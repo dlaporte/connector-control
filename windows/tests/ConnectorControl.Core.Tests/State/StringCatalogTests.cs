@@ -143,6 +143,7 @@ public class StringCatalogTests
         ["ControlTools.notOneOfError"] = ["X", "Y"],
         ["ControlTools.notSubscribedError"] = ["X"],
         ["ControlTools.renamedCollectionText"] = ["X", "Y"],
+        ["ControlTools.renamedNotification"] = ["X", "Y", "Z"],
         ["ControlTools.renamedText"] = ["X", "Y"],
         ["ControlTools.savedNotAppliedText"] = ["X"],
         ["ControlTools.settingChangedText"] = ["X", "Y"],
@@ -469,6 +470,7 @@ public class StringCatalogTests
         actual["ControlTools.relaySummary"] = ControlTools.RelaySummary;
         actual["ControlTools.relayUsage"] = ControlTools.RelayUsage;
         actual["ControlTools.renamedCollectionText"] = ControlTools.RenamedCollectionText("X", "Y");
+        actual["ControlTools.renamedNotification"] = ControlTools.RenamedNotification("X", "Y", "Z");
         actual["ControlTools.renamedText"] = ControlTools.RenamedText("X", "Y");
         actual["ControlTools.restartToApplyText"] = ControlTools.RestartToApplyText;
         actual["ControlTools.restartToUseText"] = ControlTools.RestartToUseText;

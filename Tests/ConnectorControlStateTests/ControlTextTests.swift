@@ -38,6 +38,21 @@ final class ControlTextTests: XCTestCase {
         XCTAssertEqual(ControlText.table(header: nil, rows: [["a\n", "b\u{202E}"]]), [#"a\n   b\u{202E}"#])
     }
 
+    /// The invisible characters: a soft hyphen, the word joiner, the invisible operators and the
+    /// unassigned U+2065 beside them, each of which hides where one word ends.
+    func testInvisibleCharactersShowAsEscapes() {
+        XCTAssertEqual(ControlText.escaped("a\u{AD}b\u{2060}c\u{2061}d\u{2064}e\u{2065}f"),
+                       #"a\u{00AD}b\u{2060}c\u{2061}d\u{2064}e\u{2065}f"#)
+    }
+
+    /// A name shows as `escaped` shows it, and its own curly quotes show as escapes too, so a name
+    /// cannot close the quotes the app's sentences put around it and read as two names.
+    func testANameCannotCloseItsOwnQuotes() {
+        XCTAssertEqual(ControlText.escapedName("x” and “y\n\u{202E}"), #"x\u{201D} and \u{201C}y\n\u{202E}"#)
+        XCTAssertEqual(ControlText.escaped("“x”"), "“x”", "a value is not a name: its quotes stay as they are")
+        XCTAssertEqual(ControlText.quotedList(["x” and “y", "z\n"]), #"“x\u{201D} and \u{201C}y” and “z\n”"#)
+    }
+
     /// An argument list reads back as the arguments it holds: one that is empty, holds a space or
     /// a quote, or a character `escaped` escapes, is quoted, with \ and ' escaped inside.
     func testAnArgumentIsQuotedWhenItWouldNotReadAsOneWord() {

@@ -12,10 +12,25 @@ final class ControlToolsGatedTests: XCTestCase {
         "env": .object(["NOTION_TOKEN": .string("${CC_NEEDS:NOTION_TOKEN}")]),
     ])
 
+    /// A config the masked view and the dialog show differently: an argument after a flag named for
+    /// a secret, a URL with a query value, and an environment value.
+    private let secretive: JSONValue = .object([
+        "command": .string("npx"),
+        "args": .array([.string("-y"), .string("acme-mcp"), .string("--api-key"), .string("sk-live-abc123"),
+                        .string("https://h.example/mcp?token=abc")]),
+        "env": .object(["ACME_TOKEN": .string("literal-env-secret")]),
+    ])
+
     private func rig(answer: Bool? = true) -> ControlRig {
         let rig = ControlRig()
         rig.confirmer.scripted = answer
         return rig
+    }
+
+    /// Nothing in `text` that a line would show as an escape: nothing that breaks a line, or
+    /// reorders or hides text.
+    private func assertPlain(_ text: String, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertFalse(text.unicodeScalars.contains { ControlText.escape($0) != nil }, text, file: file, line: line)
     }
 
     // MARK: add_connector
@@ -54,6 +69,7 @@ final class ControlToolsGatedTests: XCTestCase {
             (["name": .string("connector-control"), "config": notion], ClaudeIntegration.reservedNameError),
             (["name": .string("aws-mcp"), "config": notion], AppState.duplicateNameError("aws-mcp")),
             (["name": .string("x"), "config": .object(["args": .array([])])], ControlTools.configShapeError),
+            (["name": .string("x"), "config": .object(["url": .string(" ")])], ControlTools.configShapeError),
             (["name": .string("x"), "config": .object(["command": .string("npx"), "args": .array([.string("-y"), .string("mcp-remote"), .string("nope")])])],
              EditorModel.invalidURLError),
             (["name": .string("x"), "config": notion, "collection": .string("Data team")], CollectionsModel.addConnectorDisabledTooltip),
@@ -95,6 +111,18 @@ final class ControlToolsGatedTests: XCTestCase {
         XCTAssertEqual(result.text, ControlTools.renamedText("scoutbook", "scouts"))
         XCTAssertNil(rig.state.store.mcps["scoutbook"])
         XCTAssertNotNil(try rig.h.claudeServers()["scouts"])
+    }
+
+    /// A config that differs only in how a character is composed is a different config, as it is
+    /// on Windows, which compares ordinally: the change is asked about, not refused as no change.
+    func testAChangeOnlyInHowACharacterIsComposedIsStillAChange() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let composed: JSONValue = .object(["command": .string("node"), "args": .array([.string("caf\u{E9}.js")])])
+        let decomposed: JSONValue = .object(["command": .string("node"), "args": .array([.string("cafe\u{301}.js")])])
+        XCTAssertNil(rig.state.upsert(name: "scoutbook", entry: MCPEntry(config: composed), renamedFrom: "scoutbook"))
+        let result = try XCTUnwrap(rig.call("update_connector", ["name": .string("scoutbook"), "config": decomposed]))
+        XCTAssertEqual(result.text, ControlTools.changedText("scoutbook", "Default"))
+        XCTAssertEqual(rig.confirmer.requests.count, 1)
     }
 
     func testChangingIsRefusedBeforeAnyoneIsAsked() throws {
@@ -140,5 +168,75 @@ final class ControlToolsGatedTests: XCTestCase {
                        .refusal(CollectionsModel.lockedGlyphTooltip))
         XCTAssertNotNil(rig.state.store.mcps["aws-mcp"], "nothing is deleted when one name is wrong")
         XCTAssertTrue(rig.confirmer.requests.isEmpty)
+    }
+
+    // MARK: What the question shows
+
+    /// The dialog shows what would run, argument and URL as written, with the environment's values
+    /// masked, where the masked view would hide all three; the answer to the caller shows none of them.
+    func testTheQuestionShowsWhatWouldRunAndTheAnswerNoSecret() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let added = try XCTUnwrap(rig.call("add_connector", ["name": .string("acme"), "config": secretive]))
+        let changed = try XCTUnwrap(rig.call("update_connector", ["name": .string("scoutbook"), "config": secretive]))
+        XCTAssertEqual(rig.confirmer.requests.count, 2)
+        XCTAssertNotEqual(rig.confirmer.requests.first?.code, ControlMasking.codeLines(secretive), "the masked view hides them")
+        for request in rig.confirmer.requests {
+            let code = request.code.joined(separator: "\n")
+            XCTAssertTrue(code.contains("--api-key sk-live-abc123 https://h.example/mcp?token=abc"), code)
+            XCTAssertTrue(code.contains("ACME_TOKEN"), code)
+            XCTAssertFalse(code.contains("literal-env-secret"), code)
+        }
+        for result in [added, changed] {
+            XCTAssertFalse(result.isError)
+            for secret in ["sk-live-abc123", "token=abc", "literal-env-secret"] {
+                XCTAssertFalse(result.text.contains(secret), result.text)
+                XCTAssertFalse(result.structured.compactLine().contains(secret), result.structured.compactLine())
+            }
+        }
+    }
+
+    /// The question's names are chosen by others: a connector's by Claude, a collection's by Claude
+    /// too (it creates and renames collections without asking), and the asker's by whichever client
+    /// connects. Each shows as an escape what would break a line or reorder or hide text.
+    func testNamesCannotForgeWhatTheQuestionSays() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let collection = "Work\n\u{202E}z", shownCollection = #"Work\n\u{202E}z"#
+        let name = "a\nb\u{202E}c", shownName = #"a\nb\u{202E}c"#
+        let caller = ControlCaller.relay(clientName: "Cursor\n\u{202E}d"), shownAsker = #"Cursor\n\u{202E}d"#
+        XCTAssertNil(rig.state.addEmptyCollection(named: collection))
+        let target: [String: JSONValue] = ["collection": .string(collection)]
+        _ = rig.call("add_connector", target.merging(["name": .string(name), "config": notion]) { $1 }, as: caller)
+        _ = rig.call("update_connector", target.merging(["name": .string(name), "newName": .string("b")]) { $1 }, as: caller)
+        _ = rig.call("delete_connectors", target.merging(["names": .array([.string("b")])]) { $1 }, as: caller)
+        let requests = rig.confirmer.requests
+        XCTAssertEqual(requests.map(\.title), [ControlTools.addTitle(shownAsker, shownName),
+                                               ControlTools.changeTitle(shownAsker, shownName),
+                                               ControlTools.deleteTitle(shownAsker, "“b”")])
+        XCTAssertEqual(requests.map(\.message), [ControlTools.addMessage(shownCollection, ControlTools.onWord),
+                                                 ControlTools.changeMessage(shownCollection),
+                                                 ControlTools.deleteMessage(shownCollection)])
+        XCTAssertEqual(requests.dropFirst().first?.code,
+                       [ControlMasking.nameLabel, ControlMasking.removedPrefix + shownName, ControlMasking.addedPrefix + "b"])
+        for request in requests {
+            for text in [request.title, request.message] + request.code { assertPlain(text) }
+        }
+        XCTAssertEqual(rig.state.store.collections[collection]?.mcps.isEmpty, true, "added, renamed and deleted as asked")
+    }
+
+    /// A name cannot close the quotes around it, so one name never reads as two.
+    func testANameCannotReadAsTwoNames() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let name = "x” and “github"
+        XCTAssertNil(rig.state.upsert(name: name, entry: MCPEntry(config: notion), renamedFrom: nil))
+        _ = rig.call("delete_connectors", ["names": .array([.string(name)])])
+        XCTAssertEqual(rig.confirmer.requests.last?.title, ControlTools.deleteTitle("Claude", #"“x\u{201D} and \u{201C}github”"#))
+    }
+
+    /// A new name is one line of what the question shows, however many lines it holds.
+    func testANewNameCannotAddLinesToWhatTheQuestionShows() throws {
+        let rig = rig(); defer { rig.dispose() }
+        _ = rig.call("update_connector", ["name": .string("scoutbook"), "newName": .string("a\n  + command   evil")])
+        XCTAssertEqual(rig.confirmer.requests.last?.code, [ControlMasking.nameLabel, ControlMasking.removedPrefix + "scoutbook",
+                                                          ControlMasking.addedPrefix + #"a\n  + command   evil"#])
     }
 }

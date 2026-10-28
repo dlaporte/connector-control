@@ -6,6 +6,11 @@ namespace ConnectorControl.Core.State;
 /// secrets masked — then the change itself, which runs only on Allow (or with confirmations off,
 /// or for the command-line tool) and is announced when nobody was asked.
 ///
+/// The question and the announcement name connectors, collections and the asker as others chose
+/// them — Claude names connectors, creates and renames collections without asking, and any client
+/// names itself — so every name goes through <see cref="ControlText.EscapedName"/>: none can break a line,
+/// reorder or hide text, or close its own quotes.
+///
 /// Mirror: Sources/ConnectorControlState/Control/ControlTools+Gated.swift
 /// </summary>
 public sealed partial class ControlTools
@@ -48,6 +53,8 @@ public sealed partial class ControlTools
 
     public static string ChangedNotification(string asker, string name, string collection) => $"{asker} changed “{name}” in “{collection}”.";
 
+    public static string RenamedNotification(string asker, string old, string @new) => $"{asker} renamed “{old}” to “{@new}”.";
+
     public static string DeletedNotification(string asker, string names, string collection) => $"{asker} deleted {names} from “{collection}”.";
 
     /// <summary>What the editor's JSON view refuses on Save, for a config that arrives as JSON: anything but
@@ -65,7 +72,7 @@ public sealed partial class ControlTools
         {
             runnable = true;
         }
-        if (config["url"] is { Kind: JsonKind.String } url && url.StringValue.Length > 0)
+        if (config["url"] is { Kind: JsonKind.String } url && url.StringValue.TrimSpaces().Length > 0)
         {
             runnable = true;
         }
@@ -86,6 +93,11 @@ public sealed partial class ControlTools
         }
         return null;
     }
+
+    // Platform idiom: JsonValue already compares text ordinally, as the Mac mirror compares it scalar by
+    // scalar; Swift's == would hold canonically equivalent text equal and refuse a change as no change.
+    /// <summary>Whether two configs are the same, value for value.</summary>
+    internal static bool Identical(JsonValue one, JsonValue other) => one == other;
 
     /// <summary>The collection a connector tool works in: the one named, else the active one.</summary>
     internal string TargetCollection(ControlArguments arguments) => arguments.String("collection") ?? state.ActiveCollection;
@@ -122,9 +134,11 @@ public sealed partial class ControlTools
         var on = arguments.Bool("enabled") ?? true;
         var word = on ? OnWord : OffWord;
         var active = collection == state.ActiveCollection;
+        var (shownAsker, shownName, shownCollection) = (ControlText.EscapedName(asker), ControlText.EscapedName(name),
+                                                        ControlText.EscapedName(collection));
         var request = new ConfirmationRequest(
-            AddTitle(asker, name),
-            active ? AddActiveMessage(collection, word) : AddMessage(collection, word),
+            AddTitle(shownAsker, shownName),
+            active ? AddActiveMessage(shownCollection, word) : AddMessage(shownCollection, word),
             ControlMasking.CodeLines(config, ControlMasking.Exposure.Dialog),
             active && on ? TakesEffectFooter : null);
         return new ControlStep.Ready(request, () =>
@@ -144,7 +158,7 @@ public sealed partial class ControlTools
             return Done(lines, [("collection", JsonValue.String(collection)), ("name", JsonValue.String(name)), ("enabled", JsonValue.Bool(on)),
                                 ("needs", JsonValue.Array(needs.Select(JsonValue.String)))],
                 collection, mark, RestartToUseText,
-                notification: AddedNotification(asker, name, collection));
+                notification: AddedNotification(shownAsker, shownName, shownCollection));
         });
     }
 
@@ -191,17 +205,20 @@ public sealed partial class ControlTools
         var after = config ?? current.Config;
         // "Unchanged" compares the configs themselves, not the rendered lines: every difference is a
         // change, whether or not a line can show it.
-        var reconfigured = after != current.Config;
+        var reconfigured = !Identical(after, current.Config);
         if (!renamed && !reconfigured)
         {
             return new ControlStep.Refused(UnchangedError(name));
         }
         var changes = ControlMasking.ChangeLines(current.Config, after, ControlMasking.Exposure.Dialog);
         var active = collection == state.ActiveCollection;
-        IReadOnlyList<string> names = renamed ? [ControlMasking.NameLabel, ControlMasking.RemovedPrefix + name, ControlMasking.AddedPrefix + newName] : [];
+        var (shownAsker, shownName, shownNewName, shownCollection) = (
+            ControlText.EscapedName(asker), ControlText.EscapedName(name), ControlText.EscapedName(newName),
+            ControlText.EscapedName(collection));
+        IReadOnlyList<string> names = renamed ? [ControlMasking.NameLabel, ControlMasking.RemovedPrefix + shownName, ControlMasking.AddedPrefix + shownNewName] : [];
         var request = new ConfirmationRequest(
-            ChangeTitle(asker, name),
-            active ? ChangeActiveMessage(collection) : ChangeMessage(collection),
+            ChangeTitle(shownAsker, shownName),
+            active ? ChangeActiveMessage(shownCollection) : ChangeMessage(shownCollection),
             [.. names, .. changes],
             active && current.Enabled ? TakesEffectFooter : null);
         return new ControlStep.Ready(request, () =>
@@ -224,7 +241,9 @@ public sealed partial class ControlTools
             }
             return Done(lines, [("collection", JsonValue.String(collection)), ("name", JsonValue.String(newName)), ("previousName", JsonValue.String(name))],
                 collection, mark, RestartToApplyText,
-                notification: ChangedNotification(asker, newName, collection));
+                // A rename and nothing else is announced as one; any other change by what it changed.
+                notification: reconfigured ? ChangedNotification(shownAsker, shownNewName, shownCollection)
+                                           : RenamedNotification(shownAsker, shownName, shownNewName));
         });
     }
 
@@ -259,9 +278,10 @@ public sealed partial class ControlTools
         var listed = ControlText.QuotedList(names);
         var active = collection == state.ActiveCollection;
         var reachesClaude = active && names.Any(name => held.Mcps.GetValueOrDefault(name)?.Enabled == true);
+        var (shownAsker, shownCollection) = (ControlText.EscapedName(asker), ControlText.EscapedName(collection));
         var request = new ConfirmationRequest(
-            DeleteTitle(asker, listed),
-            active ? DeleteActiveMessage(collection) : DeleteMessage(collection),
+            DeleteTitle(shownAsker, listed),
+            active ? DeleteActiveMessage(shownCollection) : DeleteMessage(shownCollection),
             [], reachesClaude ? TakesEffectFooter : null);
         return new ControlStep.Ready(request, () =>
         {
@@ -271,7 +291,7 @@ public sealed partial class ControlTools
             return Done([DeletedText(listed, collection)],
                 [("collection", JsonValue.String(collection)), ("names", JsonValue.Array(names.Select(JsonValue.String)))],
                 collection, mark, RestartToApplyText,
-                notification: DeletedNotification(asker, listed, collection));
+                notification: DeletedNotification(shownAsker, listed, shownCollection));
         });
     }
 }

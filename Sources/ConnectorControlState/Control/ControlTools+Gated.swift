@@ -7,6 +7,11 @@ import ConnectorControlCore
 /// every refusal, then the question — who is asking, for what, and exactly what would run, with
 /// secrets masked — then the change itself, which runs only on Allow (or with confirmations off,
 /// or for the command-line tool) and is announced when nobody was asked.
+///
+/// The question and the announcement name connectors, collections and the asker as others chose
+/// them — Claude names connectors, creates and renames collections without asking, and any client
+/// names itself — so every name goes through `ControlText.escapedName(_:)`: none can break a line,
+/// reorder or hide text, or close its own quotes.
 extension ControlTools {
     public static let takesEffectFooter = "Takes effect when Claude restarts."
     public static let configShapeError = "A connector’s config needs a “command” or a “url”."
@@ -46,6 +51,8 @@ extension ControlTools {
 
     public static func changedNotification(_ asker: String, _ name: String, _ collection: String) -> String { "\(asker) changed “\(name)” in “\(collection)”." }
 
+    public static func renamedNotification(_ asker: String, _ old: String, _ new: String) -> String { "\(asker) renamed “\(old)” to “\(new)”." }
+
     public static func deletedNotification(_ asker: String, _ names: String, _ collection: String) -> String { "\(asker) deleted \(names) from “\(collection)”." }
 
     /// What the editor's JSON view refuses on Save, for a config that arrives as JSON: anything but
@@ -56,12 +63,33 @@ extension ControlTools {
         guard case .object(let object) = config else { return EditorModel.notValidJSON }
         var runnable = false
         if case .string(let command)? = object["command"], !command.trimmingCharacters(in: .whitespaces).isEmpty { runnable = true }
-        if case .string(let url)? = object["url"], !url.isEmpty { runnable = true }
+        if case .string(let url)? = object["url"], !url.trimmingCharacters(in: .whitespaces).isEmpty { runnable = true }
         guard runnable else { return configShapeError }
         if RemotePattern.isCanonicalShape(config), RemotePattern.detect(config) == nil { return EditorModel.invalidURLError }
-        // The cmd /c launcher hands these fields to cmd.exe, which treats & | < > ^ " and spaces as
-        // commands; the Mac never writes that launcher, so its mirror has no such check.
+        // The Windows mirror refuses here what its cmd /c launcher would hand to cmd.exe, which treats
+        // & | < > ^ " and spaces as commands; the Mac never writes that launcher, so there is no such check.
         return nil
+    }
+
+    // Platform idiom: text is compared scalar by scalar, as the Windows mirror compares it ordinally;
+    // Swift's == holds canonically equivalent text equal, which would refuse a change as no change.
+    /// Whether two configs are the same, value for value.
+    static func identical(_ one: JSONValue, _ other: JSONValue) -> Bool {
+        switch (one, other) {
+        case (.string(let a), .string(let b)):
+            return ControlMasking.same(a, b)
+        case (.array(let a), .array(let b)):
+            return a.count == b.count && zip(a, b).allSatisfy { identical($0, $1) }
+        case (.object(let a), .object(let b)):
+            let keys = a.keys.sorted { $0.ordinallyPrecedes($1) }
+            let otherKeys = b.keys.sorted { $0.ordinallyPrecedes($1) }
+            return keys.count == otherKeys.count && zip(keys, otherKeys).allSatisfy { key, otherKey in
+                guard ControlMasking.same(key, otherKey), let value = a[key], let otherValue = b[otherKey] else { return false }
+                return identical(value, otherValue)
+            }
+        default:
+            return one == other
+        }
     }
 
     /// The collection a connector tool works in: the one named, else the active one.
@@ -82,9 +110,11 @@ extension ControlTools {
         let on = arguments.bool("enabled") ?? true
         let word = on ? ControlTools.onWord : ControlTools.offWord
         let active = collection == state.activeCollection
+        let (shownAsker, shownName, shownCollection) = (ControlText.escapedName(asker), ControlText.escapedName(name),
+                                                        ControlText.escapedName(collection))
         let request = ConfirmationRequest(
-            title: ControlTools.addTitle(asker, name),
-            message: active ? ControlTools.addActiveMessage(collection, word) : ControlTools.addMessage(collection, word),
+            title: ControlTools.addTitle(shownAsker, shownName),
+            message: active ? ControlTools.addActiveMessage(shownCollection, word) : ControlTools.addMessage(shownCollection, word),
             code: ControlMasking.codeLines(config, exposure: .dialog),
             footer: active && on ? ControlTools.takesEffectFooter : nil)
         return .ready(request, perform: { [self] in
@@ -100,7 +130,7 @@ extension ControlTools {
             return done(lines, ["collection": .string(collection), "name": .string(name), "enabled": .bool(on),
                                 "needs": .array(needs.map(JSONValue.string))],
                         touching: collection, since: mark, restart: ControlTools.restartToUseText,
-                        notification: ControlTools.addedNotification(asker, name, collection))
+                        notification: ControlTools.addedNotification(shownAsker, shownName, shownCollection))
         })
     }
 
@@ -122,14 +152,17 @@ extension ControlTools {
         let after = config ?? current.config
         // "Unchanged" compares the configs themselves, not the rendered lines: every difference is a
         // change, whether or not a line can show it.
-        let reconfigured = after != current.config
+        let reconfigured = !ControlTools.identical(after, current.config)
         guard renamed || reconfigured else { return .refused(ControlTools.unchangedError(name)) }
         let changes = ControlMasking.changeLines(from: current.config, to: after, exposure: .dialog)
         let active = collection == state.activeCollection
-        let names = renamed ? [ControlMasking.nameLabel, ControlMasking.removedPrefix + name, ControlMasking.addedPrefix + newName] : []
+        let (shownAsker, shownName, shownNewName, shownCollection) = (
+            ControlText.escapedName(asker), ControlText.escapedName(name), ControlText.escapedName(newName),
+            ControlText.escapedName(collection))
+        let names = renamed ? [ControlMasking.nameLabel, ControlMasking.removedPrefix + shownName, ControlMasking.addedPrefix + shownNewName] : []
         let request = ConfirmationRequest(
-            title: ControlTools.changeTitle(asker, name),
-            message: active ? ControlTools.changeActiveMessage(collection) : ControlTools.changeMessage(collection),
+            title: ControlTools.changeTitle(shownAsker, shownName),
+            message: active ? ControlTools.changeActiveMessage(shownCollection) : ControlTools.changeMessage(shownCollection),
             code: names + changes,
             footer: active && current.enabled ? ControlTools.takesEffectFooter : nil)
         return .ready(request, perform: { [self] in
@@ -145,7 +178,9 @@ extension ControlTools {
             if reconfigured { lines.append(ControlTools.changedText(newName, collection)) }
             return done(lines, ["collection": .string(collection), "name": .string(newName), "previousName": .string(name)],
                         touching: collection, since: mark, restart: ControlTools.restartToApplyText,
-                        notification: ControlTools.changedNotification(asker, newName, collection))
+                        // A rename and nothing else is announced as one; any other change by what it changed.
+                        notification: reconfigured ? ControlTools.changedNotification(shownAsker, shownNewName, shownCollection)
+                                                   : ControlTools.renamedNotification(shownAsker, shownName, shownNewName))
         })
     }
 
@@ -163,9 +198,10 @@ extension ControlTools {
         let listed = ControlText.quotedList(names)
         let active = collection == state.activeCollection
         let reachesClaude = active && names.contains { held.mcps[$0]?.enabled == true }
+        let (shownAsker, shownCollection) = (ControlText.escapedName(asker), ControlText.escapedName(collection))
         let request = ConfirmationRequest(
-            title: ControlTools.deleteTitle(asker, listed),
-            message: active ? ControlTools.deleteActiveMessage(collection) : ControlTools.deleteMessage(collection),
+            title: ControlTools.deleteTitle(shownAsker, listed),
+            message: active ? ControlTools.deleteActiveMessage(shownCollection) : ControlTools.deleteMessage(shownCollection),
             code: [], footer: reachesClaude ? ControlTools.takesEffectFooter : nil)
         return .ready(request, perform: { [self] in
             let mark = state.appliedServers
@@ -174,7 +210,7 @@ extension ControlTools {
             return done([ControlTools.deletedText(listed, collection)],
                         ["collection": .string(collection), "names": .array(names.map(JSONValue.string))],
                         touching: collection, since: mark, restart: ControlTools.restartToApplyText,
-                        notification: ControlTools.deletedNotification(asker, listed, collection))
+                        notification: ControlTools.deletedNotification(shownAsker, listed, shownCollection))
         })
     }
 }

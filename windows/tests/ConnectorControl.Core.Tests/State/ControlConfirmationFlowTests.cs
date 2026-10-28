@@ -50,6 +50,40 @@ public class ControlConfirmationFlowTests
         Assert.Equal([ControlTools.AddedNotification("Claude", "x", "Default")], rig.H.Notifier.Sent.Select(sent => sent.Body));
     }
 
+    /// <summary>A rename and nothing else is announced as a rename; a rename that also changes the config is
+    /// announced as a change, under the new name.</summary>
+    [Fact]
+    public void ARenameIsAnnouncedAsARename()
+    {
+        using var rig = new ControlRig(confirm: false);
+        rig.Call("update_connector", JsonValue.Object(("name", JsonValue.String("scoutbook")), ("newName", JsonValue.String("scouts"))));
+        rig.Call("update_connector", JsonValue.Object(("name", JsonValue.String("scouts")), ("newName", JsonValue.String("scoutbook")),
+            ("config", Config)));
+        Assert.Equal([ControlTools.RenamedNotification("Claude", "scoutbook", "scouts"),
+                      ControlTools.ChangedNotification("Claude", "scoutbook", "Default")], rig.H.Notifier.Sent.Select(sent => sent.Body));
+    }
+
+    /// <summary>An announcement shows names as the question would: what would break a line or reorder or
+    /// hide text shows as an escape.</summary>
+    [Fact]
+    public void AnAnnouncementShowsNamesAsEscapes()
+    {
+        using var rig = new ControlRig(confirm: false);
+        const string collection = "Work\n\u202Ez", shownCollection = """Work\n\u{202E}z""";
+        var caller = new ControlCaller.Relay("Cursor\n\u202Ed");
+        const string shownAsker = """Cursor\n\u{202E}d""";
+        Assert.Null(rig.State.AddEmptyCollection(collection));
+        var target = ("collection", JsonValue.String(collection));
+        rig.Call("add_connector", JsonValue.Object(target, ("name", JsonValue.String("a\nb")), ("config", Config)), caller);
+        rig.Call("update_connector", JsonValue.Object(target, ("name", JsonValue.String("a\nb")), ("newName", JsonValue.String("c\u202E"))),
+            caller);
+        rig.Call("delete_connectors", JsonValue.Object(target, ("names", JsonValue.Array([JsonValue.String("c\u202E")]))), caller);
+        Assert.Equal([ControlTools.AddedNotification(shownAsker, """a\nb""", shownCollection),
+                      ControlTools.RenamedNotification(shownAsker, """a\nb""", """c\u{202E}"""),
+                      ControlTools.DeletedNotification(shownAsker, """“c\u{202E}”""", shownCollection)],
+            rig.H.Notifier.Sent.Select(sent => sent.Body));
+    }
+
     [Fact]
     public void TheCommandLineIsNeverAskedAndNeverAnnounced()
     {

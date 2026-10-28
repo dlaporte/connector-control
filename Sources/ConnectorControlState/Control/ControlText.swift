@@ -49,12 +49,23 @@ public enum ControlText {
     }
 
     /// Text as a line shows it: a control character, and a format character that reorders or hides
-    /// text (U+061C, U+200B–U+200F, U+2028–U+202E, U+2066–U+2069, U+FEFF), as a visible escape —
-    /// `\n`, `\r`, `\t` or `\u{202E}` — so a value can neither break its line nor hide part of it.
+    /// text (U+00AD, U+061C, U+200B–U+200F, U+2028–U+202E, U+2060–U+2069, U+FEFF), as a visible
+    /// escape — `\n`, `\r`, `\t` or `\u{202E}` — so a value can neither break its line nor hide part
+    /// of it.
     public static func escaped(_ text: String) -> String {
         var line = ""
         for scalar in text.unicodeScalars { line += escape(scalar) ?? String(scalar) }
         return line
+    }
+
+    /// A name as the app's sentences quote it: as `escaped(_:)` shows it, with “ and ” escaped as
+    /// well, so a name can neither break its line nor close its own quotes and read as two names.
+    public static func escapedName(_ text: String) -> String {
+        var name = ""
+        for scalar in text.unicodeScalars {
+            name += escape(scalar) ?? (scalar == "\u{201C}" || scalar == "\u{201D}" ? hexEscape(scalar) : String(scalar))
+        }
+        return name
     }
 
     // Platform idiom: one scalar at a time here, one UTF-16 unit on Windows; every character escaped
@@ -65,11 +76,16 @@ public enum ControlText {
         case 0x0A: return "\\n"
         case 0x0D: return "\\r"
         case 0x09: return "\\t"
-        case 0x00...0x1F, 0x7F...0x9F, 0x061C, 0x200B...0x200F, 0x2028...0x202E, 0x2066...0x2069, 0xFEFF:
-            let hex = String(scalar.value, radix: 16, uppercase: true)
-            return "\\u{" + String(repeating: "0", count: max(0, 4 - hex.count)) + hex + "}"
+        case 0x00...0x1F, 0x7F...0x9F, 0xAD, 0x061C, 0x200B...0x200F, 0x2028...0x202E, 0x2060...0x2069, 0xFEFF:
+            return hexEscape(scalar)
         default: return nil
         }
+    }
+
+    /// A character by its code, as `\u{202E}`: every one escaped is in the Basic Plane, so four hex digits.
+    static func hexEscape(_ scalar: Unicode.Scalar) -> String {
+        let hex = String(scalar.value, radix: 16, uppercase: true)
+        return "\\u{" + String(repeating: "0", count: max(0, 4 - hex.count)) + hex + "}"
     }
 
     /// One argument of a command line: as written when it reads as one word — not empty, with no
@@ -98,9 +114,10 @@ public enum ControlText {
         scalar.properties.generalCategory == .spaceSeparator
     }
 
-    /// “a”, “a” and “b”, “a”, “b” and “c” — names as the app's sentences list them.
+    /// “a”, “a” and “b”, “a”, “b” and “c” — names as the app's sentences list them, each through
+    /// `escapedName(_:)`.
     public static func quotedList(_ names: [String]) -> String {
-        let quoted = names.map { "“\($0)”" }
+        let quoted = names.map { "“\(escapedName($0))”" }
         guard let last = quoted.last else { return "" }
         guard quoted.count > 1 else { return last }
         return quoted.dropLast().joined(separator: ", ") + listAnd + last

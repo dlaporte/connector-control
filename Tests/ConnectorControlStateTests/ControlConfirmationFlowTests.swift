@@ -39,6 +39,34 @@ final class ControlConfirmationFlowTests: XCTestCase {
         XCTAssertEqual(rig.h.notifier.sent.map(\.body), [ControlTools.addedNotification("Claude", "x", "Default")])
     }
 
+    /// A rename and nothing else is announced as a rename; a rename that also changes the config is
+    /// announced as a change, under the new name.
+    func testARenameIsAnnouncedAsARename() {
+        let rig = ControlRig(confirm: false); defer { rig.dispose() }
+        _ = rig.call("update_connector", ["name": .string("scoutbook"), "newName": .string("scouts")])
+        _ = rig.call("update_connector", ["name": .string("scouts"), "newName": .string("scoutbook"), "config": config])
+        XCTAssertEqual(rig.h.notifier.sent.map(\.body), [ControlTools.renamedNotification("Claude", "scoutbook", "scouts"),
+                                                         ControlTools.changedNotification("Claude", "scoutbook", "Default")])
+    }
+
+    /// An announcement shows names as the question would: what would break a line or reorder or
+    /// hide text shows as an escape.
+    func testAnAnnouncementShowsNamesAsEscapes() {
+        let rig = ControlRig(confirm: false); defer { rig.dispose() }
+        let collection = "Work\n\u{202E}z", shownCollection = #"Work\n\u{202E}z"#
+        let caller = ControlCaller.relay(clientName: "Cursor\n\u{202E}d"), shownAsker = #"Cursor\n\u{202E}d"#
+        XCTAssertNil(rig.state.addEmptyCollection(named: collection))
+        let target: [String: JSONValue] = ["collection": .string(collection)]
+        _ = rig.call("add_connector", target.merging(["name": .string("a\nb"), "config": config]) { $1 }, as: caller)
+        _ = rig.call("update_connector", target.merging(["name": .string("a\nb"), "newName": .string("c\u{202E}")]) { $1 }, as: caller)
+        _ = rig.call("delete_connectors", target.merging(["names": .array([.string("c\u{202E}")])]) { $1 }, as: caller)
+        XCTAssertEqual(rig.h.notifier.sent.map(\.body), [
+            ControlTools.addedNotification(shownAsker, #"a\nb"#, shownCollection),
+            ControlTools.renamedNotification(shownAsker, #"a\nb"#, #"c\u{202E}"#),
+            ControlTools.deletedNotification(shownAsker, #"“c\u{202E}”"#, shownCollection),
+        ])
+    }
+
     func testTheCommandLineIsNeverAskedAndNeverAnnounced() {
         let rig = ControlRig(); defer { rig.dispose() }
         XCTAssertEqual(rig.call("add_connector", add("x"), as: .cli)?.isError, false)

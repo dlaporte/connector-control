@@ -51,6 +51,24 @@ public class ControlTextTests
         Assert.Equal(["""a\n   b\u{202E}"""], ControlText.Table(null, [["a\n", "b\u202E"]]));
     }
 
+    /// <summary>The invisible characters: a soft hyphen, the word joiner, the invisible operators and the
+    /// unassigned U+2065 beside them, each of which hides where one word ends.</summary>
+    [Fact]
+    public void InvisibleCharactersShowAsEscapes() =>
+        Assert.Equal("""a\u{00AD}b\u{2060}c\u{2061}d\u{2064}e\u{2065}f""",
+            ControlText.Escaped("a\u00ADb\u2060c\u2061d\u2064e\u2065f"));
+
+    /// <summary>A name shows as <see cref="ControlText.Escaped"/> shows it, and its own curly quotes show as
+    /// escapes too, so a name cannot close the quotes the app's sentences put around it and read as two names.</summary>
+    [Fact]
+    public void ANameCannotCloseItsOwnQuotes()
+    {
+        Assert.Equal("""x\u{201D} and \u{201C}y\n\u{202E}""", ControlText.EscapedName("x” and “y\n\u202E"));
+        // A value is not a name: its quotes stay as they are.
+        Assert.Equal("“x”", ControlText.Escaped("“x”"));
+        Assert.Equal("""“x\u{201D} and \u{201C}y” and “z\n”""", ControlText.QuotedList(["x” and “y", "z\n"]));
+    }
+
     /// <summary>An argument list reads back as the arguments it holds: one that is empty, holds a space or
     /// a quote, or a character <see cref="ControlText.Escaped"/> escapes, is quoted, with \ and ' escaped inside.</summary>
     [Fact]

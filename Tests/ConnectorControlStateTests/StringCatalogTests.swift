@@ -137,6 +137,7 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.notOneOfError": ["X", "Y"],
         "ControlTools.notSubscribedError": ["X"],
         "ControlTools.renamedCollectionText": ["X", "Y"],
+        "ControlTools.renamedNotification": ["X", "Y", "Z"],
         "ControlTools.renamedText": ["X", "Y"],
         "ControlTools.savedNotAppliedText": ["X"],
         "ControlTools.settingChangedText": ["X", "Y"],
@@ -460,6 +461,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.relaySummary"] = ControlTools.relaySummary
         actual["ControlTools.relayUsage"] = ControlTools.relayUsage
         actual["ControlTools.renamedCollectionText"] = ControlTools.renamedCollectionText("X", "Y")
+        actual["ControlTools.renamedNotification"] = ControlTools.renamedNotification("X", "Y", "Z")
         actual["ControlTools.renamedText"] = ControlTools.renamedText("X", "Y")
         actual["ControlTools.restartToApplyText"] = ControlTools.restartToApplyText
         actual["ControlTools.restartToUseText"] = ControlTools.restartToUseText

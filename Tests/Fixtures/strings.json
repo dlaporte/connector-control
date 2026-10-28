@@ -434,6 +434,9 @@
   "ControlTools.renamedCollectionText": {
     "format": "Renamed the collection “{0}” to “{1}”."
   },
+  "ControlTools.renamedNotification": {
+    "format": "{0} renamed “{1}” to “{2}”."
+  },
   "ControlTools.renamedText": {
     "format": "Renamed “{0}” to “{1}”."
   },

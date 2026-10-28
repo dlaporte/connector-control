@@ -57,8 +57,9 @@ public static class ControlText
     internal static string TrimmingTrailingSpaces(string line) => line.TrimEnd(' ');
 
     /// <summary>Text as a line shows it: a control character, and a format character that reorders or hides
-    /// text (U+061C, U+200B–U+200F, U+2028–U+202E, U+2066–U+2069, U+FEFF), as a visible escape —
-    /// <c>\n</c>, <c>\r</c>, <c>\t</c> or <c>\u{202E}</c> — so a value can neither break its line nor hide part of it.</summary>
+    /// text (U+00AD, U+061C, U+200B–U+200F, U+2028–U+202E, U+2060–U+2069, U+FEFF), as a visible
+    /// escape — <c>\n</c>, <c>\r</c>, <c>\t</c> or <c>\u{202E}</c> — so a value can neither break its line nor hide part
+    /// of it.</summary>
     public static string Escaped(string text)
     {
         var line = new StringBuilder();
@@ -69,6 +70,18 @@ public static class ControlText
         return line.ToString();
     }
 
+    /// <summary>A name as the app's sentences quote it: as <see cref="Escaped"/> shows it, with “ and ” escaped as
+    /// well, so a name can neither break its line nor close its own quotes and read as two names.</summary>
+    public static string EscapedName(string text)
+    {
+        var name = new StringBuilder();
+        foreach (var c in text)
+        {
+            name.Append(Escape(c) ?? (c is '\u201C' or '\u201D' ? HexEscape(c) : c.ToString()));
+        }
+        return name.ToString();
+    }
+
     // Platform idiom: one UTF-16 unit at a time here, one scalar on the Mac; every character escaped
     // is in the Basic Plane, so both escape the same ones.
     /// <summary>The escape for one character, or null for one shown as it is.</summary>
@@ -77,10 +90,13 @@ public static class ControlText
         '\n' => "\\n",
         '\r' => "\\r",
         '\t' => "\\t",
-        <= '\u001F' or (>= '\u007F' and <= '\u009F') or '\u061C' or (>= '\u200B' and <= '\u200F')
-            or (>= '\u2028' and <= '\u202E') or (>= '\u2066' and <= '\u2069') or '\uFEFF' => $"\\u{{{(int)c:X4}}}",
+        <= '\u001F' or (>= '\u007F' and <= '\u009F') or '\u00AD' or '\u061C' or (>= '\u200B' and <= '\u200F')
+            or (>= '\u2028' and <= '\u202E') or (>= '\u2060' and <= '\u2069') or '\uFEFF' => HexEscape(c),
         _ => null,
     };
+
+    /// <summary>A character by its code, as <c>\u{202E}</c>: every one escaped is in the Basic Plane, so four hex digits.</summary>
+    internal static string HexEscape(char c) => $"\\u{{{(int)c:X4}}}";
 
     /// <summary>One argument of a command line: as written when it reads as one word — not empty, with no
     /// space, no ' and nothing <see cref="Escaped"/> escapes — else between single quotes, with \ and '
@@ -112,10 +128,11 @@ public static class ControlText
     internal static bool IsSpace(char c) =>
         CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.SpaceSeparator;
 
-    /// <summary>“a”, “a” and “b”, “a”, “b” and “c” — names as the app's sentences list them.</summary>
+    /// <summary>“a”, “a” and “b”, “a”, “b” and “c” — names as the app's sentences list them, each through
+    /// <see cref="EscapedName"/>.</summary>
     public static string QuotedList(IReadOnlyList<string> names)
     {
-        var quoted = names.Select(name => $"“{name}”").ToList();
+        var quoted = names.Select(name => $"“{EscapedName(name)}”").ToList();
         if (quoted.Count == 0)
         {
             return "";
