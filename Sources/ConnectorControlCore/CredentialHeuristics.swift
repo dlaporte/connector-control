@@ -28,19 +28,22 @@ public enum CredentialHeuristics {
     /// Collections window's target column leaves out whatever follows a flag named so, and the
     /// publish preview flags a header or a URL parameter named so.
     public static func namesASecret(_ name: String) -> Bool {
-        // Platform idiom: each unit is lowered to the first scalar of its lower case here, to match
-        // the Windows mirror's ToLowerInvariant, which lowers unit by unit.
+        // Platform idiom: each unit is lowered to its lower case here only where that is one unit,
+        // to match the Windows mirror's ToLowerInvariant, which lowers unit by unit, one to one.
         let lowered = loweredUnits(name)
         return secretNames.contains { contains(lowered, Array($0.utf16)) }
     }
 
-    /// `text` lowered unit by unit, each to the first scalar of its lower case, as C#'s
-    /// ToLowerInvariant lowers it; half of a surrogate pair stays as it is.
+    /// `text` lowered unit by unit, as C#'s ToLowerInvariant lowers it: a unit whose lower case is
+    /// one scalar in the Basic Plane becomes it, and any other stays as it is — half of a surrogate
+    /// pair, and İ (U+0130), whose lower case is two scalars, i and a combining dot, and which
+    /// ToLowerInvariant leaves unchanged.
     static func loweredUnits(_ text: String) -> [UInt16] {
         text.utf16.map { unit in
-            guard let scalar = Unicode.Scalar(unit), let lower = scalar.properties.lowercaseMapping.unicodeScalars.first,
-                  lower.value <= 0xFFFF else { return unit }
-            return UInt16(lower.value)
+            guard let scalar = Unicode.Scalar(unit) else { return unit }
+            let lower = Array(scalar.properties.lowercaseMapping.unicodeScalars)
+            guard lower.count == 1, lower[0].value <= 0xFFFF else { return unit }
+            return UInt16(lower[0].value)
         }
     }
 

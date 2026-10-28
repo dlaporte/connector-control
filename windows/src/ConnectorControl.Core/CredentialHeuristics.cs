@@ -38,8 +38,9 @@ public static class CredentialHeuristics
     /// </summary>
     public static bool NamesASecret(string name)
     {
-        // Platform idiom: ToLowerInvariant lowers unit by unit here; the Mac mirror lowers each unit
-        // to the first scalar of its lower case to match it.
+        // Platform idiom: ToLowerInvariant lowers unit by unit here, one to one, and leaves İ (U+0130),
+        // whose lower case is two scalars, as it is; the Mac mirror lowers each unit only where its
+        // lower case is one unit, to match it.
         var lowered = name.ToLowerInvariant();
         return SecretNames.Any(lowered.Contains);
     }

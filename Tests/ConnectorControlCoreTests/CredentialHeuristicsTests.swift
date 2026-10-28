@@ -29,6 +29,9 @@ final class CredentialHeuristicsTests: XCTestCase {
         XCTAssertTrue(CredentialHeuristics.namesASecret("--api-key\u{301}"))
         XCTAssertTrue(CredentialHeuristics.namesASecret("API_TOKEN\u{301}"))
         XCTAssertTrue(CredentialHeuristics.namesASecret("X-API-\u{212A}EY"), "the Kelvin sign lowers to k")
+        XCTAssertFalse(CredentialHeuristics.namesASecret("CREDENT\u{130}AL"),
+                       "İ lowers to two scalars, i and a combining dot, and stays as it is, as ToLowerInvariant leaves it")
+        XCTAssertEqual(CredentialHeuristics.loweredUnits("\u{130}I"), [0x130, 0x69])
         XCTAssertTrue(CredentialHeuristics.looksLikeCredential("sk-\u{301}live"))
         XCTAssertFalse(CredentialHeuristics.looksLikeCredential("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4 \u{301}x"), "a space is a space")
         XCTAssertTrue(CredentialHeuristics.looksLikeCredential("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3\u{1F600}"), "32 units")

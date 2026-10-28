@@ -36,6 +36,9 @@ public class CredentialHeuristicsTests
         Assert.True(CredentialHeuristics.NamesASecret("--api-key\u0301"));
         Assert.True(CredentialHeuristics.NamesASecret("API_TOKEN\u0301"));
         Assert.True(CredentialHeuristics.NamesASecret("X-API-\u212AEY"));   // the Kelvin sign lowers to k
+        // \u0130 lowers to two scalars, i and a combining dot, on the Mac; ToLowerInvariant leaves it as it is.
+        Assert.False(CredentialHeuristics.NamesASecret("CREDENT\u0130AL"));
+        Assert.Equal("\u0130i", "\u0130I".ToLowerInvariant());
         Assert.True(CredentialHeuristics.LooksLikeCredential("sk-\u0301live"));
         Assert.False(CredentialHeuristics.LooksLikeCredential("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4 \u0301x"));   // a space is a space
         Assert.True(CredentialHeuristics.LooksLikeCredential("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3\U0001F600"));   // 32 units
