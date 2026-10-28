@@ -12,6 +12,12 @@ public interface IMcpToolHost
     IReadOnlyList<JsonValue> ListTools();
 
     /// <summary>
+    /// What <c>tools/call</c> answers for a tool this host does not list: the session's own sentence,
+    /// or one that says why the tool is missing.
+    /// </summary>
+    string UnknownToolMessage(string name);
+
+    /// <summary>
     /// Runs one tool. <paramref name="progress"/> may be called any number of times before
     /// <paramref name="completion"/>, which is called once, with the <c>tools/call</c> result object.
     /// </summary>

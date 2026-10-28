@@ -122,6 +122,9 @@ public sealed class JsonValue : IEquatable<JsonValue>
     /// One line of compact, key-sorted JSON: the control layer's wire format. JSONSerialization
     /// writes it on the Swift side, which this reproduces byte for byte
     /// (<c>AppleJsonFormat.SerializationCompact</c>, pinned by the serialization-compact goldens).
+    /// Platform idiom: the Mac writer answers <c>"null"</c> for a value JSON cannot hold (NaN,
+    /// infinity); a C# <see cref="JsonValue"/> cannot hold one — <see cref="Double"/> refuses them — so
+    /// this never does.
     /// </summary>
     public string CompactLine() => AppleJsonWriter.Write(this, AppleJsonFormat.SerializationCompact);
 

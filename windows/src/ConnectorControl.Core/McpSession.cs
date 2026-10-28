@@ -15,6 +15,8 @@ namespace ConnectorControl.Core;
 /// </summary>
 public sealed class McpSession(IMcpToolHost host, string version, Action<string> send)
 {
+    // The Swift side marks its constants and pure helpers nonisolated for the command-line tool's
+    // reading threads; C# has no actor isolation, so these are plain statics.
     public const string ServerName = "connector-control";
     /// <summary>Newest first; the first is what a client asking for anything else is offered.</summary>
     public static readonly IReadOnlyList<string> SupportedProtocolVersions = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
@@ -36,6 +38,8 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
     public const string InvalidParamsMessage = "Invalid params";
     public const string NotInitializedMessage = "Server not initialized";
     public const string TooLargeMessage = "Message too large";
+    public const int InternalErrorCode = -32603;
+    public const string InternalErrorMessage = "Internal error";
 
     public static string UnknownToolMessage(string name) => $"Unknown tool: {name}";
 
@@ -102,6 +106,48 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
             return;
         }
         Request(method, parameters, id);
+    }
+
+    /// <summary>
+    /// One message as the transport read it. Bytes that are not UTF-8 are refused as a parse error
+    /// before anything decodes them: each platform would otherwise decode them its own way, and a
+    /// name echoed back in an answer would differ between the two.
+    /// </summary>
+    public void Receive(byte[] bytes)
+    {
+        if (bytes.Length > MaxMessageBytes)
+        {
+            ReceiveTooLarge();
+            return;
+        }
+        if (StrictUtf8(bytes) is not { } line)
+        {
+            Reply(ParseErrorCode, ParseErrorMessage, JsonValue.Null);
+            return;
+        }
+        Receive(line);
+    }
+
+    /// <summary>A line the transport stopped reading at <see cref="MaxMessageBytes"/>: refused as <c>Receive</c> refuses one.</summary>
+    public void ReceiveTooLarge() => Reply(InvalidRequestCode, TooLargeMessage, JsonValue.Null);
+
+    private static readonly UTF8Encoding StrictDecoder = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
+    /// <summary>
+    /// <paramref name="bytes"/> as text, or null when they are not UTF-8; the hello is read the same
+    /// way. Platform idiom: a throwing UTF8Encoding, which refuses malformed, overlong and surrogate
+    /// sequences, as the Mac mirror's standard-library decoder does.
+    /// </summary>
+    public static string? StrictUtf8(byte[] bytes)
+    {
+        try
+        {
+            return StrictDecoder.GetString(bytes);
+        }
+        catch (DecoderFallbackException)
+        {
+            return null;
+        }
     }
 
     // MARK: Requests
@@ -176,7 +222,7 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
         }
         if (!host.ListTools().Any(tool => ToolName(tool) == name))
         {
-            Reply(InvalidParamsCode, UnknownToolMessage(name), id);
+            Reply(InvalidParamsCode, host.UnknownToolMessage(name), id);
             return;
         }
         JsonValue? token = null;
@@ -219,17 +265,25 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
 
     // MARK: Writing
 
+    // Platform idiom: a C# JsonValue cannot hold NaN or infinity — JsonValue.Double refuses them — so
+    // every answer is writable; the Mac mirror answers -32603 for the one value its writer cannot write.
     private void Respond(JsonValue id, JsonValue result) =>
         Write(JsonValue.Object(("jsonrpc", JsonValue.String("2.0")), ("id", id), ("result", result)));
 
-    private void Reply(int code, string message, JsonValue id) =>
-        Write(JsonValue.Object(("jsonrpc", JsonValue.String("2.0")), ("id", id),
-            ("error", JsonValue.Object(("code", JsonValue.Int(code)), ("message", JsonValue.String(message))))));
+    private void Reply(int code, string message, JsonValue id) => send(ErrorLine(code, message, id));
+
+    /// <summary>
+    /// A JSON-RPC error answer, as this session writes one: the relay answers in the same words when
+    /// the app cannot.
+    /// </summary>
+    public static string ErrorLine(int code, string message, JsonValue id) =>
+        JsonValue.Object(("jsonrpc", JsonValue.String("2.0")), ("id", id),
+            ("error", JsonValue.Object(("code", JsonValue.Int(code)), ("message", JsonValue.String(message))))).CompactLine();
 
     private void Write(JsonValue message) => send(message.CompactLine());
 
     /// <summary>A JSON-RPC id this server accepts: a string or an integer.</summary>
-    internal static JsonValue? ValidId(JsonValue value) => value.Kind switch
+    public static JsonValue? ValidId(JsonValue value) => value.Kind switch
     {
         JsonKind.String or JsonKind.Int => value,
         _ => null,
@@ -251,7 +305,7 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
         : value == Math.Round(value) && Math.Abs(value) < 1e15 ? JsonValue.Int((long)value) : JsonValue.Double(value);
 
     /// <summary>Whether <paramref name="text"/> nests arrays and objects no deeper than <paramref name="limit"/>, brackets inside strings not counted.</summary>
-    internal static bool Nests(int limit, string text)
+    public static bool Nests(int limit, string text)
     {
         var depth = 0;
         var inString = false;

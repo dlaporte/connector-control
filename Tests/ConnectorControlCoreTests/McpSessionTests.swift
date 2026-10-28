@@ -14,6 +14,7 @@ final class McpSessionTests: XCTestCase {
         }
         var calls: [Call] = []
         func listTools() -> [JSONValue] { [.object(["name": .string("echo")])] }
+        func unknownToolMessage(_ name: String) -> String { "No \(name) here" }
         func callTool(name: String, arguments: JSONValue, progressToken: JSONValue?,
                       progress: @escaping (Double) -> Void, completion: @escaping (JSONValue) -> Void) {
             calls.append(Call(name: name, arguments: arguments, token: progressToken, progress: progress, completion: completion))
@@ -117,7 +118,7 @@ final class McpSessionTests: XCTestCase {
         session.receive(#"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"echo","arguments":[1]}}"#)
         session.receive(#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{}}"#)
         XCTAssertEqual(Array(sent.dropFirst()), [
-            #"{"error":{"code":-32602,"message":"Unknown tool: nope"},"id":5,"jsonrpc":"2.0"}"#,
+            #"{"error":{"code":-32602,"message":"No nope here"},"id":5,"jsonrpc":"2.0"}"#,
             #"{"error":{"code":-32602,"message":"Invalid params"},"id":6,"jsonrpc":"2.0"}"#,
             #"{"error":{"code":-32602,"message":"Invalid params"},"id":7,"jsonrpc":"2.0"}"#,
         ])
@@ -187,10 +188,41 @@ final class McpSessionTests: XCTestCase {
         XCTAssertEqual(sent, [#"{"error":{"code":-32600,"message":"Invalid Request"},"id":null,"jsonrpc":"2.0"}"#])
     }
 
-    func testInvalidUTF8IsReadAsReplacementCharacters() {
-        let bad = String(decoding: [0xFF, 0xFE], as: UTF8.self)
-        session.receive(pingLine(padding: bad))
+    /// Text that already holds U+FFFD is text; bytes that are not UTF-8 never become text (below).
+    func testReplacementCharactersAlreadyInTextAreReadAsText() {
+        session.receive(pingLine(padding: "\u{FFFD}\u{FFFD}"))
         XCTAssertEqual(sent, [#"{"id":1,"jsonrpc":"2.0","result":{}}"#])
+    }
+
+    func testAnAnswerJSONCannotHoldIsAnInternalErrorNotSilence() throws {
+        initialize()
+        session.receive(#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"echo"}}"#)
+        try XCTUnwrap(host.calls.first).completion(.object(["value": .double(.nan)]))
+        XCTAssertEqual(sent.last, #"{"error":{"code":-32603,"message":"Internal error"},"id":9,"jsonrpc":"2.0"}"#)
+    }
+
+    func testBytesThatAreNotUTF8AreAParseErrorBeforeAnythingDecodesThem() {
+        let invalid: [[UInt8]] = [[0xC3, 0x28], [0xC0, 0xAF], [0xED, 0xA0, 0x80], [0xFF]]
+        for bad in invalid {
+            sent = []
+            session.receive(Data(#"{"jsonrpc":"2.0","id":1,"method":"ping","params":{"x":""#.utf8) + Data(bad) + Data(#""}}"#.utf8))
+            XCTAssertEqual(sent, [#"{"error":{"code":-32700,"message":"Parse error"},"id":null,"jsonrpc":"2.0"}"#], "\(bad)")
+        }
+        sent = []
+        session.receive(Data(#"{"jsonrpc":"2.0","id":"é","method":"ping"}"#.utf8))
+        XCTAssertEqual(sent, [#"{"id":"é","jsonrpc":"2.0","result":{}}"#], "valid UTF-8 is read as it always was")
+    }
+
+    func testBytesPastTheLimitAndAFramersReportAreRefusedUnread() {
+        session.receive(Data(repeating: 0x20, count: McpSession.maxMessageBytes + 1))
+        session.receiveTooLarge()
+        XCTAssertEqual(sent, Array(repeating: #"{"error":{"code":-32600,"message":"Message too large"},"id":null,"jsonrpc":"2.0"}"#,
+                                   count: 2))
+    }
+
+    func testErrorLinesAreWrittenAsTheSessionWritesThem() {
+        XCTAssertEqual(McpSession.errorLine(code: McpSession.internalErrorCode, message: McpSession.internalErrorMessage, id: .int(4)),
+                       #"{"error":{"code":-32603,"message":"Internal error"},"id":4,"jsonrpc":"2.0"}"#)
     }
 
     func testTheSizeLimitCountsBytesNotCharacters() {

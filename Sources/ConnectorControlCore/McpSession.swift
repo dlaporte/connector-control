@@ -7,6 +7,9 @@ import Foundation
 @MainActor
 public protocol McpToolHost: AnyObject {
     func listTools() -> [JSONValue]
+    /// What `tools/call` answers for a tool this host does not list: the session's own sentence, or
+    /// one that says why the tool is missing.
+    func unknownToolMessage(_ name: String) -> String
     /// Runs one tool. `progress` may be called any number of times before `completion`, which is
     /// called once, with the `tools/call` result object.
     func callTool(name: String, arguments: JSONValue, progressToken: JSONValue?,
@@ -22,27 +25,31 @@ public protocol McpToolHost: AnyObject {
 /// main thread, where the tools run.
 @MainActor
 public final class McpSession {
-    public static let serverName = "connector-control"
+    // The constants and the pure helpers below are nonisolated: the command-line tool frames and
+    // writes lines on its own reading threads, away from the main actor.
+    public nonisolated static let serverName = "connector-control"
     /// Newest first; the first is what a client asking for anything else is offered.
-    public static let supportedProtocolVersions = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]
+    public nonisolated static let supportedProtocolVersions = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]
     /// The largest message read; anything longer is refused without being parsed.
-    public static let maxMessageBytes = 1_048_576
+    public nonisolated static let maxMessageBytes = 1_048_576
     /// How deeply a message may nest arrays and objects; the Windows parser's own limit, set on both
     /// sides so neither accepts what the other refuses.
-    public static let maxNestingDepth = 64
-    public static let parseErrorCode = -32700
-    public static let invalidRequestCode = -32600
-    public static let methodNotFoundCode = -32601
-    public static let invalidParamsCode = -32602
-    public static let notInitializedCode = -32002
-    public static let parseErrorMessage = "Parse error"
-    public static let invalidRequestMessage = "Invalid Request"
-    public static let methodNotFoundMessage = "Method not found"
-    public static let invalidParamsMessage = "Invalid params"
-    public static let notInitializedMessage = "Server not initialized"
-    public static let tooLargeMessage = "Message too large"
+    public nonisolated static let maxNestingDepth = 64
+    public nonisolated static let parseErrorCode = -32700
+    public nonisolated static let invalidRequestCode = -32600
+    public nonisolated static let methodNotFoundCode = -32601
+    public nonisolated static let invalidParamsCode = -32602
+    public nonisolated static let notInitializedCode = -32002
+    public nonisolated static let parseErrorMessage = "Parse error"
+    public nonisolated static let invalidRequestMessage = "Invalid Request"
+    public nonisolated static let methodNotFoundMessage = "Method not found"
+    public nonisolated static let invalidParamsMessage = "Invalid params"
+    public nonisolated static let notInitializedMessage = "Server not initialized"
+    public nonisolated static let tooLargeMessage = "Message too large"
+    public nonisolated static let internalErrorCode = -32603
+    public nonisolated static let internalErrorMessage = "Internal error"
 
-    public static func unknownToolMessage(_ name: String) -> String { "Unknown tool: \(name)" }
+    public nonisolated static func unknownToolMessage(_ name: String) -> String { "Unknown tool: \(name)" }
 
     /// The client's own name from `initialize`, which the gate names as the asker.
     public private(set) var clientName: String?
@@ -102,6 +109,42 @@ public final class McpSession {
         request(method, params, id: id)
     }
 
+    /// One message as the transport read it. Bytes that are not UTF-8 are refused as a parse error
+    /// before anything decodes them: each platform would otherwise decode them its own way, and a
+    /// name echoed back in an answer would differ between the two.
+    public func receive(_ bytes: Data) {
+        guard bytes.count <= McpSession.maxMessageBytes else {
+            receiveTooLarge()
+            return
+        }
+        guard let line = McpSession.strictUTF8(bytes) else {
+            reply(error: McpSession.parseErrorCode, McpSession.parseErrorMessage, id: .null)
+            return
+        }
+        receive(line)
+    }
+
+    /// A line the transport stopped reading at `maxMessageBytes`: refused as `receive` refuses one.
+    public func receiveTooLarge() {
+        reply(error: McpSession.invalidRequestCode, McpSession.tooLargeMessage, id: .null)
+    }
+
+    /// `bytes` as text, or nil when they are not UTF-8; the hello is read the same way. Platform
+    /// idiom: the standard library's decoder, which refuses malformed, overlong and surrogate
+    /// sequences, as the Windows mirror's throwing UTF8Encoding does.
+    public nonisolated static func strictUTF8(_ bytes: Data) -> String? {
+        var decoder = UTF8()
+        var iterator = bytes.makeIterator()
+        var scalars = String.UnicodeScalarView()
+        while true {
+            switch decoder.decode(&iterator) {
+            case .scalarValue(let scalar): scalars.append(scalar)
+            case .emptyInput: return String(scalars)
+            case .error: return nil
+            }
+        }
+    }
+
     // MARK: Requests
 
     private func request(_ method: String, _ params: JSONValue, id: JSONValue) {
@@ -157,7 +200,7 @@ public final class McpSession {
             return
         }
         guard host.listTools().contains(where: { McpSession.toolName(of: $0) == name }) else {
-            reply(error: McpSession.invalidParamsCode, McpSession.unknownToolMessage(name), id: id)
+            reply(error: McpSession.invalidParamsCode, host.unknownToolMessage(name), id: id)
             return
         }
         var token: JSONValue?
@@ -193,18 +236,31 @@ public final class McpSession {
     // MARK: Writing
 
     private func respond(_ id: JSONValue, _ result: JSONValue) {
-        write(.object(["jsonrpc": .string("2.0"), "id": id, "result": result]))
+        let line = JSONValue.object(["jsonrpc": .string("2.0"), "id": id, "result": result]).compactLine()
+        // compactLine answers "null" for a value JSON cannot hold (NaN, infinity); the client must
+        // still hear about its request, or it waits on that id for good.
+        guard line != "null" else {
+            reply(error: McpSession.internalErrorCode, McpSession.internalErrorMessage, id: id)
+            return
+        }
+        send(line)
     }
 
     private func reply(error code: Int, _ message: String, id: JSONValue) {
-        write(.object(["jsonrpc": .string("2.0"), "id": id,
-                       "error": .object(["code": .int(code), "message": .string(message)])]))
+        send(McpSession.errorLine(code: code, message: message, id: id))
     }
 
     private func write(_ message: JSONValue) { send(message.compactLine()) }
 
+    /// A JSON-RPC error answer, as this session writes one: the relay answers in the same words when
+    /// the app cannot.
+    public nonisolated static func errorLine(code: Int, message: String, id: JSONValue) -> String {
+        JSONValue.object(["jsonrpc": .string("2.0"), "id": id,
+                          "error": .object(["code": .int(code), "message": .string(message)])]).compactLine()
+    }
+
     /// A JSON-RPC id this server accepts: a string or an integer.
-    static func validID(_ value: JSONValue) -> JSONValue? {
+    public nonisolated static func validID(_ value: JSONValue) -> JSONValue? {
         switch value {
         case .string, .int: return value
         default: return nil
@@ -217,20 +273,20 @@ public final class McpSession {
         return McpSession.validID(id)
     }
 
-    static func toolName(of descriptor: JSONValue) -> String? {
+    nonisolated static func toolName(of descriptor: JSONValue) -> String? {
         guard case .object(let object) = descriptor, case .string(let name)? = object["name"] else { return nil }
         return name
     }
 
     /// Whole numbers go out as integers, which both platforms write the same way. NaN and infinity
     /// have no JSON form, so they are no progress at all.
-    static func number(_ value: Double) -> JSONValue? {
+    nonisolated static func number(_ value: Double) -> JSONValue? {
         guard value.isFinite else { return nil }
         return value == value.rounded() && abs(value) < 1e15 ? .int(Int(value)) : .double(value)
     }
 
     /// Whether `text` nests arrays and objects no deeper than `limit`, brackets inside strings not counted.
-    static func nests(atMost limit: Int, _ text: String) -> Bool {
+    public nonisolated static func nests(atMost limit: Int, _ text: String) -> Bool {
         var depth = 0
         var inString = false
         var escaped = false

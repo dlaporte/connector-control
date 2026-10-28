@@ -28,6 +28,8 @@ public final class ControlToolHost: McpToolHost {
 
     public func listTools() -> [JSONValue] { ControlTools.mcpDescriptors }
 
+    public func unknownToolMessage(_ name: String) -> String { McpSession.unknownToolMessage(name) }
+
     public func callTool(name: String, arguments: JSONValue, progressToken: JSONValue?,
                          progress: @escaping (Double) -> Void, completion: @escaping (JSONValue) -> Void) {
         tools.call(name: name, arguments: arguments, caller: caller, progress: progress,

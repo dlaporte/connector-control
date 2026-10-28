@@ -26,6 +26,8 @@ public sealed class ControlToolHost(ControlTools tools, bool isCli) : IMcpToolHo
 
     public IReadOnlyList<JsonValue> ListTools() => ControlTools.McpDescriptors;
 
+    public string UnknownToolMessage(string name) => McpSession.UnknownToolMessage(name);
+
     public void CallTool(string name, JsonValue arguments, JsonValue? progressToken,
                          Action<double> progress, Action<JsonValue> completion) =>
         Tools.Call(name, arguments, Caller, progress, result => completion(result.McpResult));

@@ -14,6 +14,8 @@ public class McpSessionTests
 
         public IReadOnlyList<JsonValue> ListTools() => [JsonValue.Object(("name", JsonValue.String("echo")))];
 
+        public string UnknownToolMessage(string name) => $"No {name} here";
+
         public void CallTool(string name, JsonValue arguments, JsonValue? progressToken,
                              Action<double> progress, Action<JsonValue> completion) =>
             Calls.Add(new Call(name, arguments, progressToken, progress, completion));
@@ -151,7 +153,7 @@ public class McpSessionTests
         session.Receive("""{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{}}""");
         Assert.Equal(
             [
-                """{"error":{"code":-32602,"message":"Unknown tool: nope"},"id":5,"jsonrpc":"2.0"}""",
+                """{"error":{"code":-32602,"message":"No nope here"},"id":5,"jsonrpc":"2.0"}""",
                 """{"error":{"code":-32602,"message":"Invalid params"},"id":6,"jsonrpc":"2.0"}""",
                 """{"error":{"code":-32602,"message":"Invalid params"},"id":7,"jsonrpc":"2.0"}""",
             ],
@@ -237,11 +239,54 @@ public class McpSessionTests
     }
 
     [Fact]
-    public void InvalidUtf8IsReadAsReplacementCharacters()
+    public void ReplacementCharactersAlreadyInTextAreReadAsText()
     {
-        // A lone surrogate is what invalid bytes become in a .NET string.
-        session.Receive(PingLine("𐀀".Substring(0, 1)));
+        // Text that already holds U+FFFD is text; bytes that are not UTF-8 never become text (below).
+        session.Receive(PingLine("\uFFFD\uFFFD"));
         Assert.Equal(["""{"id":1,"jsonrpc":"2.0","result":{}}"""], sent);
+    }
+
+    [Fact]
+    public void AnAnswerJsonCannotHoldCannotBeBuilt()
+    {
+        // Stands in for the Mac's testAnAnswerJSONCannotHoldIsAnInternalErrorNotSilence: a C# JsonValue
+        // refuses NaN and infinity, so no answer is ever unwritable.
+        Assert.Throws<ArgumentException>(() => JsonValue.Double(double.NaN));
+    }
+
+    [Fact]
+    public void BytesThatAreNotUtf8AreAParseErrorBeforeAnythingDecodesThem()
+    {
+        byte[] prefix = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"params\":{\"x\":\""u8.ToArray();
+        byte[] suffix = "\"}}"u8.ToArray();
+        byte[][] invalid = [[0xC3, 0x28], [0xC0, 0xAF], [0xED, 0xA0, 0x80], [0xFF]];
+        foreach (var bad in invalid)
+        {
+            sent.Clear();
+            session.Receive([.. prefix, .. bad, .. suffix]);
+            Assert.Equal(["""{"error":{"code":-32700,"message":"Parse error"},"id":null,"jsonrpc":"2.0"}"""], sent);
+        }
+        sent.Clear();
+        session.Receive(Encoding.UTF8.GetBytes("""{"jsonrpc":"2.0","id":"é","method":"ping"}"""));
+        Assert.Equal(["""{"id":"é","jsonrpc":"2.0","result":{}}"""], sent); // valid UTF-8 is read as it always was
+    }
+
+    [Fact]
+    public void BytesPastTheLimitAndAFramersReportAreRefusedUnread()
+    {
+        session.Receive(Enumerable.Repeat((byte)0x20, McpSession.MaxMessageBytes + 1).ToArray());
+        session.ReceiveTooLarge();
+        Assert.Equal(
+            Enumerable.Repeat("""{"error":{"code":-32600,"message":"Message too large"},"id":null,"jsonrpc":"2.0"}""", 2),
+            sent);
+    }
+
+    [Fact]
+    public void ErrorLinesAreWrittenAsTheSessionWritesThem()
+    {
+        Assert.Equal(
+            """{"error":{"code":-32603,"message":"Internal error"},"id":4,"jsonrpc":"2.0"}""",
+            McpSession.ErrorLine(McpSession.InternalErrorCode, McpSession.InternalErrorMessage, JsonValue.Int(4)));
     }
 
     [Fact]
