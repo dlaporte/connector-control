@@ -297,6 +297,9 @@
   "ControlTools.connectorsHeader": "CONNECTORS",
   "ControlTools.create_collection.cliUsage": "collection new <name>",
   "ControlTools.create_collection.description": "Create an empty collection. It does not become active.",
+  "ControlTools.createdText": {
+    "format": "Created “{0}”."
+  },
   "ControlTools.declinedError": "You declined this change in Connector Control.",
   "ControlTools.delete_collection.cliUsage": "collection delete <name>",
   "ControlTools.delete_collection.description": "Delete a collection and its connectors. A copy remains in Connector Control's backups; a subscribed collection's file is left alone.",
@@ -305,8 +308,14 @@
   "ControlTools.detail": {
     "format": "{0} · {1}"
   },
+  "ControlTools.duplicateSubscribedError": {
+    "format": "“{0}” is subscribed; copy it in Connector Control with Make Local Copy."
+  },
   "ControlTools.duplicate_collection.cliUsage": "collection duplicate <name> <new>",
   "ControlTools.duplicate_collection.description": "Copy a collection under a new name. The copy holds the same connectors, each on or off as it is, and does not become active. A subscribed collection is copied in Connector Control instead.",
+  "ControlTools.duplicatedText": {
+    "format": "Copied “{0}” as “{1}”."
+  },
   "ControlTools.emptyCollectionText": {
     "format": "“{0}” has no connectors."
   },
@@ -331,6 +340,10 @@
   "ControlTools.integrationOffError": "Claude integration is turned off in Connector Control.",
   "ControlTools.integrationOnConfirming": "on · confirmations on",
   "ControlTools.integrationOnNotConfirming": "on · confirmations off",
+  "ControlTools.integrationSetText": {
+    "format": "Claude integration is {0}."
+  },
+  "ControlTools.keepCountError": "backups-to-keep takes a number from 5 to 100.",
   "ControlTools.kindHeader": "KIND",
   "ControlTools.listKind": "a list of names",
   "ControlTools.list_backups.cliUsage": "backups",
@@ -368,15 +381,29 @@
   "ControlTools.relayUsage": "mcp",
   "ControlTools.rename_collection.cliUsage": "collection rename <old> <new>",
   "ControlTools.rename_collection.description": "Rename a collection.",
+  "ControlTools.renamedCollectionText": {
+    "format": "Renamed the collection “{0}” to “{1}”."
+  },
+  "ControlTools.restartToApplyText": "Restart Claude to apply the change.",
+  "ControlTools.restartToUseText": "Restart Claude to use it.",
   "ControlTools.restart_claude.cliUsage": "restart-claude",
   "ControlTools.restart_claude.description": "Quit and reopen Claude Desktop. The user is always asked first; the reply in progress stops and the conversation is kept.",
   "ControlTools.restore_backup.cliUsage": "backups restore <id>",
   "ControlTools.restore_backup.description": "Replace Claude's config with a backup. The current file is backed up first.",
   "ControlTools.runsHeader": "RUNS",
+  "ControlTools.savedNotAppliedText": {
+    "format": "Saved, but Claude’s config wasn’t updated: {0}"
+  },
   "ControlTools.set_connector_enabled.cliUsage": "enable <name> | disable <name>",
   "ControlTools.set_connector_enabled.description": "Turn a connector on or off. Acts on the active collection, the one Claude runs, as Connector Control's own switches do; Claude picks the change up when it restarts.",
   "ControlTools.set_setting.cliUsage": "settings set <key> <value>",
   "ControlTools.set_setting.description": "Change a setting. Takes a key from get_settings and on or off, or a number from 5 to 100 for backups-to-keep. Only the user can change claude-integration and confirm-claude-changes.",
+  "ControlTools.settingChangedText": {
+    "format": "{0} is now {1}."
+  },
+  "ControlTools.settingNotForClaudeError": {
+    "format": "Only you can change {0}, in Connector Control or with the command-line tool."
+  },
   "ControlTools.settingsGroup": "Settings and backups",
   "ControlTools.sharingGroup": "Sharing",
   "ControlTools.statusGroup": "Status",
@@ -386,8 +413,14 @@
   "ControlTools.subscribe.cliUsage": "subscribe <file> [--name <name>]",
   "ControlTools.subscribe.description": "Subscribe to a collection file someone publishes. It becomes a new, read-only collection that follows the file, and its connectors arrive switched off.",
   "ControlTools.subscribedKind": "subscribed",
+  "ControlTools.switchValueError": {
+    "format": "{0} takes on or off."
+  },
   "ControlTools.switch_collection.cliUsage": "use <collection>",
   "ControlTools.switch_collection.description": "Make a collection active. Claude runs its connectors after its next restart.",
+  "ControlTools.switchedText": {
+    "format": "Switched to “{0}”."
+  },
   "ControlTools.textKind": "text",
   "ControlTools.titles.add_connector": "Add connector",
   "ControlTools.titles.apply_update": "Apply update",
@@ -413,6 +446,12 @@
   "ControlTools.titles.subscribe": "Subscribe to collection",
   "ControlTools.titles.switch_collection": "Switch collection",
   "ControlTools.titles.update_connector": "Change connector",
+  "ControlTools.turnedOffText": {
+    "format": "Turned off “{0}” in “{1}”."
+  },
+  "ControlTools.turnedOnText": {
+    "format": "Turned on “{0}” in “{1}”."
+  },
   "ControlTools.unknownToolError": {
     "format": "There’s no tool named “{0}”."
   },
