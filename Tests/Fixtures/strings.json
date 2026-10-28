@@ -349,6 +349,7 @@
   "ControlTools.noConnectorError": {
     "format": "There’s no connector named “{0}” in “{1}”."
   },
+  "ControlTools.noQuestionError": "Connector Control couldn’t ask about this change, so nothing was done.",
   "ControlTools.notOneOfError": {
     "format": "“{0}” must be one of {1}."
   },
@@ -360,6 +361,7 @@
   "ControlTools.onWord": "on",
   "ControlTools.problemLabel": "Problem",
   "ControlTools.publishedKind": "published",
+  "ControlTools.queuedText": "Waiting for another change in Connector Control to finish.",
   "ControlTools.refresh_subscription.cliUsage": "refresh <collection>",
   "ControlTools.refresh_subscription.description": "Read a subscribed collection's file now. Says whether an update is waiting.",
   "ControlTools.relaySummary": "The relay Claude Desktop runs; not for direct use",

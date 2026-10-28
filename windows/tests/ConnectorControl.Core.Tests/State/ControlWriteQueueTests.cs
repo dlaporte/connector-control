@@ -1,0 +1,195 @@
+using ConnectorControl.Core.State;
+using ConnectorControl.Core.Tests.TestSupport;
+
+namespace ConnectorControl.Core.Tests.State;
+
+/// <summary>
+/// The write queue, driven by writes the test controls: every write is prepared through the tools'
+/// <c>PrepareOverride</c>, asks a question of its own when its tool asks, and records that it ran.
+///
+/// Mirror: Tests/ConnectorControlStateTests/ControlWriteQueueTests.swift
+/// </summary>
+public class ControlWriteQueueTests
+{
+    /// <summary>The writes that ran, in order, by the name or collection each was given.</summary>
+    private readonly List<string> performed = [];
+
+    private static readonly ControlCaller Claude = new ControlCaller.Relay("claude-ai");
+
+    private static ConfirmationRequest Question(string label) => new($"Allow {label}?", label, [], null);
+
+    /// <summary>Every write prepared as one that asks about its label, and answers "Did &lt;label&gt;." once it
+    /// runs. <paramref name="beforePerform"/>, when given, runs first, and may throw.</summary>
+    private void ControlWrites(ControlRig rig, Action<string>? beforePerform = null) =>
+        rig.Tools.PrepareOverride = (name, arguments, _) =>
+        {
+            var label = arguments.String("collection") ?? arguments.String("name") ?? name;
+            return new ControlStep.Ready(Question(label), () =>
+            {
+                beforePerform?.Invoke(label);
+                performed.Add(label);
+                return new ControlOutcome(new ControlResult(JsonValue.Object(), $"Did {label}.", false), null);
+            });
+        };
+
+    /// <summary>A gated write: it asks while confirmations are on.</summary>
+    private static ControlRig.Answer Add(ControlRig rig, string name) =>
+        rig.Start("add_connector", JsonValue.Object(("name", JsonValue.String(name)), ("config", JsonValue.Object())));
+
+    /// <summary>A direct write: it never asks.</summary>
+    private static ControlRig.Answer SwitchTo(ControlRig rig, string collection, ControlCaller? caller = null) =>
+        rig.Start("switch_collection", JsonValue.Object(("collection", JsonValue.String(collection))), caller);
+
+    /// <summary>Lets every waiting call's clock run out: each reports progress until its early answer.</summary>
+    private static void RunOutTheClock(ControlRig rig)
+    {
+        var runs = 0;
+        while (rig.H.Delays.Pending.Count > 0 && runs < 100)
+        {
+            rig.H.Delays.RunNext();
+            runs++;
+        }
+        // Every waiting call has had its early answer.
+        Assert.Empty(rig.H.Delays.Pending);
+    }
+
+    [Fact]
+    public void AnAllowAfterTheIntegrationWasTurnedOffAppliesNothing()
+    {
+        using var rig = new ControlRig();
+        ControlWrites(rig);
+        var answer = Add(rig, "a");
+        Assert.Equal(1, rig.Confirmer.WaitingCount);
+        Assert.Null(rig.State.SetClaudeIntegrationEnabled(false));
+        rig.Confirmer.Answer(true);
+        Assert.Equal(ControlResult.Refusal(ControlTools.IntegrationOffError), answer.Result);
+        Assert.Empty(performed);
+    }
+
+    [Fact]
+    public void AWriteWaitingItsTurnSaysSoAndOnlyItsOwnDialogSaysItAwaitsAnAnswer()
+    {
+        using var rig = new ControlRig();
+        ControlWrites(rig);
+        var asking = Add(rig, "a");
+        var queued = SwitchTo(rig, "b");
+        var fromCli = SwitchTo(rig, "c", new ControlCaller.Cli());
+        RunOutTheClock(rig);
+        var ticks = Enumerable.Range(1, (int)(ControlTools.ConfirmationWait / ControlTools.ProgressInterval))
+            .Select(tick => tick * ControlTools.ProgressInterval).ToList();
+        Assert.Equal(ControlTools.WaitingResult, asking.Result);
+        Assert.Equal(ticks, asking.Progress);
+        Assert.Equal(ControlTools.QueuedResult, queued.Result);
+        Assert.Equal(ticks, queued.Progress);
+        // The command line never hears of a dialog it did not raise.
+        Assert.Equal(ControlTools.QueuedResult, fromCli.Result);
+        Assert.NotEqual(ControlTools.WaitingText, ControlTools.QueuedText);
+        Assert.Empty(performed);
+    }
+
+    [Fact]
+    public void AChangeClaudeAskedForThatLandsAfterItsEarlyAnswerIsAnnounced()
+    {
+        using var rig = new ControlRig();
+        ControlWrites(rig);
+        Add(rig, "a");
+        SwitchTo(rig, "b");
+        SwitchTo(rig, "c", new ControlCaller.Cli());
+        RunOutTheClock(rig);
+        rig.H.Notifier.Sent.Clear();
+        rig.Confirmer.Answer(true);
+        rig.H.Drain();
+        Assert.Equal(["a", "b", "c"], performed);
+        // The confirmed change and the direct one Claude asked for are announced; the command
+        // line's own change is the user's.
+        Assert.Equal(["Did a.", "Did b."], rig.H.Notifier.Sent.Select(sent => sent.Body));
+    }
+
+    [Fact]
+    public void AChangeAnsweredInTimeIsNotAnnouncedAgain()
+    {
+        using var rig = new ControlRig();
+        ControlWrites(rig);
+        var asking = Add(rig, "a");
+        var queued = SwitchTo(rig, "b");
+        rig.H.Notifier.Sent.Clear();
+        rig.Confirmer.Answer(true);
+        rig.H.Drain();
+        Assert.Equal("Did a.", asking.Result?.Text);
+        Assert.Equal("Did b.", queued.Result?.Text);
+        // The caller heard the outcome itself.
+        Assert.Empty(rig.H.Notifier.Sent);
+    }
+
+    [Fact]
+    public void AToolThatBuildsNoQuestionIsRefusedRatherThanRunUnasked()
+    {
+        using var rig = new ControlRig();
+        rig.Tools.PrepareOverride = (_, _, _) => new ControlStep.Ready(null, () =>
+        {
+            performed.Add("unasked");
+            return new ControlOutcome(new ControlResult(JsonValue.Object(), "Did it.", false), null);
+        });
+        Assert.Equal(ControlResult.Refusal(ControlTools.NoQuestionError), Add(rig, "a").Result);
+        Assert.Empty(performed);
+        Assert.Empty(rig.Confirmer.Requests);
+    }
+
+    // C# only, as each case below is: a C# handler, dialog or caller can throw, where Swift's
+    // closures cannot, and a write that threw must still end and let the next one run.
+
+    [Fact]
+    public void AWriteThatThrowsIsRefusedOnceAndTheNextStillRuns()
+    {
+        using var rig = new ControlRig();
+        ControlWrites(rig, label =>
+        {
+            if (label is "a" or "b")
+            {
+                throw new InvalidOperationException($"{label} broke");
+            }
+        });
+        var direct = new List<ControlResult>();
+        rig.Tools.Call("switch_collection", JsonValue.Object(("collection", JsonValue.String("a"))), Claude, _ => { }, direct.Add);
+        Assert.Equal([ControlResult.Refusal("a broke")], direct);
+        var confirmed = Add(rig, "b");
+        rig.Confirmer.Answer(true);
+        Assert.Equal(ControlResult.Refusal("b broke"), confirmed.Result);
+        Assert.Equal("Did c.", SwitchTo(rig, "c").Result?.Text);
+        Assert.Equal(["c"], performed);
+    }
+
+    [Fact]
+    public void ADialogThatThrowsRefusesTheCallOnceAndTheNextStillRuns()
+    {
+        using var rig = new ControlRig();
+        ControlWrites(rig);
+        rig.Confirmer.Throws = new InvalidOperationException("no dialog");
+        var answers = new List<ControlResult>();
+        rig.Tools.Call("add_connector", JsonValue.Object(("name", JsonValue.String("a")), ("config", JsonValue.Object())),
+            Claude, _ => { }, answers.Add);
+        Assert.Equal([ControlResult.Refusal("no dialog")], answers);
+        Assert.Empty(rig.H.Delays.Pending);
+        rig.Confirmer.Throws = null;
+        rig.Confirmer.Scripted = true;
+        Assert.Equal("Did b.", Add(rig, "b").Result?.Text);
+        Assert.Equal(["b"], performed);
+    }
+
+    [Fact]
+    public void ACallerThatThrowsOnItsAnswerStillLetsTheNextWriteRun()
+    {
+        using var rig = new ControlRig();
+        ControlWrites(rig);
+        var answers = 0;
+        rig.Tools.Call("switch_collection", JsonValue.Object(("collection", JsonValue.String("a"))), Claude, _ => { },
+            _ =>
+            {
+                answers++;
+                throw new InvalidOperationException("caller gone");
+            });
+        Assert.Equal(1, answers);
+        Assert.Equal("Did b.", SwitchTo(rig, "b").Result?.Text);
+        Assert.Equal(["a", "b"], performed);
+    }
+}

@@ -126,8 +126,9 @@ public sealed partial class ControlTools
         state.WhenToolsProbed(null, () => done(ToolsResult()));
     }
 
-    /// <summary>Each launcher as the app's own words put it — "Found" or "Not found", never a version, so the
-    /// column reads the same whatever is installed — with where it is or how to install it.</summary>
+    /// <summary>Each launcher as the app's own words put it — "Found", "Not found" or, on the Mac, "Not visible
+    /// to Claude Desktop"; never a version, so the column reads the same whatever is installed — with
+    /// where it is or how to install it.</summary>
     internal ControlResult ToolsResult()
     {
         var rows = new List<IReadOnlyList<string>>();
@@ -294,7 +295,7 @@ public sealed partial class ControlTools
         {
             paths = BackupPaths();
         }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        catch (Exception error)
         {
             return ControlResult.Refusal(AppState.Friendly(error));
         }

@@ -8,10 +8,12 @@ import ConnectorControlTestSupport
 final class ControlToolsReadTests: XCTestCase {
     private let token = "ghp_0123456789abcdefghijklmnopqrstuvwxyzAB"
 
+    /// The token in its environment and, after a flag, in its arguments, where a summary of what it
+    /// runs could show it.
     private var github: MCPEntry {
         MCPEntry(config: .object([
             "command": .string("npx"),
-            "args": .array([.string("-y"), .string("@modelcontextprotocol/server-github")]),
+            "args": .array([.string("-y"), .string("@modelcontextprotocol/server-github"), .string("--token"), .string(token)]),
             "env": .object(["GITHUB_PERSONAL_ACCESS_TOKEN": .string(token)]),
         ]))
     }
@@ -144,17 +146,25 @@ final class ControlToolsReadTests: XCTestCase {
         ].joined(separator: "\n"))
     }
 
-    /// Arguments for the read tools that need some.
+    /// Arguments for the read tools that need some: each names something that is there, so every
+    /// read answers in full.
     private let readArguments: [String: [String: JSONValue]] = [
         "get_connector": ["name": .string("github")],
-        "get_pending_update": ["collection": .string("Default")],
+        "get_pending_update": ["collection": .string("Data team")],
     ]
 
     func testEveryReadToolLeavesTheStoreTheSettingsAndClaudesConfigByteIdentical() throws {
         let rig = ControlRig(); defer { rig.dispose() }
         XCTAssertNil(rig.state.upsert(name: "github", entry: github, renamedFrom: nil))
         rig.state.applyInteractively()
+        // A subscribed collection with an update waiting, so the pending-update read describes one.
+        let url = try rig.h.subscribe(rig.state, to: CollectionDocumentSamples.dataTeam)
+        var doc = CollectionDocumentSamples.dataTeam
+        doc.connectors["github"] = nil
+        try rig.h.writeDocument(doc, at: url)
+        rig.state.refreshSource(for: "Data team")
         rig.h.drain()
+        XCTAssertNotNil(rig.state.pendingUpdates["Data team"])
         let files = [rig.h.masterStoreURL, rig.h.storeDir.appendingPathComponent(CollectionsFile.fileName),
                      rig.h.claudeConfigURL, rig.state.service.paths.collectionsCacheURL]
         func bytes() -> [Data?] { files.map { try? Data(contentsOf: $0) } }
@@ -171,12 +181,13 @@ final class ControlToolsReadTests: XCTestCase {
         let filesBefore = bytes()
         let settingsBefore = settings()
         let backupsBefore = try rig.state.service.backups.backups(series: RestoreModel.series)
+        let sentBefore = rig.h.notifier.sent.count
         for tool in ControlTools.catalog where tool.gate == .read {
-            XCTAssertNotNil(rig.call(tool.name, readArguments[tool.name] ?? [:]), tool.name)
+            XCTAssertEqual(rig.call(tool.name, readArguments[tool.name] ?? [:])?.isError, false, tool.name)
         }
         XCTAssertEqual(bytes(), filesBefore)
         XCTAssertEqual(settings(), settingsBefore)
         XCTAssertEqual(try rig.state.service.backups.backups(series: RestoreModel.series), backupsBefore)
-        XCTAssertTrue(rig.h.notifier.sent.isEmpty)
+        XCTAssertEqual(rig.h.notifier.sent.count, sentBefore)
     }
 }

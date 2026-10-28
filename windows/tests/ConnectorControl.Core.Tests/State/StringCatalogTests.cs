@@ -404,6 +404,7 @@ public class StringCatalogTests
         actual["ControlTools.nameHeader"] = ControlTools.NameHeader;
         actual["ControlTools.noBackupsText"] = ControlTools.NoBackupsText;
         actual["ControlTools.noConnectorError"] = ControlTools.NoConnectorError("X", "Y");
+        actual["ControlTools.noQuestionError"] = ControlTools.NoQuestionError;
         actual["ControlTools.notOneOfError"] = ControlTools.NotOneOfError("X", "Y");
         actual["ControlTools.notSubscribedError"] = ControlTools.NotSubscribedError("X");
         actual["ControlTools.objectKind"] = ControlTools.ObjectKind;
@@ -411,6 +412,7 @@ public class StringCatalogTests
         actual["ControlTools.onWord"] = ControlTools.OnWord;
         actual["ControlTools.problemLabel"] = ControlTools.ProblemLabel;
         actual["ControlTools.publishedKind"] = ControlTools.PublishedKind;
+        actual["ControlTools.queuedText"] = ControlTools.QueuedText;
         actual["ControlTools.relaySummary"] = ControlTools.RelaySummary;
         actual["ControlTools.relayUsage"] = ControlTools.RelayUsage;
         actual["ControlTools.runsHeader"] = ControlTools.RunsHeader;

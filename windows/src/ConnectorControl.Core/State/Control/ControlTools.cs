@@ -18,7 +18,9 @@ public sealed partial class ControlTools
     public const string IntegrationOffError = "Claude integration is turned off in Connector Control.";
     public const string DeclinedError = "You declined this change in Connector Control.";
     public const string WaitingText = "Waiting for your answer in Connector Control.";
+    public const string QueuedText = "Waiting for another change in Connector Control to finish.";
     public const string ChangedWhileAskingError = "This changed while Connector Control was asking, so nothing was done. Ask again.";
+    public const string NoQuestionError = "Connector Control couldn’t ask about this change, so nothing was done.";
     public const string ArgumentsNotObjectError = "The arguments must be a JSON object.";
     public const string OnWord = "on";
     public const string OffWord = "off";
@@ -49,8 +51,14 @@ public sealed partial class ControlTools
 
     public static string Detail(string first, string second) => $"{first} · {second}";
 
+    /// <summary>The early answer of a call whose confirmation is open.</summary>
     internal static ControlResult WaitingResult =>
         new(JsonValue.Object(("status", JsonValue.String("waiting"))), WaitingText, false);
+
+    /// <summary>The early answer of a call still waiting for its turn, behind another change: it has asked
+    /// nobody anything yet.</summary>
+    internal static ControlResult QueuedResult =>
+        new(JsonValue.Object(("status", JsonValue.String("queued"))), QueuedText, false);
 
     internal readonly AppState state;
     internal readonly SettingsModel settings;
@@ -60,6 +68,9 @@ public sealed partial class ControlTools
     private readonly List<ToolCall> writeQueue = [];
     /// <summary>A write is running, or waiting for the user's answer.</summary>
     private bool writing;
+    /// <summary>Stands in for the write tools' own preparation when set, so tests drive the write queue with
+    /// writes they control. Null in the app.</summary>
+    internal Func<string, ControlArguments, ControlCaller, ControlStep>? PrepareOverride { get; set; }
 
     public ControlTools(AppState state, SettingsModel settings, IControlConfirmer confirmer, AppHost host)
     {
@@ -154,45 +165,59 @@ public sealed partial class ControlTools
         var call = writeQueue[0];
         writeQueue.RemoveAt(0);
         writing = true;
-        // Decided again: the settings may have changed while the call waited for its turn.
-        switch (Decision(call.Definition, call.Caller))
+        // Caught here, where the Mac has nothing to catch: a C# handler, the confirmer or the caller's
+        // completion can throw, and a write that threw must still end and let the next start. Swift's
+        // closures here do not throw, so nothing there can leave the line held.
+        try
         {
-            case ControlGate.Decision.Refuse refuse:
-                Finish(call, ControlResult.Refusal(refuse.Reason));
-                break;
-            case ControlGate.Decision.Run:
-                Finish(call, Run(call).Result);
-                break;
-            case ControlGate.Decision.RunAndNotify:
-                var outcome = Run(call);
-                if (!outcome.Result.IsError && outcome.Notification is { } notification)
+            // Decided again: the settings may have changed while the call waited for its turn.
+            switch (Decision(call.Definition, call.Caller))
+            {
+                case ControlGate.Decision.Refuse refuse:
+                    Finish(call, ControlResult.Refusal(refuse.Reason));
+                    break;
+                case ControlGate.Decision.Run:
                 {
-                    state.NotifyClaudeChange(notification);
+                    var outcome = Run(call);
+                    Announce(call, outcome, unasked: false);
+                    Finish(call, outcome.Result);
+                    break;
                 }
-                Finish(call, outcome.Result);
-                break;
-            case ControlGate.Decision.Confirm:
-                switch (Prepare(call.Definition.Name, call.Arguments, call.Caller))
+                case ControlGate.Decision.RunAndNotify:
                 {
-                    case ControlStep.Refused refused:
-                        Finish(call, ControlResult.Refusal(refused.Reason));
-                        break;
-                    case ControlStep.Ready ready:
-                        // Every tool that asks builds its question; one that did not is refused rather than
-                        // run unasked.
-                        if (ready.Request is not { } request)
-                        {
-                            Finish(call, ControlResult.Refusal(DeclinedError));
-                            return;
-                        }
-                        confirmer.Confirm(request, allowed => Answered(call, request, allowed));
-                        if (!call.Answered)
-                        {
-                            StartWaiting(call);
-                        }
-                        break;
+                    var outcome = Run(call);
+                    Announce(call, outcome, unasked: true);
+                    Finish(call, outcome.Result);
+                    break;
                 }
-                break;
+                case ControlGate.Decision.Confirm:
+                    switch (Prepare(call.Definition.Name, call.Arguments, call.Caller))
+                    {
+                        case ControlStep.Refused refused:
+                            Finish(call, ControlResult.Refusal(refused.Reason));
+                            break;
+                        case ControlStep.Ready ready:
+                            // Every tool that asks builds its question; one that did not is refused rather than
+                            // run unasked.
+                            if (ready.Request is not { } request)
+                            {
+                                Finish(call, ControlResult.Refusal(NoQuestionError));
+                                return;
+                            }
+                            call.Asking = true;
+                            confirmer.Confirm(request, allowed => Answered(call, request, allowed));
+                            if (!call.Answered)
+                            {
+                                StartWaiting(call);
+                            }
+                            break;
+                    }
+                    break;
+            }
+        }
+        catch (Exception error)
+        {
+            Failed(call, error);
         }
     }
 
@@ -201,49 +226,94 @@ public sealed partial class ControlTools
     {
         ControlStep.Refused refused => new ControlOutcome(ControlResult.Refusal(refused.Reason), null),
         ControlStep.Ready ready => ready.Perform(),
+        // Platform idiom: a C# switch expression must cover every value, and a record hierarchy can
+        // grow; a step is refused or ready, as the Mac's enum says without this arm.
         _ => throw new InvalidOperationException("A write is refused or ready."),
     };
 
     /// <summary>The user's answer. What they allowed is what they were shown: the change is prepared again
-    /// against the state as it is now and must ask the very same question, or nothing happens.</summary>
+    /// against the state as it is now and must ask the very same question, or nothing happens. An answer
+    /// to a call that has already ended — one whose dialog threw — changes nothing.</summary>
     private void Answered(ToolCall call, ConfirmationRequest request, bool allowed)
     {
-        if (call.Answered)
+        if (call.Answered || call.Finished)
         {
             return;
         }
         call.Answered = true;
-        var outcome = new ControlOutcome(ControlResult.Refusal(DeclinedError), null);
-        if (allowed)
+        // Caught here as where a write starts; Swift's closures here do not throw.
+        try
         {
-            switch (Prepare(call.Definition.Name, call.Arguments, call.Caller))
+            var outcome = new ControlOutcome(ControlResult.Refusal(DeclinedError), null);
+            if (allowed)
             {
-                case ControlStep.Refused refused:
-                    outcome = new ControlOutcome(ControlResult.Refusal(refused.Reason), null);
-                    break;
-                case ControlStep.Ready ready:
-                    outcome = Equals(ready.Request, request)
-                        ? ready.Perform()
-                        : new ControlOutcome(ControlResult.Refusal(ChangedWhileAskingError), null);
-                    break;
+                // Decided again: the integration may have been turned off while the dialog was open, and
+                // an Allow then must not reach past it.
+                if (Decision(call.Definition, call.Caller) is ControlGate.Decision.Refuse refuse)
+                {
+                    outcome = new ControlOutcome(ControlResult.Refusal(refuse.Reason), null);
+                }
+                else
+                {
+                    switch (Prepare(call.Definition.Name, call.Arguments, call.Caller))
+                    {
+                        case ControlStep.Refused refused:
+                            outcome = new ControlOutcome(ControlResult.Refusal(refused.Reason), null);
+                            break;
+                        case ControlStep.Ready ready:
+                            outcome = Equals(ready.Request, request)
+                                ? ready.Perform()
+                                : new ControlOutcome(ControlResult.Refusal(ChangedWhileAskingError), null);
+                            break;
+                    }
+                }
             }
+            Announce(call, outcome, unasked: false);
+            Finish(call, outcome.Result);
         }
-        // A caller already told the answer was awaited hears no more; a change that lands now is
-        // announced the way one made without asking is.
-        if (call.Delivered && !outcome.Result.IsError && outcome.Notification is { } notification)
+        catch (Exception error)
         {
-            state.NotifyClaudeChange(notification);
+            Failed(call, error);
         }
-        Finish(call, outcome.Result);
     }
 
-    /// <summary>Answers the call, unless it already has its answer, and lets the next write start.</summary>
+    /// <summary>Announces a change that landed when nobody else will hear of it: always for one made without
+    /// asking, and for any other once its caller has already been told it is still waiting, so a
+    /// change Claude asked for never lands unannounced. The command line's own changes are the
+    /// user's, and never announced. The tool's own notification says it, or else its answer.</summary>
+    private void Announce(ToolCall call, ControlOutcome outcome, bool unasked)
+    {
+        if (outcome.Result.IsError || call.Caller is ControlCaller.Cli || !(unasked || call.Delivered))
+        {
+            return;
+        }
+        state.NotifyClaudeChange(outcome.Notification ?? outcome.Result.Text);
+    }
+
+    /// <summary>Answers the call, unless it already has its answer, and lets the next write start. A call
+    /// ends once.</summary>
     private void Finish(ToolCall call, ControlResult result)
     {
-        Deliver(call, result);
-        writing = false;
-        StartNextWrite();
+        if (call.Finished)
+        {
+            return;
+        }
+        call.Finished = true;
+        // The next write starts even when the answer throws; the Mac's answer cannot throw.
+        try
+        {
+            Deliver(call, result);
+        }
+        finally
+        {
+            writing = false;
+            StartNextWrite();
+        }
     }
+
+    /// <summary>A write that threw ends as one refused for the reason, unless it has already ended. C# only:
+    /// nothing in the Mac's queue can throw.</summary>
+    private void Failed(ToolCall call, Exception error) => Finish(call, ControlResult.Refusal(AppState.Friendly(error)));
 
     private void Deliver(ToolCall call, ControlResult result)
     {
@@ -283,7 +353,9 @@ public sealed partial class ControlTools
             call.Progress(waited);
             if (waited >= ConfirmationWait)
             {
-                Deliver(call, WaitingResult);
+                // Only a call whose own dialog is open is waiting for an answer; any other is
+                // waiting for its turn, and the command line, never asked, is always the latter.
+                Deliver(call, call.Asking ? WaitingResult : QueuedResult);
             }
             else
             {
@@ -304,8 +376,12 @@ public sealed partial class ControlTools
         public Action<ControlResult> Completion { get; } = completion;
         /// <summary>The caller has its answer — perhaps the early one that says the user's is awaited.</summary>
         public bool Delivered { get; set; }
+        /// <summary>Its confirmation has been put to the user.</summary>
+        public bool Asking { get; set; }
         /// <summary>The user has answered the confirmation.</summary>
         public bool Answered { get; set; }
+        /// <summary>It has ended, and the next write may start.</summary>
+        public bool Finished { get; set; }
         public bool Waiting { get; set; }
         public int Ticks { get; set; }
     }

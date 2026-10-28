@@ -395,6 +395,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.nameHeader"] = ControlTools.nameHeader
         actual["ControlTools.noBackupsText"] = ControlTools.noBackupsText
         actual["ControlTools.noConnectorError"] = ControlTools.noConnectorError("X", "Y")
+        actual["ControlTools.noQuestionError"] = ControlTools.noQuestionError
         actual["ControlTools.notOneOfError"] = ControlTools.notOneOfError("X", "Y")
         actual["ControlTools.notSubscribedError"] = ControlTools.notSubscribedError("X")
         actual["ControlTools.objectKind"] = ControlTools.objectKind
@@ -402,6 +403,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.onWord"] = ControlTools.onWord
         actual["ControlTools.problemLabel"] = ControlTools.problemLabel
         actual["ControlTools.publishedKind"] = ControlTools.publishedKind
+        actual["ControlTools.queuedText"] = ControlTools.queuedText
         actual["ControlTools.relaySummary"] = ControlTools.relaySummary
         actual["ControlTools.relayUsage"] = ControlTools.relayUsage
         actual["ControlTools.runsHeader"] = ControlTools.runsHeader

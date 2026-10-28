@@ -8,9 +8,12 @@ public class ControlToolsReadTests
 {
     private const string Token = "ghp_0123456789abcdefghijklmnopqrstuvwxyzAB";
 
+    /// <summary>The token in its environment and, after a flag, in its arguments, where a summary of what it
+    /// runs could show it.</summary>
     private static McpEntry Github => new(JsonValue.Object(
         ("command", JsonValue.String("npx")),
-        ("args", JsonValue.Array([JsonValue.String("-y"), JsonValue.String("@modelcontextprotocol/server-github")])),
+        ("args", JsonValue.Array([JsonValue.String("-y"), JsonValue.String("@modelcontextprotocol/server-github"),
+                                  JsonValue.String("--token"), JsonValue.String(Token)])),
         ("env", JsonValue.Object(("GITHUB_PERSONAL_ACCESS_TOKEN", JsonValue.String(Token))))));
 
     private static JsonValue? At(JsonValue value, params string[] segments) => value.ValueAt(new JsonPointer(segments));
@@ -183,11 +186,12 @@ public class ControlToolsReadTests
             "confirm-claude-changes    on"), rig.Call("get_settings")?.Text);
     }
 
-    /// <summary>Arguments for the read tools that need some.</summary>
+    /// <summary>Arguments for the read tools that need some: each names something that is there, so every
+    /// read answers in full.</summary>
     private static readonly Dictionary<string, JsonValue> ReadArguments = new(StringComparer.Ordinal)
     {
         ["get_connector"] = Args(("name", JsonValue.String("github"))),
-        ["get_pending_update"] = Args(("collection", JsonValue.String("Default"))),
+        ["get_pending_update"] = Args(("collection", JsonValue.String("Data team"))),
     };
 
     [Fact]
@@ -196,7 +200,15 @@ public class ControlToolsReadTests
         using var rig = new ControlRig();
         Assert.Null(rig.State.Upsert("github", Github, null));
         rig.State.ApplyInteractively();
+        // A subscribed collection with an update waiting, so the pending-update read describes one.
+        var path = rig.H.Subscribe(rig.State, CollectionDocumentSamples.DataTeam);
+        var sample = CollectionDocumentSamples.DataTeam;
+        var connectors = new Dictionary<string, CollectionDocument.Connector>(sample.Connectors, StringComparer.Ordinal);
+        connectors.Remove("github");
+        AppStateHarness.WriteDocumentAt(new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors), path);
+        rig.State.RefreshSource("Data team");
         rig.H.Drain();
+        Assert.True(rig.State.PendingUpdates.ContainsKey("Data team"));
         string[] files = [rig.H.MasterStorePath, Path.Combine(rig.H.StoreDir, CollectionsFile.FileName),
                           rig.H.ClaudeConfigPath, rig.State.Service.Paths.CollectionsCachePath];
         List<byte[]?> Bytes() => files.Select(file => File.Exists(file) ? File.ReadAllBytes(file) : null).ToList();
@@ -214,9 +226,10 @@ public class ControlToolsReadTests
         var filesBefore = Bytes();
         var settingsBefore = Settings();
         var backupsBefore = rig.State.Service.Backups.Backups(RestoreModel.Series);
+        var sentBefore = rig.H.Notifier.Sent.Count;
         foreach (var tool in ControlTools.Catalog.Where(t => t.Gate == ControlGateClass.Read))
         {
-            Assert.True(rig.Call(tool.Name, ReadArguments.GetValueOrDefault(tool.Name)) is not null, tool.Name);
+            Assert.True(rig.Call(tool.Name, ReadArguments.GetValueOrDefault(tool.Name))?.IsError == false, tool.Name);
         }
         var filesAfter = Bytes();
         Assert.Equal(filesBefore.Count, filesAfter.Count);
@@ -227,6 +240,6 @@ public class ControlToolsReadTests
         }
         Assert.Equal(settingsBefore, Settings());
         Assert.Equal(backupsBefore, rig.State.Service.Backups.Backups(RestoreModel.Series));
-        Assert.Empty(rig.H.Notifier.Sent);
+        Assert.Equal(sentBefore, rig.H.Notifier.Sent.Count);
     }
 }

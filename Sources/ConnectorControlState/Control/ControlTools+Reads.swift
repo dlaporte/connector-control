@@ -113,8 +113,9 @@ extension ControlTools {
         }
     }
 
-    /// Each launcher as the app's own words put it — "Found" or "Not found", never a version, so the
-    /// column reads the same whatever is installed — with where it is or how to install it.
+    /// Each launcher as the app's own words put it — "Found", "Not found" or, on the Mac, "Not visible
+    /// to Claude Desktop"; never a version, so the column reads the same whatever is installed — with
+    /// where it is or how to install it.
     func toolsResult() -> ControlResult {
         var rows: [[String]] = []
         var items: [JSONValue] = []
