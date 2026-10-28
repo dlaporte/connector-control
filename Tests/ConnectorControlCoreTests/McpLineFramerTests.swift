@@ -25,6 +25,13 @@ final class McpLineFramerTests: XCTestCase {
         XCTAssertEqual(framer.finish(), [], "a skipped line is not a line at the end either")
     }
 
+    func testACarriageReturnStaysInTheLineAndACharacterMayBeSplitBetweenChunks() {
+        var framer = McpLineFramer(limit: 10)
+        XCTAssertEqual(framer.append(bytes("ab\r\n")), [.line(bytes("ab\r"))], "only the newline is stripped; the session trims the rest")
+        XCTAssertEqual(framer.append(Data([0xC3])), [])
+        XCTAssertEqual(framer.append(Data([0xA9, 0x0A])), [.line(bytes("é"))], "bytes, not characters: a split character joins up")
+    }
+
     func testTheDefaultLimitIsOneMegabyte() {
         var framer = McpLineFramer()
         XCTAssertEqual(framer.limit, McpSession.maxMessageBytes)

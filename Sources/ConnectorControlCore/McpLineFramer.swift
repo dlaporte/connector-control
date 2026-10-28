@@ -12,7 +12,8 @@ public enum McpFrame: Equatable, Sendable {
 
 /// Splits a byte stream into newline-delimited messages, holding at most `limit` bytes of a line. A
 /// line longer than that is reported once, as `.tooLarge`, and skipped up to its newline; the
-/// stream carries on after it.
+/// stream carries on after it. Platform idiom: a struct its one owner mutates in place, where the
+/// Windows mirror is a class.
 public struct McpLineFramer: Sendable {
     public let limit: Int
     private var buffer = Data()

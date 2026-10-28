@@ -202,7 +202,7 @@ final class McpSessionTests: XCTestCase {
     }
 
     func testBytesThatAreNotUTF8AreAParseErrorBeforeAnythingDecodesThem() {
-        let invalid: [[UInt8]] = [[0xC3, 0x28], [0xC0, 0xAF], [0xED, 0xA0, 0x80], [0xFF]]
+        let invalid: [[UInt8]] = [[0xC3, 0x28], [0xC0, 0xAF], [0xED, 0xA0, 0x80], [0xFF], [0xF4, 0x90, 0x80, 0x80], [0xE2]]
         for bad in invalid {
             sent = []
             session.receive(Data(#"{"jsonrpc":"2.0","id":1,"method":"ping","params":{"x":""#.utf8) + Data(bad) + Data(#""}}"#.utf8))
@@ -214,7 +214,8 @@ final class McpSessionTests: XCTestCase {
     }
 
     func testBytesPastTheLimitAndAFramersReportAreRefusedUnread() {
-        session.receive(Data(repeating: 0x20, count: McpSession.maxMessageBytes + 1))
+        // 0xFF is not UTF-8: only a size check that runs before decoding answers "too large" for it.
+        session.receive(Data(repeating: 0xFF, count: McpSession.maxMessageBytes + 1))
         session.receiveTooLarge()
         XCTAssertEqual(sent, Array(repeating: #"{"error":{"code":-32600,"message":"Message too large"},"id":null,"jsonrpc":"2.0"}"#,
                                    count: 2))

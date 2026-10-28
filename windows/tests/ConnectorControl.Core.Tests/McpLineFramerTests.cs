@@ -33,6 +33,15 @@ public class McpLineFramerTests
     }
 
     [Fact]
+    public void ACarriageReturnStaysInTheLineAndACharacterMayBeSplitBetweenChunks()
+    {
+        var framer = new McpLineFramer(10);
+        Assert.Equal(["ab\r"], Shown(framer.Append("ab\r\n"u8))); // only the newline is stripped; the session trims the rest
+        Assert.Empty(framer.Append([0xC3]));
+        Assert.Equal(["é"], Shown(framer.Append([0xA9, 0x0A]))); // bytes, not characters: a split character joins up
+    }
+
+    [Fact]
     public void TheDefaultLimitIsOneMegabyte()
     {
         var framer = new McpLineFramer();

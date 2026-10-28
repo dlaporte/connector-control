@@ -252,6 +252,7 @@ public class McpSessionTests
         // Stands in for the Mac's testAnAnswerJSONCannotHoldIsAnInternalErrorNotSilence: a C# JsonValue
         // refuses NaN and infinity, so no answer is ever unwritable.
         Assert.Throws<ArgumentException>(() => JsonValue.Double(double.NaN));
+        Assert.Throws<ArgumentException>(() => JsonValue.Double(double.PositiveInfinity));
     }
 
     [Fact]
@@ -259,7 +260,7 @@ public class McpSessionTests
     {
         byte[] prefix = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"params\":{\"x\":\""u8.ToArray();
         byte[] suffix = "\"}}"u8.ToArray();
-        byte[][] invalid = [[0xC3, 0x28], [0xC0, 0xAF], [0xED, 0xA0, 0x80], [0xFF]];
+        byte[][] invalid = [[0xC3, 0x28], [0xC0, 0xAF], [0xED, 0xA0, 0x80], [0xFF], [0xF4, 0x90, 0x80, 0x80], [0xE2]];
         foreach (var bad in invalid)
         {
             sent.Clear();
@@ -274,7 +275,8 @@ public class McpSessionTests
     [Fact]
     public void BytesPastTheLimitAndAFramersReportAreRefusedUnread()
     {
-        session.Receive(Enumerable.Repeat((byte)0x20, McpSession.MaxMessageBytes + 1).ToArray());
+        // 0xFF is not UTF-8: only a size check that runs before decoding answers "too large" for it.
+        session.Receive(Enumerable.Repeat((byte)0xFF, McpSession.MaxMessageBytes + 1).ToArray());
         session.ReceiveTooLarge();
         Assert.Equal(
             Enumerable.Repeat("""{"error":{"code":-32600,"message":"Message too large"},"id":null,"jsonrpc":"2.0"}""", 2),

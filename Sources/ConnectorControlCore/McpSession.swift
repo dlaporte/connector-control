@@ -26,7 +26,8 @@ public protocol McpToolHost: AnyObject {
 @MainActor
 public final class McpSession {
     // The constants and the pure helpers below are nonisolated: the command-line tool frames and
-    // writes lines on its own reading threads, away from the main actor.
+    // writes lines on its own reading threads, away from the main actor. Platform idiom: C# has no
+    // actor isolation, so its mirror of these is plain statics.
     public nonisolated static let serverName = "connector-control"
     /// Newest first; the first is what a client asking for anything else is offered.
     public nonisolated static let supportedProtocolVersions = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]
@@ -72,7 +73,7 @@ public final class McpSession {
 
     public func receive(_ line: String) {
         guard line.utf8.count <= McpSession.maxMessageBytes else {
-            reply(error: McpSession.invalidRequestCode, McpSession.tooLargeMessage, id: .null)
+            receiveTooLarge()
             return
         }
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -250,14 +251,14 @@ public final class McpSession {
         send(McpSession.errorLine(code: code, message: message, id: id))
     }
 
-    private func write(_ message: JSONValue) { send(message.compactLine()) }
-
     /// A JSON-RPC error answer, as this session writes one: the relay answers in the same words when
     /// the app cannot.
     public nonisolated static func errorLine(code: Int, message: String, id: JSONValue) -> String {
         JSONValue.object(["jsonrpc": .string("2.0"), "id": id,
                           "error": .object(["code": .int(code), "message": .string(message)])]).compactLine()
     }
+
+    private func write(_ message: JSONValue) { send(message.compactLine()) }
 
     /// A JSON-RPC id this server accepts: a string or an integer.
     public nonisolated static func validID(_ value: JSONValue) -> JSONValue? {

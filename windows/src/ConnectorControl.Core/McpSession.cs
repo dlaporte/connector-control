@@ -16,7 +16,8 @@ namespace ConnectorControl.Core;
 public sealed class McpSession(IMcpToolHost host, string version, Action<string> send)
 {
     // The Swift side marks its constants and pure helpers nonisolated for the command-line tool's
-    // reading threads; C# has no actor isolation, so these are plain statics.
+    // reading threads, away from the main actor. Platform idiom: C# has no actor isolation, so these
+    // are plain statics.
     public const string ServerName = "connector-control";
     /// <summary>Newest first; the first is what a client asking for anything else is offered.</summary>
     public static readonly IReadOnlyList<string> SupportedProtocolVersions = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
@@ -59,7 +60,7 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
     {
         if (Encoding.UTF8.GetByteCount(line) > MaxMessageBytes)
         {
-            Reply(InvalidRequestCode, TooLargeMessage, JsonValue.Null);
+            ReceiveTooLarge();
             return;
         }
         var trimmed = line.Trim();
