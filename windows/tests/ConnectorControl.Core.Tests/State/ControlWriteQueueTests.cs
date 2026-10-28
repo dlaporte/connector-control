@@ -383,6 +383,7 @@ public class ControlWriteQueueTests
         rig.H.Drain();
         Assert.Equal(["a"], performed);
         Assert.Equal(["Did a."], rig.H.Notifier.Sent.Select(sent => sent.Body));
+        Assert.Equal(1, asking.Completions);
         // The answer goes to a connection that is closed, and is dropped there.
         Assert.Equal("Did a.", asking.Result?.Text);
     }

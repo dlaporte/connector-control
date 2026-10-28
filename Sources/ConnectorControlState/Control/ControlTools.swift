@@ -99,8 +99,8 @@ public final class ControlTools {
 
     /// Runs one tool for `caller`. `progress` reports how many seconds a change has waited;
     /// `completion` is called once, or never for a write dropped because its connection closed first.
-    /// `isAbandoned` says the caller's connection has closed: a write
-    /// still waiting for its turn then, whose caller was never told it is waiting, is dropped unrun.
+    /// `isAbandoned` says the caller's connection has closed: a write still waiting for its turn then,
+    /// whose caller was never told it is waiting, is dropped unrun.
     public func call(name: String, arguments: JSONValue, caller: ControlCaller,
                      progress: @escaping (Double) -> Void, completion: @escaping (ControlResult) -> Void,
                      isAbandoned: @escaping () -> Bool = { false }) {

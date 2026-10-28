@@ -99,9 +99,9 @@ public sealed partial class ControlTools
 
     /// <summary>Runs one tool for <paramref name="caller"/>. <paramref name="progress"/> reports how many
     /// seconds a change has waited; <paramref name="completion"/> is called once, or never for a write dropped
-    /// because its connection closed first. <paramref name="isAbandoned"/>
-    /// says the caller's connection has closed: a write still waiting for its turn then, whose caller was never
-    /// told it is waiting, is dropped unrun.</summary>
+    /// because its connection closed first. <paramref name="isAbandoned"/> says the caller's connection has
+    /// closed: a write still waiting for its turn then, whose caller was never told it is waiting, is dropped
+    /// unrun.</summary>
     public void Call(string name, JsonValue arguments, ControlCaller caller, Action<double> progress, Action<ControlResult> completion,
                      Func<bool>? isAbandoned = null)
     {
@@ -184,8 +184,8 @@ public sealed partial class ControlTools
         // A write whose connection closed before its turn, and whose caller was never told it is
         // waiting, is dropped unrun: nobody is left to hear of it, and a command line stopped with
         // Control-C has taken it back. One already told it is queued runs, as it was told.
-        // Outside the catches below on purpose: the one supplier of <c>IsAbandoned</c>, the host's
-        // <c>IsOpen</c>, cannot throw, and the Mac's closure cannot by its type.
+        // Outside the catches below on purpose: the one supplier of `IsAbandoned`, the host's
+        // `IsOpen`, cannot throw, and the Mac's closure cannot by its type.
         if (!call.Delivered && call.IsAbandoned())
         {
             call.Finished = true;

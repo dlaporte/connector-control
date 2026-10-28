@@ -265,6 +265,7 @@ final class ControlWriteQueueTests: XCTestCase {
         rig.h.drain()
         XCTAssertEqual(performed, ["a"])
         XCTAssertEqual(rig.h.notifier.sent.map(\.body), ["Did a."])
+        XCTAssertEqual(asking.completions, 1, "answered exactly once")
         XCTAssertEqual(asking.result?.text, "Did a.", "the answer goes to a connection that is closed, and is dropped there")
     }
 
