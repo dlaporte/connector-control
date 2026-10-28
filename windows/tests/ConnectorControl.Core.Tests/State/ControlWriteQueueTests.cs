@@ -66,6 +66,20 @@ public class ControlWriteQueueTests
         Assert.Empty(performed);
     }
 
+    /// <summary>Turning confirmations off loosens the gate rather than closing it: the Allow the user gave
+    /// still applies.</summary>
+    [Fact]
+    public void AnAllowAfterConfirmationsWereTurnedOffStillApplies()
+    {
+        using var rig = new ControlRig();
+        ControlWrites(rig);
+        var answer = Add(rig, "a");
+        rig.State.SetConfirmClaudeChanges(false);
+        rig.Confirmer.Answer(true);
+        Assert.Equal("Did a.", answer.Result?.Text);
+        Assert.Equal(["a"], performed);
+    }
+
     [Fact]
     public void AWriteWaitingItsTurnSaysSoAndOnlyItsOwnDialogSaysItAwaitsAnAnswer()
     {
