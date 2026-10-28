@@ -291,9 +291,24 @@
   "ControlTools.addedText": {
     "format": "Added “{0}” to “{1}”, switched {2}."
   },
+  "ControlTools.appliedUpdateNotification": {
+    "format": "{0} applied the update to “{1}”."
+  },
+  "ControlTools.appliedUpdateText": {
+    "format": "Applied the update to “{0}”."
+  },
+  "ControlTools.applyUpdateTitle": {
+    "format": "{0} wants to update “{1}”"
+  },
   "ControlTools.apply_update.cliUsage": "apply-update <collection>",
   "ControlTools.apply_update.description": "Apply the update waiting for a subscribed collection. get_pending_update shows what it changes.",
   "ControlTools.argumentsNotObjectError": "The arguments must be a JSON object.",
+  "ControlTools.arrivedOffText.many": {
+    "format": "{0} connectors arrived switched off."
+  },
+  "ControlTools.arrivedOffText.one": {
+    "format": "{0} connector arrived switched off."
+  },
   "ControlTools.booleanKind": "true or false",
   "ControlTools.changeActiveMessage": {
     "format": "In “{0}”, the collection Claude is running:"
@@ -335,6 +350,9 @@
   "ControlTools.deleteActiveMessage": {
     "format": "From “{0}”, the collection Claude is running. A copy remains in Backups."
   },
+  "ControlTools.deleteCollectionTitle": {
+    "format": "{0} wants to delete the collection “{1}”"
+  },
   "ControlTools.deleteMessage": {
     "format": "From “{0}”. A copy remains in Backups."
   },
@@ -345,6 +363,12 @@
   "ControlTools.delete_collection.description": "Delete a collection and its connectors. A copy remains in Connector Control's backups; a subscribed collection's file is left alone.",
   "ControlTools.delete_connectors.cliUsage": "delete <name>…",
   "ControlTools.delete_connectors.description": "Delete connectors. A copy remains in Connector Control's backups.",
+  "ControlTools.deletedCollectionNotification": {
+    "format": "{0} deleted the collection “{1}”."
+  },
+  "ControlTools.deletedCollectionText": {
+    "format": "Deleted the collection “{0}”."
+  },
   "ControlTools.deletedNotification": {
     "format": "{0} deleted {1} from “{2}”."
   },
@@ -365,6 +389,9 @@
   "ControlTools.emptyCollectionText": {
     "format": "“{0}” has no connectors."
   },
+  "ControlTools.fromFooter": {
+    "format": "From {0}"
+  },
   "ControlTools.get_connector.cliUsage": "show <name> [--reveal]",
   "ControlTools.get_connector.description": "Show one connector, with its secrets masked. Gives its command, arguments, URL and environment; environment and header values are never shown, only whether they are set. Looks in the active collection unless collection names another.",
   "ControlTools.get_pending_update.cliUsage": "updates <collection>",
@@ -376,8 +403,35 @@
   "ControlTools.helpOptions": "Options: --json  --version  --help",
   "ControlTools.helpUsage": "Usage: connector-control <command> [options]",
   "ControlTools.idHeader": "ID",
+  "ControlTools.importMessage.many": {
+    "format": "{0} connectors would be copied into “{1}”, switched off:"
+  },
+  "ControlTools.importMessage.one": {
+    "format": "{0} connector would be copied into “{1}”, switched off:"
+  },
+  "ControlTools.importNewMessage.many": {
+    "format": "{0} connectors would be copied into a new collection, “{1}”, switched off:"
+  },
+  "ControlTools.importNewMessage.one": {
+    "format": "{0} connector would be copied into a new collection, “{1}”, switched off:"
+  },
+  "ControlTools.importTitle": {
+    "format": "{0} wants to import “{1}”"
+  },
   "ControlTools.import_document.cliUsage": "import <file> [--into <collection> | --new <name>] [--on-clash replace|keep-both|skip]",
   "ControlTools.import_document.description": "Copy the connectors in a collection file into a collection. They arrive switched off, with no link to the file afterwards. onClash says what to do with a name the collection already has: replace it, keep both, or skip it.",
+  "ControlTools.importedNotification.many": {
+    "format": "{0} copied {1} connectors into “{2}”."
+  },
+  "ControlTools.importedNotification.one": {
+    "format": "{0} copied {1} connector into “{2}”."
+  },
+  "ControlTools.importedText.many": {
+    "format": "Copied {0} connectors into “{1}”, switched off."
+  },
+  "ControlTools.importedText.one": {
+    "format": "Copied {0} connector into “{1}”, switched off."
+  },
   "ControlTools.installHint": {
     "format": "{0}: {1}"
   },
@@ -407,11 +461,17 @@
   "ControlTools.needsValuesText": {
     "format": "It needs a value for {0}: fill it in Connector Control."
   },
+  "ControlTools.noBackupError": {
+    "format": "There’s no backup named “{0}”."
+  },
   "ControlTools.noBackupsText": "No backups yet.",
   "ControlTools.noConnectorError": {
     "format": "There’s no connector named “{0}” in “{1}”."
   },
   "ControlTools.noQuestionError": "Connector Control couldn’t ask about this change, so nothing was done.",
+  "ControlTools.noUpdateError": {
+    "format": "“{0}” has no update waiting."
+  },
   "ControlTools.notOneOfError": {
     "format": "“{0}” must be one of {1}."
   },
@@ -419,10 +479,14 @@
     "format": "“{0}” isn’t a subscribed collection."
   },
   "ControlTools.nothingToChangeError": "Give a new config, a new name, or both.",
+  "ControlTools.nothingToImportError": {
+    "format": "Nothing in “{0}” would come across."
+  },
   "ControlTools.objectKind": "a JSON object",
   "ControlTools.offWord": "off",
   "ControlTools.onWord": "on",
   "ControlTools.problemLabel": "Problem",
+  "ControlTools.publishedFileStaysText": "Its published file stays in its folder.",
   "ControlTools.publishedKind": "published",
   "ControlTools.queuedText": "Waiting for another change in Connector Control to finish.",
   "ControlTools.refresh_subscription.cliUsage": "refresh <collection>",
@@ -440,12 +504,33 @@
   "ControlTools.renamedText": {
     "format": "Renamed “{0}” to “{1}”."
   },
+  "ControlTools.restartItselfTitle": "Claude wants to restart itself",
+  "ControlTools.restartMessage": "Claude Desktop will quit and reopen to pick up the change. The reply in progress stops; the conversation is kept.",
+  "ControlTools.restartTitle": {
+    "format": "{0} wants to restart Claude Desktop"
+  },
   "ControlTools.restartToApplyText": "Restart Claude to apply the change.",
   "ControlTools.restartToUseText": "Restart Claude to use it.",
   "ControlTools.restart_claude.cliUsage": "restart-claude",
   "ControlTools.restart_claude.description": "Quit and reopen Claude Desktop. The user is always asked first; the reply in progress stops and the conversation is kept.",
+  "ControlTools.restartingText": "Restarting Claude Desktop.",
+  "ControlTools.restoreActivatingText": {
+    "format": "Its connectors go back into “{0}”, which becomes the active collection:"
+  },
+  "ControlTools.restoreIntoText": {
+    "format": "Its connectors go back into “{0}”:"
+  },
+  "ControlTools.restoreTitle": {
+    "format": "{0} wants to restore “{1}”"
+  },
   "ControlTools.restore_backup.cliUsage": "backups restore <id>",
   "ControlTools.restore_backup.description": "Replace Claude's config with a backup. The current file is backed up first.",
+  "ControlTools.restoredNotification": {
+    "format": "{0} restored “{1}”."
+  },
+  "ControlTools.restoredText": {
+    "format": "Restored “{0}”."
+  },
   "ControlTools.runsHeader": "RUNS",
   "ControlTools.savedNotAppliedText": {
     "format": "Saved, but Claude’s config wasn’t updated: {0}"
@@ -468,7 +553,22 @@
   },
   "ControlTools.subscribe.cliUsage": "subscribe <file> [--name <name>]",
   "ControlTools.subscribe.description": "Subscribe to a collection file someone publishes. It becomes a new, read-only collection that follows the file, and its connectors arrive switched off.",
+  "ControlTools.subscribeMessage.many": {
+    "format": "A new collection, “{0}”, would follow this file, read-only. Its {1} connectors arrive switched off:"
+  },
+  "ControlTools.subscribeMessage.one": {
+    "format": "A new collection, “{0}”, would follow this file, read-only. Its {1} connector arrives switched off:"
+  },
+  "ControlTools.subscribeTitle": {
+    "format": "{0} wants to subscribe to “{1}”"
+  },
   "ControlTools.subscribedKind": "subscribed",
+  "ControlTools.subscribedNotification": {
+    "format": "{0} subscribed to “{1}” as “{2}”."
+  },
+  "ControlTools.subscribedText": {
+    "format": "Subscribed: “{0}” follows {1}, read-only."
+  },
   "ControlTools.switchValueError": {
     "format": "{0} takes on or off."
   },

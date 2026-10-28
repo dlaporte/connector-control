@@ -64,6 +64,12 @@ public sealed partial class ControlTools
             case "add_connector": return AddConnector(arguments, caller.AskerName);
             case "update_connector": return UpdateConnector(arguments, caller.AskerName);
             case "delete_connectors": return DeleteConnectors(arguments, caller.AskerName);
+            case "delete_collection": return DeleteCollection(arguments, caller.AskerName);
+            case "import_document": return ImportDocument(arguments, caller.AskerName);
+            case "subscribe": return SubscribeDocument(arguments, caller.AskerName);
+            case "apply_update": return ApplyUpdate(arguments, caller.AskerName);
+            case "restore_backup": return RestoreBackup(arguments, caller.AskerName);
+            case "restart_claude": return RestartClaude(caller.AskerName);
             default: return new ControlStep.Refused(UnknownToolError(name));
         }
     }

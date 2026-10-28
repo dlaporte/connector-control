@@ -55,6 +55,12 @@ extension ControlTools {
         case "add_connector": return addConnector(arguments, caller.askerName)
         case "update_connector": return updateConnector(arguments, caller.askerName)
         case "delete_connectors": return deleteConnectors(arguments, caller.askerName)
+        case "delete_collection": return deleteCollection(arguments, caller.askerName)
+        case "import_document": return importDocument(arguments, caller.askerName)
+        case "subscribe": return subscribeDocument(arguments, caller.askerName)
+        case "apply_update": return applyUpdate(arguments, caller.askerName)
+        case "restore_backup": return restoreBackup(arguments, caller.askerName)
+        case "restart_claude": return restartClaude(caller.askerName)
         default: return .refused(ControlTools.unknownToolError(name))
         }
     }

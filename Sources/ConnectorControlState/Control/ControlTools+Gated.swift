@@ -3,10 +3,12 @@ import ConnectorControlCore
 
 /// Mirror: windows/src/ConnectorControl.Core/State/Control/ControlTools.Gated.cs
 ///
-/// The writes that change what a connector runs. Each is prepared in full before anyone is asked:
-/// every refusal, then the question — who is asking, for what, and exactly what would run, with
-/// secrets masked — then the change itself, which runs only on Allow (or with confirmations off,
-/// or for the command-line tool) and is announced when nobody was asked.
+/// The writes that change what a connector runs, or what Claude could run: connectors, deleting a
+/// collection, importing, subscribing, applying an update, restoring a backup, and the restart.
+/// Each is prepared in full before anyone is asked: every refusal, then the question — who is
+/// asking, for what, and exactly what would run, with secrets masked — then the change itself,
+/// which runs only on Allow (or with confirmations off, or for the command-line tool; never
+/// unasked for the restart Claude asks for) and is announced when nobody was asked.
 ///
 /// The question, the answer and the announcement name connectors, collections and the asker as
 /// others chose them — Claude names connectors, creates and renames collections without asking, and
@@ -214,6 +216,356 @@ extension ControlTools {
                         ["collection": .string(collection), "names": .array(names.map(JSONValue.string))],
                         touching: collection, since: mark, restart: ControlTools.restartToApplyText,
                         notification: ControlTools.deletedNotification(shownAsker, listed, shownCollection))
+        })
+    }
+
+    // MARK: Collections, sharing, backups and restart
+
+    public static let publishedFileStaysText = "Its published file stays in its folder."
+    public static let restartItselfTitle = "Claude wants to restart itself"
+    public static let restartMessage = "Claude Desktop will quit and reopen to pick up the change. The reply in progress stops; the conversation is kept."
+    public static let restartingText = "Restarting Claude Desktop."
+
+    public static func deleteCollectionTitle(_ asker: String, _ collection: String) -> String { "\(asker) wants to delete the collection “\(collection)”" }
+
+    public static func deletedCollectionText(_ collection: String) -> String { "Deleted the collection “\(collection)”." }
+
+    public static func deletedCollectionNotification(_ asker: String, _ collection: String) -> String { "\(asker) deleted the collection “\(collection)”." }
+
+    public static func importTitle(_ asker: String, _ file: String) -> String { "\(asker) wants to import “\(file)”" }
+
+    public static func importMessage(_ count: Int, _ collection: String) -> String { count == 1 ? "\(count) connector would be copied into “\(collection)”, switched off:" : "\(count) connectors would be copied into “\(collection)”, switched off:" }
+
+    public static func importNewMessage(_ count: Int, _ collection: String) -> String { count == 1 ? "\(count) connector would be copied into a new collection, “\(collection)”, switched off:" : "\(count) connectors would be copied into a new collection, “\(collection)”, switched off:" }
+
+    public static func fromFooter(_ path: String) -> String { "From \(path)" }
+
+    public static func importedText(_ count: Int, _ collection: String) -> String { count == 1 ? "Copied \(count) connector into “\(collection)”, switched off." : "Copied \(count) connectors into “\(collection)”, switched off." }
+
+    public static func importedNotification(_ asker: String, _ count: Int, _ collection: String) -> String { count == 1 ? "\(asker) copied \(count) connector into “\(collection)”." : "\(asker) copied \(count) connectors into “\(collection)”." }
+
+    public static func nothingToImportError(_ file: String) -> String { "Nothing in “\(file)” would come across." }
+
+    public static func subscribeTitle(_ asker: String, _ file: String) -> String { "\(asker) wants to subscribe to “\(file)”" }
+
+    public static func subscribeMessage(_ collection: String, _ count: Int) -> String { count == 1 ? "A new collection, “\(collection)”, would follow this file, read-only. Its \(count) connector arrives switched off:" : "A new collection, “\(collection)”, would follow this file, read-only. Its \(count) connectors arrive switched off:" }
+
+    public static func subscribedText(_ collection: String, _ file: String) -> String { "Subscribed: “\(collection)” follows \(file), read-only." }
+
+    public static func arrivedOffText(_ count: Int) -> String { count == 1 ? "\(count) connector arrived switched off." : "\(count) connectors arrived switched off." }
+
+    public static func subscribedNotification(_ asker: String, _ file: String, _ collection: String) -> String { "\(asker) subscribed to “\(file)” as “\(collection)”." }
+
+    public static func applyUpdateTitle(_ asker: String, _ collection: String) -> String { "\(asker) wants to update “\(collection)”" }
+
+    public static func appliedUpdateText(_ collection: String) -> String { "Applied the update to “\(collection)”." }
+
+    public static func appliedUpdateNotification(_ asker: String, _ collection: String) -> String { "\(asker) applied the update to “\(collection)”." }
+
+    public static func noUpdateError(_ collection: String) -> String { "“\(collection)” has no update waiting." }
+
+    public static func restoreTitle(_ asker: String, _ id: String) -> String { "\(asker) wants to restore “\(id)”" }
+
+    public static func restoreIntoText(_ collection: String) -> String { "Its connectors go back into “\(collection)”:" }
+
+    public static func restoreActivatingText(_ collection: String) -> String { "Its connectors go back into “\(collection)”, which becomes the active collection:" }
+
+    public static func restoredText(_ id: String) -> String { "Restored “\(id)”." }
+
+    public static func restoredNotification(_ asker: String, _ id: String) -> String { "\(asker) restored “\(id)”." }
+
+    public static func noBackupError(_ id: String) -> String { "There’s no backup named “\(id)”." }
+
+    public static func restartTitle(_ asker: String) -> String { "\(asker) wants to restart Claude Desktop" }
+
+    /// A connector as a question lists it: its name in quotes, through `ControlText.quotedList(_:)`
+    /// — so no name can close its quotes, break its line, or pass for a line of what a connector
+    /// runs, which are indented under it — then what becomes of it, when that is said.
+    static func connectorHeading(_ name: String, _ detail: String? = nil) -> String {
+        let quoted = ControlText.quotedList([name])
+        return detail.map { ControlTools.detail(quoted, ControlText.escaped($0)) } ?? quoted
+    }
+
+    /// Lines under a connector's heading, indented so they read as its own.
+    static func indented(_ lines: [String]) -> [String] {
+        lines.map { "  " + $0 }
+    }
+
+    /// A document's connectors as the import and subscribe questions list them, in the Import
+    /// sheet's order and words: each by name with what it would run, as the dialog shows a config
+    /// (`${COLLECTION_DIR}` as the document writes it, the footer naming the folder it stands for);
+    /// a name the collection already holds with what happens to it; one this platform cannot carry
+    /// with why.
+    static func documentLines(_ rendered: RenderedCollection, present: (String) -> Bool, choice: ImportChoice) -> [String] {
+        var lines: [String] = []
+        for name in Set(rendered.connectors.keys).union(rendered.excluded.keys).sorted(by: { $0.ordinallyPrecedes($1) }) {
+            if let reason = rendered.excluded[name] {
+                lines.append(connectorHeading(name, ImportModel.skippedBadge(reason)))
+                continue
+            }
+            guard let connector = rendered.connectors[name] else { continue }
+            let runs = indented(ControlMasking.codeLines(connector.config, exposure: .dialog))
+            guard present(name) else {
+                lines += [connectorHeading(name)] + runs
+                continue
+            }
+            switch choice {
+            case .replace: lines += [connectorHeading(name, ImportModel.replaceTitle)] + runs
+            case .keepBoth: lines += [connectorHeading(name, ImportModel.keepBothTitle)] + runs
+            case .skip, .add: lines.append(connectorHeading(name, ImportModel.presentBadge))
+            }
+        }
+        return lines
+    }
+
+    /// The collection's own Delete: the window's question, refused first for what the window
+    /// refuses. A subscribed collection's file is never touched, nor a published one's — the window
+    /// asks whether that one goes too, and nothing here asks twice, so it stays, as Keep leaves it.
+    func deleteCollection(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
+        let collection = arguments.string("collection") ?? ""
+        let shown = ControlText.escapedName(collection)
+        guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shown)) }
+        let synced = state.isSynced(collection)
+        // AppState's own rule, asked before the question rather than after it.
+        if !synced, state.localCollectionNames.count <= 1 { return .refused(AppState.lastLocalCollectionError) }
+        let active = collection == state.activeCollection
+        let count = held.mcps.count
+        // The window's Delete confirmation, sentence for sentence and in its order.
+        var sentences = [CollectionsModel.deleteConnectorsSentence(count)]
+        if count > 0 { sentences.append(CollectionsModel.deleteCopiesSentence) }
+        if active, let next = state.activeAfterDeleting(collection) {
+            sentences.append(CollectionsModel.deleteNextActiveSentence(ControlText.escapedName(next)))
+        }
+        if synced { sentences.append(CollectionsModel.deleteSourceSentence) }
+        if state.collectionsCache.published[collection] != nil, state.isPublished(collection) {
+            sentences.append(ControlTools.publishedFileStaysText)
+        }
+        if count > 0 { sentences.append(CollectionsModel.deleteCheckedInformative) }
+        let shownAsker = ControlText.escapedName(asker)
+        let request = ConfirmationRequest(title: ControlTools.deleteCollectionTitle(shownAsker, shown),
+                                          message: sentences.joined(separator: " "), code: [],
+                                          footer: active ? ControlTools.takesEffectFooter : nil)
+        return .ready(request, perform: { [self] in
+            let mark = state.appliedServers
+            if let error = state.deleteCollection(named: collection) { return ControlTools.refused(error) }
+            return done([ControlTools.deletedCollectionText(shown)],
+                        ["collection": .string(collection), "activeCollection": .string(state.activeCollection)],
+                        // Only deleting the collection Claude runs reaches its config; deleting
+                        // another must not report a retry an earlier write left pending.
+                        touching: active ? nil : collection, since: mark, restart: ControlTools.restartToApplyText,
+                        notification: ControlTools.deletedCollectionNotification(shownAsker, shown))
+        })
+    }
+
+    func importDocument(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
+        let path = arguments.string("path") ?? ""
+        // An empty path names the working folder here and is no path at all on Windows: refused
+        // alike on both.
+        guard !path.isEmpty else { return .refused(ControlTools.missingArgumentError("path")) }
+        // Platform idiom: a URL takes any text, and the read below refuses what names no file; the
+        // Windows mirror first refuses a path .NET cannot make full.
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        let file = ControlText.escapedName(url.lastPathComponent)
+        let (read, _, failure) = AppState.readDocument(at: url)
+        guard let document = read else { return .refused(ControlText.escaped(failure ?? EditorModel.notValidJSON)) }
+        let newCollection = arguments.string("newCollection").map(MasterStore.collectionName)
+        let target: String
+        if let newCollection {
+            // The store's own refusal for a name it cannot take, found on a copy so nothing is made.
+            var probe = state.store
+            if let error = probe.addCollection(named: newCollection) { return .refused(ControlText.escaped(error)) }
+            target = newCollection
+        } else {
+            // The Import sheet's own target: the active collection while it is local, else the
+            // first local one.
+            let locals = state.localCollectionNames
+            target = arguments.string("into")
+                ?? (locals.contains(state.activeCollection) ? state.activeCollection : (locals.first ?? state.activeCollection))
+            guard state.store.collections[target] != nil else { return .refused(MasterStore.noCollectionError(ControlText.escapedName(target))) }
+            guard !state.isSynced(target) else { return .refused(AppState.targetMustBeLocalError) }
+        }
+        let shownTarget = ControlText.escapedName(target)
+        let clash: ImportChoice
+        switch arguments.string("onClash") {
+        case "replace": clash = .replace
+        case "keep-both": clash = .keepBoth
+        default: clash = .skip
+        }
+        let rendered = document.render()
+        // A new collection holds nothing yet, whatever an existing one of that name might.
+        let held = newCollection == nil ? (state.store.collections[target]?.mcps ?? [:]) : [:]
+        var choices: [String: ImportChoice] = [:]
+        for name in rendered.connectors.keys { choices[name] = held[name] == nil ? .add : clash }
+        let count = choices.values.filter { $0 != .skip }.count
+        guard count > 0 else { return .refused(ControlTools.nothingToImportError(file)) }
+        let shownAsker = ControlText.escapedName(asker)
+        let request = ConfirmationRequest(
+            title: ControlTools.importTitle(shownAsker, file),
+            message: newCollection == nil ? ControlTools.importMessage(count, shownTarget) : ControlTools.importNewMessage(count, shownTarget),
+            code: ControlTools.documentLines(rendered, present: { held[$0] != nil }, choice: clash),
+            footer: ControlTools.fromFooter(ControlText.escaped(url.path)))
+        return .ready(request, perform: { [self] in
+            let mark = state.appliedServers
+            if let newCollection, let error = state.addEmptyCollection(named: newCollection) { return ControlTools.refused(error) }
+            if let error = state.importCopies(documentAt: url.path, into: target, choices: choices) { return ControlTools.refused(error) }
+            return done([ControlTools.importedText(count, shownTarget)], ["collection": .string(target), "count": .int(count)],
+                        touching: target, since: mark, restart: ControlTools.restartToApplyText,
+                        notification: ControlTools.importedNotification(shownAsker, count, shownTarget))
+        })
+    }
+
+    func subscribeDocument(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
+        let path = arguments.string("path") ?? ""
+        // As import_document refuses it.
+        guard !path.isEmpty else { return .refused(ControlTools.missingArgumentError("path")) }
+        // Platform idiom: as import_document reads it.
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        let file = ControlText.escapedName(url.lastPathComponent)
+        let (read, _, failure) = AppState.readDocument(at: url)
+        guard let document = read else { return .refused(ControlText.escaped(failure ?? EditorModel.notValidJSON)) }
+        // AppState's own rules, asked here as well, so the refusal comes before the question.
+        if let origin = document.origin, state.collectionsFile.collections.values.contains(where: { $0.publish?.origin == origin }) {
+            return .refused(AppState.ownCollectionError)
+        }
+        let requested = MasterStore.collectionName(arguments.string("name") ?? "")
+        let name = MasterStore.collectionName(requested.isEmpty ? document.name : requested)
+        var probe = state.store
+        if let error = probe.addCollection(named: name) { return .refused(ControlText.escaped(error)) }
+        let shownName = ControlText.escapedName(name)
+        let rendered = document.render()
+        let count = rendered.connectors.count
+        let shownAsker = ControlText.escapedName(asker)
+        let request = ConfirmationRequest(
+            title: ControlTools.subscribeTitle(shownAsker, file),
+            message: ControlTools.subscribeMessage(shownName, count),
+            code: ControlTools.documentLines(rendered, present: { _ in false }, choice: .add),
+            footer: ControlTools.fromFooter(ControlText.escaped(url.path)))
+        return .ready(request, perform: { [self] in
+            let mark = state.appliedServers
+            if let error = state.subscribe(documentAt: url.path, as: arguments.string("name")) { return ControlTools.refused(error) }
+            return done([ControlTools.subscribedText(shownName, file), ControlTools.arrivedOffText(count)],
+                        ["collection": .string(name), "count": .int(count)],
+                        touching: name, since: mark, restart: ControlTools.restartToApplyText,
+                        notification: ControlTools.subscribedNotification(shownAsker, file, shownName))
+        })
+    }
+
+    func applyUpdate(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
+        let collection = arguments.string("collection") ?? ""
+        let shown = ControlText.escapedName(collection)
+        guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shown)) }
+        guard state.isSynced(collection) else { return .refused(ControlTools.notSubscribedError(shown)) }
+        if let problem = state.sourceErrors[collection] { return .refused(ControlText.escaped(problem)) }
+        guard let diff = state.pendingUpdates[collection] else { return .refused(ControlTools.noUpdateError(shown)) }
+        // Connector by connector, as the Review sheet shows an update: every entry is a command
+        // Claude will run. A document that moves under the question then asks a different one, so
+        // an Allow cannot land what nobody read.
+        let incoming = state.pendingDocument(for: collection)?.connectors ?? [:]
+        var code: [String] = []
+        for name in diff.added {
+            code.append(ControlTools.connectorHeading(name, ReviewModel.addedLabel))
+            if let after = incoming[name]?.config { code += ControlTools.indented(ControlMasking.codeLines(after, exposure: .dialog)) }
+        }
+        for name in diff.removed { code.append(ControlTools.connectorHeading(name, ReviewModel.deletedLabel)) }
+        for name in diff.changed {
+            code.append(ControlTools.connectorHeading(name, ReviewModel.changedLabel))
+            if let before = held.mcps[name]?.config, let after = incoming[name]?.config {
+                code += ControlTools.indented(ControlMasking.changeLines(from: before, to: after, exposure: .dialog))
+            }
+        }
+        let active = collection == state.activeCollection
+        let shownAsker = ControlText.escapedName(asker)
+        let request = ConfirmationRequest(title: ControlTools.applyUpdateTitle(shownAsker, shown),
+                                          message: AppState.collectionUpdateBanner(shown, ControlText.escapedName(diff.summary())),
+                                          code: code, footer: active ? ControlTools.takesEffectFooter : nil)
+        return .ready(request, perform: { [self] in
+            let mark = state.appliedServers
+            if let error = state.applyPendingUpdate(for: collection) { return ControlTools.refused(error) }
+            return done([ControlTools.appliedUpdateText(shown)], ["collection": .string(collection)],
+                        touching: collection, since: mark, restart: ControlTools.restartToApplyText,
+                        notification: ControlTools.appliedUpdateNotification(shownAsker, shown))
+        })
+    }
+
+    /// A refused restore in AppState's own sentences, the collection each names through
+    /// `ControlText.escapedName(_:)`: Claude names collections.
+    static func restoreRefusalText(_ refusal: RestoreError) -> String {
+        switch refusal {
+        case .collectionGone(let collection): return AppState.restoreCollectionGoneError(ControlText.escapedName(collection))
+        case .subscribedActive(let collection): return AppState.restoreSubscribedError(ControlText.escapedName(collection))
+        }
+    }
+
+    /// The Restore sheet's restore, by an id `list_backups` gave, refused first for what the sheet
+    /// refuses; the question says which connectors come back, and into which collection.
+    func restoreBackup(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
+        let id = arguments.string("id") ?? ""
+        let shownID = ControlText.escapedName(id)
+        let urls: [URL]
+        do {
+            urls = try backupURLs()
+        } catch {
+            return .refused(ControlText.escaped(AppState.friendly(error)))
+        }
+        // Only an id the list gives: never a path, so nothing outside the backups folder is read.
+        // Compared scalar by scalar, as the Windows mirror compares ordinally.
+        guard let backup = urls.first(where: { ControlMasking.same($0.lastPathComponent, id) }) else {
+            return .refused(ControlTools.noBackupError(shownID))
+        }
+        if let refusal = state.restoreRefusal(for: backup) { return .refused(ControlTools.restoreRefusalText(refusal)) }
+        // A backup that is not a config file is refused now rather than after the question, in the
+        // reader's own words, as the Restore sheet shows a failed restore's.
+        let servers: [String: JSONValue]
+        do {
+            servers = try ClaudeConfigIO.readMCPServers(at: backup)
+        } catch {
+            return .refused(ControlText.escaped(error.localizedDescription))
+        }
+        // AppState's rule: back into the collection the backup was taken from, else the active one.
+        let target = BackupCollections.collection(of: backup, in: state.service.paths.backupsDirURL) ?? state.activeCollection
+        let shownTarget = ControlText.escapedName(target)
+        let into = target == state.activeCollection ? ControlTools.restoreIntoText(shownTarget) : ControlTools.restoreActivatingText(shownTarget)
+        // Connector Control's own entry is the app's, not a connector the backup brings back.
+        let names = servers.keys.filter { $0 != ClaudeIntegration.entryName }.sorted { $0.ordinallyPrecedes($1) }
+        let shownAsker = ControlText.escapedName(asker)
+        let request = ConfirmationRequest(title: ControlTools.restoreTitle(shownAsker, shownID),
+                                          message: RestoreModel.caption + " " + into,
+                                          code: names.map { ControlTools.connectorHeading($0) },
+                                          footer: ControlTools.takesEffectFooter)
+        return .ready(request, perform: { [self] in
+            let mark = state.appliedServers
+            do {
+                try state.restoreClaudeConfig(from: backup)
+            } catch let refusal as RestoreError {
+                return ControlOutcome(result: .refusal(ControlTools.restoreRefusalText(refusal)), notification: nil)
+            } catch {
+                // A restore that failed is the banner's too, as the Restore sheet's is, in the
+                // error's own words.
+                state.lastError = error.localizedDescription
+                return ControlTools.refused(error.localizedDescription)
+            }
+            return done([ControlTools.restoredText(shownID)], ["id": .string(id), "activeCollection": .string(state.activeCollection)],
+                        touching: nil, since: mark, restart: ControlTools.restartToApplyText,
+                        notification: ControlTools.restoredNotification(shownAsker, shownID))
+        })
+    }
+
+    /// Always asked about when Claude calls it, whatever the confirmation setting; never asked about
+    /// from the command line, where the typed command is the confirmation, as the notification's
+    /// Restart button is. Either way it is `performRestartClaude()`, not the in-app button's
+    /// `restartClaude()`: the gate has asked already, or need not, and the app's own "confirm
+    /// before restarting" question would ask a second time.
+    func restartClaude(_ asker: String) -> ControlStep {
+        let request = ConfirmationRequest(
+            title: asker == ControlCaller.claudeName ? ControlTools.restartItselfTitle : ControlTools.restartTitle(ControlText.escapedName(asker)),
+            message: ControlTools.restartMessage, code: [], footer: nil)
+        return .ready(request, perform: { [self] in
+            // The restart reports through AppState's own banner when it completes; the Windows
+            // mirror starts it fire-and-forget, as the toast's Restart button does.
+            state.performRestartClaude()
+            return ControlOutcome(result: ControlResult(structured: .object(["restarting": .bool(true)]),
+                                                        text: ControlTools.restartingText, isError: false),
+                                  notification: nil)
         })
     }
 }

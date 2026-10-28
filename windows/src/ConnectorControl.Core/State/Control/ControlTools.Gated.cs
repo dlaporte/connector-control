@@ -1,10 +1,14 @@
+using System.Text.Json;
+
 namespace ConnectorControl.Core.State;
 
 /// <summary>
-/// The writes that change what a connector runs. Each is prepared in full before anyone is asked:
-/// every refusal, then the question — who is asking, for what, and exactly what would run, with
-/// secrets masked — then the change itself, which runs only on Allow (or with confirmations off,
-/// or for the command-line tool) and is announced when nobody was asked.
+/// The writes that change what a connector runs, or what Claude could run: connectors, deleting a
+/// collection, importing, subscribing, applying an update, restoring a backup, and the restart.
+/// Each is prepared in full before anyone is asked: every refusal, then the question — who is
+/// asking, for what, and exactly what would run, with secrets masked — then the change itself,
+/// which runs only on Allow (or with confirmations off, or for the command-line tool; never
+/// unasked for the restart Claude asks for) and is announced when nobody was asked.
 ///
 /// The question, the answer and the announcement name connectors, collections and the asker as
 /// others chose them — Claude names connectors, creates and renames collections without asking, and
@@ -295,6 +299,503 @@ public sealed partial class ControlTools
                 [("collection", JsonValue.String(collection)), ("names", JsonValue.Array(names.Select(JsonValue.String)))],
                 collection, mark, RestartToApplyText,
                 notification: DeletedNotification(shownAsker, listed, shownCollection));
+        });
+    }
+
+    // MARK: Collections, sharing, backups and restart
+
+    public const string PublishedFileStaysText = "Its published file stays in its folder.";
+    public const string RestartItselfTitle = "Claude wants to restart itself";
+    public const string RestartMessage = "Claude Desktop will quit and reopen to pick up the change. The reply in progress stops; the conversation is kept.";
+    public const string RestartingText = "Restarting Claude Desktop.";
+
+    public static string DeleteCollectionTitle(string asker, string collection) => $"{asker} wants to delete the collection “{collection}”";
+
+    public static string DeletedCollectionText(string collection) => $"Deleted the collection “{collection}”.";
+
+    public static string DeletedCollectionNotification(string asker, string collection) => $"{asker} deleted the collection “{collection}”.";
+
+    public static string ImportTitle(string asker, string file) => $"{asker} wants to import “{file}”";
+
+    public static string ImportMessage(int count, string collection) => count == 1 ? $"{count} connector would be copied into “{collection}”, switched off:" : $"{count} connectors would be copied into “{collection}”, switched off:";
+
+    public static string ImportNewMessage(int count, string collection) => count == 1 ? $"{count} connector would be copied into a new collection, “{collection}”, switched off:" : $"{count} connectors would be copied into a new collection, “{collection}”, switched off:";
+
+    public static string FromFooter(string path) => $"From {path}";
+
+    public static string ImportedText(int count, string collection) => count == 1 ? $"Copied {count} connector into “{collection}”, switched off." : $"Copied {count} connectors into “{collection}”, switched off.";
+
+    public static string ImportedNotification(string asker, int count, string collection) => count == 1 ? $"{asker} copied {count} connector into “{collection}”." : $"{asker} copied {count} connectors into “{collection}”.";
+
+    public static string NothingToImportError(string file) => $"Nothing in “{file}” would come across.";
+
+    public static string SubscribeTitle(string asker, string file) => $"{asker} wants to subscribe to “{file}”";
+
+    public static string SubscribeMessage(string collection, int count) => count == 1 ? $"A new collection, “{collection}”, would follow this file, read-only. Its {count} connector arrives switched off:" : $"A new collection, “{collection}”, would follow this file, read-only. Its {count} connectors arrive switched off:";
+
+    public static string SubscribedText(string collection, string file) => $"Subscribed: “{collection}” follows {file}, read-only.";
+
+    public static string ArrivedOffText(int count) => count == 1 ? $"{count} connector arrived switched off." : $"{count} connectors arrived switched off.";
+
+    public static string SubscribedNotification(string asker, string file, string collection) => $"{asker} subscribed to “{file}” as “{collection}”.";
+
+    public static string ApplyUpdateTitle(string asker, string collection) => $"{asker} wants to update “{collection}”";
+
+    public static string AppliedUpdateText(string collection) => $"Applied the update to “{collection}”.";
+
+    public static string AppliedUpdateNotification(string asker, string collection) => $"{asker} applied the update to “{collection}”.";
+
+    public static string NoUpdateError(string collection) => $"“{collection}” has no update waiting.";
+
+    public static string RestoreTitle(string asker, string id) => $"{asker} wants to restore “{id}”";
+
+    public static string RestoreIntoText(string collection) => $"Its connectors go back into “{collection}”:";
+
+    public static string RestoreActivatingText(string collection) => $"Its connectors go back into “{collection}”, which becomes the active collection:";
+
+    public static string RestoredText(string id) => $"Restored “{id}”.";
+
+    public static string RestoredNotification(string asker, string id) => $"{asker} restored “{id}”.";
+
+    public static string NoBackupError(string id) => $"There’s no backup named “{id}”.";
+
+    public static string RestartTitle(string asker) => $"{asker} wants to restart Claude Desktop";
+
+    /// <summary>A connector as a question lists it: its name in quotes, through <see cref="ControlText.QuotedList"/>
+    /// — so no name can close its quotes, break its line, or pass for a line of what a connector
+    /// runs, which are indented under it — then what becomes of it, when that is said.</summary>
+    internal static string ConnectorHeading(string name, string? detail = null)
+    {
+        var quoted = ControlText.QuotedList([name]);
+        return detail is null ? quoted : Detail(quoted, ControlText.Escaped(detail));
+    }
+
+    /// <summary>Lines under a connector's heading, indented so they read as its own.</summary>
+    internal static IEnumerable<string> Indented(IEnumerable<string> lines) => lines.Select(line => "  " + line);
+
+    /// <summary>A document's connectors as the import and subscribe questions list them, in the Import
+    /// sheet's order and words: each by name with what it would run, as the dialog shows a config
+    /// (<c>${COLLECTION_DIR}</c> as the document writes it, the footer naming the folder it stands for);
+    /// a name the collection already holds with what happens to it; one this platform cannot carry
+    /// with why.</summary>
+    internal static List<string> DocumentLines(RenderedCollection rendered, Func<string, bool> present, ImportChoice choice)
+    {
+        var lines = new List<string>();
+        foreach (var name in rendered.Connectors.Keys.Union(rendered.Excluded.Keys).Order(StringComparer.Ordinal))
+        {
+            if (rendered.Excluded.TryGetValue(name, out var reason))
+            {
+                lines.Add(ConnectorHeading(name, ImportModel.SkippedBadge(reason)));
+                continue;
+            }
+            if (!rendered.Connectors.TryGetValue(name, out var connector))
+            {
+                continue;
+            }
+            var runs = Indented(ControlMasking.CodeLines(connector.Config, ControlMasking.Exposure.Dialog)).ToList();
+            if (!present(name))
+            {
+                lines.Add(ConnectorHeading(name));
+                lines.AddRange(runs);
+                continue;
+            }
+            switch (choice)
+            {
+                case ImportChoice.Replace:
+                    lines.Add(ConnectorHeading(name, ImportModel.ReplaceTitle));
+                    lines.AddRange(runs);
+                    break;
+                case ImportChoice.KeepBoth:
+                    lines.Add(ConnectorHeading(name, ImportModel.KeepBothTitle));
+                    lines.AddRange(runs);
+                    break;
+                default:
+                    lines.Add(ConnectorHeading(name, ImportModel.PresentBadge));
+                    break;
+            }
+        }
+        return lines;
+    }
+
+    /// <summary>The collection's own Delete: the window's question, refused first for what the window
+    /// refuses. A subscribed collection's file is never touched, nor a published one's — the window
+    /// asks whether that one goes too, and nothing here asks twice, so it stays, as Keep leaves it.</summary>
+    private ControlStep DeleteCollection(ControlArguments arguments, string asker)
+    {
+        var collection = arguments.String("collection") ?? "";
+        var shown = ControlText.EscapedName(collection);
+        if (state.Store.Collections.GetValueOrDefault(collection) is not { } held)
+        {
+            return new ControlStep.Refused(MasterStore.NoCollectionError(shown));
+        }
+        var synced = state.IsSynced(collection);
+        // AppState's own rule, asked before the question rather than after it.
+        if (!synced && state.LocalCollectionNames.Count <= 1)
+        {
+            return new ControlStep.Refused(AppState.LastLocalCollectionError);
+        }
+        var active = collection == state.ActiveCollection;
+        var count = held.Mcps.Count;
+        // The window's Delete confirmation, sentence for sentence and in its order.
+        var sentences = new List<string> { CollectionsModel.DeleteConnectorsSentence(count) };
+        if (count > 0)
+        {
+            sentences.Add(CollectionsModel.DeleteCopiesSentence);
+        }
+        if (active && state.ActiveAfterDeleting(collection) is { } next)
+        {
+            sentences.Add(CollectionsModel.DeleteNextActiveSentence(ControlText.EscapedName(next)));
+        }
+        if (synced)
+        {
+            sentences.Add(CollectionsModel.DeleteSourceSentence);
+        }
+        if (state.CollectionsCache.Published.ContainsKey(collection) && state.IsPublished(collection))
+        {
+            sentences.Add(PublishedFileStaysText);
+        }
+        if (count > 0)
+        {
+            sentences.Add(CollectionsModel.DeleteCheckedInformative);
+        }
+        var shownAsker = ControlText.EscapedName(asker);
+        var request = new ConfirmationRequest(DeleteCollectionTitle(shownAsker, shown), string.Join(" ", sentences), [],
+            active ? TakesEffectFooter : null);
+        return new ControlStep.Ready(request, () =>
+        {
+            var mark = state.AppliedServers;
+            if (state.DeleteCollection(collection) is { } error)
+            {
+                return Refused(error);
+            }
+            return Done([DeletedCollectionText(shown)],
+                [("collection", JsonValue.String(collection)), ("activeCollection", JsonValue.String(state.ActiveCollection))],
+                // Only deleting the collection Claude runs reaches its config; deleting another must
+                // not report a retry an earlier write left pending.
+                active ? null : collection, mark, RestartToApplyText,
+                notification: DeletedCollectionNotification(shownAsker, shown));
+        });
+    }
+
+    /// <summary>The full path a document's <c>path</c> names, as AppState resolves it, or why there is
+    /// none. Platform idiom: <see cref="Path.GetFullPath(string)"/> throws for a path it cannot take,
+    /// where the Mac mirror's URL takes any text and the read that follows refuses it.</summary>
+    private static (string? Full, string? Refusal) DocumentPath(string path)
+    {
+        try
+        {
+            return (Path.GetFullPath(path), null);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return (null, AppState.SourceUnreadableError(Path.GetFileName(path), ex.Message));
+        }
+    }
+
+    private ControlStep ImportDocument(ControlArguments arguments, string asker)
+    {
+        var path = arguments.String("path") ?? "";
+        // An empty path names the working folder on the Mac and is no path at all here: refused alike
+        // on both.
+        if (path.Length == 0)
+        {
+            return new ControlStep.Refused(MissingArgumentError("path"));
+        }
+        var (full, unusable) = DocumentPath(path);
+        if (full is null)
+        {
+            return new ControlStep.Refused(ControlText.Escaped(unusable ?? EditorModel.NotValidJson));
+        }
+        var file = ControlText.EscapedName(Path.GetFileName(full));
+        var (document, _, failure) = AppState.ReadDocument(full);
+        if (document is null)
+        {
+            return new ControlStep.Refused(ControlText.Escaped(failure ?? EditorModel.NotValidJson));
+        }
+        var newCollection = arguments.String("newCollection") is { } requested ? MasterStore.CollectionName(requested) : null;
+        string target;
+        if (newCollection is not null)
+        {
+            // The store's own refusal for a name it cannot take, found on a copy so nothing is made.
+            if (state.Store.Clone().AddCollection(newCollection) is { } error)
+            {
+                return new ControlStep.Refused(ControlText.Escaped(error));
+            }
+            target = newCollection;
+        }
+        else
+        {
+            // The Import sheet's own target: the active collection while it is local, else the first
+            // local one.
+            var locals = state.LocalCollectionNames;
+            target = arguments.String("into")
+                ?? (locals.Contains(state.ActiveCollection) ? state.ActiveCollection : locals.FirstOrDefault() ?? state.ActiveCollection);
+            if (!state.Store.Collections.ContainsKey(target))
+            {
+                return new ControlStep.Refused(MasterStore.NoCollectionError(ControlText.EscapedName(target)));
+            }
+            if (state.IsSynced(target))
+            {
+                return new ControlStep.Refused(AppState.TargetMustBeLocalError);
+            }
+        }
+        var shownTarget = ControlText.EscapedName(target);
+        var clash = arguments.String("onClash") switch
+        {
+            "replace" => ImportChoice.Replace,
+            "keep-both" => ImportChoice.KeepBoth,
+            _ => ImportChoice.Skip,
+        };
+        var rendered = document.Render();
+        // A new collection holds nothing yet, whatever an existing one of that name might.
+        IReadOnlyDictionary<string, McpEntry> held = newCollection is null && state.Store.Collections.TryGetValue(target, out var existing)
+            ? existing.Mcps
+            : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
+        var choices = new Dictionary<string, ImportChoice>(StringComparer.Ordinal);
+        foreach (var name in rendered.Connectors.Keys)
+        {
+            choices[name] = held.ContainsKey(name) ? clash : ImportChoice.Add;
+        }
+        var count = choices.Values.Count(choice => choice != ImportChoice.Skip);
+        if (count == 0)
+        {
+            return new ControlStep.Refused(NothingToImportError(file));
+        }
+        var shownAsker = ControlText.EscapedName(asker);
+        var request = new ConfirmationRequest(
+            ImportTitle(shownAsker, file),
+            newCollection is null ? ImportMessage(count, shownTarget) : ImportNewMessage(count, shownTarget),
+            DocumentLines(rendered, held.ContainsKey, clash),
+            FromFooter(ControlText.Escaped(full)));
+        return new ControlStep.Ready(request, () =>
+        {
+            var mark = state.AppliedServers;
+            if (newCollection is not null && state.AddEmptyCollection(newCollection) is { } created)
+            {
+                return Refused(created);
+            }
+            if (state.ImportCopies(full, target, choices) is { } error)
+            {
+                return Refused(error);
+            }
+            return Done([ImportedText(count, shownTarget)], [("collection", JsonValue.String(target)), ("count", JsonValue.Int(count))],
+                target, mark, RestartToApplyText,
+                notification: ImportedNotification(shownAsker, count, shownTarget));
+        });
+    }
+
+    private ControlStep SubscribeDocument(ControlArguments arguments, string asker)
+    {
+        var path = arguments.String("path") ?? "";
+        // As import_document refuses it.
+        if (path.Length == 0)
+        {
+            return new ControlStep.Refused(MissingArgumentError("path"));
+        }
+        var (full, unusable) = DocumentPath(path);
+        if (full is null)
+        {
+            return new ControlStep.Refused(ControlText.Escaped(unusable ?? EditorModel.NotValidJson));
+        }
+        // Platform idiom: as import_document reads it.
+        var file = ControlText.EscapedName(Path.GetFileName(full));
+        var (document, _, failure) = AppState.ReadDocument(full);
+        if (document is null)
+        {
+            return new ControlStep.Refused(ControlText.Escaped(failure ?? EditorModel.NotValidJson));
+        }
+        // AppState's own rules, asked here as well, so the refusal comes before the question.
+        if (document.Origin is { } origin && state.CollectionsFile.Collections.Values.Any(entry => entry.Publish?.Origin == origin))
+        {
+            return new ControlStep.Refused(AppState.OwnCollectionError);
+        }
+        var requested = MasterStore.CollectionName(arguments.String("name") ?? "");
+        var name = MasterStore.CollectionName(requested.Length == 0 ? document.Name : requested);
+        if (state.Store.Clone().AddCollection(name) is { } error)
+        {
+            return new ControlStep.Refused(ControlText.Escaped(error));
+        }
+        var shownName = ControlText.EscapedName(name);
+        var rendered = document.Render();
+        var count = rendered.Connectors.Count;
+        var shownAsker = ControlText.EscapedName(asker);
+        var request = new ConfirmationRequest(
+            SubscribeTitle(shownAsker, file),
+            SubscribeMessage(shownName, count),
+            DocumentLines(rendered, _ => false, ImportChoice.Add),
+            FromFooter(ControlText.Escaped(full)));
+        return new ControlStep.Ready(request, () =>
+        {
+            var mark = state.AppliedServers;
+            if (state.Subscribe(full, arguments.String("name")) is { } refusal)
+            {
+                return Refused(refusal);
+            }
+            return Done([SubscribedText(shownName, file), ArrivedOffText(count)],
+                [("collection", JsonValue.String(name)), ("count", JsonValue.Int(count))],
+                name, mark, RestartToApplyText,
+                notification: SubscribedNotification(shownAsker, file, shownName));
+        });
+    }
+
+    private ControlStep ApplyUpdate(ControlArguments arguments, string asker)
+    {
+        var collection = arguments.String("collection") ?? "";
+        var shown = ControlText.EscapedName(collection);
+        if (state.Store.Collections.GetValueOrDefault(collection) is not { } held)
+        {
+            return new ControlStep.Refused(MasterStore.NoCollectionError(shown));
+        }
+        if (!state.IsSynced(collection))
+        {
+            return new ControlStep.Refused(NotSubscribedError(shown));
+        }
+        if (state.SourceErrors.TryGetValue(collection, out var problem))
+        {
+            return new ControlStep.Refused(ControlText.Escaped(problem));
+        }
+        if (state.PendingUpdates.GetValueOrDefault(collection) is not { } diff)
+        {
+            return new ControlStep.Refused(NoUpdateError(shown));
+        }
+        // Connector by connector, as the Review sheet shows an update: every entry is a command Claude
+        // will run. A document that moves under the question then asks a different one, so an Allow
+        // cannot land what nobody read.
+        var incoming = state.PendingDocument(collection)?.Connectors ?? new Dictionary<string, RenderedConnector>(StringComparer.Ordinal);
+        var code = new List<string>();
+        foreach (var name in diff.Added)
+        {
+            code.Add(ConnectorHeading(name, ReviewModel.AddedLabel));
+            if (incoming.GetValueOrDefault(name) is { } after)
+            {
+                code.AddRange(Indented(ControlMasking.CodeLines(after.Config, ControlMasking.Exposure.Dialog)));
+            }
+        }
+        foreach (var name in diff.Removed)
+        {
+            code.Add(ConnectorHeading(name, ReviewModel.DeletedLabel));
+        }
+        foreach (var name in diff.Changed)
+        {
+            code.Add(ConnectorHeading(name, ReviewModel.ChangedLabel));
+            if (held.Mcps.GetValueOrDefault(name) is { } before && incoming.GetValueOrDefault(name) is { } after)
+            {
+                code.AddRange(Indented(ControlMasking.ChangeLines(before.Config, after.Config, ControlMasking.Exposure.Dialog)));
+            }
+        }
+        var active = collection == state.ActiveCollection;
+        var shownAsker = ControlText.EscapedName(asker);
+        var request = new ConfirmationRequest(ApplyUpdateTitle(shownAsker, shown),
+            AppState.CollectionUpdateBanner(shown, ControlText.EscapedName(diff.Summary())),
+            code, active ? TakesEffectFooter : null);
+        return new ControlStep.Ready(request, () =>
+        {
+            var mark = state.AppliedServers;
+            if (state.ApplyPendingUpdate(collection) is { } error)
+            {
+                return Refused(error);
+            }
+            return Done([AppliedUpdateText(shown)], [("collection", JsonValue.String(collection))],
+                collection, mark, RestartToApplyText,
+                notification: AppliedUpdateNotification(shownAsker, shown));
+        });
+    }
+
+    /// <summary>A refused restore in AppState's own sentences, the collection each names through
+    /// <see cref="ControlText.EscapedName"/>: Claude names collections.</summary>
+    internal static string RestoreRefusalText(Exception refusal) => refusal switch
+    {
+        RestoreCollectionGoneException gone => AppState.RestoreCollectionGoneError(ControlText.EscapedName(gone.Collection)),
+        RestoreSubscribedException subscribed => AppState.RestoreSubscribedError(ControlText.EscapedName(subscribed.Collection)),
+        // RestoreRefusal returns only the two; Swift's switch over its enum is exhaustive.
+        _ => ControlText.Escaped(refusal.Message),
+    };
+
+    /// <summary>The Restore sheet's restore, by an id <c>list_backups</c> gave, refused first for what the
+    /// sheet refuses; the question says which connectors come back, and into which collection.</summary>
+    private ControlStep RestoreBackup(ControlArguments arguments, string asker)
+    {
+        var id = arguments.String("id") ?? "";
+        var shownId = ControlText.EscapedName(id);
+        List<string> paths;
+        try
+        {
+            paths = BackupPaths();
+        }
+        catch (Exception error)
+        {
+            return new ControlStep.Refused(ControlText.Escaped(AppState.Friendly(error)));
+        }
+        // Only an id the list gives: never a path, so nothing outside the backups folder is read.
+        // Compared ordinally, as the Mac mirror compares scalar by scalar.
+        if (paths.FirstOrDefault(path => string.Equals(Path.GetFileName(path), id, StringComparison.Ordinal)) is not { } backup)
+        {
+            return new ControlStep.Refused(NoBackupError(shownId));
+        }
+        if (state.RestoreRefusal(backup) is { } refusal)
+        {
+            return new ControlStep.Refused(RestoreRefusalText(refusal));
+        }
+        // A backup that is not a config file is refused now rather than after the question, in the
+        // reader's own words, as the Restore sheet shows a failed restore's.
+        IReadOnlyDictionary<string, JsonValue> servers;
+        try
+        {
+            servers = ClaudeConfigIO.ReadMcpServers(backup);
+        }
+        catch (Exception ex) when (ex is ClaudeConfigException or IOException or UnauthorizedAccessException or JsonException)
+        {
+            return new ControlStep.Refused(ControlText.Escaped(ex.Message));
+        }
+        // AppState's rule: back into the collection the backup was taken from, else the active one.
+        var target = BackupCollections.CollectionOf(backup, state.Service.Paths.BackupsDir) ?? state.ActiveCollection;
+        var shownTarget = ControlText.EscapedName(target);
+        var into = target == state.ActiveCollection ? RestoreIntoText(shownTarget) : RestoreActivatingText(shownTarget);
+        // Connector Control's own entry is the app's, not a connector the backup brings back.
+        var names = servers.Keys.Where(name => name != ClaudeIntegration.EntryName).Order(StringComparer.Ordinal);
+        var shownAsker = ControlText.EscapedName(asker);
+        var request = new ConfirmationRequest(RestoreTitle(shownAsker, shownId), RestoreModel.Caption + " " + into,
+            names.Select(name => ConnectorHeading(name)).ToList(), TakesEffectFooter);
+        return new ControlStep.Ready(request, () =>
+        {
+            var mark = state.AppliedServers;
+            try
+            {
+                state.RestoreClaudeConfig(backup);
+            }
+            catch (Exception ex) when (ex is RestoreCollectionGoneException or RestoreSubscribedException)
+            {
+                return new ControlOutcome(ControlResult.Refusal(RestoreRefusalText(ex)), null);
+            }
+            catch (Exception ex) when (ex is ClaudeConfigException or IOException or UnauthorizedAccessException or JsonException)
+            {
+                // A restore that failed is the banner's too, as the Restore sheet's is, in the error's
+                // own words.
+                state.LastError = ex.Message;
+                return Refused(ex.Message);
+            }
+            return Done([RestoredText(shownId)], [("id", JsonValue.String(id)), ("activeCollection", JsonValue.String(state.ActiveCollection))],
+                null, mark, RestartToApplyText,
+                notification: RestoredNotification(shownAsker, shownId));
+        });
+    }
+
+    /// <summary>Always asked about when Claude calls it, whatever the confirmation setting; never asked about
+    /// from the command line, where the typed command is the confirmation, as the notification's
+    /// Restart button is. Either way it is <c>PerformRestartClaudeAsync</c>, not the in-app button's
+    /// <c>RestartClaudeAsync</c>: the gate has asked already, or need not, and the app's own "confirm
+    /// before restarting" question would ask a second time.</summary>
+    private ControlStep RestartClaude(string asker)
+    {
+        var request = new ConfirmationRequest(
+            asker == ControlCaller.ClaudeName ? RestartItselfTitle : RestartTitle(ControlText.EscapedName(asker)),
+            RestartMessage, [], null);
+        return new ControlStep.Ready(request, () =>
+        {
+            // Fire-and-forget, as the toast's Restart button calls it: the restart reports through
+            // AppState's own banner, as the Mac's reports through its completion.
+            _ = state.PerformRestartClaudeAsync();
+            return new ControlOutcome(new ControlResult(JsonValue.Object(("restarting", JsonValue.Bool(true))), RestartingText, false), null);
         });
     }
 }
