@@ -18,7 +18,7 @@ internal static class UninstallCleanup
         {
             var settings = new SettingsStore(ServiceFactory.DefaultSettingsPath);
             ClaudeIntegrationCleanup.Uninstall(PathContext.Live(), new PathOverrides(settings.ClaudeConfigPath, settings.MasterStoreDir),
-                ServiceFactory.DefaultDataDir, new RegistryUserEnvironment(), settings.BackupKeepCount);
+                ServiceFactory.DefaultDataDir, new RegistryUserEnvironment(), settings.BackupKeepCount, App.Log);
         }
         catch (Exception ex)
         {

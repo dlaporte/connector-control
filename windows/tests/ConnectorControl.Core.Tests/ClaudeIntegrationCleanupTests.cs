@@ -89,13 +89,15 @@ public class ClaudeIntegrationCleanupTests : IDisposable
         File.WriteAllText(Tool, "tool");
         var environment = new FakeEnvironment(@"C:\Windows;" + Bin + @";C:\Tools");
         var paths = Paths();
-        ClaudeIntegrationCleanup.Uninstall(paths, new PathOverrides(), DataDir, environment, BackupManager.DefaultKeepCount);
+        var reported = new List<string>();
+        ClaudeIntegrationCleanup.Uninstall(paths, new PathOverrides(), DataDir, environment, BackupManager.DefaultKeepCount, reported.Add);
         Assert.Equal(["github"], ClaudeConfigIO.ReadMcpServers(RoamingConfig).Keys);
         Assert.Empty(ClaudeConfigIO.ReadMcpServers(MsixConfig));
         Assert.Equal(@"C:\Windows;C:\Tools", environment.Path);
         Assert.False(Directory.Exists(Bin));
         var backups = AppPaths.Resolve(paths.Environment, new PathOverrides(), paths.Folders, paths.Probe).BackupsDir;
         Assert.Equal(2, Directory.EnumerateFiles(backups, RestoreModel.Series + ".*").Count());
+        Assert.Empty(reported);
     }
 
     [Fact]
@@ -104,8 +106,141 @@ public class ClaudeIntegrationCleanupTests : IDisposable
         Write(RoamingConfig, ("github", Github));
         var before = File.ReadAllBytes(RoamingConfig);
         var environment = new FakeEnvironment(@"C:\Windows");
-        ClaudeIntegrationCleanup.Uninstall(Paths(), new PathOverrides(), DataDir, environment, BackupManager.DefaultKeepCount);
+        var reported = new List<string>();
+        var paths = Paths();
+        ClaudeIntegrationCleanup.Uninstall(paths, new PathOverrides(), DataDir, environment, BackupManager.DefaultKeepCount, reported.Add);
         Assert.Equal(before, File.ReadAllBytes(RoamingConfig));
         Assert.Equal(0, environment.Writes);
+        Assert.Empty(reported);
+        var backups = AppPaths.Resolve(paths.Environment, new PathOverrides(), paths.Folders, paths.Probe).BackupsDir;
+        Assert.False(Directory.Exists(backups) && Directory.EnumerateFileSystemEntries(backups).Any(), "no backup for a config that was not changed");
+    }
+
+    [Fact]
+    public void AKeepCountOfOneLeavesOneBackupOverTwoConfigs()
+    {
+        Write(RoamingConfig, (ClaudeIntegration.EntryName, ClaudeIntegration.Entry(Tool)));
+        Write(MsixConfig, (ClaudeIntegration.EntryName, ClaudeIntegration.Entry(Tool)));
+        var paths = Paths();
+        ClaudeIntegrationCleanup.Uninstall(paths, new PathOverrides(), DataDir, new FakeEnvironment(null), 1);
+        var backups = AppPaths.Resolve(paths.Environment, new PathOverrides(), paths.Folders, paths.Probe).BackupsDir;
+        Assert.Single(Directory.EnumerateFiles(backups, RestoreModel.Series + ".*"));
+    }
+
+    [Fact]
+    public void AnEntryThatIsNotExactlyTheAppsIsLeftAlone()
+    {
+        JsonValue Entry(JsonValue command, JsonValue args) => JsonValue.Object(("command", command), ("args", args));
+        var command = JsonValue.String(Tool);
+        JsonValue[] others =
+        [
+            Entry(command, JsonValue.Array([JsonValue.String("mcp"), JsonValue.String("x")])),
+            Entry(command, JsonValue.Array([JsonValue.String("MCP")])),
+            Entry(JsonValue.Array([command]), JsonValue.Array([JsonValue.String("mcp")])),
+            Entry(JsonValue.Int(1), JsonValue.Array([JsonValue.String("mcp")])),
+        ];
+        foreach (var other in others)
+        {
+            Write(RoamingConfig, (ClaudeIntegration.EntryName, other));
+            var before = File.ReadAllBytes(RoamingConfig);
+            Assert.False(ClaudeIntegrationCleanup.RemoveEntry(RoamingConfig, Tool));
+            Assert.Equal(before, File.ReadAllBytes(RoamingConfig));
+        }
+    }
+
+    [Fact]
+    public void AnEntryWithAnEnvKeyIsStillTheAppsAndGoes()
+    {
+        // It runs a copy that is being deleted, whatever else it carries.
+        var entry = JsonValue.Object(("command", JsonValue.String(Tool)), ("args", JsonValue.Array([JsonValue.String("mcp")])),
+            ("env", JsonValue.Object(("X", JsonValue.String("1")))));
+        Write(RoamingConfig, (ClaudeIntegration.EntryName, entry));
+        Assert.True(ClaudeIntegrationCleanup.RemoveEntry(RoamingConfig, Tool));
+        Assert.Empty(ClaudeConfigIO.ReadMcpServers(RoamingConfig));
+    }
+
+    [Fact]
+    public void AnEntryThatCannotBeBackedUpIsReported()
+    {
+        Write(RoamingConfig, (ClaudeIntegration.EntryName, ClaudeIntegration.Entry(Tool)));
+        var reported = new List<string>();
+        Assert.False(ClaudeIntegrationCleanup.RemoveEntry(RoamingConfig, Tool, _ => throw new IOException("disk full"), reported.Add));
+        Assert.Contains("disk full", Assert.Single(reported));
+        File.WriteAllText(dir.File("broken.json"), "{ not json");
+        Assert.False(ClaudeIntegrationCleanup.RemoveEntry(dir.File("broken.json"), Tool, null, reported.Add));
+        Assert.Equal(2, reported.Count);
+        reported.Clear();
+        Assert.False(ClaudeIntegrationCleanup.RemoveEntry(dir.File("missing.json"), Tool, null, reported.Add));
+        Assert.Empty(reported);
+    }
+
+    [Fact]
+    public void AConfigWhoseWriteFailsIsReportedAndTheCopyAndPathStillGo()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "a read-only folder is a Unix permission");
+        Write(RoamingConfig, (ClaudeIntegration.EntryName, ClaudeIntegration.Entry(Tool)));
+        Write(MsixConfig, (ClaudeIntegration.EntryName, ClaudeIntegration.Entry(Tool)));
+        Directory.CreateDirectory(Bin);
+        File.WriteAllText(Tool, "tool");
+        var environment = new FakeEnvironment(@"C:\Windows;" + Bin);
+        var locked = System.IO.Path.GetDirectoryName(RoamingConfig)!;
+        var reported = new List<string>();
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+        try
+        {
+            ClaudeIntegrationCleanup.Uninstall(Paths(), new PathOverrides(), DataDir, environment, BackupManager.DefaultKeepCount, reported.Add);
+        }
+        finally
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+        Assert.Contains(reported, line => line.Contains(RoamingConfig));
+        Assert.True(ClaudeConfigIO.ReadMcpServers(RoamingConfig).ContainsKey(ClaudeIntegration.EntryName));
+        Assert.Empty(ClaudeConfigIO.ReadMcpServers(MsixConfig));
+        Assert.False(Directory.Exists(Bin));
+        Assert.Equal(@"C:\Windows", environment.Path);
+    }
+
+    [Fact]
+    public void ACopyThatThrowsDoesNotStopThePathStep()
+    {
+        Directory.CreateDirectory(Bin);
+        var environment = new FakeEnvironment(@"C:\Windows;" + Bin);
+        var reported = new List<string>();
+        ClaudeIntegrationCleanup.Uninstall(Paths(), new PathOverrides(), DataDir, environment, BackupManager.DefaultKeepCount, reported.Add,
+            _ => throw new UnauthorizedAccessException("denied"));
+        Assert.Contains("denied", Assert.Single(reported, line => line.Contains("copy")));
+        Assert.Equal(@"C:\Windows", environment.Path);
+    }
+
+    [Fact]
+    public void ACopyThatSurvivesIsReported()
+    {
+        Directory.CreateDirectory(Bin);
+        File.WriteAllText(Tool, "tool");
+        var reported = new List<string>();
+        ClaudeIntegrationCleanup.Uninstall(Paths(), new PathOverrides(), DataDir, new FakeEnvironment(null), BackupManager.DefaultKeepCount, reported.Add,
+            _ => { });
+        Assert.Contains("still runs it", Assert.Single(reported));
+    }
+
+    [Fact]
+    public void APathStepThatThrowsIsReported()
+    {
+        var reported = new List<string>();
+        ClaudeIntegrationCleanup.Uninstall(Paths(), new PathOverrides(), DataDir, new ThrowingEnvironment(), BackupManager.DefaultKeepCount, reported.Add);
+        Assert.Contains("PATH", Assert.Single(reported));
+    }
+
+    private sealed class ThrowingEnvironment : IUserEnvironment
+    {
+        public string? ReadPath() => throw new System.Security.SecurityException("no registry");
+        public void WritePath(string value) => throw new System.Security.SecurityException("no registry");
     }
 }

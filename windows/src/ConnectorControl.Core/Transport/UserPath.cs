@@ -28,6 +28,8 @@ public static class UserPath
     private static bool Same(string entry, string folder) =>
         entry.Trim().Length > 0 && string.Equals(Normal(entry), Normal(folder), StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Slashes fold to backslashes, so <c>C:/Users/me/bin</c> is the folder too. 8.3 short names
+    /// (<c>PROGRA~1</c>) are not expanded: that takes the file system, and a PATH entry written so is rare.</summary>
     private static string Normal(string entry) =>
-        Environment.ExpandEnvironmentVariables(entry.Trim().Trim('"')).TrimEnd('\\', '/');
+        Environment.ExpandEnvironmentVariables(entry.Trim().Trim('"')).Replace('/', '\\').TrimEnd('\\');
 }

@@ -29,4 +29,20 @@ public class UserPathTests
         Assert.Equal(@"C:\Windows;;%USERPROFILE%\bin", UserPath.Removing(@"C:\Windows;" + Bin + @";;%USERPROFILE%\bin", Bin));
         Assert.Equal("", UserPath.Removing(Bin, Bin));
     }
+
+    [Fact]
+    public void ForwardSlashesAndEveryDuplicateOrVariableSpellingCount()
+    {
+        Assert.True(UserPath.Contains(@"C:/Users/me/AppData/Local/Connector Control/bin", Bin));
+        Environment.SetEnvironmentVariable("CC_TEST_LOCAL", @"C:\Users\me\AppData\Local");
+        try
+        {
+            var path = @"C:\Windows;" + Bin + @";%CC_TEST_LOCAL%\Connector Control\bin\;" + Bin.ToUpperInvariant() + @";C:\Tools";
+            Assert.Equal(@"C:\Windows;C:\Tools", UserPath.Removing(path, Bin));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CC_TEST_LOCAL", null);
+        }
+    }
 }

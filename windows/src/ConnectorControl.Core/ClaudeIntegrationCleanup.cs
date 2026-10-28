@@ -36,9 +36,12 @@ public static class ClaudeIntegrationCleanup
     }
 
     /// <summary>Removes the app's entry from <paramref name="configPath"/> when it is there as the app writes it,
-    /// once <paramref name="backUp"/> has copied the file; true when it removed it. No file, a malformed one, an
-    /// entry of that name that runs anything else, or a backup that fails: the file is left as it is.</summary>
-    public static bool RemoveEntry(string configPath, string toolPath, Action<string>? backUp = null)
+    /// once <paramref name="backUp"/> has copied the file; true when it removed it. No file, an entry of that name
+    /// that runs anything else: the file is left as it is, and nothing is said. A malformed file, a backup that
+    /// fails or a write that fails: left as it is too, and said to <paramref name="failed"/>, since the entry may
+    /// still be there. An entry that is the app's but carries other keys, such as <c>env</c>, is still removed: it
+    /// runs a copy that is being deleted.</summary>
+    public static bool RemoveEntry(string configPath, string toolPath, Action<string>? backUp = null, Action<string>? failed = null)
     {
         try
         {
@@ -54,6 +57,7 @@ public static class ClaudeIntegrationCleanup
         }
         catch (Exception ex) when (ex is ClaudeConfigException or IOException or UnauthorizedAccessException)
         {
+            failed?.Invoke($"Connector Control's entry was left in {configPath}: {ex.Message}");
             return false;
         }
     }
@@ -61,21 +65,58 @@ public static class ClaudeIntegrationCleanup
     /// <summary>Everything the uninstaller takes away, as <see cref="ClaudeIntegrationCleanup"/> says. Each config is
     /// backed up into the app's backups folder first, keeping as many backups as the person chose. The copy goes
     /// before the PATH entry: Velopack ends the hook after 30 seconds, and the PATH change waits on every window's
-    /// answer to its broadcast.</summary>
-    public static void Uninstall(PathContext paths, PathOverrides overrides, string dataDir, IUserEnvironment environment, int keepCount)
+    /// answer to its broadcast. Each step stands alone: one that fails is said to <paramref name="failed"/> — the
+    /// app's log — and never keeps another from running, since nobody will see the failure and this runs once.</summary>
+    public static void Uninstall(PathContext paths, PathOverrides overrides, string dataDir, IUserEnvironment environment, int keepCount, Action<string>? failed = null) =>
+        Uninstall(paths, overrides, dataDir, environment, keepCount, failed, ControlToolCopy.Remove);
+
+    /// <summary><paramref name="removeCopy"/> deletes the copy, as <see cref="ControlToolCopy.Remove"/> does: a test's
+    /// way to a copy step that throws.</summary>
+    internal static void Uninstall(PathContext paths, PathOverrides overrides, string dataDir, IUserEnvironment environment, int keepCount,
+        Action<string>? failed, Action<string> removeCopy)
     {
         var tool = ControlToolCopy.ToolPath(dataDir);
-        var backups = new BackupManager(AppPaths.Resolve(paths.Environment, overrides, paths.Folders, paths.Probe).BackupsDir, keepCount);
-        foreach (var config in CandidateConfigs(paths, overrides))
-        {
-            RemoveEntry(config, tool, path => backups.BackUp(path, RestoreModel.Series));
-        }
-        ControlToolCopy.Remove(dataDir);
         var bin = ControlToolCopy.BinDir(dataDir);
-        var userPath = environment.ReadPath();
-        if (UserPath.Contains(userPath, bin))
+        IReadOnlyList<string> configs = [];
+        BackupManager? backups = null;
+        Step(failed, "The Claude configs could not be listed", () =>
         {
-            environment.WritePath(UserPath.Removing(userPath, bin));
+            configs = CandidateConfigs(paths, overrides);
+            backups = new BackupManager(AppPaths.Resolve(paths.Environment, overrides, paths.Folders, paths.Probe).BackupsDir, keepCount);
+        });
+        foreach (var config in configs)
+        {
+            Step(failed, $"Connector Control's entry was left in {config}", () =>
+                RemoveEntry(config, tool, path => backups!.BackUp(path, RestoreModel.Series), failed));
+        }
+        Step(failed, $"The command-line tool's copy could not be removed from {bin}", () =>
+        {
+            removeCopy(dataDir);
+            // A copy Claude's relay is still running cannot be deleted; nothing will start it again.
+            if (File.Exists(tool) || Directory.Exists(bin))
+            {
+                failed?.Invoke($"The command-line tool's copy in {bin} was left: something still runs it.");
+            }
+        });
+        Step(failed, "Connector Control's folder could not be taken out of the user PATH", () =>
+        {
+            var userPath = environment.ReadPath();
+            if (UserPath.Contains(userPath, bin))
+            {
+                environment.WritePath(UserPath.Removing(userPath, bin));
+            }
+        });
+    }
+
+    private static void Step(Action<string>? failed, string what, Action step)
+    {
+        try
+        {
+            step();
+        }
+        catch (Exception ex)
+        {
+            failed?.Invoke($"{what}: {ex.Message}");
         }
     }
 
