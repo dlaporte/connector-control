@@ -58,7 +58,7 @@ extension ControlTools {
              properties: ["name": text("The connector's name, in the active collection."),
                           "enabled": flag("true to turn it on, false to turn it off.")],
              required: ["name", "enabled"]),
-        tool("add_connector", .gated, usage: "add <name> --json <config> | --file <path>", group: connectorsGroup,
+        tool("add_connector", .gated, usage: "add <name> --json <config> | --file <path> [--off]", group: connectorsGroup,
              description: "Add a connector. config is what Claude Desktop runs, as its config file holds it: {\"command\": ..., \"args\": [...], \"env\": {...}} for a local server, or an npx mcp-remote command line for a remote one. Never write a secret the user has not given you: put ${CC_NEEDS:NAME} in its place, and the user fills it in in Connector Control. The connector goes into the active collection unless collection names another, switched on unless enabled is false.",
              properties: ["name": text("The new connector's name."), "config": object("What Claude Desktop runs, as its config file holds it."),
                           "collection": text(collectionOrActive), "enabled": flag("false to add it switched off.")],

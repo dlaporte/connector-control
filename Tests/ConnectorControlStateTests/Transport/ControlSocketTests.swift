@@ -365,6 +365,42 @@ final class ControlSocketTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(began), WriteDeadline.bound)
         client.close()
     }
+
+    func testACommandRunsOverTheSocketAndPrintsTheAppsWords() throws {
+        let socket = try SocketRig(); defer { socket.dispose() }
+        let stream = try ControlSocketStream.connect(to: socket.path)
+        let output = Box<ControlOutput>()
+        Thread.detachNewThread {
+            output.set(ControlCommandRunner.run(tool: "get_status", arguments: .object([:]), json: false, version: "1.2.2",
+                                                over: stream, notice: {}))
+        }
+        XCTAssertTrue(socket.until { output.value != nil })
+        XCTAssertEqual(output.value, ControlOutput(stdout: socket.rig.tools.status().text, stderr: nil, exitCode: 0))
+    }
+
+    /// A command queued behind a dialog says once that it is waiting, is never answered early, and
+    /// gets its own answer when its change has run.
+    func testACommandBehindADialogSaysOnceThatItIsWaitingThenGetsItsAnswer() throws {
+        let socket = try SocketRig(); defer { socket.dispose() }
+        let relay = try socket.connect()
+        relay.hello(ControlHello.relayClient)
+        relay.say(initialize, initialized, deleteAws)
+        XCTAssertTrue(socket.until { socket.rig.confirmer.waitingCount == 1 })
+        let stream = try ControlSocketStream.connect(to: socket.path)
+        let output = Box<ControlOutput>(), noticed = Box<Bool>()
+        Thread.detachNewThread {
+            output.set(ControlCommandRunner.run(tool: "create_collection", arguments: .object(["name": .string("Later")]), json: false,
+                                                version: "1.2.2", over: stream, notice: { noticed.set(true) }))
+        }
+        XCTAssertTrue(socket.until { socket.rig.h.delays.pending.count == 2 }, "both calls wait: one for its answer, one for its turn")
+        for _ in 0..<30 { socket.rig.h.delays.runNext() }
+        XCTAssertTrue(socket.until { noticed.value == true })
+        XCTAssertNil(output.value, "no early answer for the command line")
+        socket.rig.confirmer.answer(false)
+        XCTAssertTrue(socket.until { output.value != nil })
+        XCTAssertEqual(output.value?.exitCode, 0)
+        XCTAssertNotNil(socket.rig.state.store.collections["Later"])
+    }
 }
 
 /// The short write timeout the tests give the server, and how long a write past it may take to be

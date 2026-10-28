@@ -272,6 +272,25 @@
   "ControlSettingKey.launchAtLogin": "launch-at-login",
   "ControlSettingKey.notifyExternalChanges": "notify-external-changes",
   "ControlText.listAnd": " and ",
+  "ControlClient.droppedError": "Connector Control closed the connection before answering.",
+  "ControlClient.notRunningError": "Connector Control isn’t running.",
+  "ControlClient.startingText": "Starting Connector Control…",
+  "ControlClient.unreachableError": "Connector Control isn’t running and couldn’t be started.",
+  "ControlCommandLine.missingValueError": {
+    "format": "“{0}” needs a value."
+  },
+  "ControlCommandLine.unknownCommandError": {
+    "format": "There’s no command named “{0}”. Run connector-control help to see them all."
+  },
+  "ControlCommandLine.unknownOptionError": {
+    "format": "“{0}” isn’t an option of this command."
+  },
+  "ControlCommandLine.usageError": {
+    "format": "Usage: connector-control {0}"
+  },
+  "ControlCommandLine.versionLine": {
+    "format": "connector-control {0}"
+  },
   "ControlTools.activeCollectionLabel": "Active collection",
   "ControlTools.activeMark": "active",
   "ControlTools.addActiveMessage": {
@@ -283,7 +302,7 @@
   "ControlTools.addTitle": {
     "format": "{0} wants to add “{1}”"
   },
-  "ControlTools.add_connector.cliUsage": "add <name> --json <config> | --file <path>",
+  "ControlTools.add_connector.cliUsage": "add <name> --json <config> | --file <path> [--off]",
   "ControlTools.add_connector.description": "Add a connector. config is what Claude Desktop runs, as its config file holds it: {\"command\": ..., \"args\": [...], \"env\": {...}} for a local server, or an npx mcp-remote command line for a remote one. Never write a secret the user has not given you: put ${CC_NEEDS:NAME} in its place, and the user fills it in in Connector Control. The connector goes into the active collection unless collection names another, switched on unless enabled is false.",
   "ControlTools.addedNotification": {
     "format": "{0} added “{1}” to “{2}”."

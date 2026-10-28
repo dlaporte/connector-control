@@ -238,6 +238,47 @@ public class ControlPipeTests
             client.Answers()[JsonValue.Int(2)]);
     }
 
+    [Fact]
+    public void ACommandRunsOverThePipeAndPrintsTheAppsWords()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        using var pipe = new PipeRig();
+        var stream = ControlPipe.TryConnect(pipe.Name, TimeSpan.FromSeconds(5)) ?? throw new InvalidOperationException("The test pipe did not answer.");
+        ControlOutput? output = null;
+        var task = Task.Run(() => output = ControlCommandRunner.Run("get_status", JsonValue.Object(), false, "1.2.2", stream, () => { }));
+        Assert.True(pipe.Until(() => task.IsCompleted));
+        Assert.Equal(new ControlOutput(pipe.Rig.Tools.Status().Text, null, 0), output);
+    }
+
+    /// <summary>A command queued behind a dialog says once that it is waiting, is never answered early, and
+    /// gets its own answer when its change has run.</summary>
+    [Fact]
+    public void ACommandBehindADialogSaysOnceThatItIsWaitingThenGetsItsAnswer()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        using var pipe = new PipeRig();
+        var relay = pipe.Connect();
+        relay.Hello(ControlHello.RelayClient);
+        relay.Say(InitializeMessage, InitializedMessage, DeleteAws);
+        Assert.True(pipe.Until(() => pipe.Rig.Confirmer.WaitingCount == 1));
+        var stream = ControlPipe.TryConnect(pipe.Name, TimeSpan.FromSeconds(5)) ?? throw new InvalidOperationException("The test pipe did not answer.");
+        var noticed = 0;
+        ControlOutput? output = null;
+        var task = Task.Run(() => output = ControlCommandRunner.Run("create_collection", JsonValue.Object(("name", JsonValue.String("Later"))), false,
+            "1.2.2", stream, () => Interlocked.Increment(ref noticed)));
+        Assert.True(pipe.Until(() => pipe.Rig.H.Delays.Pending.Count == 2), "both calls wait: one for its answer, one for its turn");
+        for (var i = 0; i < 30; i++)
+        {
+            pipe.Rig.H.Delays.RunNext();
+        }
+        Assert.True(pipe.Until(() => Volatile.Read(ref noticed) == 1));
+        Assert.False(task.IsCompleted, "no early answer for the command line");
+        pipe.Rig.Confirmer.Answer(false);
+        Assert.True(pipe.Until(() => task.IsCompleted));
+        Assert.Equal(0, output?.ExitCode);
+        Assert.True(pipe.Rig.State.Store.Collections.ContainsKey("Later"));
+    }
+
     /// <summary>A command line that goes away while its write waits behind a dialog takes the write with it.</summary>
     [Fact]
     public void ClosingTheConnectionDropsItsWaitingWrite()

@@ -3,6 +3,7 @@ using ConnectorControl.Core;
 using ConnectorControl.Core.Services;
 using ConnectorControl.Core.State;
 using ConnectorControl.Core.Tests.TestSupport;
+using ConnectorControl.Core.Transport;
 using JsonTextValue = System.Text.Json.Nodes.JsonValue;
 
 namespace ConnectorControl.Core.Tests.State;
@@ -114,6 +115,11 @@ public class StringCatalogTests
         ["ControlMasking.assignment"] = ["X", "Y"],
         ["ControlMasking.oauthClientText"] = ["X", "Y"],
         ["ControlMasking.remoteBridgeType"] = ["X"],
+        ["ControlCommandLine.missingValueError"] = ["X"],
+        ["ControlCommandLine.unknownCommandError"] = ["X"],
+        ["ControlCommandLine.unknownOptionError"] = ["X"],
+        ["ControlCommandLine.usageError"] = ["X"],
+        ["ControlCommandLine.versionLine"] = ["X"],
         ["ControlTools.addActiveMessage"] = ["X", "Y"],
         ["ControlTools.addMessage"] = ["X", "Y"],
         ["ControlTools.addTitle"] = ["X", "Y"],
@@ -446,6 +452,15 @@ public class StringCatalogTests
         actual["ControlSettingKey.confirmRestart"] = ControlSettingKey.ConfirmRestart;
         actual["ControlSettingKey.launchAtLogin"] = ControlSettingKey.LaunchAtLogin;
         actual["ControlSettingKey.notifyExternalChanges"] = ControlSettingKey.NotifyExternalChanges;
+        actual["ControlClient.droppedError"] = ControlClient.DroppedError;
+        actual["ControlClient.notRunningError"] = ControlClient.NotRunningError;
+        actual["ControlClient.startingText"] = ControlClient.StartingText;
+        actual["ControlClient.unreachableError"] = ControlClient.UnreachableError;
+        actual["ControlCommandLine.missingValueError"] = ControlCommandLine.MissingValueError("X");
+        actual["ControlCommandLine.unknownCommandError"] = ControlCommandLine.UnknownCommandError("X");
+        actual["ControlCommandLine.unknownOptionError"] = ControlCommandLine.UnknownOptionError("X");
+        actual["ControlCommandLine.usageError"] = ControlCommandLine.UsageError("X");
+        actual["ControlCommandLine.versionLine"] = ControlCommandLine.VersionLine("X");
         actual["ControlTools.activeCollectionLabel"] = ControlTools.ActiveCollectionLabel;
         actual["ControlTools.activeMark"] = ControlTools.ActiveMark;
         actual["ControlTools.addActiveMessage"] = ControlTools.AddActiveMessage("X", "Y");

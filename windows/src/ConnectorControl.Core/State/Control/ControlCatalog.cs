@@ -64,7 +64,7 @@ public sealed partial class ControlTools
              properties: [("name", Text("The connector's name, in the active collection.")),
                           ("enabled", Flag("true to turn it on, false to turn it off."))],
              required: ["name", "enabled"]),
-        Tool("add_connector", ControlGateClass.Gated, usage: "add <name> --json <config> | --file <path>", group: ConnectorsGroup,
+        Tool("add_connector", ControlGateClass.Gated, usage: "add <name> --json <config> | --file <path> [--off]", group: ConnectorsGroup,
              description: "Add a connector. config is what Claude Desktop runs, as its config file holds it: {\"command\": ..., \"args\": [...], \"env\": {...}} for a local server, or an npx mcp-remote command line for a remote one. Never write a secret the user has not given you: put ${CC_NEEDS:NAME} in its place, and the user fills it in in Connector Control. The connector goes into the active collection unless collection names another, switched on unless enabled is false.",
              properties: [("name", Text("The new connector's name.")), ("config", Object("What Claude Desktop runs, as its config file holds it.")),
                           ("collection", Text(CollectionOrActive)), ("enabled", Flag("false to add it switched off."))],
