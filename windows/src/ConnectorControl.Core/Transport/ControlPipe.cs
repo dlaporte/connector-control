@@ -130,10 +130,16 @@ public sealed class ControlPipeStream(PipeStream pipe) : IControlStream
         }
     }
 
-    /// <summary>Nothing: a pipe has no half-close. A write to the pipe fails only once the app's end is gone, and
-    /// then a read still gives what the app sent before it went and then the end, so nothing need be ended
-    /// here for the reader to finish. The Mac's socket shuts its writing half.</summary>
+    /// <summary>A pipe has no half-close. A write that failed on a broken pipe — ERROR_BROKEN_PIPE, ERROR_NO_DATA or
+    /// ERROR_PIPE_NOT_CONNECTED, the failures .NET marks the pipe broken for — failed because the app's end has
+    /// gone, and a read still gives what the app sent before it went and then the end: the pipe is left to be
+    /// read. A write that failed any other way leaves the pipe connected, and a read that could wait for good,
+    /// so the pipe is closed both ways and the reader ends now. The Mac's socket shuts its writing half.</summary>
     public void CloseWrite()
     {
+        if (pipe.IsConnected)
+        {
+            Close();
+        }
     }
 }

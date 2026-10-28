@@ -115,10 +115,10 @@ public sealed class ControlRelayRunner(ControlClient client, string version, Str
             switch (action)
             {
                 case ControlRelay.Action.ToApp toApp:
-                    // A write that fails ends only the writing half. What the app sent before it went is still
-                    // read and passed on, and the end of the stream after it gives the connection up: a call
-                    // that went through is never told to try again, and one this write or a later one carried
-                    // is told so once.
+                    // A write that fails ends the writing half, as far as CloseWrite can. What the app sent
+                    // before it went is still read and passed on, and the end of the stream after it gives the
+                    // connection up: a call that went through is never told to try again, and one this write or
+                    // a later one carried is told so once.
                     if (stream is { } current && !current.Write(Encoding.UTF8.GetBytes(toApp.Line + "\n")))
                     {
                         current.CloseWrite();

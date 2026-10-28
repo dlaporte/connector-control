@@ -506,11 +506,12 @@ public class ControlRelayRunnerTests
         }
     }
 
-    /// <summary>Claude going away while the relay writes to it ends the relay as any failed write to Claude does.
-    /// Windows reports the broken pipe as an <see cref="IOException"/>; the Mac's counterpart also proves the
-    /// relay is not ended by SIGPIPE instead.</summary>
+    /// <summary>A Claude that has gone ends the relay at its next write, as any failed write to Claude does: Windows
+    /// reports the broken pipe as an <see cref="IOException"/>. Claude goes before the relay writes. The Mac's
+    /// counterpart has the relay's write wait first, to prove SIGPIPE does not end the process instead; Windows
+    /// has no SIGPIPE, and an anonymous pipe offers no sure way to see a write waiting.</summary>
     [Fact]
-    public void TheRelayEndsWhenClaudeGoesWhileItWrites()
+    public void TheRelayEndsWhenClaudeHasGone()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
         using var pipe = new PipeRig();

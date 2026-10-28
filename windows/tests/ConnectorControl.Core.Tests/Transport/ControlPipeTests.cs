@@ -15,9 +15,8 @@ namespace ConnectorControl.Core.Tests.Transport;
 ///
 /// The control layer on a real pipe: what reaches the server, what it answers, and who it lets in.
 ///
-/// Eleven of the Mac's facts have no pipe to test, and the file says so here rather than leaving them out
-/// unremarked. A pipe has no half-close, so a client cannot end only its writing half
-/// (testAClientThatEndsItsWritingHalfIsClosedByTheServer: one). A pipe leaves no file behind, so there is no stale socket to replace, no file that is not a
+/// Ten of the Mac's facts have no pipe to test, and the file says so here rather than leaving them out
+/// unremarked. A pipe leaves no file behind, so there is no stale socket to replace, no file that is not a
 /// socket to leave alone, no socket whose connect fails for another reason, and no listener that is started
 /// twice or after it is closed (testALiveSocketIsLeftAloneAndAStaleOneIsReplaced,
 /// testAFileThatIsNotASocketIsLeftAlone, testASocketThatFailsForAnotherReasonIsLeftAlone,
@@ -279,6 +278,50 @@ public class ControlPipeTests
         Assert.Equal(0, output?.ExitCode);
         Assert.Equal(1, Volatile.Read(ref noticed));
         Assert.True(pipe.Rig.State.Store.Collections.ContainsKey("Later"));
+    }
+
+    /// <summary>A client that ends its writing while the app is still connected — as the relay does after a write
+    /// that failed some way other than on a broken pipe — has no half-close to make: the pipe closes both ways,
+    /// the server closes the connection, and the client's reading ends, having read what was sent to it. The
+    /// Mac's socket ends only its writing half, to the same end.</summary>
+    [Fact]
+    public void AClientThatEndsItsWritingWhileTheAppIsConnectedIsClosedByTheServer()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        using var pipe = new PipeRig();
+        var client = pipe.Connect();
+        client.Hello();
+        client.Say("""{"jsonrpc":"2.0","id":1,"method":"ping"}""");
+        Assert.True(pipe.Until(() => client.Answers().ContainsKey(JsonValue.Int(1))));
+        client.Stream.CloseWrite();
+        Assert.True(pipe.Until(() => pipe.Server.ConnectionCount == 0 && client.IsEnded));
+        Assert.Equal(["""{"id":1,"jsonrpc":"2.0","result":{}}"""], client.Lines);
+    }
+
+    /// <summary>A client whose write failed on a broken pipe — the app's end has gone — ends nothing more: what the
+    /// app sent before it went is still read, and then the end of the stream. Windows only: a socket's write
+    /// half is ended either way, and its counterpart is the fact above.</summary>
+    [Fact]
+    public void AClientWhoseWriteFailedOnABrokenPipeStillReadsWhatTheAppSent()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        var (server, client) = Pair();
+        var stream = new ControlPipeStream(client);
+        try
+        {
+            server.Write(Encoding.UTF8.GetBytes("answer\n"));
+            server.Flush();
+            server.Dispose();
+            Assert.False(stream.Write(Encoding.UTF8.GetBytes("call\n")), "the app's end has gone");
+            stream.CloseWrite();
+            Assert.Equal("answer\n", Encoding.UTF8.GetString(stream.Read(65_536)));
+            Assert.Empty(stream.Read(65_536));
+        }
+        finally
+        {
+            stream.Close();
+            server.Dispose();
+        }
     }
 
     /// <summary>A command line that goes away while its write waits behind a dialog takes the write with it.</summary>
