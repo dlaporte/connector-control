@@ -124,7 +124,7 @@ extension ControlTools {
             let mark = state.appliedServers
             if let error = state.upsert(name: name, entry: MCPEntry(enabled: on, config: config, lastEditView: .json),
                                         renamedFrom: nil, in: collection) {
-                return ControlTools.refused(error)
+                return ControlTools.refused(error, naming: [name, collection])
             }
             state.applyInteractively()
             let needs = Placeholder.unfilledNames(in: config)
@@ -174,7 +174,7 @@ extension ControlTools {
             if let error = state.upsert(name: newName,
                                         entry: MCPEntry(enabled: current.enabled, config: after, lastEditView: current.lastEditView),
                                         renamedFrom: name, in: collection) {
-                return ControlTools.refused(error)
+                return ControlTools.refused(error, naming: [newName, name, collection])
             }
             state.applyInteractively()
             var lines: [String] = []
@@ -225,6 +225,7 @@ extension ControlTools {
     public static let restartItselfTitle = "Claude wants to restart itself"
     public static let restartMessage = "Claude Desktop will quit and reopen to pick up the change. The reply in progress stops; the conversation is kept."
     public static let restartingText = "Restarting Claude Desktop."
+    public static let intoOrNewCollectionError = "Give “into” or “newCollection”, not both."
 
     public static func deleteCollectionTitle(_ asker: String, _ collection: String) -> String { "\(asker) wants to delete the collection “\(collection)”" }
 
@@ -234,25 +235,42 @@ extension ControlTools {
 
     public static func importTitle(_ asker: String, _ file: String) -> String { "\(asker) wants to import “\(file)”" }
 
-    public static func importMessage(_ count: Int, _ collection: String) -> String { count == 1 ? "\(count) connector would be copied into “\(collection)”, switched off:" : "\(count) connectors would be copied into “\(collection)”, switched off:" }
+    public static func importMessage(_ count: Int, _ collection: String) -> String {
+        count == 1 ? "\(count) connector would be copied into “\(collection)”, switched off:"
+            : "\(count) connectors would be copied into “\(collection)”, switched off:"
+    }
 
-    public static func importNewMessage(_ count: Int, _ collection: String) -> String { count == 1 ? "\(count) connector would be copied into a new collection, “\(collection)”, switched off:" : "\(count) connectors would be copied into a new collection, “\(collection)”, switched off:" }
+    public static func importNewMessage(_ count: Int, _ collection: String) -> String {
+        count == 1 ? "\(count) connector would be copied into a new collection, “\(collection)”, switched off:"
+            : "\(count) connectors would be copied into a new collection, “\(collection)”, switched off:"
+    }
 
     public static func fromFooter(_ path: String) -> String { "From \(path)" }
 
-    public static func importedText(_ count: Int, _ collection: String) -> String { count == 1 ? "Copied \(count) connector into “\(collection)”, switched off." : "Copied \(count) connectors into “\(collection)”, switched off." }
+    public static func importedText(_ count: Int, _ collection: String) -> String {
+        count == 1 ? "Copied \(count) connector into “\(collection)”, switched off."
+            : "Copied \(count) connectors into “\(collection)”, switched off."
+    }
 
-    public static func importedNotification(_ asker: String, _ count: Int, _ collection: String) -> String { count == 1 ? "\(asker) copied \(count) connector into “\(collection)”." : "\(asker) copied \(count) connectors into “\(collection)”." }
+    public static func importedNotification(_ asker: String, _ count: Int, _ collection: String) -> String {
+        count == 1 ? "\(asker) copied \(count) connector into “\(collection)”."
+            : "\(asker) copied \(count) connectors into “\(collection)”."
+    }
 
     public static func nothingToImportError(_ file: String) -> String { "Nothing in “\(file)” would come across." }
 
     public static func subscribeTitle(_ asker: String, _ file: String) -> String { "\(asker) wants to subscribe to “\(file)”" }
 
-    public static func subscribeMessage(_ collection: String, _ count: Int) -> String { count == 1 ? "A new collection, “\(collection)”, would follow this file, read-only. Its \(count) connector arrives switched off:" : "A new collection, “\(collection)”, would follow this file, read-only. Its \(count) connectors arrive switched off:" }
+    public static func subscribeMessage(_ collection: String, _ count: Int) -> String {
+        count == 1 ? "A new collection, “\(collection)”, would follow this file, read-only. Its \(count) connector arrives switched off:"
+            : "A new collection, “\(collection)”, would follow this file, read-only. Its \(count) connectors arrive switched off:"
+    }
 
     public static func subscribedText(_ collection: String, _ file: String) -> String { "Subscribed: “\(collection)” follows \(file), read-only." }
 
-    public static func arrivedOffText(_ count: Int) -> String { count == 1 ? "\(count) connector arrived switched off." : "\(count) connectors arrived switched off." }
+    public static func arrivedOffText(_ count: Int) -> String {
+        count == 1 ? "\(count) connector arrived switched off." : "\(count) connectors arrived switched off."
+    }
 
     public static func subscribedNotification(_ asker: String, _ file: String, _ collection: String) -> String { "\(asker) subscribed to “\(file)” as “\(collection)”." }
 
@@ -347,7 +365,7 @@ extension ControlTools {
                                           footer: active ? ControlTools.takesEffectFooter : nil)
         return .ready(request, perform: { [self] in
             let mark = state.appliedServers
-            if let error = state.deleteCollection(named: collection) { return ControlTools.refused(error) }
+            if let error = state.deleteCollection(named: collection) { return ControlTools.refused(error, naming: [collection]) }
             return done([ControlTools.deletedCollectionText(shown)],
                         ["collection": .string(collection), "activeCollection": .string(state.activeCollection)],
                         // Only deleting the collection Claude runs reaches its config; deleting
@@ -362,18 +380,24 @@ extension ControlTools {
         // An empty path names the working folder here and is no path at all on Windows: refused
         // alike on both.
         guard !path.isEmpty else { return .refused(ControlTools.missingArgumentError("path")) }
+        // One place or the other, as the command line's --into | --new.
+        guard arguments.string("into") == nil || arguments.string("newCollection") == nil else {
+            return .refused(ControlTools.intoOrNewCollectionError)
+        }
         // Platform idiom: a URL takes any text, and the read below refuses what names no file; the
         // Windows mirror first refuses a path .NET cannot make full.
         let url = URL(fileURLWithPath: path).standardizedFileURL
         let file = ControlText.escapedName(url.lastPathComponent)
-        let (read, _, failure) = AppState.readDocument(at: url)
-        guard let document = read else { return .refused(ControlText.escaped(failure ?? EditorModel.notValidJSON)) }
+        let (read, bytes, failure) = AppState.readDocument(at: url)
+        guard let document = read, let bytes else {
+            return .refused(ControlText.escaped(failure ?? EditorModel.notValidJSON, naming: [url.lastPathComponent]))
+        }
         let newCollection = arguments.string("newCollection").map(MasterStore.collectionName)
         let target: String
         if let newCollection {
             // The store's own refusal for a name it cannot take, found on a copy so nothing is made.
             var probe = state.store
-            if let error = probe.addCollection(named: newCollection) { return .refused(ControlText.escaped(error)) }
+            if let error = probe.addCollection(named: newCollection) { return .refused(ControlText.escaped(error, naming: [newCollection])) }
             target = newCollection
         } else {
             // The Import sheet's own target: the active collection while it is local, else the
@@ -404,10 +428,15 @@ extension ControlTools {
             message: newCollection == nil ? ControlTools.importMessage(count, shownTarget) : ControlTools.importNewMessage(count, shownTarget),
             code: ControlTools.documentLines(rendered, present: { held[$0] != nil }, choice: clash),
             footer: ControlTools.fromFooter(ControlText.escaped(url.path)))
-        return .ready(request, perform: { [self] in
+        // What the question cannot show, the document's masked values among them, the bytes stand for.
+        return .ready(request, fingerprint: ContentHash.sha256(bytes), perform: { [self] in
             let mark = state.appliedServers
-            if let newCollection, let error = state.addEmptyCollection(named: newCollection) { return ControlTools.refused(error) }
-            if let error = state.importCopies(documentAt: url.path, into: target, choices: choices) { return ControlTools.refused(error) }
+            if let newCollection, let error = state.addEmptyCollection(named: newCollection) {
+                return ControlTools.refused(error, naming: [newCollection])
+            }
+            if let error = state.importCopies(documentAt: url.path, into: target, choices: choices) {
+                return ControlTools.refused(error, naming: [url.lastPathComponent, target])
+            }
             return done([ControlTools.importedText(count, shownTarget)], ["collection": .string(target), "count": .int(count)],
                         touching: target, since: mark, restart: ControlTools.restartToApplyText,
                         notification: ControlTools.importedNotification(shownAsker, count, shownTarget))
@@ -421,8 +450,10 @@ extension ControlTools {
         // Platform idiom: as import_document reads it.
         let url = URL(fileURLWithPath: path).standardizedFileURL
         let file = ControlText.escapedName(url.lastPathComponent)
-        let (read, _, failure) = AppState.readDocument(at: url)
-        guard let document = read else { return .refused(ControlText.escaped(failure ?? EditorModel.notValidJSON)) }
+        let (read, bytes, failure) = AppState.readDocument(at: url)
+        guard let document = read, let bytes else {
+            return .refused(ControlText.escaped(failure ?? EditorModel.notValidJSON, naming: [url.lastPathComponent]))
+        }
         // AppState's own rules, asked here as well, so the refusal comes before the question.
         if let origin = document.origin, state.collectionsFile.collections.values.contains(where: { $0.publish?.origin == origin }) {
             return .refused(AppState.ownCollectionError)
@@ -430,7 +461,7 @@ extension ControlTools {
         let requested = MasterStore.collectionName(arguments.string("name") ?? "")
         let name = MasterStore.collectionName(requested.isEmpty ? document.name : requested)
         var probe = state.store
-        if let error = probe.addCollection(named: name) { return .refused(ControlText.escaped(error)) }
+        if let error = probe.addCollection(named: name) { return .refused(ControlText.escaped(error, naming: [name])) }
         let shownName = ControlText.escapedName(name)
         let rendered = document.render()
         let count = rendered.connectors.count
@@ -440,9 +471,12 @@ extension ControlTools {
             message: ControlTools.subscribeMessage(shownName, count),
             code: ControlTools.documentLines(rendered, present: { _ in false }, choice: .add),
             footer: ControlTools.fromFooter(ControlText.escaped(url.path)))
-        return .ready(request, perform: { [self] in
+        // As import_document's: the bytes stand for what the question cannot show.
+        return .ready(request, fingerprint: ContentHash.sha256(bytes), perform: { [self] in
             let mark = state.appliedServers
-            if let error = state.subscribe(documentAt: url.path, as: arguments.string("name")) { return ControlTools.refused(error) }
+            if let error = state.subscribe(documentAt: url.path, as: arguments.string("name")) {
+                return ControlTools.refused(error, naming: [url.lastPathComponent, name])
+            }
             return done([ControlTools.subscribedText(shownName, file), ControlTools.arrivedOffText(count)],
                         ["collection": .string(name), "count": .int(count)],
                         touching: name, since: mark, restart: ControlTools.restartToApplyText,
@@ -455,7 +489,11 @@ extension ControlTools {
         let shown = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shown)) }
         guard state.isSynced(collection) else { return .refused(ControlTools.notSubscribedError(shown)) }
-        if let problem = state.sourceErrors[collection] { return .refused(ControlText.escaped(problem)) }
+        if let problem = state.sourceErrors[collection] {
+            // The problem names the document's file.
+            let file = state.sourceBinding(of: collection)?.path.map { URL(fileURLWithPath: $0).lastPathComponent }
+            return .refused(ControlText.escaped(problem, naming: file.map { [$0] } ?? []))
+        }
         guard let diff = state.pendingUpdates[collection] else { return .refused(ControlTools.noUpdateError(shown)) }
         // Connector by connector, as the Review sheet shows an update: every entry is a command
         // Claude will run. A document that moves under the question then asks a different one, so
@@ -476,11 +514,13 @@ extension ControlTools {
         let active = collection == state.activeCollection
         let shownAsker = ControlText.escapedName(asker)
         let request = ConfirmationRequest(title: ControlTools.applyUpdateTitle(shownAsker, shown),
-                                          message: AppState.collectionUpdateBanner(shown, ControlText.escapedName(diff.summary())),
+                                          message: ControlTools.pendingUpdateText(shown, ControlTools.changesText(diff)),
                                           code: code, footer: active ? ControlTools.takesEffectFooter : nil)
-        return .ready(request, perform: { [self] in
+        // The document's bytes, as the Review sheet's Apply checks them: what the question cannot
+        // show, its masked values among them, must not have moved either.
+        return .ready(request, fingerprint: state.pendingSourceHash(for: collection), perform: { [self] in
             let mark = state.appliedServers
-            if let error = state.applyPendingUpdate(for: collection) { return ControlTools.refused(error) }
+            if let error = state.applyPendingUpdate(for: collection) { return ControlTools.refused(error, naming: [collection]) }
             return done([ControlTools.appliedUpdateText(shown)], ["collection": .string(collection)],
                         touching: collection, since: mark, restart: ControlTools.restartToApplyText,
                         notification: ControlTools.appliedUpdateNotification(shownAsker, shown))
@@ -514,12 +554,15 @@ extension ControlTools {
         }
         if let refusal = state.restoreRefusal(for: backup) { return .refused(ControlTools.restoreRefusalText(refusal)) }
         // A backup that is not a config file is refused now rather than after the question, in the
-        // reader's own words, as the Restore sheet shows a failed restore's.
+        // reader's own words, as the Restore sheet shows a failed restore's. Its bytes stand for what
+        // the question, which lists only names, cannot show.
         let servers: [String: JSONValue]
+        let fingerprint: String
         do {
+            fingerprint = ContentHash.sha256(try Data(contentsOf: backup))
             servers = try ClaudeConfigIO.readMCPServers(at: backup)
         } catch {
-            return .refused(ControlText.escaped(error.localizedDescription))
+            return .refused(ControlText.escaped(error.localizedDescription, naming: [id]))
         }
         // AppState's rule: back into the collection the backup was taken from, else the active one.
         let target = BackupCollections.collection(of: backup, in: state.service.paths.backupsDirURL) ?? state.activeCollection
@@ -532,17 +575,20 @@ extension ControlTools {
                                           message: RestoreModel.caption + " " + into,
                                           code: names.map { ControlTools.connectorHeading($0) },
                                           footer: ControlTools.takesEffectFooter)
-        return .ready(request, perform: { [self] in
+        return .ready(request, fingerprint: fingerprint, perform: { [self] in
             let mark = state.appliedServers
             do {
                 try state.restoreClaudeConfig(from: backup)
             } catch let refusal as RestoreError {
                 return ControlOutcome(result: .refusal(ControlTools.restoreRefusalText(refusal)), notification: nil)
             } catch {
+                // Platform idiom: every other error lands here, as the Restore sheet's catch takes it;
+                // the Windows mirror catches the sheet's own set (a config, I/O, access or JSON error)
+                // and leaves anything else to the write queue, which ends the call.
                 // A restore that failed is the banner's too, as the Restore sheet's is, in the
                 // error's own words.
                 state.lastError = error.localizedDescription
-                return ControlTools.refused(error.localizedDescription)
+                return ControlTools.refused(error.localizedDescription, naming: [id])
             }
             return done([ControlTools.restoredText(shownID)], ["id": .string(id), "activeCollection": .string(state.activeCollection)],
                         touching: nil, since: mark, restart: ControlTools.restartToApplyText,
@@ -560,9 +606,14 @@ extension ControlTools {
             title: asker == ControlCaller.claudeName ? ControlTools.restartItselfTitle : ControlTools.restartTitle(ControlText.escapedName(asker)),
             message: ControlTools.restartMessage, code: [], footer: nil)
         return .ready(request, perform: { [self] in
-            // The restart reports through AppState's own banner when it completes; the Windows
-            // mirror starts it fire-and-forget, as the toast's Restart button does.
-            state.performRestartClaude()
+            // Claude hears the answer first: the restart quits it, and the relay with it. One still
+            // due when the app quits never happens. It reports through AppState's own banner when it
+            // completes; the Windows mirror starts it fire-and-forget, as the toast's Restart button
+            // does.
+            host.delay(ControlTools.restartDelay) { [weak self] in
+                guard let self, !self.state.isDisposed else { return }
+                self.state.performRestartClaude()
+            }
             return ControlOutcome(result: ControlResult(structured: .object(["restarting": .bool(true)]),
                                                         text: ControlTools.restartingText, isError: false),
                                   notification: nil)

@@ -65,10 +65,10 @@ extension ControlTools {
         }
     }
 
-    /// A change refused as it was made, with the app's own sentence: through `ControlText.escaped(_:)`,
-    /// since the sentence may echo a name the caller chose.
-    static func refused(_ text: String) -> ControlOutcome {
-        ControlOutcome(result: .refusal(ControlText.escaped(text)), notification: nil)
+    /// A change refused as it was made, with the app's own sentence: through
+    /// `ControlText.escaped(_:naming:)`, since the sentence may echo `names`, which others chose.
+    static func refused(_ text: String, naming names: [String] = []) -> ControlOutcome {
+        ControlOutcome(result: .refusal(ControlText.escaped(text, naming: names)), notification: nil)
     }
 
     /// A write's answer: what happened, then what follows for the collection Claude runs. A write
@@ -142,7 +142,9 @@ extension ControlTools {
         let name = arguments.string("name") ?? ""
         return .ready(nil, perform: { [self] in
             let mark = state.appliedServers
-            if let error = state.addEmptyCollection(named: name) { return ControlTools.refused(error) }
+            if let error = state.addEmptyCollection(named: name) {
+                return ControlTools.refused(error, naming: [name, MasterStore.collectionName(name)])
+            }
             let created = MasterStore.collectionName(name)
             return done([ControlTools.createdText(ControlText.escapedName(created))], ["collection": .string(created)],
                         touching: created, since: mark, restart: ControlTools.restartToApplyText)
@@ -154,7 +156,9 @@ extension ControlTools {
         let newName = arguments.string("newName") ?? ""
         return .ready(nil, perform: { [self] in
             let mark = state.appliedServers
-            if let error = state.renameCollection(collection, to: newName) { return ControlTools.refused(error) }
+            if let error = state.renameCollection(collection, to: newName) {
+                return ControlTools.refused(error, naming: [collection, newName, MasterStore.collectionName(newName)])
+            }
             let renamed = MasterStore.collectionName(newName)
             return done([ControlTools.renamedCollectionText(ControlText.escapedName(collection), ControlText.escapedName(renamed))],
                         ["collection": .string(renamed), "previousName": .string(collection)],
@@ -172,7 +176,9 @@ extension ControlTools {
         guard !state.isSynced(source) else { return .refused(ControlTools.duplicateSubscribedError(shownSource)) }
         return .ready(nil, perform: { [self] in
             let mark = state.appliedServers
-            if let error = state.duplicateCollection(source, named: newName) { return ControlTools.refused(error) }
+            if let error = state.duplicateCollection(source, named: newName) {
+                return ControlTools.refused(error, naming: [source, newName, MasterStore.collectionName(newName)])
+            }
             let copy = MasterStore.collectionName(newName)
             return done([ControlTools.duplicatedText(shownSource, ControlText.escapedName(copy))],
                         ["collection": .string(copy), "source": .string(source)],

@@ -28,7 +28,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public const string ClaudeIntegrationTitle = "Let Claude manage Connector Control";
     public const string ClaudeIntegrationCaption = "Adds a connector named connector-control to Claude's config, so Claude can list, switch and edit your connectors. Takes effect when Claude restarts.";
     public const string ConfirmClaudeChangesTitle = "Confirm changes Claude makes to connectors";
-    public const string ConfirmClaudeChangesOnCaption = "Adding, editing or deleting a connector, importing, subscribing and restoring a backup ask here first.";
+    public const string ConfirmClaudeChangesOnCaption = "Adding, editing or deleting a connector, deleting a collection, importing, subscribing, applying an update and restoring a backup ask here first.";
     public const string ConfirmClaudeChangesOffCaption = "Claude can then change what it runs without asking here. Text Claude reads, such as a web page, could ask it to.";
     public const string ConfigPathLabel = "Config file";
     public const string LaunchTargetLabel = "Launch target";

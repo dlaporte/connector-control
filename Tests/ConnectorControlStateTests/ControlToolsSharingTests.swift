@@ -44,11 +44,19 @@ final class ControlToolsSharingTests: XCTestCase {
         connectors: ["acme": .init(launcher: .local(.init(command: "node", args: ["${COLLECTION_DIR}/server.js", "--api-key", "sk-live-abc123"], platform: .mac)),
                                    env: ["ACME_TOKEN": .value("literal-env-secret")], needs: [:], additional: [:])])
 
+    /// A document whose one connector holds `value` where the dialog shows only that it is set.
+    private func masked(_ value: String) -> CollectionDocument {
+        CollectionDocument(name: "Acme", author: nil, origin: "acme-origin", exported: "2026-10-01T00:00:00Z",
+                           connectors: ["acme": .init(launcher: .local(.init(command: "node", args: [], platform: .mac)),
+                                                      env: ["ACME_TOKEN": .value(value)], needs: [:], additional: [:])])
+    }
+
     // MARK: delete_collection
 
     func testDeletingACollectionAsksWhatTheWindowSaysAndSaysWhatBecomesActive() throws {
         let rig = rig(); defer { rig.dispose() }
         XCTAssertNil(rig.state.addEmptyCollection(named: "Work"))
+        XCTAssertNil(rig.state.upsert(name: "tool", entry: AppStateHarness.localConnector("node"), renamedFrom: nil, in: "Work"))
         let window = rig.h.collectionsModel(rig.state).deleteInformative(for: "Default")
         let result = try XCTUnwrap(rig.call("delete_collection", ["collection": .string("Default")]))
         XCTAssertEqual(rig.confirmer.requests.last, ConfirmationRequest(
@@ -61,6 +69,8 @@ final class ControlToolsSharingTests: XCTestCase {
         XCTAssertEqual(result.structured.value(at: JSONPointer(["activeCollection"])), .string("Work"))
         XCTAssertEqual(rig.state.activeCollection, "Work")
         XCTAssertNil(rig.state.store.collections["Default"])
+        XCTAssertEqual(Set(try rig.h.claudeServers().keys), ["tool", ClaudeIntegration.entryName],
+                       "Claude's config follows the collection that became active")
     }
 
     func testTheLastLocalCollectionIsRefusedBeforeAsking() throws {
@@ -168,6 +178,9 @@ final class ControlToolsSharingTests: XCTestCase {
         XCTAssertEqual(rig.call("import_document", ["path": .string(url.path), "newCollection": .string("Default")])?.isError, true)
         XCTAssertEqual(rig.call("import_document", ["path": .string(rig.h.dir.file("missing.json").path)])?.isError, true)
         XCTAssertEqual(rig.call("import_document", ["path": .string("")]), .refusal(ControlTools.missingArgumentError("path")))
+        XCTAssertEqual(rig.call("import_document", ["path": .string(url.path), "into": .string("Default"), "newCollection": .string("Team")]),
+                       .refusal(ControlTools.intoOrNewCollectionError), "one place or the other, as the command line's --into | --new")
+        XCTAssertNil(rig.state.store.collections["Team"])
         XCTAssertEqual(rig.confirmer.requests, [])
         XCTAssertNil(rig.state.store.collections["Default"]?.mcps["dbt"])
     }
@@ -203,6 +216,10 @@ final class ControlToolsSharingTests: XCTestCase {
                        listed(ClaudeIntegration.entryName, nil, ImportModel.skippedBadge(ClaudeIntegration.reservedNameError))
                        + ["dbt", "github", "ledger", "notion"].flatMap { listed($0, rendered.connectors[$0]?.config) })
         XCTAssertNil(rig.state.store.collections["Team"]?.mcps[ClaudeIntegration.entryName])
+        XCTAssertEqual(rig.call("import_document", ["path": .string(url.path)])?.text, ControlTools.importedText(4, "Default"))
+        XCTAssertEqual(rig.confirmer.requests.last?.code.first,
+                       listed(ClaudeIntegration.entryName, nil, ImportModel.skippedBadge(ClaudeIntegration.reservedNameError)).first)
+        XCTAssertNil(rig.state.store.collections["Default"]?.mcps[ClaudeIntegration.entryName])
     }
 
     // The Windows mirror also lists a remote connector the cmd /c launcher cannot carry as skipped,
@@ -264,7 +281,8 @@ final class ControlToolsSharingTests: XCTestCase {
         let result = try XCTUnwrap(rig.call("apply_update", ["collection": .string("Data team")]))
         XCTAssertEqual(rig.confirmer.requests.last, ConfirmationRequest(
             title: ControlTools.applyUpdateTitle("Claude", "Data team"),
-            message: AppState.collectionUpdateBanner("Data team", "deletes github; changes dbt"),
+            message: ControlTools.pendingUpdateText("Data team", ControlTools.deletesClause("“github”") + ControlTools.clauseSeparator
+                                                     + ControlTools.changesClause("“dbt”")),
             code: listed("github", nil, ReviewModel.deletedLabel) + listed("dbt", nil, ReviewModel.changedLabel)
                 + ControlMasking.changeLines(from: before, to: after, exposure: .dialog).map { "  " + $0 },
             footer: nil))
@@ -281,6 +299,7 @@ final class ControlToolsSharingTests: XCTestCase {
     func testAnUpdateThatMovedWhileAskingIsNotApplied() throws {
         let rig = rig(answer: nil); defer { rig.dispose() }
         let url = try rig.h.subscribe(rig.state, to: CollectionDocumentSamples.dataTeam)
+        let original = try XCTUnwrap(rig.state.store.collections["Data team"]?.mcps["dbt"])
         var doc = CollectionDocumentSamples.dataTeam
         doc.connectors["dbt"] = local("npx", ["-y", "@dbt/mcp@2"])
         try rig.h.writeDocument(doc, at: url)
@@ -292,7 +311,110 @@ final class ControlToolsSharingTests: XCTestCase {
         rig.confirmer.answer(true)
         rig.h.drain()
         XCTAssertEqual(answer.result, .refusal(ControlTools.changedWhileAskingError))
-        XCTAssertNotEqual(rig.state.store.collections["Data team"]?.mcps["dbt"]?.config, doc.render().connectors["dbt"]?.config)
+        XCTAssertEqual(rig.state.store.collections["Data team"]?.mcps["dbt"], original, "nothing applied")
+    }
+
+    /// A name cannot invent a clause of the update's sentence: every name is quoted.
+    func testAConnectorsNameCannotInventAClauseOfTheUpdate() throws {
+        let rig = rig(); defer { rig.dispose() }
+        var doc = CollectionDocumentSamples.dataTeam
+        doc.connectors["x; deletes notion"] = doc.connectors["github"]
+        let url = try rig.h.subscribe(rig.state, to: doc)
+        doc.connectors["x; deletes notion"] = nil
+        try rig.h.writeDocument(doc, at: url)
+        rig.state.refreshSource(for: "Data team")
+        let sentence = ControlTools.pendingUpdateText("Data team", ControlTools.deletesClause("“x; deletes notion”"))
+        XCTAssertEqual(rig.call("get_pending_update", ["collection": .string("Data team")])?.text, sentence)
+        _ = rig.call("apply_update", ["collection": .string("Data team")])
+        XCTAssertEqual(rig.confirmer.requests.last?.message, sentence)
+    }
+
+    // MARK: What the user allowed
+
+    /// The question cannot show a value the dialog masks, so it alone cannot tell the user's Allow
+    /// from one given to a different value: a document that changed only there while the dialog
+    /// was open lands nothing.
+    func testAnImportWhoseDocumentChangedOnlyWhereTheDialogMasksLandsNothing() throws {
+        let rig = rig(answer: nil); defer { rig.dispose() }
+        let url = try rig.h.writeDocument(masked("one"), named: "acme.json")
+        let answer = rig.start("import_document", ["path": .string(url.path)])
+        let asked = try XCTUnwrap(rig.confirmer.requests.last)
+        try rig.h.writeDocument(masked("two"), at: url)
+        rig.confirmer.answer(true)
+        rig.h.drain()
+        XCTAssertEqual(answer.result, .refusal(ControlTools.changedWhileAskingError))
+        XCTAssertNil(rig.state.store.mcps["acme"], "nothing applied")
+        _ = rig.start("import_document", ["path": .string(url.path)])
+        XCTAssertEqual(rig.confirmer.requests.last, asked, "the question itself reads the same")
+    }
+
+    func testASubscriptionWhoseDocumentChangedOnlyWhereTheDialogMasksLandsNothing() throws {
+        let rig = rig(answer: nil); defer { rig.dispose() }
+        let url = try rig.h.writeDocument(masked("one"), named: "acme.json")
+        let answer = rig.start("subscribe", ["path": .string(url.path)])
+        try rig.h.writeDocument(masked("two"), at: url)
+        rig.confirmer.answer(true)
+        rig.h.drain()
+        XCTAssertEqual(answer.result, .refusal(ControlTools.changedWhileAskingError))
+        XCTAssertNil(rig.state.store.collections["Acme"], "nothing applied")
+    }
+
+    func testAnUpdateWhoseDocumentChangedOnlyWhereTheDialogMasksLandsNothing() throws {
+        let rig = rig(answer: nil); defer { rig.dispose() }
+        let url = try rig.h.subscribe(rig.state, to: masked("one"))
+        let original = try XCTUnwrap(rig.state.store.collections["Acme"]?.mcps["acme"])
+        try rig.h.writeDocument(masked("two"), at: url)
+        rig.state.refreshSource(for: "Acme")
+        let answer = rig.start("apply_update", ["collection": .string("Acme")])
+        try rig.h.writeDocument(masked("three"), at: url)
+        rig.state.refreshSource(for: "Acme")
+        rig.confirmer.answer(true)
+        rig.h.drain()
+        XCTAssertEqual(answer.result, .refusal(ControlTools.changedWhileAskingError))
+        XCTAssertEqual(rig.state.store.collections["Acme"]?.mcps["acme"], original, "nothing applied")
+    }
+
+    func testARestoreWhoseBackupChangedWhileAskingLandsNothing() throws {
+        let rig = rig(answer: nil); defer { rig.dispose() }
+        let id = "claude_desktop_config.zz-masked.json"
+        let backup = rig.h.backupsDir.appendingPathComponent(id)
+        let config = #"{"mcpServers": {"acme": {"command": "node", "env": {"ACME_TOKEN": "%@"}}}}"#
+        try Data(config.replacingOccurrences(of: "%@", with: "one").utf8).write(to: backup)
+        let before = try rig.h.claudeServers()
+        let answer = rig.start("restore_backup", ["id": .string(id)])
+        try Data(config.replacingOccurrences(of: "%@", with: "two").utf8).write(to: backup)
+        rig.confirmer.answer(true)
+        rig.h.drain()
+        XCTAssertEqual(answer.result, .refusal(ControlTools.changedWhileAskingError))
+        XCTAssertEqual(try rig.h.claudeServers(), before, "nothing applied")
+    }
+
+    /// Don't Allow, for every one of these, leaves everything as it was.
+    func testADeclinedChangeLeavesEverythingAsItWas() throws {
+        let rig = rig(answer: false); defer { rig.dispose() }
+        XCTAssertNil(rig.state.addEmptyCollection(named: "Work"))
+        let subscribed = try rig.h.subscribe(rig.state, to: CollectionDocumentSamples.dataTeam)
+        var doc = CollectionDocumentSamples.dataTeam
+        doc.connectors["github"] = nil
+        try rig.h.writeDocument(doc, at: subscribed)
+        rig.state.refreshSource(for: "Data team")
+        let url = try rig.h.writeDocument(masked("one"), named: "acme.json")
+        let id = try XCTUnwrap(rig.state.service.backups.backups(series: RestoreModel.series).first?.lastPathComponent)
+        let store = try rig.h.storeOnDisk(), claude = try rig.h.claudeServers()
+        let calls: [(String, [String: JSONValue])] = [
+            ("delete_collection", ["collection": .string("Work")]),
+            ("import_document", ["path": .string(url.path)]),
+            ("subscribe", ["path": .string(url.path)]),
+            ("apply_update", ["collection": .string("Data team")]),
+            ("restore_backup", ["id": .string(id)]),
+        ]
+        for (name, arguments) in calls {
+            XCTAssertEqual(rig.call(name, arguments), .refusal(ControlTools.declinedError), name)
+        }
+        XCTAssertEqual(rig.confirmer.requests.count, calls.count)
+        XCTAssertEqual(try rig.h.storeOnDisk(), store)
+        XCTAssertEqual(try rig.h.claudeServers(), claude)
+        XCTAssertNotNil(rig.state.pendingUpdates["Data team"])
     }
 
     // MARK: restore_backup
@@ -321,7 +443,9 @@ final class ControlToolsSharingTests: XCTestCase {
         let rig = rig(); defer { rig.dispose() }
         let broken = "claude_desktop_config.zz-broken.json"
         try Data("{".utf8).write(to: rig.h.backupsDir.appendingPathComponent(broken))
-        XCTAssertEqual(rig.call("restore_backup", ["id": .string(broken)])?.isError, true)
+        let unreadable = try XCTUnwrap(rig.call("restore_backup", ["id": .string(broken)]))
+        XCTAssertTrue(unreadable.isError)
+        XCTAssertNotEqual(unreadable, .refusal(ControlTools.noBackupError(broken)), "listed, but not a config file")
         // A backup with no record of its collection goes into the active one, which is refused
         // while that one is subscribed.
         let backup = try XCTUnwrap(rig.state.service.backups.backups(series: RestoreModel.series).first)
@@ -334,6 +458,25 @@ final class ControlToolsSharingTests: XCTestCase {
         XCTAssertEqual(rig.state.activeCollection, "Data team")
     }
 
+    /// A backup taken while another collection was active goes back into that one, which becomes
+    /// the active collection again; the question says so.
+    func testRestoringABackupOfAnotherCollectionMakesThatOneActive() throws {
+        let rig = rig(); defer { rig.dispose() }
+        XCTAssertNil(rig.state.createActiveCopy(named: "Work"))
+        XCTAssertNil(rig.state.upsert(name: "one", entry: AppStateHarness.localConnector("node"), renamedFrom: nil))
+        rig.state.applyInteractively()
+        XCTAssertNil(rig.state.upsert(name: "two", entry: AppStateHarness.localConnector("node"), renamedFrom: nil))
+        rig.state.applyInteractively()
+        rig.state.switchCollection(to: "Default")
+        let backups = try rig.state.service.backups.backups(series: RestoreModel.series)
+        let backup = try XCTUnwrap(backups.first { BackupCollections.collection(of: $0, in: rig.h.backupsDir) == "Work" })
+        let result = try XCTUnwrap(rig.call("restore_backup", ["id": .string(backup.lastPathComponent)]))
+        XCTAssertEqual(rig.confirmer.requests.last?.message, RestoreModel.caption + " " + ControlTools.restoreActivatingText("Work"))
+        XCTAssertFalse(result.isError, result.text)
+        XCTAssertEqual(rig.state.activeCollection, "Work")
+        XCTAssertEqual(result.structured.value(at: JSONPointer(["activeCollection"])), .string("Work"))
+    }
+
     // MARK: restart_claude
 
     func testARestartFromClaudeAlwaysAsksAndFromTheCommandLineNever() {
@@ -343,12 +486,15 @@ final class ControlToolsSharingTests: XCTestCase {
         XCTAssertEqual(rig.confirmer.requests.last, ConfirmationRequest(
             title: ControlTools.restartItselfTitle, message: ControlTools.restartMessage, code: [], footer: nil))
         XCTAssertEqual(rig.h.claude.restartCalls, 0)
+        XCTAssertTrue(rig.h.delays.pending.isEmpty, "a declined restart leaves nothing for later")
         XCTAssertEqual(rig.call("restart_claude", as: .cli)?.text, ControlTools.restartingText)
+        rig.h.delays.runNext()
         XCTAssertEqual(rig.h.claude.restartCalls, 1)
         XCTAssertEqual(rig.confirmer.requests.count, 1)
         rig.confirmer.scripted = true
         _ = rig.call("restart_claude", as: .relay(clientName: "Cursor"))
         XCTAssertEqual(rig.confirmer.requests.last?.title, ControlTools.restartTitle("Cursor"))
+        rig.h.delays.runNext()
         XCTAssertEqual(rig.h.claude.restartCalls, 2)
         XCTAssertTrue(rig.h.notifier.sent.isEmpty, "a restart is asked about, never announced")
     }
@@ -361,8 +507,25 @@ final class ControlToolsSharingTests: XCTestCase {
         rig.h.dialogs.nextConfirm = false
         _ = rig.call("restart_claude")
         _ = rig.call("restart_claude", as: .cli)
+        rig.h.delays.runNext()
+        rig.h.delays.runNext()
         XCTAssertEqual(rig.h.claude.restartCalls, 2)
         XCTAssertEqual(rig.h.dialogs.confirms, [])
+    }
+
+    /// Claude hears its answer before it quits: the restart waits `restartDelay`, and one due after
+    /// the app has quit never happens.
+    func testTheAnswerComesBeforeTheRestart() throws {
+        let rig = rig(); defer { rig.dispose() }
+        XCTAssertEqual(rig.call("restart_claude")?.text, ControlTools.restartingText)
+        XCTAssertEqual(rig.h.claude.restartCalls, 0, "answered, not yet restarted")
+        XCTAssertEqual(rig.h.delays.pending.map(\.delay), [ControlTools.restartDelay])
+        rig.h.delays.runNext()
+        XCTAssertEqual(rig.h.claude.restartCalls, 1)
+        _ = rig.call("restart_claude")
+        rig.state.dispose()
+        while !rig.h.delays.pending.isEmpty { rig.h.delays.runNext() }
+        XCTAssertEqual(rig.h.claude.restartCalls, 1, "the app quit before the restart was due")
     }
 
     // MARK: Names
@@ -410,7 +573,7 @@ final class ControlToolsSharingTests: XCTestCase {
         ])
         XCTAssertEqual(requests.prefix(3).map(\.message), [
             ControlTools.importMessage(2, shownCollection), ControlTools.subscribeMessage(shownTeam, 2),
-            AppState.collectionUpdateBanner(shownTeam, "deletes " + shownConnector),
+            ControlTools.pendingUpdateText(shownTeam, ControlTools.deletesClause("“" + shownConnector + "”")),
         ])
         XCTAssertEqual(requests.first?.code.first, "“" + shownConnector + "”")
         XCTAssertEqual(requests.dropFirst(2).first?.code, ["“" + shownConnector + "” · " + ReviewModel.deletedLabel])
@@ -428,6 +591,36 @@ final class ControlToolsSharingTests: XCTestCase {
             XCTAssertEqual(result?.isError, false, result?.text ?? "")
             for line in (result?.text ?? "").split(separator: "\n") { assertPlain(String(line)) }
         }
+    }
+
+    /// A refusal in the app's own words still shows a name someone else chose as an escape, with the
+    /// sentence's own quotes as they are.
+    func testNamesInsideTheAppsOwnSentencesAreEscaped() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let collection = "Work\n\u{202E}z", shownCollection = #"Work\n\u{202E}z"#
+        let file = "t\u{202E}\u{201D}.json", shownFile = #"t\u{202E}\u{201D}.json"#
+        XCTAssertNil(rig.state.addEmptyCollection(named: collection))
+        var probe = rig.state.store
+        let taken = try XCTUnwrap(probe.addCollection(named: collection))
+        let shownTaken = taken.replacingOccurrences(of: collection, with: shownCollection)
+        let url = try rig.h.writeDocument(CollectionDocumentSamples.dataTeam, named: "team.json")
+        XCTAssertEqual(rig.call("import_document", ["path": .string(url.path), "newCollection": .string(collection)]), .refusal(shownTaken))
+        XCTAssertEqual(rig.call("subscribe", ["path": .string(url.path), "name": .string(collection)]), .refusal(shownTaken))
+        let broken = rig.h.dir.file(file)
+        try Data("{".utf8).write(to: broken)
+        let source = try rig.h.subscribe(rig.state, to: CollectionDocumentSamples.dataTeam, at: "source/" + file, as: "Team")
+        try Data("{".utf8).write(to: source)
+        rig.state.refreshSource(for: "Team")
+        let refusals = [rig.call("import_document", ["path": .string(broken.path)]), rig.call("subscribe", ["path": .string(broken.path)]),
+                        rig.call("apply_update", ["collection": .string("Team")])]
+        for refusal in refusals {
+            XCTAssertEqual(refusal?.isError, true)
+            XCTAssertTrue(refusal?.text.contains(shownFile) == true, refusal?.text ?? "")
+            assertPlain(refusal?.text ?? "")
+        }
+        XCTAssertTrue(rig.confirmer.requests.isEmpty)
+        XCTAssertEqual(ControlTools.refused("No collection named “a\nb”.", naming: ["a\nb"]).result,
+                       .refusal(#"No collection named “a\nb”."#), "as a change refused as it was made says it")
     }
 
     /// The announcements, for changes nobody was asked about, name everything as the questions do.

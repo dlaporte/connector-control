@@ -137,7 +137,7 @@ public class ControlToolsReadTests
         rig.State.RefreshSource("Data team");
         var pending = rig.Call("get_pending_update", Args(("collection", JsonValue.String("Data team"))));
         Assert.NotNull(pending);
-        Assert.Equal(AppState.CollectionUpdateBanner("Data team", "deletes github"), pending.Text);
+        Assert.Equal(ControlTools.PendingUpdateText("Data team", ControlTools.DeletesClause("“github”")), pending.Text);
         Assert.Equal(JsonValue.Array([JsonValue.String("github")]), At(pending.Structured, "removed"));
     }
 

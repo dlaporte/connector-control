@@ -23,7 +23,7 @@ public static class ControlText
         text + new string(' ', Math.Max(0, width - Width(text)));
 
     /// <summary>"label   value" lines, every value starting in the same column. A row with an empty label
-    /// continues the one above it. Labels and values go through <see cref="Escaped"/>.</summary>
+    /// continues the one above it. Labels and values go through <see cref="Escaped(string)"/>.</summary>
     public static IReadOnlyList<string> Labelled(IReadOnlyList<(string Label, string Value)> rows)
     {
         var escaped = rows.Select(row => (Label: Escaped(row.Label), Value: Escaped(row.Value))).ToList();
@@ -33,7 +33,7 @@ public static class ControlText
 
     /// <summary>A table: every column but the last padded to its widest cell plus the gap; the header row,
     /// when there is one, first. No line ends in spaces, whatever its last cells hold. Every cell
-    /// goes through <see cref="Escaped"/>.</summary>
+    /// goes through <see cref="Escaped(string)"/>.</summary>
     public static IReadOnlyList<string> Table(IReadOnlyList<string>? header, IReadOnlyList<IReadOnlyList<string>> rows)
     {
         var all = (header is null ? [] : new List<IReadOnlyList<string>> { header }).Concat(rows)
@@ -70,7 +70,23 @@ public static class ControlText
         return line.ToString();
     }
 
-    /// <summary>A name as the app's sentences quote it: as <see cref="Escaped"/> shows it, with “ and ” escaped as
+    /// <summary>One of the app's own sentences that quotes names someone else chose: each of
+    /// <paramref name="names"/> as <see cref="EscapedName"/> shows it, and the rest — the sentence's own quotes
+    /// included — as <see cref="Escaped(string)"/> does. A name with nothing to escape reads as itself, so
+    /// replacing every place it appears can only ever escape more, never less.</summary>
+    public static string Escaped(string text, IReadOnlyList<string> names)
+    {
+        var sentence = text;
+        // Platform idiom: replaced ordinally, as the Mac mirror replaces literally; a culture-aware
+        // replace would also take a canonically equivalent spelling of a name.
+        foreach (var name in names.Where(name => name.Length > 0))
+        {
+            sentence = sentence.Replace(name, EscapedName(name), StringComparison.Ordinal);
+        }
+        return Escaped(sentence);
+    }
+
+    /// <summary>A name as the app's sentences quote it: as <see cref="Escaped(string)"/> shows it, with “ and ” escaped as
     /// well, so a name can neither break its line nor close its own quotes and read as two names.</summary>
     public static string EscapedName(string text)
     {
@@ -99,7 +115,7 @@ public static class ControlText
     internal static string HexEscape(char c) => $"\\u{{{(int)c:X4}}}";
 
     /// <summary>One argument of a command line: as written when it reads as one word — not empty, with no
-    /// space, no ' and nothing <see cref="Escaped"/> escapes — else between single quotes, with \ and '
+    /// space, no ' and nothing <see cref="Escaped(string)"/> escapes — else between single quotes, with \ and '
     /// escaped inside as well, so no two argument lists read alike.</summary>
     public static string Word(string text)
     {

@@ -74,6 +74,17 @@ public class ControlToolsSharingTests
                 new Dictionary<string, string?>(), new Dictionary<string, JsonValue>()),
         });
 
+    /// <summary>A document whose one connector holds <paramref name="value"/> where the dialog shows only
+    /// that it is set.</summary>
+    private static CollectionDocument Masked(string value) => new(
+        "Acme", null, "acme-origin", "2026-10-01T00:00:00Z",
+        new Dictionary<string, CollectionDocument.Connector>
+        {
+            ["acme"] = new(new CollectionDocument.Launcher.Local("node", [], CollectionPlatform.Mac),
+                new Dictionary<string, CollectionDocument.EnvValue> { ["ACME_TOKEN"] = new CollectionDocument.EnvValue.Value(value) },
+                new Dictionary<string, string?>(), new Dictionary<string, JsonValue>()),
+        });
+
     // MARK: delete_collection
 
     [Fact]
@@ -81,6 +92,7 @@ public class ControlToolsSharingTests
     {
         using var rig = Rig();
         Assert.Null(rig.State.AddEmptyCollection("Work"));
+        Assert.Null(rig.State.Upsert("tool", AppStateHarness.LocalConnector("node"), null, "Work"));
         var window = rig.H.CollectionsModel(rig.State).DeleteInformative("Default");
         var result = rig.Call("delete_collection", Args(("collection", Text("Default"))));
         Assert.NotNull(result);
@@ -95,6 +107,8 @@ public class ControlToolsSharingTests
         Assert.Equal(JsonValue.String("Work"), result.Structured.ValueAt(new JsonPointer(["activeCollection"])));
         Assert.Equal("Work", rig.State.ActiveCollection);
         Assert.False(rig.State.Store.Collections.ContainsKey("Default"));
+        // Claude's config follows the collection that became active.
+        Assert.Equal([ClaudeIntegration.EntryName, "tool"], rig.H.ClaudeServers().Keys.Order(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -219,6 +233,10 @@ public class ControlToolsSharingTests
         Assert.True(rig.Call("import_document", Args(("path", Text(path)), ("newCollection", Text("Default"))))?.IsError);
         Assert.True(rig.Call("import_document", Args(("path", Text(rig.H.Dir.File("missing.json")))))?.IsError);
         Assert.Equal(ControlResult.Refusal(ControlTools.MissingArgumentError("path")), rig.Call("import_document", Args(("path", Text("")))));
+        // One place or the other, as the command line's --into | --new.
+        Assert.Equal(ControlResult.Refusal(ControlTools.IntoOrNewCollectionError),
+            rig.Call("import_document", Args(("path", Text(path)), ("into", Text("Default")), ("newCollection", Text("Team")))));
+        Assert.False(rig.State.Store.Collections.ContainsKey("Team"));
         Assert.Empty(rig.Confirmer.Requests);
         Assert.False(rig.State.Store.Collections["Default"].Mcps.ContainsKey("dbt"));
     }
@@ -258,6 +276,10 @@ public class ControlToolsSharingTests
                 .Concat(new[] { "dbt", "github", "ledger", "notion" }.SelectMany(name => Listed(name, rendered.Connectors[name].Config))),
             rig.Confirmer.Requests[^1].Code);
         Assert.False(rig.State.Store.Collections["Team"].Mcps.ContainsKey(ClaudeIntegration.EntryName));
+        Assert.Equal(ControlTools.ImportedText(4, "Default"), rig.Call("import_document", Args(("path", Text(path))))?.Text);
+        Assert.Equal(Listed(ClaudeIntegration.EntryName, null, ImportModel.SkippedBadge(ClaudeIntegration.ReservedNameError))[0],
+            rig.Confirmer.Requests[^1].Code[0]);
+        Assert.False(rig.State.Store.Collections["Default"].Mcps.ContainsKey(ClaudeIntegration.EntryName));
     }
 
     /// <summary>This mirror only: a remote connector the cmd /c launcher cannot carry is listed as skipped,
@@ -344,7 +366,8 @@ public class ControlToolsSharingTests
         Assert.NotNull(result);
         Assert.Equal(new ConfirmationRequest(
             ControlTools.ApplyUpdateTitle("Claude", "Data team"),
-            AppState.CollectionUpdateBanner("Data team", "deletes github; changes dbt"),
+            ControlTools.PendingUpdateText("Data team", ControlTools.DeletesClause("“github”") + ControlTools.ClauseSeparator
+                + ControlTools.ChangesClause("“dbt”")),
             [.. Listed("github", null, ReviewModel.DeletedLabel), .. Listed("dbt", null, ReviewModel.ChangedLabel),
              .. ControlMasking.ChangeLines(before, after, ControlMasking.Exposure.Dialog).Select(line => "  " + line)],
             null), rig.Confirmer.Requests[^1]);
@@ -363,6 +386,7 @@ public class ControlToolsSharingTests
     {
         using var rig = Rig(answer: null);
         var path = rig.H.Subscribe(rig.State, CollectionDocumentSamples.DataTeam);
+        var original = rig.State.Store.Collections["Data team"].Mcps["dbt"];
         AppStateHarness.WriteDocumentAt(With(CollectionDocumentSamples.DataTeam, "dbt", Local("npx", "-y", "@dbt/mcp@2")), path);
         rig.State.RefreshSource("Data team");
         var answer = rig.Start("apply_update", Args(("collection", Text("Data team"))));
@@ -372,7 +396,127 @@ public class ControlToolsSharingTests
         rig.Confirmer.Answer(true);
         rig.H.Drain();
         Assert.Equal(ControlResult.Refusal(ControlTools.ChangedWhileAskingError), answer.Result);
-        Assert.NotEqual(moved.Render().Connectors["dbt"].Config, rig.State.Store.Collections["Data team"].Mcps["dbt"].Config);
+        // Nothing applied.
+        Assert.Equal(original, rig.State.Store.Collections["Data team"].Mcps["dbt"]);
+    }
+
+    /// <summary>A name cannot invent a clause of the update's sentence: every name is quoted.</summary>
+    [Fact]
+    public void AConnectorsNameCannotInventAClauseOfTheUpdate()
+    {
+        using var rig = Rig();
+        var doc = With(CollectionDocumentSamples.DataTeam, "x; deletes notion", CollectionDocumentSamples.DataTeam.Connectors["github"]);
+        var path = rig.H.Subscribe(rig.State, doc);
+        AppStateHarness.WriteDocumentAt(With(doc, "x; deletes notion", null), path);
+        rig.State.RefreshSource("Data team");
+        var sentence = ControlTools.PendingUpdateText("Data team", ControlTools.DeletesClause("“x; deletes notion”"));
+        Assert.Equal(sentence, rig.Call("get_pending_update", Args(("collection", Text("Data team"))))?.Text);
+        rig.Call("apply_update", Args(("collection", Text("Data team"))));
+        Assert.Equal(sentence, rig.Confirmer.Requests[^1].Message);
+    }
+
+    // MARK: What the user allowed
+
+    /// <summary>The question cannot show a value the dialog masks, so it alone cannot tell the user's Allow
+    /// from one given to a different value: a document that changed only there while the dialog was open
+    /// lands nothing.</summary>
+    [Fact]
+    public void AnImportWhoseDocumentChangedOnlyWhereTheDialogMasksLandsNothing()
+    {
+        using var rig = Rig(answer: null);
+        var path = rig.H.WriteDocument(Masked("one"), "acme.json");
+        var answer = rig.Start("import_document", Args(("path", Text(path))));
+        var asked = rig.Confirmer.Requests[^1];
+        AppStateHarness.WriteDocumentAt(Masked("two"), path);
+        rig.Confirmer.Answer(true);
+        rig.H.Drain();
+        Assert.Equal(ControlResult.Refusal(ControlTools.ChangedWhileAskingError), answer.Result);
+        // Nothing applied.
+        Assert.False(rig.State.Store.Mcps.ContainsKey("acme"));
+        rig.Start("import_document", Args(("path", Text(path))));
+        // The question itself reads the same.
+        Assert.Equal(asked, rig.Confirmer.Requests[^1]);
+    }
+
+    [Fact]
+    public void ASubscriptionWhoseDocumentChangedOnlyWhereTheDialogMasksLandsNothing()
+    {
+        using var rig = Rig(answer: null);
+        var path = rig.H.WriteDocument(Masked("one"), "acme.json");
+        var answer = rig.Start("subscribe", Args(("path", Text(path))));
+        AppStateHarness.WriteDocumentAt(Masked("two"), path);
+        rig.Confirmer.Answer(true);
+        rig.H.Drain();
+        Assert.Equal(ControlResult.Refusal(ControlTools.ChangedWhileAskingError), answer.Result);
+        // Nothing applied.
+        Assert.False(rig.State.Store.Collections.ContainsKey("Acme"));
+    }
+
+    [Fact]
+    public void AnUpdateWhoseDocumentChangedOnlyWhereTheDialogMasksLandsNothing()
+    {
+        using var rig = Rig(answer: null);
+        var path = rig.H.Subscribe(rig.State, Masked("one"));
+        var original = rig.State.Store.Collections["Acme"].Mcps["acme"];
+        AppStateHarness.WriteDocumentAt(Masked("two"), path);
+        rig.State.RefreshSource("Acme");
+        var answer = rig.Start("apply_update", Args(("collection", Text("Acme"))));
+        AppStateHarness.WriteDocumentAt(Masked("three"), path);
+        rig.State.RefreshSource("Acme");
+        rig.Confirmer.Answer(true);
+        rig.H.Drain();
+        Assert.Equal(ControlResult.Refusal(ControlTools.ChangedWhileAskingError), answer.Result);
+        // Nothing applied.
+        Assert.Equal(original, rig.State.Store.Collections["Acme"].Mcps["acme"]);
+    }
+
+    [Fact]
+    public void ARestoreWhoseBackupChangedWhileAskingLandsNothing()
+    {
+        using var rig = Rig(answer: null);
+        const string id = "claude_desktop_config.zz-masked.json";
+        var backup = Path.Combine(rig.H.BackupsDir, id);
+        const string config = """{"mcpServers": {"acme": {"command": "node", "env": {"ACME_TOKEN": "%@"}}}}""";
+        File.WriteAllText(backup, config.Replace("%@", "one", StringComparison.Ordinal));
+        var before = rig.H.ClaudeServers();
+        var answer = rig.Start("restore_backup", Args(("id", Text(id))));
+        File.WriteAllText(backup, config.Replace("%@", "two", StringComparison.Ordinal));
+        rig.Confirmer.Answer(true);
+        rig.H.Drain();
+        Assert.Equal(ControlResult.Refusal(ControlTools.ChangedWhileAskingError), answer.Result);
+        // Nothing applied.
+        Assert.Equal(before, rig.H.ClaudeServers());
+    }
+
+    /// <summary>Don't Allow, for every one of these, leaves everything as it was.</summary>
+    [Fact]
+    public void ADeclinedChangeLeavesEverythingAsItWas()
+    {
+        using var rig = Rig(answer: false);
+        Assert.Null(rig.State.AddEmptyCollection("Work"));
+        var subscribed = rig.H.Subscribe(rig.State, CollectionDocumentSamples.DataTeam);
+        AppStateHarness.WriteDocumentAt(With(CollectionDocumentSamples.DataTeam, "github", null), subscribed);
+        rig.State.RefreshSource("Data team");
+        var path = rig.H.WriteDocument(Masked("one"), "acme.json");
+        var id = Path.GetFileName(rig.State.Service.Backups.Backups(RestoreModel.Series)[0]);
+        var store = rig.H.StoreOnDisk();
+        var claude = rig.H.ClaudeServers();
+        (string Name, JsonValue Arguments)[] calls =
+        [
+            ("delete_collection", Args(("collection", Text("Work")))),
+            ("import_document", Args(("path", Text(path)))),
+            ("subscribe", Args(("path", Text(path)))),
+            ("apply_update", Args(("collection", Text("Data team")))),
+            ("restore_backup", Args(("id", Text(id)))),
+        ];
+        foreach (var (name, arguments) in calls)
+        {
+            Assert.Equal(ControlResult.Refusal(ControlTools.DeclinedError), rig.Call(name, arguments));
+        }
+        Assert.Equal(calls.Length, rig.Confirmer.Requests.Count);
+        Assert.Equal(store, rig.H.StoreOnDisk());
+        Assert.Equal(claude, rig.H.ClaudeServers());
+        Assert.True(rig.State.PendingUpdates.ContainsKey("Data team"));
     }
 
     // MARK: restore_backup
@@ -408,7 +552,11 @@ public class ControlToolsSharingTests
         using var rig = Rig();
         const string broken = "claude_desktop_config.zz-broken.json";
         File.WriteAllText(Path.Combine(rig.H.BackupsDir, broken), "{");
-        Assert.True(rig.Call("restore_backup", Args(("id", Text(broken))))?.IsError);
+        var unreadable = rig.Call("restore_backup", Args(("id", Text(broken))));
+        Assert.NotNull(unreadable);
+        Assert.True(unreadable.IsError);
+        // Listed, but not a config file.
+        Assert.NotEqual(ControlResult.Refusal(ControlTools.NoBackupError(broken)), unreadable);
         // A backup with no record of its collection goes into the active one, which is refused while
         // that one is subscribed.
         var backup = rig.State.Service.Backups.Backups(RestoreModel.Series)[0];
@@ -420,6 +568,28 @@ public class ControlToolsSharingTests
             rig.Call("restore_backup", Args(("id", Text(unrecorded)))));
         Assert.Empty(rig.Confirmer.Requests);
         Assert.Equal("Data team", rig.State.ActiveCollection);
+    }
+
+    /// <summary>A backup taken while another collection was active goes back into that one, which becomes
+    /// the active collection again; the question says so.</summary>
+    [Fact]
+    public void RestoringABackupOfAnotherCollectionMakesThatOneActive()
+    {
+        using var rig = Rig();
+        Assert.Null(rig.State.CreateActiveCopy("Work"));
+        Assert.Null(rig.State.Upsert("one", AppStateHarness.LocalConnector("node"), null));
+        rig.State.ApplyInteractively();
+        Assert.Null(rig.State.Upsert("two", AppStateHarness.LocalConnector("node"), null));
+        rig.State.ApplyInteractively();
+        rig.State.SwitchCollection("Default");
+        var backup = rig.State.Service.Backups.Backups(RestoreModel.Series)
+            .First(path => BackupCollections.CollectionOf(path, rig.H.BackupsDir) == "Work");
+        var result = rig.Call("restore_backup", Args(("id", Text(Path.GetFileName(backup)))));
+        Assert.NotNull(result);
+        Assert.Equal(RestoreModel.Caption + " " + ControlTools.RestoreActivatingText("Work"), rig.Confirmer.Requests[^1].Message);
+        Assert.False(result.IsError, result.Text);
+        Assert.Equal("Work", rig.State.ActiveCollection);
+        Assert.Equal(JsonValue.String("Work"), result.Structured.ValueAt(new JsonPointer(["activeCollection"])));
     }
 
     // MARK: restart_claude
@@ -434,12 +604,15 @@ public class ControlToolsSharingTests
         Assert.Equal(new ConfirmationRequest(ControlTools.RestartItselfTitle, ControlTools.RestartMessage, [], null),
             rig.Confirmer.Requests[^1]);
         Assert.Equal(0, rig.H.Claude.RestartCalls);
+        // A declined restart leaves nothing for later.
+        Assert.Empty(rig.H.Delays.Pending);
         Assert.Equal(ControlTools.RestartingText, rig.Call("restart_claude", caller: new ControlCaller.Cli())?.Text);
-        rig.H.Drain();
+        rig.H.Delays.RunNext();
         Assert.Equal(1, rig.H.Claude.RestartCalls);
         Assert.Single(rig.Confirmer.Requests);
         rig.Confirmer.Scripted = true;
         rig.Call("restart_claude", caller: new ControlCaller.Relay("Cursor"));
+        rig.H.Delays.RunNext();
         rig.H.Drain();
         Assert.Equal(ControlTools.RestartTitle("Cursor"), rig.Confirmer.Requests[^1].Title);
         Assert.Equal(2, rig.H.Claude.RestartCalls);
@@ -457,9 +630,34 @@ public class ControlToolsSharingTests
         rig.H.Dialogs.NextConfirm = false;
         rig.Call("restart_claude");
         rig.Call("restart_claude", caller: new ControlCaller.Cli());
+        rig.H.Delays.RunNext();
+        rig.H.Delays.RunNext();
         rig.H.Drain();
         Assert.Equal(2, rig.H.Claude.RestartCalls);
         Assert.Empty(rig.H.Dialogs.Confirms);
+    }
+
+    /// <summary>Claude hears its answer before it quits: the restart waits <c>RestartDelay</c>, and one due
+    /// after the app has quit never happens.</summary>
+    [Fact]
+    public void TheAnswerComesBeforeTheRestart()
+    {
+        using var rig = Rig();
+        Assert.Equal(ControlTools.RestartingText, rig.Call("restart_claude")?.Text);
+        // Answered, not yet restarted.
+        Assert.Equal(0, rig.H.Claude.RestartCalls);
+        Assert.Equal([TimeSpan.FromSeconds(ControlTools.RestartDelay)], rig.H.Delays.Pending.Select(pending => pending.Delay));
+        rig.H.Delays.RunNext();
+        rig.H.Drain();
+        Assert.Equal(1, rig.H.Claude.RestartCalls);
+        rig.Call("restart_claude");
+        rig.State.Dispose();
+        while (rig.H.Delays.Pending.Count > 0)
+        {
+            rig.H.Delays.RunNext();
+        }
+        // The app quit before the restart was due.
+        Assert.Equal(1, rig.H.Claude.RestartCalls);
     }
 
     // MARK: Names
@@ -472,13 +670,13 @@ public class ControlToolsSharingTests
     public void NamesCannotForgeTheseQuestionsOrTheirAnswers()
     {
         using var rig = Rig();
-        var caller = new ControlCaller.Relay("Cursor\n‮d");
+        var caller = new ControlCaller.Relay("Cursor\n\u202Ed");
         const string shownAsker = """Cursor\n\u{202E}d""";
-        const string collection = "Work\n‮z", shownCollection = """Work\n\u{202E}z""";
-        const string connector = "a\nb‮c", shownConnector = """a\nb\u{202E}c""";
+        const string collection = "Work\n\u202Ez", shownCollection = """Work\n\u{202E}z""";
+        const string connector = "a\nb\u202Ec", shownConnector = """a\nb\u{202E}c""";
         // Neither platform takes a line break in a file name; both take these.
-        const string file = "t‮”.json", shownFile = """t\u{202E}\u{201D}.json""";
-        const string team = "Team\n‮y", shownTeam = """Team\n\u{202E}y""";
+        const string file = "t\u202E\u201D.json", shownFile = """t\u{202E}\u{201D}.json""";
+        const string team = "Team\n\u202Ey", shownTeam = """Team\n\u{202E}y""";
         var config = AppStateHarness.LocalConnector("node").Config;
         var doc = new CollectionDocument(team, null, "hostile-origin", "2026-10-01T00:00:00Z",
             new Dictionary<string, CollectionDocument.Connector> { [connector] = Local("node"), ["keep"] = Local("node", "k") });
@@ -489,7 +687,7 @@ public class ControlToolsSharingTests
         Assert.Null(rig.State.Upsert("later", new McpEntry(config), null));
         rig.State.ApplyInteractively();
         var backup = rig.State.Service.Backups.Backups(RestoreModel.Series)[0];
-        const string id = "claude_desktop_config.‮”.json", shownId = """claude_desktop_config.\u{202E}\u{201D}.json""";
+        const string id = "claude_desktop_config.\u202E\u201D.json", shownId = """claude_desktop_config.\u{202E}\u{201D}.json""";
         File.Copy(backup, Path.Combine(rig.H.BackupsDir, id));
 
         var results = new List<ControlResult?>
@@ -513,7 +711,7 @@ public class ControlToolsSharingTests
         ], requests.Select(request => request.Title));
         Assert.Equal([
             ControlTools.ImportMessage(2, shownCollection), ControlTools.SubscribeMessage(shownTeam, 2),
-            AppState.CollectionUpdateBanner(shownTeam, "deletes " + shownConnector),
+            ControlTools.PendingUpdateText(shownTeam, ControlTools.DeletesClause("“" + shownConnector + "”")),
         ], requests.Take(3).Select(request => request.Message));
         Assert.Equal("“" + shownConnector + "”", requests[0].Code[0]);
         Assert.Equal(["“" + shownConnector + "” · " + ReviewModel.DeletedLabel], requests[2].Code);
@@ -542,16 +740,53 @@ public class ControlToolsSharingTests
         }
     }
 
+    /// <summary>A refusal in the app's own words still shows a name someone else chose as an escape, with the
+    /// sentence's own quotes as they are.</summary>
+    [Fact]
+    public void NamesInsideTheAppsOwnSentencesAreEscaped()
+    {
+        using var rig = Rig();
+        const string collection = "Work\n\u202Ez", shownCollection = """Work\n\u{202E}z""";
+        const string file = "t\u202E\u201D.json", shownFile = """t\u{202E}\u{201D}.json""";
+        Assert.Null(rig.State.AddEmptyCollection(collection));
+        var taken = rig.State.Store.Clone().AddCollection(collection);
+        Assert.NotNull(taken);
+        var shownTaken = taken.Replace(collection, shownCollection, StringComparison.Ordinal);
+        var path = rig.H.WriteDocument(CollectionDocumentSamples.DataTeam, "team.json");
+        Assert.Equal(ControlResult.Refusal(shownTaken), rig.Call("import_document", Args(("path", Text(path)), ("newCollection", Text(collection)))));
+        Assert.Equal(ControlResult.Refusal(shownTaken), rig.Call("subscribe", Args(("path", Text(path)), ("name", Text(collection)))));
+        var broken = rig.H.Dir.File(file);
+        File.WriteAllText(broken, "{");
+        var source = rig.H.Subscribe(rig.State, CollectionDocumentSamples.DataTeam, "source/" + file, "Team");
+        File.WriteAllText(source, "{");
+        rig.State.RefreshSource("Team");
+        foreach (var refusal in new[]
+                 {
+                     rig.Call("import_document", Args(("path", Text(broken)))), rig.Call("subscribe", Args(("path", Text(broken)))),
+                     rig.Call("apply_update", Args(("collection", Text("Team")))),
+                 })
+        {
+            Assert.NotNull(refusal);
+            Assert.True(refusal.IsError);
+            Assert.Contains(shownFile, refusal.Text);
+            AssertPlain(refusal.Text);
+        }
+        Assert.Empty(rig.Confirmer.Requests);
+        // As a change refused as it was made says it.
+        Assert.Equal(ControlResult.Refusal("""No collection named “a\nb”."""),
+            ControlTools.Refused("No collection named “a\nb”.", ["a\nb"]).Result);
+    }
+
     /// <summary>The announcements, for changes nobody was asked about, name everything as the questions do.</summary>
     [Fact]
     public void AnAnnouncementShowsNamesAsEscapes()
     {
         using var rig = new ControlRig(confirm: false);
-        var caller = new ControlCaller.Relay("Cursor\n‮d");
+        var caller = new ControlCaller.Relay("Cursor\n\u202Ed");
         const string shownAsker = """Cursor\n\u{202E}d""";
-        const string collection = "Work\n‮z", shownCollection = """Work\n\u{202E}z""";
-        const string file = "t‮”.json", shownFile = """t\u{202E}\u{201D}.json""";
-        const string team = "Team\n‮y", shownTeam = """Team\n\u{202E}y""";
+        const string collection = "Work\n\u202Ez", shownCollection = """Work\n\u{202E}z""";
+        const string file = "t\u202E\u201D.json", shownFile = """t\u{202E}\u{201D}.json""";
+        const string team = "Team\n\u202Ey", shownTeam = """Team\n\u{202E}y""";
         var doc = new CollectionDocument(team, null, "hostile-origin", "2026-10-01T00:00:00Z",
             new Dictionary<string, CollectionDocument.Connector> { ["one"] = Local("node") });
         var path = rig.H.WriteDocument(doc, file);

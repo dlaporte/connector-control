@@ -58,6 +58,20 @@ public enum ControlText {
         return line
     }
 
+    /// One of the app's own sentences that quotes names someone else chose: each of `names` as
+    /// `escapedName(_:)` shows it, and the rest — the sentence's own quotes included — as
+    /// `escaped(_:)` does. A name with nothing to escape reads as itself, so replacing every place
+    /// it appears can only ever escape more, never less.
+    public static func escaped(_ text: String, naming names: [String]) -> String {
+        var sentence = text
+        // Platform idiom: replaced literally, as the Windows mirror replaces ordinally; without
+        // `.literal`, a canonically equivalent spelling of a name would be replaced too.
+        for name in names where !name.isEmpty {
+            sentence = sentence.replacingOccurrences(of: name, with: escapedName(name), options: .literal)
+        }
+        return escaped(sentence)
+    }
+
     /// A name as the app's sentences quote it: as `escaped(_:)` shows it, with “ and ” escaped as
     /// well, so a name can neither break its line nor close its own quotes and read as two names.
     public static func escapedName(_ text: String) -> String {

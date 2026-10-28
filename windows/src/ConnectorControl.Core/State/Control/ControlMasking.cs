@@ -438,7 +438,7 @@ public static class ControlMasking
     /// "− " before each value it loses and "+ " before each it gains. A secret that changed shows
     /// as changed although both sides read "••• (set)". Every difference between the two configs
     /// shows, as every key shows on the code lines, and labels and values go through
-    /// <see cref="ControlText.Escaped"/> as the code lines' do.</summary>
+    /// <see cref="ControlText.Escaped(string)"/> as the code lines' do.</summary>
     public static IReadOnlyList<string> ChangeLines(JsonValue before, JsonValue after, Exposure exposure = Exposure.Masked)
     {
         var old = Fields(before, exposure);

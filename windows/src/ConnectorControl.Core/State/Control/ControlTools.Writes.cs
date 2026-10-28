@@ -74,9 +74,11 @@ public sealed partial class ControlTools
         }
     }
 
-    /// <summary>A change refused as it was made, with the app's own sentence: through <see cref="ControlText.Escaped"/>,
-    /// since the sentence may echo a name the caller chose.</summary>
-    internal static ControlOutcome Refused(string text) => new(ControlResult.Refusal(ControlText.Escaped(text)), null);
+    /// <summary>A change refused as it was made, with the app's own sentence: through
+    /// <see cref="ControlText.Escaped(string, IReadOnlyList{string})"/>, since the sentence may echo
+    /// <paramref name="names"/>, which others chose.</summary>
+    internal static ControlOutcome Refused(string text, IReadOnlyList<string>? names = null) =>
+        new(ControlResult.Refusal(ControlText.Escaped(text, names ?? [])), null);
 
     /// <summary>A write's answer: what happened, then what follows for the collection Claude runs. A write
     /// that changed what Claude's config holds (<c>AppliedServers</c> moved off <paramref name="mark"/>, taken
@@ -172,7 +174,7 @@ public sealed partial class ControlTools
             var mark = state.AppliedServers;
             if (state.AddEmptyCollection(name) is { } error)
             {
-                return Refused(error);
+                return Refused(error, [name, MasterStore.CollectionName(name)]);
             }
             var created = MasterStore.CollectionName(name);
             return Done([CreatedText(ControlText.EscapedName(created))], [("collection", JsonValue.String(created))],
@@ -189,7 +191,7 @@ public sealed partial class ControlTools
             var mark = state.AppliedServers;
             if (state.RenameCollection(collection, newName) is { } error)
             {
-                return Refused(error);
+                return Refused(error, [collection, newName, MasterStore.CollectionName(newName)]);
             }
             var renamed = MasterStore.CollectionName(newName);
             return Done([RenamedCollectionText(ControlText.EscapedName(collection), ControlText.EscapedName(renamed))],
@@ -218,7 +220,7 @@ public sealed partial class ControlTools
             var mark = state.AppliedServers;
             if (state.DuplicateCollection(source, newName) is { } error)
             {
-                return Refused(error);
+                return Refused(error, [source, newName, MasterStore.CollectionName(newName)]);
             }
             var copy = MasterStore.CollectionName(newName);
             return Done([DuplicatedText(shownSource, ControlText.EscapedName(copy))],

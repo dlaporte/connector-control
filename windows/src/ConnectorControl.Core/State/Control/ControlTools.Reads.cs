@@ -30,6 +30,7 @@ public sealed partial class ControlTools
     public const string PublishedKind = "published";
     public const string UpdateAvailableKind = "update available";
     public const string NoBackupsText = "No backups yet.";
+    public const string ClauseSeparator = "; ";
 
     public static string StatusTitle(string version) => $"Connector Control {version}";
 
@@ -44,6 +45,14 @@ public sealed partial class ControlTools
     public static string NotSubscribedError(string collection) => $"“{collection}” isn’t a subscribed collection.";
 
     public static string UpToDateText(string collection) => $"“{collection}” is up to date.";
+
+    public static string PendingUpdateText(string collection, string changes) => $"“{collection}” changed at its source: {changes}.";
+
+    public static string AddsClause(string names) => $"adds {names}";
+
+    public static string DeletesClause(string names) => $"deletes {names}";
+
+    public static string ChangesClause(string names) => $"changes {names}";
 
     internal void Read(string name, ControlArguments arguments, ControlCaller caller, Action<ControlResult> done)
     {
@@ -250,10 +259,30 @@ public sealed partial class ControlTools
             false);
     }
 
-    /// <summary>What an update would change, in the window's own banner. It names the collection and the
-    /// connectors as others chose them — the document's author names its connectors — so each goes
-    /// through <see cref="ControlText.EscapedName"/>; refresh_subscription answers with it, and is
-    /// announced with it when it lands late.</summary>
+    /// <summary>What an update adds, deletes and changes, each name quoted through <see cref="ControlText.QuotedList"/>
+    /// — the document's author names its connectors — so that none can invent a clause of its own.
+    /// The window's banner, written for names read beside a list, joins them bare.</summary>
+    internal static string ChangesText(CollectionDiff diff)
+    {
+        var clauses = new List<string>();
+        if (diff.Added.Count > 0)
+        {
+            clauses.Add(AddsClause(ControlText.QuotedList(diff.Added)));
+        }
+        if (diff.Removed.Count > 0)
+        {
+            clauses.Add(DeletesClause(ControlText.QuotedList(diff.Removed)));
+        }
+        if (diff.Changed.Count > 0)
+        {
+            clauses.Add(ChangesClause(ControlText.QuotedList(diff.Changed)));
+        }
+        return string.Join(ClauseSeparator, clauses);
+    }
+
+    /// <summary>What an update would change: the window's banner, with the collection quoted and every name
+    /// through <see cref="ControlText.EscapedName"/>, since others chose them. refresh_subscription answers
+    /// with it, and is announced with it when it lands late; apply_update asks with it.</summary>
     internal ControlResult PendingUpdate(string collection)
     {
         var shown = ControlText.EscapedName(collection);
@@ -276,7 +305,7 @@ public sealed partial class ControlTools
             ("removed", JsonValue.Array((diff?.Removed ?? []).Select(JsonValue.String))),
             ("changed", JsonValue.Array((diff?.Changed ?? []).Select(JsonValue.String))));
         var text = diff is not null
-            ? AppState.CollectionUpdateBanner(shown, ControlText.EscapedName(diff.Summary()))
+            ? PendingUpdateText(shown, ChangesText(diff))
             : UpToDateText(shown);
         return new ControlResult(structured, text, false);
     }

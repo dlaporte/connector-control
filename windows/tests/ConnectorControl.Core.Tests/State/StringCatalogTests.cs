@@ -119,6 +119,7 @@ public class StringCatalogTests
         ["ControlTools.addTitle"] = ["X", "Y"],
         ["ControlTools.addedNotification"] = ["X", "Y", "Z"],
         ["ControlTools.addedText"] = ["X", "Y", "Z"],
+        ["ControlTools.addsClause"] = ["X"],
         ["ControlTools.appliedUpdateNotification"] = ["X", "Y"],
         ["ControlTools.appliedUpdateText"] = ["X"],
         ["ControlTools.applyUpdateTitle"] = ["X", "Y"],
@@ -129,6 +130,7 @@ public class StringCatalogTests
         ["ControlTools.changeTitle"] = ["X", "Y"],
         ["ControlTools.changedNotification"] = ["X", "Y", "Z"],
         ["ControlTools.changedText"] = ["X", "Y"],
+        ["ControlTools.changesClause"] = ["X"],
         ["ControlTools.connectorCountText"] = ["3", "7"],
         ["ControlTools.createdText"] = ["X"],
         ["ControlTools.deleteActiveMessage"] = ["X"],
@@ -139,6 +141,7 @@ public class StringCatalogTests
         ["ControlTools.deletedCollectionText"] = ["X"],
         ["ControlTools.deletedNotification"] = ["X", "Y", "Z"],
         ["ControlTools.deletedText"] = ["X", "Y"],
+        ["ControlTools.deletesClause"] = ["X"],
         ["ControlTools.detail"] = ["X", "Y"],
         ["ControlTools.duplicateSubscribedError"] = ["X"],
         ["ControlTools.duplicatedText"] = ["X", "Y"],
@@ -163,6 +166,7 @@ public class StringCatalogTests
         ["ControlTools.notOneOfError"] = ["X", "Y"],
         ["ControlTools.notSubscribedError"] = ["X"],
         ["ControlTools.nothingToImportError"] = ["X"],
+        ["ControlTools.pendingUpdateText"] = ["X", "Y"],
         ["ControlTools.renamedCollectionText"] = ["X", "Y"],
         ["ControlTools.renamedNotification"] = ["X", "Y", "Z"],
         ["ControlTools.renamedText"] = ["X", "Y"],
@@ -439,6 +443,7 @@ public class StringCatalogTests
         actual["ControlTools.addTitle"] = ControlTools.AddTitle("X", "Y");
         actual["ControlTools.addedNotification"] = ControlTools.AddedNotification("X", "Y", "Z");
         actual["ControlTools.addedText"] = ControlTools.AddedText("X", "Y", "Z");
+        actual["ControlTools.addsClause"] = ControlTools.AddsClause("X");
         actual["ControlTools.appliedUpdateNotification"] = ControlTools.AppliedUpdateNotification("X", "Y");
         actual["ControlTools.appliedUpdateText"] = ControlTools.AppliedUpdateText("X");
         actual["ControlTools.applyUpdateTitle"] = ControlTools.ApplyUpdateTitle("X", "Y");
@@ -452,11 +457,13 @@ public class StringCatalogTests
         actual["ControlTools.changedNotification"] = ControlTools.ChangedNotification("X", "Y", "Z");
         actual["ControlTools.changedText"] = ControlTools.ChangedText("X", "Y");
         actual["ControlTools.changedWhileAskingError"] = ControlTools.ChangedWhileAskingError;
+        actual["ControlTools.changesClause"] = ControlTools.ChangesClause("X");
         actual["ControlTools.claudeGroup"] = ControlTools.ClaudeGroup;
         actual["ControlTools.claudeLabel"] = ControlTools.ClaudeLabel;
         actual["ControlTools.claudeNotRunning"] = ControlTools.ClaudeNotRunning;
         actual["ControlTools.claudeRunning"] = ControlTools.ClaudeRunning;
         actual["ControlTools.claudeRunningRestart"] = ControlTools.ClaudeRunningRestart;
+        actual["ControlTools.clauseSeparator"] = ControlTools.ClauseSeparator;
         actual["ControlTools.collectionHeader"] = ControlTools.CollectionHeader;
         actual["ControlTools.collectionsGroup"] = ControlTools.CollectionsGroup;
         actual["ControlTools.configShapeError"] = ControlTools.ConfigShapeError;
@@ -473,6 +480,7 @@ public class StringCatalogTests
         actual["ControlTools.deletedCollectionText"] = ControlTools.DeletedCollectionText("X");
         actual["ControlTools.deletedNotification"] = ControlTools.DeletedNotification("X", "Y", "Z");
         actual["ControlTools.deletedText"] = ControlTools.DeletedText("X", "Y");
+        actual["ControlTools.deletesClause"] = ControlTools.DeletesClause("X");
         actual["ControlTools.detail"] = ControlTools.Detail("X", "Y");
         actual["ControlTools.duplicateSubscribedError"] = ControlTools.DuplicateSubscribedError("X");
         actual["ControlTools.duplicatedText"] = ControlTools.DuplicatedText("X", "Y");
@@ -497,6 +505,7 @@ public class StringCatalogTests
         actual["ControlTools.integrationOnConfirming"] = ControlTools.IntegrationOnConfirming;
         actual["ControlTools.integrationOnNotConfirming"] = ControlTools.IntegrationOnNotConfirming;
         actual["ControlTools.integrationSetText"] = ControlTools.IntegrationSetText("X");
+        actual["ControlTools.intoOrNewCollectionError"] = ControlTools.IntoOrNewCollectionError;
         actual["ControlTools.keepCountError"] = ControlTools.KeepCountError;
         actual["ControlTools.kindHeader"] = ControlTools.KindHeader;
         actual["ControlTools.listKind"] = ControlTools.ListKind;
@@ -517,6 +526,7 @@ public class StringCatalogTests
         actual["ControlTools.objectKind"] = ControlTools.ObjectKind;
         actual["ControlTools.offWord"] = ControlTools.OffWord;
         actual["ControlTools.onWord"] = ControlTools.OnWord;
+        actual["ControlTools.pendingUpdateText"] = ControlTools.PendingUpdateText("X", "Y");
         actual["ControlTools.problemLabel"] = ControlTools.ProblemLabel;
         actual["ControlTools.publishedFileStaysText"] = ControlTools.PublishedFileStaysText;
         actual["ControlTools.publishedKind"] = ControlTools.PublishedKind;

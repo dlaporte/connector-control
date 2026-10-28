@@ -151,7 +151,7 @@ public sealed partial class ControlTools
             var mark = state.AppliedServers;
             if (state.Upsert(name, new McpEntry(on, config, EditView.Json), renamedFrom: null, collection: collection) is { } refusal)
             {
-                return Refused(refusal);
+                return Refused(refusal, [name, collection]);
             }
             state.ApplyInteractively();
             var needs = Placeholder.UnfilledNamesIn(config);
@@ -233,7 +233,7 @@ public sealed partial class ControlTools
             if (state.Upsert(newName, new McpEntry(current.Enabled, after, current.LastEditView), renamedFrom: name, collection: collection)
                 is { } refusal)
             {
-                return Refused(refusal);
+                return Refused(refusal, [newName, name, collection]);
             }
             state.ApplyInteractively();
             var lines = new List<string>();
@@ -308,6 +308,7 @@ public sealed partial class ControlTools
     public const string RestartItselfTitle = "Claude wants to restart itself";
     public const string RestartMessage = "Claude Desktop will quit and reopen to pick up the change. The reply in progress stops; the conversation is kept.";
     public const string RestartingText = "Restarting Claude Desktop.";
+    public const string IntoOrNewCollectionError = "Give “into” or “newCollection”, not both.";
 
     public static string DeleteCollectionTitle(string asker, string collection) => $"{asker} wants to delete the collection “{collection}”";
 
@@ -317,25 +318,36 @@ public sealed partial class ControlTools
 
     public static string ImportTitle(string asker, string file) => $"{asker} wants to import “{file}”";
 
-    public static string ImportMessage(int count, string collection) => count == 1 ? $"{count} connector would be copied into “{collection}”, switched off:" : $"{count} connectors would be copied into “{collection}”, switched off:";
+    public static string ImportMessage(int count, string collection) => count == 1
+        ? $"{count} connector would be copied into “{collection}”, switched off:"
+        : $"{count} connectors would be copied into “{collection}”, switched off:";
 
-    public static string ImportNewMessage(int count, string collection) => count == 1 ? $"{count} connector would be copied into a new collection, “{collection}”, switched off:" : $"{count} connectors would be copied into a new collection, “{collection}”, switched off:";
+    public static string ImportNewMessage(int count, string collection) => count == 1
+        ? $"{count} connector would be copied into a new collection, “{collection}”, switched off:"
+        : $"{count} connectors would be copied into a new collection, “{collection}”, switched off:";
 
     public static string FromFooter(string path) => $"From {path}";
 
-    public static string ImportedText(int count, string collection) => count == 1 ? $"Copied {count} connector into “{collection}”, switched off." : $"Copied {count} connectors into “{collection}”, switched off.";
+    public static string ImportedText(int count, string collection) => count == 1
+        ? $"Copied {count} connector into “{collection}”, switched off."
+        : $"Copied {count} connectors into “{collection}”, switched off.";
 
-    public static string ImportedNotification(string asker, int count, string collection) => count == 1 ? $"{asker} copied {count} connector into “{collection}”." : $"{asker} copied {count} connectors into “{collection}”.";
+    public static string ImportedNotification(string asker, int count, string collection) => count == 1
+        ? $"{asker} copied {count} connector into “{collection}”."
+        : $"{asker} copied {count} connectors into “{collection}”.";
 
     public static string NothingToImportError(string file) => $"Nothing in “{file}” would come across.";
 
     public static string SubscribeTitle(string asker, string file) => $"{asker} wants to subscribe to “{file}”";
 
-    public static string SubscribeMessage(string collection, int count) => count == 1 ? $"A new collection, “{collection}”, would follow this file, read-only. Its {count} connector arrives switched off:" : $"A new collection, “{collection}”, would follow this file, read-only. Its {count} connectors arrive switched off:";
+    public static string SubscribeMessage(string collection, int count) => count == 1
+        ? $"A new collection, “{collection}”, would follow this file, read-only. Its {count} connector arrives switched off:"
+        : $"A new collection, “{collection}”, would follow this file, read-only. Its {count} connectors arrive switched off:";
 
     public static string SubscribedText(string collection, string file) => $"Subscribed: “{collection}” follows {file}, read-only.";
 
-    public static string ArrivedOffText(int count) => count == 1 ? $"{count} connector arrived switched off." : $"{count} connectors arrived switched off.";
+    public static string ArrivedOffText(int count) =>
+        count == 1 ? $"{count} connector arrived switched off." : $"{count} connectors arrived switched off.";
 
     public static string SubscribedNotification(string asker, string file, string collection) => $"{asker} subscribed to “{file}” as “{collection}”.";
 
@@ -466,7 +478,7 @@ public sealed partial class ControlTools
             var mark = state.AppliedServers;
             if (state.DeleteCollection(collection) is { } error)
             {
-                return Refused(error);
+                return Refused(error, [collection]);
             }
             return Done([DeletedCollectionText(shown)],
                 [("collection", JsonValue.String(collection)), ("activeCollection", JsonValue.String(state.ActiveCollection))],
@@ -501,16 +513,21 @@ public sealed partial class ControlTools
         {
             return new ControlStep.Refused(MissingArgumentError("path"));
         }
+        // One place or the other, as the command line's --into | --new.
+        if (arguments.String("into") is not null && arguments.String("newCollection") is not null)
+        {
+            return new ControlStep.Refused(IntoOrNewCollectionError);
+        }
         var (full, unusable) = DocumentPath(path);
         if (full is null)
         {
-            return new ControlStep.Refused(ControlText.Escaped(unusable ?? EditorModel.NotValidJson));
+            return new ControlStep.Refused(ControlText.Escaped(unusable ?? EditorModel.NotValidJson, [Path.GetFileName(path)]));
         }
         var file = ControlText.EscapedName(Path.GetFileName(full));
-        var (document, _, failure) = AppState.ReadDocument(full);
-        if (document is null)
+        var (document, bytes, failure) = AppState.ReadDocument(full);
+        if (document is null || bytes is null)
         {
-            return new ControlStep.Refused(ControlText.Escaped(failure ?? EditorModel.NotValidJson));
+            return new ControlStep.Refused(ControlText.Escaped(failure ?? EditorModel.NotValidJson, [Path.GetFileName(full)]));
         }
         var newCollection = arguments.String("newCollection") is { } requested ? MasterStore.CollectionName(requested) : null;
         string target;
@@ -519,7 +536,7 @@ public sealed partial class ControlTools
             // The store's own refusal for a name it cannot take, found on a copy so nothing is made.
             if (state.Store.Clone().AddCollection(newCollection) is { } error)
             {
-                return new ControlStep.Refused(ControlText.Escaped(error));
+                return new ControlStep.Refused(ControlText.Escaped(error, [newCollection]));
             }
             target = newCollection;
         }
@@ -567,16 +584,17 @@ public sealed partial class ControlTools
             newCollection is null ? ImportMessage(count, shownTarget) : ImportNewMessage(count, shownTarget),
             DocumentLines(rendered, held.ContainsKey, clash),
             FromFooter(ControlText.Escaped(full)));
-        return new ControlStep.Ready(request, () =>
+        // What the question cannot show, the document's masked values among them, the bytes stand for.
+        return new ControlStep.Ready(request, Fingerprint: ContentHash.Sha256(bytes), Perform: () =>
         {
             var mark = state.AppliedServers;
             if (newCollection is not null && state.AddEmptyCollection(newCollection) is { } created)
             {
-                return Refused(created);
+                return Refused(created, [newCollection]);
             }
             if (state.ImportCopies(full, target, choices) is { } error)
             {
-                return Refused(error);
+                return Refused(error, [Path.GetFileName(full), target]);
             }
             return Done([ImportedText(count, shownTarget)], [("collection", JsonValue.String(target)), ("count", JsonValue.Int(count))],
                 target, mark, RestartToApplyText,
@@ -595,14 +613,14 @@ public sealed partial class ControlTools
         var (full, unusable) = DocumentPath(path);
         if (full is null)
         {
-            return new ControlStep.Refused(ControlText.Escaped(unusable ?? EditorModel.NotValidJson));
+            return new ControlStep.Refused(ControlText.Escaped(unusable ?? EditorModel.NotValidJson, [Path.GetFileName(path)]));
         }
         // Platform idiom: as import_document reads it.
         var file = ControlText.EscapedName(Path.GetFileName(full));
-        var (document, _, failure) = AppState.ReadDocument(full);
-        if (document is null)
+        var (document, bytes, failure) = AppState.ReadDocument(full);
+        if (document is null || bytes is null)
         {
-            return new ControlStep.Refused(ControlText.Escaped(failure ?? EditorModel.NotValidJson));
+            return new ControlStep.Refused(ControlText.Escaped(failure ?? EditorModel.NotValidJson, [Path.GetFileName(full)]));
         }
         // AppState's own rules, asked here as well, so the refusal comes before the question.
         if (document.Origin is { } origin && state.CollectionsFile.Collections.Values.Any(entry => entry.Publish?.Origin == origin))
@@ -613,7 +631,7 @@ public sealed partial class ControlTools
         var name = MasterStore.CollectionName(requested.Length == 0 ? document.Name : requested);
         if (state.Store.Clone().AddCollection(name) is { } error)
         {
-            return new ControlStep.Refused(ControlText.Escaped(error));
+            return new ControlStep.Refused(ControlText.Escaped(error, [name]));
         }
         var shownName = ControlText.EscapedName(name);
         var rendered = document.Render();
@@ -624,12 +642,13 @@ public sealed partial class ControlTools
             SubscribeMessage(shownName, count),
             DocumentLines(rendered, _ => false, ImportChoice.Add),
             FromFooter(ControlText.Escaped(full)));
-        return new ControlStep.Ready(request, () =>
+        // As import_document's: the bytes stand for what the question cannot show.
+        return new ControlStep.Ready(request, Fingerprint: ContentHash.Sha256(bytes), Perform: () =>
         {
             var mark = state.AppliedServers;
             if (state.Subscribe(full, arguments.String("name")) is { } refusal)
             {
-                return Refused(refusal);
+                return Refused(refusal, [Path.GetFileName(full), name]);
             }
             return Done([SubscribedText(shownName, file), ArrivedOffText(count)],
                 [("collection", JsonValue.String(name)), ("count", JsonValue.Int(count))],
@@ -652,7 +671,9 @@ public sealed partial class ControlTools
         }
         if (state.SourceErrors.TryGetValue(collection, out var problem))
         {
-            return new ControlStep.Refused(ControlText.Escaped(problem));
+            // The problem names the document's file.
+            var file = state.SourceBinding(collection)?.Path is { } source ? Path.GetFileName(source) : null;
+            return new ControlStep.Refused(ControlText.Escaped(problem, file is null ? [] : [file]));
         }
         if (state.PendingUpdates.GetValueOrDefault(collection) is not { } diff)
         {
@@ -686,14 +707,16 @@ public sealed partial class ControlTools
         var active = collection == state.ActiveCollection;
         var shownAsker = ControlText.EscapedName(asker);
         var request = new ConfirmationRequest(ApplyUpdateTitle(shownAsker, shown),
-            AppState.CollectionUpdateBanner(shown, ControlText.EscapedName(diff.Summary())),
+            PendingUpdateText(shown, ChangesText(diff)),
             code, active ? TakesEffectFooter : null);
-        return new ControlStep.Ready(request, () =>
+        // The document's bytes, as the Review sheet's Apply checks them: what the question cannot show,
+        // its masked values among them, must not have moved either.
+        return new ControlStep.Ready(request, Fingerprint: state.PendingSourceHash(collection), Perform: () =>
         {
             var mark = state.AppliedServers;
             if (state.ApplyPendingUpdate(collection) is { } error)
             {
-                return Refused(error);
+                return Refused(error, [collection]);
             }
             return Done([AppliedUpdateText(shown)], [("collection", JsonValue.String(collection))],
                 collection, mark, RestartToApplyText,
@@ -737,15 +760,18 @@ public sealed partial class ControlTools
             return new ControlStep.Refused(RestoreRefusalText(refusal));
         }
         // A backup that is not a config file is refused now rather than after the question, in the
-        // reader's own words, as the Restore sheet shows a failed restore's.
+        // reader's own words, as the Restore sheet shows a failed restore's. Its bytes stand for what the
+        // question, which lists only names, cannot show.
         IReadOnlyDictionary<string, JsonValue> servers;
+        string fingerprint;
         try
         {
+            fingerprint = ContentHash.Sha256(File.ReadAllBytes(backup));
             servers = ClaudeConfigIO.ReadMcpServers(backup);
         }
         catch (Exception ex) when (ex is ClaudeConfigException or IOException or UnauthorizedAccessException or JsonException)
         {
-            return new ControlStep.Refused(ControlText.Escaped(ex.Message));
+            return new ControlStep.Refused(ControlText.Escaped(ex.Message, [id]));
         }
         // AppState's rule: back into the collection the backup was taken from, else the active one.
         var target = BackupCollections.CollectionOf(backup, state.Service.Paths.BackupsDir) ?? state.ActiveCollection;
@@ -756,7 +782,7 @@ public sealed partial class ControlTools
         var shownAsker = ControlText.EscapedName(asker);
         var request = new ConfirmationRequest(RestoreTitle(shownAsker, shownId), RestoreModel.Caption + " " + into,
             names.Select(name => ConnectorHeading(name)).ToList(), TakesEffectFooter);
-        return new ControlStep.Ready(request, () =>
+        return new ControlStep.Ready(request, Fingerprint: fingerprint, Perform: () =>
         {
             var mark = state.AppliedServers;
             try
@@ -769,10 +795,13 @@ public sealed partial class ControlTools
             }
             catch (Exception ex) when (ex is ClaudeConfigException or IOException or UnauthorizedAccessException or JsonException)
             {
+                // Platform idiom: the Restore sheet's own set, as it catches them; anything else is left to
+                // the write queue, which ends the call. The Mac mirror's catch takes every other error,
+                // as its sheet's does.
                 // A restore that failed is the banner's too, as the Restore sheet's is, in the error's
                 // own words.
                 state.LastError = ex.Message;
-                return Refused(ex.Message);
+                return Refused(ex.Message, [id]);
             }
             return Done([RestoredText(shownId)], [("id", JsonValue.String(id)), ("activeCollection", JsonValue.String(state.ActiveCollection))],
                 null, mark, RestartToApplyText,
@@ -792,9 +821,17 @@ public sealed partial class ControlTools
             RestartMessage, [], null);
         return new ControlStep.Ready(request, () =>
         {
-            // Fire-and-forget, as the toast's Restart button calls it: the restart reports through
-            // AppState's own banner, as the Mac's reports through its completion.
-            _ = state.PerformRestartClaudeAsync();
+            // Claude hears the answer first: the restart quits it, and the relay with it. One still due
+            // when the app quits never happens. Fire-and-forget, as the toast's Restart button calls it:
+            // the restart reports through AppState's own banner, as the Mac's reports through its
+            // completion.
+            host.Delay(TimeSpan.FromSeconds(RestartDelay), () =>
+            {
+                if (!state.IsDisposed)
+                {
+                    _ = state.PerformRestartClaudeAsync();
+                }
+            });
             return new ControlOutcome(new ControlResult(JsonValue.Object(("restarting", JsonValue.Bool(true))), RestartingText, false), null);
         });
     }

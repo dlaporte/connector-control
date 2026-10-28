@@ -30,6 +30,14 @@ final class ControlTextTests: XCTestCase {
 
     /// A value can neither break its line nor hide part of it: control characters and the format
     /// characters that reorder or hide text show as escapes, on labels, values and cells alike.
+    /// An app sentence that quotes a name someone else chose shows that name as `escapedName` does,
+    /// its own quotes and the rest of it as `escaped` does.
+    func testANameInsideAnAppSentenceShowsAsItsEscape() {
+        XCTAssertEqual(ControlText.escaped("No collection named “a\nb”.\n", naming: ["a\nb"]), #"No collection named “a\nb”.\n"#)
+        XCTAssertEqual(ControlText.escaped("A “x” and “y\u{201D}”.", naming: ["x", "y\u{201D}"]), #"A “x” and “y\u{201D}”."#)
+        XCTAssertEqual(ControlText.escaped("Plain “a”.", naming: ["", "zz"]), "Plain “a”.")
+    }
+
     func testControlAndFormatCharactersShowAsEscapes() {
         XCTAssertEqual(ControlText.escaped("a\nb\rc\td\u{0}e\u{7F}f\u{85}g\u{200B}h\u{202E}i\u{2066}j\u{FEFF}k\u{2028}l\u{61C}m"),
                        #"a\nb\rc\td\u{0000}e\u{007F}f\u{0085}g\u{200B}h\u{202E}i\u{2066}j\u{FEFF}k\u{2028}l\u{061C}m"#)

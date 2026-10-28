@@ -29,6 +29,8 @@ final class ControlGateMatrixTests: XCTestCase {
                         let label = "\(name) \(caller) integration:\(integration) confirm:\(confirm)"
                         XCTAssertTrue(rig.h.notifier.sent.isEmpty, label)
                         let result = rig.call(name, arguments, as: caller)
+                        // Whatever the call left for later — the restart, after its answer — happens.
+                        for _ in rig.h.delays.pending { rig.h.delays.runNext() }
                         let relay = caller != .cli
                         let refused = relay && !integration
                         let asked = relay && integration && (gate == .alwaysConfirm || (gate == .gated && confirm))

@@ -28,6 +28,7 @@ extension ControlTools {
     public static let publishedKind = "published"
     public static let updateAvailableKind = "update available"
     public static let noBackupsText = "No backups yet."
+    public static let clauseSeparator = "; "
 
     public static func statusTitle(_ version: String) -> String { "Connector Control \(version)" }
 
@@ -42,6 +43,14 @@ extension ControlTools {
     public static func notSubscribedError(_ collection: String) -> String { "“\(collection)” isn’t a subscribed collection." }
 
     public static func upToDateText(_ collection: String) -> String { "“\(collection)” is up to date." }
+
+    public static func pendingUpdateText(_ collection: String, _ changes: String) -> String { "“\(collection)” changed at its source: \(changes)." }
+
+    public static func addsClause(_ names: String) -> String { "adds \(names)" }
+
+    public static func deletesClause(_ names: String) -> String { "deletes \(names)" }
+
+    public static func changesClause(_ names: String) -> String { "changes \(names)" }
 
     func read(_ name: String, _ arguments: ControlArguments, _ caller: ControlCaller,
               _ done: @escaping (ControlResult) -> Void) {
@@ -219,10 +228,20 @@ extension ControlTools {
                              isError: false)
     }
 
-    /// What an update would change, in the window's own banner. It names the collection and the
-    /// connectors as others chose them — the document's author names its connectors — so each goes
-    /// through `ControlText.escapedName(_:)`; refresh_subscription answers with it, and is
-    /// announced with it when it lands late.
+    /// What an update adds, deletes and changes, each name quoted through `ControlText.quotedList(_:)`
+    /// — the document's author names its connectors — so that none can invent a clause of its own.
+    /// The window's banner, written for names read beside a list, joins them bare.
+    static func changesText(_ diff: CollectionDiff) -> String {
+        var clauses: [String] = []
+        if !diff.added.isEmpty { clauses.append(addsClause(ControlText.quotedList(diff.added))) }
+        if !diff.removed.isEmpty { clauses.append(deletesClause(ControlText.quotedList(diff.removed))) }
+        if !diff.changed.isEmpty { clauses.append(changesClause(ControlText.quotedList(diff.changed))) }
+        return clauses.joined(separator: clauseSeparator)
+    }
+
+    /// What an update would change: the window's banner, with the collection quoted and every name
+    /// through `ControlText.escapedName(_:)`, since others chose them. refresh_subscription answers
+    /// with it, and is announced with it when it lands late; apply_update asks with it.
     func pendingUpdate(_ collection: String) -> ControlResult {
         let shown = ControlText.escapedName(collection)
         guard state.store.collections[collection] != nil else { return .refusal(MasterStore.noCollectionError(shown)) }
@@ -235,7 +254,7 @@ extension ControlTools {
             "removed": .array((diff?.removed ?? []).map(JSONValue.string)),
             "changed": .array((diff?.changed ?? []).map(JSONValue.string)),
         ])
-        let text = diff.map { AppState.collectionUpdateBanner(shown, ControlText.escapedName($0.summary())) }
+        let text = diff.map { ControlTools.pendingUpdateText(shown, ControlTools.changesText($0)) }
             ?? ControlTools.upToDateText(shown)
         return ControlResult(structured: structured, text: text, isError: false)
     }

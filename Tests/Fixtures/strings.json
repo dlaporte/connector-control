@@ -291,6 +291,9 @@
   "ControlTools.addedText": {
     "format": "Added “{0}” to “{1}”, switched {2}."
   },
+  "ControlTools.addsClause": {
+    "format": "adds {0}"
+  },
   "ControlTools.appliedUpdateNotification": {
     "format": "{0} applied the update to “{1}”."
   },
@@ -326,6 +329,9 @@
     "format": "Changed “{0}” in “{1}”."
   },
   "ControlTools.changedWhileAskingError": "This changed while Connector Control was asking, so nothing was done. Ask again.",
+  "ControlTools.changesClause": {
+    "format": "changes {0}"
+  },
   "ControlTools.check_tools.cliUsage": "doctor",
   "ControlTools.check_tools.description": "Whether npx, node, uvx and uv are installed where Claude can find them. A connector launched through a missing one shows only \"server disconnected\" in Claude.",
   "ControlTools.claudeGroup": "Claude",
@@ -333,6 +339,7 @@
   "ControlTools.claudeNotRunning": "not running",
   "ControlTools.claudeRunning": "running",
   "ControlTools.claudeRunningRestart": "running · restart required",
+  "ControlTools.clauseSeparator": "; ",
   "ControlTools.collectionHeader": "COLLECTION",
   "ControlTools.collectionsGroup": "Collections",
   "ControlTools.configShapeError": "A connector’s config needs a “command” or a “url”.",
@@ -374,6 +381,9 @@
   },
   "ControlTools.deletedText": {
     "format": "Deleted {0} from “{1}”."
+  },
+  "ControlTools.deletesClause": {
+    "format": "deletes {0}"
   },
   "ControlTools.detail": {
     "format": "{0} · {1}"
@@ -443,6 +453,7 @@
   "ControlTools.integrationSetText": {
     "format": "Claude integration is {0}."
   },
+  "ControlTools.intoOrNewCollectionError": "Give “into” or “newCollection”, not both.",
   "ControlTools.keepCountError": "backups-to-keep takes a number from 5 to 100.",
   "ControlTools.kindHeader": "KIND",
   "ControlTools.listKind": "a list of names",
@@ -485,6 +496,9 @@
   "ControlTools.objectKind": "a JSON object",
   "ControlTools.offWord": "off",
   "ControlTools.onWord": "on",
+  "ControlTools.pendingUpdateText": {
+    "format": "“{0}” changed at its source: {1}."
+  },
   "ControlTools.problemLabel": "Problem",
   "ControlTools.publishedFileStaysText": "Its published file stays in its folder.",
   "ControlTools.publishedKind": "published",
@@ -933,7 +947,7 @@
     "win": "Config file"
   },
   "SettingsModel.confirmClaudeChangesOffCaption": "Claude can then change what it runs without asking here. Text Claude reads, such as a web page, could ask it to.",
-  "SettingsModel.confirmClaudeChangesOnCaption": "Adding, editing or deleting a connector, importing, subscribing and restoring a backup ask here first.",
+  "SettingsModel.confirmClaudeChangesOnCaption": "Adding, editing or deleting a connector, deleting a collection, importing, subscribing, applying an update and restoring a backup ask here first.",
   "SettingsModel.confirmClaudeChangesTitle": "Confirm changes Claude makes to connectors",
   "SettingsModel.confirmQuitTitle": "Confirm before quitting",
   "SettingsModel.confirmRestartTitle": "Confirm before restarting Claude",

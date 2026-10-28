@@ -122,7 +122,7 @@ public class ControlToolsDirectTests
         var sample = CollectionDocumentSamples.DataTeam;
         var connectors = sample.Connectors.Where(pair => pair.Key != "github").ToList();
         AppStateHarness.WriteDocumentAt(new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported, connectors), path);
-        Assert.Equal(AppState.CollectionUpdateBanner("Data team", "deletes github"),
+        Assert.Equal(ControlTools.PendingUpdateText("Data team", ControlTools.DeletesClause("“github”")),
             rig.Call("refresh_subscription", Args(("collection", Text("Data team"))))?.Text);
         File.WriteAllText(path, "{half");
         var unreadable = rig.Call("refresh_subscription", Args(("collection", Text("Data team"))));

@@ -38,6 +38,9 @@ public final class ControlTools {
     /// How long a call waits before it answers `waitingText`: under Claude Desktop's tool-call
     /// timeout, which is what this constant is tuned to.
     public static let confirmationWait: TimeInterval = 50
+    /// Seconds between answering a restart and starting it, so the answer reaches Claude before it
+    /// quits.
+    public static let restartDelay: TimeInterval = 1
 
     public static func unknownToolError(_ name: String) -> String { "There’s no tool named “\(name)”." }
 
@@ -161,7 +164,7 @@ public final class ControlTools {
             switch prepare(call.definition.name, call.arguments, call.caller) {
             case .refused(let reason):
                 finish(call, .refusal(reason))
-            case .ready(let request, _):
+            case .ready(let request, let fingerprint, _):
                 // Every tool that asks builds its question; one that did not is refused rather than
                 // run unasked.
                 guard let request else {
@@ -169,7 +172,7 @@ public final class ControlTools {
                     return
                 }
                 call.asking = true
-                confirmer.confirm(request) { [weak self] allowed in self?.answered(call, request, allowed) }
+                confirmer.confirm(request) { [weak self] allowed in self?.answered(call, request, fingerprint, allowed) }
                 if !call.answered { startWaiting(call) }
             }
         }
@@ -179,15 +182,16 @@ public final class ControlTools {
     private func run(_ call: Call) -> ControlOutcome {
         switch prepare(call.definition.name, call.arguments, call.caller) {
         case .refused(let reason): return ControlOutcome(result: .refusal(reason), notification: nil)
-        case .ready(_, let perform): return perform()
+        case .ready(_, _, let perform): return perform()
         }
     }
 
     /// The user's answer. What they allowed is what they were shown: the change is prepared again
-    /// against the state as it is now and must ask the very same question, or nothing happens.
+    /// against the state as it is now and must ask the very same question, and stand for the very
+    /// same thing where the question cannot show it (its fingerprint), or nothing happens.
     /// An answer to a call that has already ended — the Windows mirror ends one whose dialog threw —
     /// changes nothing.
-    private func answered(_ call: Call, _ request: ConfirmationRequest, _ allowed: Bool) {
+    private func answered(_ call: Call, _ request: ConfirmationRequest, _ fingerprint: String?, _ allowed: Bool) {
         guard !call.answered, !call.finished else { return }
         call.answered = true
         // The Windows mirror catches around what follows, as it does where a write starts; Swift's
@@ -202,8 +206,9 @@ public final class ControlTools {
                 switch prepare(call.definition.name, call.arguments, call.caller) {
                 case .refused(let reason):
                     outcome = ControlOutcome(result: .refusal(reason), notification: nil)
-                case .ready(let again, let perform):
-                    outcome = again == request
+                case .ready(let again, let againFingerprint, let perform):
+                    // A fingerprint is hex digits, which == compares exactly on both platforms.
+                    outcome = again == request && againFingerprint == fingerprint
                         ? perform()
                         : ControlOutcome(result: .refusal(ControlTools.changedWhileAskingError), notification: nil)
                 }
@@ -353,9 +358,14 @@ public final class ControlTools {
 /// A write, prepared against the state as it is now: refused with the reason, or ready — with the
 /// question to ask when the tool asks, and the change itself. The Windows mirror has no enum
 /// payloads, so its two steps are records.
+///
+/// `fingerprint`, never shown, stands for what the change would land where the question cannot
+/// show it — a document's or a backup's bytes, whose secrets the dialog masks — so an Allow lands
+/// only while that is unchanged too. The Windows mirror declares it last, where C# puts an
+/// optional parameter.
 enum ControlStep {
     case refused(String)
-    case ready(ConfirmationRequest?, perform: () -> ControlOutcome)
+    case ready(ConfirmationRequest?, fingerprint: String? = nil, perform: () -> ControlOutcome)
 }
 
 /// What a performed write answers, and what a notification says about it when nobody was asked.

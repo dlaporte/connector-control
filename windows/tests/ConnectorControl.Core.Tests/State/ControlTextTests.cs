@@ -41,6 +41,16 @@ public class ControlTextTests
 
     /// <summary>A value can neither break its line nor hide part of it: control characters and the format
     /// characters that reorder or hide text show as escapes, on labels, values and cells alike.</summary>
+    /// <summary>An app sentence that quotes a name someone else chose shows that name as <c>EscapedName</c>
+    /// does, its own quotes and the rest of it as <c>Escaped</c> does.</summary>
+    [Fact]
+    public void ANameInsideAnAppSentenceShowsAsItsEscape()
+    {
+        Assert.Equal("""No collection named “a\nb”.\n""", ControlText.Escaped("No collection named “a\nb”.\n", ["a\nb"]));
+        Assert.Equal("""A “x” and “y\u{201D}”.""", ControlText.Escaped("A “x” and “y\u201D”.", ["x", "y\u201D"]));
+        Assert.Equal("Plain “a”.", ControlText.Escaped("Plain “a”.", ["", "zz"]));
+    }
+
     [Fact]
     public void ControlAndFormatCharactersShowAsEscapes()
     {
@@ -58,7 +68,7 @@ public class ControlTextTests
         Assert.Equal("""a\u{00AD}b\u{2060}c\u{2061}d\u{2064}e\u{2065}f""",
             ControlText.Escaped("a\u00ADb\u2060c\u2061d\u2064e\u2065f"));
 
-    /// <summary>A name shows as <see cref="ControlText.Escaped"/> shows it, and its own curly quotes show as
+    /// <summary>A name shows as <see cref="ControlText.Escaped(string)"/> shows it, and its own curly quotes show as
     /// escapes too, so a name cannot close the quotes the app's sentences put around it and read as two names.</summary>
     [Fact]
     public void ANameCannotCloseItsOwnQuotes()
@@ -70,7 +80,7 @@ public class ControlTextTests
     }
 
     /// <summary>An argument list reads back as the arguments it holds: one that is empty, holds a space or
-    /// a quote, or a character <see cref="ControlText.Escaped"/> escapes, is quoted, with \ and ' escaped inside.</summary>
+    /// a quote, or a character <see cref="ControlText.Escaped(string)"/> escapes, is quoted, with \ and ' escaped inside.</summary>
     [Fact]
     public void AnArgumentIsQuotedWhenItWouldNotReadAsOneWord()
     {

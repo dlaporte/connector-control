@@ -98,7 +98,7 @@ final class ControlToolsDirectTests: XCTestCase {
         doc.connectors["github"] = nil
         try rig.h.writeDocument(doc, at: url)
         XCTAssertEqual(rig.call("refresh_subscription", ["collection": .string("Data team")])?.text,
-                       AppState.collectionUpdateBanner("Data team", "deletes github"))
+                       ControlTools.pendingUpdateText("Data team", ControlTools.deletesClause("“github”")))
         try Data("{half".utf8).write(to: url)
         let unreadable = try XCTUnwrap(rig.call("refresh_subscription", ["collection": .string("Data team")]))
         XCTAssertTrue(unreadable.isError)

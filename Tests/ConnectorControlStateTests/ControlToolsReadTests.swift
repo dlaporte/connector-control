@@ -114,7 +114,7 @@ final class ControlToolsReadTests: XCTestCase {
         try rig.h.writeDocument(doc, at: url)
         rig.state.refreshSource(for: "Data team")
         let pending = try XCTUnwrap(rig.call("get_pending_update", ["collection": .string("Data team")]))
-        XCTAssertEqual(pending.text, AppState.collectionUpdateBanner("Data team", "deletes github"))
+        XCTAssertEqual(pending.text, ControlTools.pendingUpdateText("Data team", ControlTools.deletesClause("“github”")))
         XCTAssertEqual(pending.structured.value(at: JSONPointer(["removed"])), .array([.string("github")]))
     }
 

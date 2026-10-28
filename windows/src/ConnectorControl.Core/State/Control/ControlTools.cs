@@ -40,6 +40,9 @@ public sealed partial class ControlTools
     /// <summary>How long, in seconds, a call waits before it answers <see cref="WaitingText"/>: under
     /// Claude Desktop's tool-call timeout, which is what this constant is tuned to.</summary>
     public const double ConfirmationWait = 50;
+    /// <summary>Seconds between answering a restart and starting it, so the answer reaches Claude before it
+    /// quits.</summary>
+    public const double RestartDelay = 1;
 
     public static string UnknownToolError(string name) => $"There’s no tool named “{name}”.";
 
@@ -205,7 +208,7 @@ public sealed partial class ControlTools
                                 return;
                             }
                             call.Asking = true;
-                            confirmer.Confirm(request, allowed => Answered(call, request, allowed));
+                            confirmer.Confirm(request, allowed => Answered(call, request, ready.Fingerprint, allowed));
                             if (!call.Answered)
                             {
                                 StartWaiting(call);
@@ -232,9 +235,10 @@ public sealed partial class ControlTools
     };
 
     /// <summary>The user's answer. What they allowed is what they were shown: the change is prepared again
-    /// against the state as it is now and must ask the very same question, or nothing happens. An answer
-    /// to a call that has already ended — one whose dialog threw — changes nothing.</summary>
-    private void Answered(ToolCall call, ConfirmationRequest request, bool allowed)
+    /// against the state as it is now and must ask the very same question, and stand for the very same
+    /// thing where the question cannot show it (its fingerprint), or nothing happens. An answer to a call
+    /// that has already ended — one whose dialog threw — changes nothing.</summary>
+    private void Answered(ToolCall call, ConfirmationRequest request, string? fingerprint, bool allowed)
     {
         if (call.Answered || call.Finished)
         {
@@ -261,7 +265,8 @@ public sealed partial class ControlTools
                             outcome = new ControlOutcome(ControlResult.Refusal(refused.Reason), null);
                             break;
                         case ControlStep.Ready ready:
-                            outcome = Equals(ready.Request, request)
+                            // A fingerprint is hex digits, which == compares exactly on both platforms.
+                            outcome = Equals(ready.Request, request) && ready.Fingerprint == fingerprint
                                 ? ready.Perform()
                                 : new ControlOutcome(ControlResult.Refusal(ChangedWhileAskingError), null);
                             break;
@@ -464,12 +469,18 @@ public sealed partial class ControlTools
 /// A write, prepared against the state as it is now: refused with the reason, or ready — with the
 /// question to ask when the tool asks, and the change itself. C# has no enum payloads, so the two
 /// steps are records.
+/// <para>
+/// <c>Fingerprint</c>, never shown, stands for what the change would land where the question cannot
+/// show it — a document's or a backup's bytes, whose secrets the dialog masks — so an Allow lands only
+/// while that is unchanged too. It is declared last, where C# puts an optional parameter; the Mac
+/// mirror declares it before the change.
+/// </para>
 /// </summary>
 internal abstract record ControlStep
 {
     public sealed record Refused(string Reason) : ControlStep;
 
-    public sealed record Ready(ConfirmationRequest? Request, Func<ControlOutcome> Perform) : ControlStep;
+    public sealed record Ready(ConfirmationRequest? Request, Func<ControlOutcome> Perform, string? Fingerprint = null) : ControlStep;
 }
 
 /// <summary>What a performed write answers, and what a notification says about it when nobody was asked.</summary>

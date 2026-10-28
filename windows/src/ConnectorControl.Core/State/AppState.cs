@@ -3465,6 +3465,10 @@ public sealed class AppState : ObservableObject, IDisposable
         _ => error.Message,
     };
 
+    /// <summary>Whether <see cref="Dispose"/> has run: work scheduled for later, such as a restart Claude asked
+    /// for, checks it, as AppState's own delays do.</summary>
+    internal bool IsDisposed => disposed;
+
     public void Dispose()
     {
         disposed = true;

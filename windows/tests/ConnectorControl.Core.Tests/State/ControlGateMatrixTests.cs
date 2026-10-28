@@ -42,6 +42,11 @@ public class ControlGateMatrixTests
                         var label = $"{name} {caller} integration:{integration} confirm:{confirm}";
                         Assert.True(rig.H.Notifier.Sent.Count == 0, label);
                         var result = rig.Call(name, arguments, caller);
+                        // Whatever the call left for later — the restart, after its answer — happens.
+                        foreach (var _ in rig.H.Delays.Pending.ToList())
+                        {
+                            rig.H.Delays.RunNext();
+                        }
                         rig.H.Drain();
                         var relay = caller is not ControlCaller.Cli;
                         var refused = relay && !integration;

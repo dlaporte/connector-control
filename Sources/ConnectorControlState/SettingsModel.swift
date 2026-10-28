@@ -32,7 +32,7 @@ public final class SettingsModel: ObservableObject {
     public static let claudeIntegrationTitle = "Let Claude manage Connector Control"
     public static let claudeIntegrationCaption = "Adds a connector named connector-control to Claude's config, so Claude can list, switch and edit your connectors. Takes effect when Claude restarts."
     public static let confirmClaudeChangesTitle = "Confirm changes Claude makes to connectors"
-    public static let confirmClaudeChangesOnCaption = "Adding, editing or deleting a connector, importing, subscribing and restoring a backup ask here first."
+    public static let confirmClaudeChangesOnCaption = "Adding, editing or deleting a connector, deleting a collection, importing, subscribing, applying an update and restoring a backup ask here first."
     public static let confirmClaudeChangesOffCaption = "Claude can then change what it runs without asking here. Text Claude reads, such as a web page, could ask it to."
     public static let loginItemApprovalNote = "Approve Connector Control under System Settings → General → Login Items."
     public static let minKeepCount = 5

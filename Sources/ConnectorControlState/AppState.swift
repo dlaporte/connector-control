@@ -2384,6 +2384,10 @@ public final class AppState: ObservableObject {
         return error.localizedDescription
     }
 
+    /// Whether `dispose()` has run: work scheduled for later, such as a restart Claude asked for,
+    /// checks it, as AppState's own delays do.
+    var isDisposed: Bool { disposed }
+
     /// Stops the watchers and the notification hook; pending delays become no-ops.
     public func dispose() {
         disposed = true
