@@ -229,14 +229,22 @@ public class ControlToolsSharingTests
         var from = ControlTools.FromFooter(path);
         var replace = Args(("path", Text(path)), ("onClash", Text("replace")));
         Assert.Null(rig.State.Upsert("dbt", AppStateHarness.LocalConnector("mine"), null));
-        Assert.False(rig.Call("import_document", replace)?.IsError);
+        var kept = rig.Call("import_document", replace);
+        Assert.NotNull(kept);
+        Assert.False(kept.IsError);
+        // The answer says what the question said: the replacing copy stays on.
+        Assert.StartsWith(ControlTools.ImportedReplacingText(4, "Default"), kept.Text, StringComparison.Ordinal);
         Assert.Equal(ControlTools.ImportReplacingMessage(4, "Default"), rig.Confirmer.Requests[^1].Message);
         Assert.Equal(ControlTools.TakesEffectFooter + " " + from, rig.Confirmer.Requests[^1].Footer);
         // The copy kept the switch of what it replaced, and Claude runs it.
         Assert.True(rig.State.Store.Mcps["dbt"].Enabled);
         Assert.True(rig.H.ClaudeServers().ContainsKey("dbt"));
         rig.State.SetEnabled("dbt", false);
-        Assert.False(rig.Call("import_document", replace)?.IsError);
+        var off = rig.Call("import_document", replace);
+        Assert.NotNull(off);
+        Assert.False(off.IsError);
+        // Nothing replaced was on.
+        Assert.StartsWith(ControlTools.ImportedText(4, "Default"), off.Text, StringComparison.Ordinal);
         // Nothing replaced is on.
         Assert.Equal(ControlTools.ImportMessage(4, "Default"), rig.Confirmer.Requests[^1].Message);
         Assert.Equal(from, rig.Confirmer.Requests[^1].Footer);
@@ -372,7 +380,29 @@ public class ControlToolsSharingTests
             Assert.Equal(ControlTools.NotAFileError(@"\\.\pipe\x.json"), ControlTools.PathRefusal(@"\\.\pipe\x.json", caller));
             Assert.Null(ControlTools.PathRefusal(@"C:\Users\me\x.json", caller));
             Assert.Null(ControlTools.PathRefusal("/Users/me/x.json", caller));
+            foreach (var device in new[] { @"\\?\GLOBALROOT\Device\HarddiskVolume1\x.json", @"\\?\Volume{0b6c1b57-0000-0000-0000-100000000000}\x.json", @"\\?\pipe\x" })
+            {
+                Assert.Equal(ControlTools.NotAFileError(ControlText.EscapedName(device)), ControlTools.PathRefusal(device, caller));
+            }
         }
+        // A drive in the long-path form is a file path to the command line; the relay is refused anything that
+        // starts with \\, this form included.
+        Assert.Null(ControlTools.PathRefusal(@"\\?\C:\Users\me\x.json", cli));
+        Assert.Equal(ControlTools.NetworkPathError, ControlTools.PathRefusal(@"\\?\C:\Users\me\x.json", relay));
+    }
+
+    /// <summary>Windows-forced: a share named with forward slashes is the same share once made full, and the relay
+    /// is refused it before anything is asked or read.</summary>
+    [Fact]
+    public void TheRelayIsRefusedAShareNamedWithForwardSlashes()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        using var rig = Rig();
+        var result = rig.Call("import_document", Args(("path", Text("//host/share/team.json"))));
+        Assert.NotNull(result);
+        Assert.True(result.IsError);
+        Assert.Equal(ControlTools.NetworkPathError, result.Text);
+        Assert.Empty(rig.Confirmer.Requests);
     }
 
     // MARK: subscribe

@@ -60,13 +60,20 @@ public enum ControlText {
 
     /// One of the app's own sentences that quotes names someone else chose: each of `names` as
     /// `escapedName(_:)` shows it, and the rest — the sentence's own quotes included — as
-    /// `escaped(_:)` does. A name with nothing to escape reads as itself, so replacing every place
-    /// it appears can only ever escape more, never less.
+    /// `escaped(_:)` does. The longest names are replaced first, so a name that contains another is
+    /// escaped whole before the shorter one can change part of it; a name with nothing to escape
+    /// reads as itself, so a later replacement can only ever escape more, never less.
     public static func escaped(_ text: String, naming names: [String]) -> String {
         var sentence = text
+        // Longest first, counted in scalars as the Windows mirror counts runes; equal lengths in
+        // ordinal order, so both platforms replace in the same order.
+        let ordered = names.filter { !$0.isEmpty }.sorted { one, other in
+            let a = one.unicodeScalars.count, b = other.unicodeScalars.count
+            return a != b ? a > b : one.ordinallyPrecedes(other)
+        }
         // Platform idiom: replaced literally, as the Windows mirror replaces ordinally; without
         // `.literal`, a canonically equivalent spelling of a name would be replaced too.
-        for name in names where !name.isEmpty {
+        for name in ordered {
             sentence = sentence.replacingOccurrences(of: name, with: escapedName(name), options: .literal)
         }
         return escaped(sentence)

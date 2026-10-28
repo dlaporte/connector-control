@@ -68,13 +68,7 @@ public sealed class RestoreModel : ObservableObject
 
     public void Load()
     {
-        var found = new List<string>(state.Service.Backups.Backups(Series));
-        var original = Path.Combine(state.Service.Backups.BackupsDir, $"{Series}.original.json");
-        if (File.Exists(original))
-        {
-            found.Add(original);
-        }
-        backups = found;
+        backups = new List<string>(state.Service.Backups.RestorableBackups(Series));
         Raise(nameof(Backups));
         Raise(nameof(BackupNames));
     }

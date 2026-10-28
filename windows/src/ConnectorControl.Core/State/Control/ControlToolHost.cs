@@ -24,7 +24,7 @@ public sealed class ControlToolHost(ControlTools tools, bool isCli) : IMcpToolHo
     /// still the relay, and the gate guards it.</summary>
     public ControlCaller Caller => IsCli ? new ControlCaller.Cli() : new ControlCaller.Relay(Session?.ClientName ?? "");
 
-    public IReadOnlyList<JsonValue> ListTools() => Tools.Definitions.Select(definition => definition.McpDescriptor).ToList();
+    public IReadOnlyList<JsonValue> ListTools() => ControlTools.McpDescriptors;
 
     public void CallTool(string name, JsonValue arguments, JsonValue? progressToken,
                          Action<double> progress, Action<JsonValue> completion) =>

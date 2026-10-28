@@ -26,7 +26,7 @@ public final class ControlToolHost: McpToolHost {
     /// relay, and the gate guards it.
     public var caller: ControlCaller { isCLI ? .cli : .relay(clientName: session?.clientName ?? "") }
 
-    public func listTools() -> [JSONValue] { tools.definitions.map(\.mcpDescriptor) }
+    public func listTools() -> [JSONValue] { ControlTools.mcpDescriptors }
 
     public func callTool(name: String, arguments: JSONValue, progressToken: JSONValue?,
                          progress: @escaping (Double) -> Void, completion: @escaping (JSONValue) -> Void) {

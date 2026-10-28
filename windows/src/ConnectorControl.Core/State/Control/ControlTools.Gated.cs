@@ -339,6 +339,12 @@ public sealed partial class ControlTools
         ? $"Copied {count} connector into “{collection}”, switched off."
         : $"Copied {count} connectors into “{collection}”, switched off.";
 
+    /// <summary>The import's answer when a Replace landed over a connector that was on: the copy kept its
+    /// switch, as the question said it would.</summary>
+    public static string ImportedReplacingText(int count, string collection) => count == 1
+        ? $"Copied {count} connector into “{collection}”; it replaced one that was switched on, so it stays on."
+        : $"Copied {count} connectors into “{collection}”, switched off, but any that replaced one switched on stays on.";
+
     public static string ImportedNotification(string asker, int count, string collection) => count == 1
         ? $"{asker} copied {count} connector into “{collection}”."
         : $"{asker} copied {count} connectors into “{collection}”.";
@@ -523,11 +529,25 @@ public sealed partial class ControlTools
     /// to anyone. The Mac mirror's paths have no such form. Pure, so it is tested on any platform.</summary>
     internal static string? PathRefusal(string full, ControlCaller caller)
     {
-        if (full.StartsWith(@"\\.\", StringComparison.Ordinal))
+        if (full.StartsWith(@"\\.\", StringComparison.Ordinal) || IsDeviceNamespace(full))
         {
             return NotAFileError(ControlText.EscapedName(full));
         }
         return caller is ControlCaller.Relay && full.StartsWith(@"\\", StringComparison.Ordinal) ? NetworkPathError : null;
+    }
+
+    /// <summary>Whether <paramref name="full"/> is a <c>\\?\</c> path to anything but a drive (<c>\\?\C:\</c>) or a share
+    /// (<c>\\?\UNC\</c>): a volume by its GUID, <c>GLOBALROOT</c>, a pipe or a device, which is never a file to
+    /// anyone, the command line included.</summary>
+    private static bool IsDeviceNamespace(string full)
+    {
+        if (!full.StartsWith(@"\\?\", StringComparison.Ordinal))
+        {
+            return false;
+        }
+        var rest = full.AsSpan(4);
+        var drive = rest.Length >= 3 && char.IsAsciiLetter(rest[0]) && rest[1] == ':' && rest[2] == '\\';
+        return !drive && !rest.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Why the document at <paramref name="full"/> is not read, or null to read it, found before anything
@@ -671,7 +691,8 @@ public sealed partial class ControlTools
             {
                 return Refused(error, [Path.GetFileName(full), target]);
             }
-            return Done([ImportedText(count, shownTarget)], [("collection", JsonValue.String(target)), ("count", JsonValue.Int(count))],
+            var answer = replacesOn ? ImportedReplacingText(count, shownTarget) : ImportedText(count, shownTarget);
+            return Done([answer], [("collection", JsonValue.String(target)), ("count", JsonValue.Int(count))],
                 target, mark, RestartToApplyText,
                 notification: ImportedNotification(shownAsker, count, shownTarget));
         });

@@ -51,6 +51,14 @@ public class ControlTextTests
         Assert.Equal("Plain “a”.", ControlText.Escaped("Plain “a”.", ["", "zz"]));
     }
 
+    /// <summary>A name that contains another is escaped whole: replaced first, before the shorter name can
+    /// change part of it, so its own closing quote cannot read as the end of a name.</summary>
+    [Fact]
+    public void ANameThatContainsAnotherIsEscapedWhole()
+    {
+        Assert.Equal(@"“a\n\u{201D}b” and “a\n”", ControlText.Escaped("“a\n”b” and “a\n”", ["a\n", "a\n”b"]));
+    }
+
     [Fact]
     public void ControlAndFormatCharactersShowAsEscapes()
     {

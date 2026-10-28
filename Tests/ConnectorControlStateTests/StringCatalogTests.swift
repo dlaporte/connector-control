@@ -151,6 +151,8 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.importTitle": ["X", "Y"],
         "ControlTools.importedNotification.many": ["X", "3", "Y"],
         "ControlTools.importedNotification.one": ["X", "1", "Y"],
+        "ControlTools.importedReplacingText.many": ["3", "X"],
+        "ControlTools.importedReplacingText.one": ["1", "X"],
         "ControlTools.importedText.many": ["3", "X"],
         "ControlTools.importedText.one": ["1", "X"],
         "ControlTools.installHint": ["X", "Y"],
@@ -497,6 +499,8 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.importTitle"] = ControlTools.importTitle("X", "Y")
         actual["ControlTools.importedNotification.many"] = ControlTools.importedNotification("X", 3, "Y")
         actual["ControlTools.importedNotification.one"] = ControlTools.importedNotification("X", 1, "Y")
+        actual["ControlTools.importedReplacingText.many"] = ControlTools.importedReplacingText(3, "X")
+        actual["ControlTools.importedReplacingText.one"] = ControlTools.importedReplacingText(1, "X")
         actual["ControlTools.importedText.many"] = ControlTools.importedText(3, "X")
         actual["ControlTools.importedText.one"] = ControlTools.importedText(1, "X")
         actual["ControlTools.installHint"] = ControlTools.installHint("X", "Y")

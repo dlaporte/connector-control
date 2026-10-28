@@ -193,6 +193,21 @@ final class BackupManagerTests: XCTestCase {
 
     /// Claude's own config is 0644; a copy would inherit that. The snapshot is
     /// written like every other private file instead.
+    func testRestorableBackupsAreNewestFirstWithTheOriginalLast() throws {
+        XCTAssertEqual(try manager.restorableBackups(series: "claude_desktop_config"), [])
+        try manager.ensureOriginalSnapshot(of: source)
+        let older = try XCTUnwrap(try manager.backUp(fileAt: source, series: "claude_desktop_config",
+                                                     now: Date(timeIntervalSince1970: 1_752_600_000)))
+        try Data(#"{"mcpServers": {"a": {}}}"#.utf8).write(to: source)
+        let newer = try XCTUnwrap(try manager.backUp(fileAt: source, series: "claude_desktop_config",
+                                                     now: Date(timeIntervalSince1970: 1_752_600_001)))
+        let original = try XCTUnwrap(manager.originalSnapshotURL(series: "claude_desktop_config"))
+        // resolvingSymlinksInPath: the directory listing returns /private/var URLs while the write
+        // paths build /var ones — the same files.
+        XCTAssertEqual(try manager.restorableBackups(series: "claude_desktop_config").map { $0.resolvingSymlinksInPath() },
+                       [newer, older, original].map { $0.resolvingSymlinksInPath() })
+    }
+
     func testOriginalSnapshotOfAWorldReadableSourceIsPrivate() throws {
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: source.path)
         try manager.ensureOriginalSnapshot(of: source)

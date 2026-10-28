@@ -445,6 +445,12 @@
   "ControlTools.importedNotification.one": {
     "format": "{0} copied {1} connector into “{2}”."
   },
+  "ControlTools.importedReplacingText.many": {
+    "format": "Copied {0} connectors into “{1}”, switched off, but any that replaced one switched on stays on."
+  },
+  "ControlTools.importedReplacingText.one": {
+    "format": "Copied {0} connector into “{1}”; it replaced one that was switched on, so it stays on."
+  },
   "ControlTools.importedText.many": {
     "format": "Copied {0} connectors into “{1}”, switched off."
   },

@@ -87,4 +87,15 @@ final class ControlToolHostTests: XCTestCase {
         let expected = try XCTUnwrap(rig.call("list_collections")).mcpResult
         XCTAssertEqual(sent().last, JSONValue.object(["jsonrpc": .string("2.0"), "id": .int(1), "result": expected]).compactLine())
     }
+
+    /// `tools/call` checks the list on every call: it is built once, from the static catalog, and
+    /// every connection's host lists the same descriptors.
+    func testEveryHostListsTheOneCachedCatalog() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        let relay = ControlToolHost(tools: rig.tools, isCLI: false)
+        let cli = ControlToolHost(tools: rig.tools, isCLI: true)
+        XCTAssertEqual(ControlTools.mcpDescriptors, ControlTools.catalog.map(\.mcpDescriptor))
+        XCTAssertEqual(relay.listTools(), ControlTools.mcpDescriptors)
+        XCTAssertEqual(cli.listTools(), ControlTools.mcpDescriptors)
+    }
 }

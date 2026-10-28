@@ -38,11 +38,7 @@ public final class RestoreModel: ObservableObject {
 
     public func load() {
         do {
-            var found = try state.service.backups.backups(series: RestoreModel.series)
-            if let original = state.service.backups.originalSnapshotURL(series: RestoreModel.series) {
-                found.append(original)
-            }
-            backups = found
+            backups = try state.service.backups.restorableBackups(series: RestoreModel.series)
         } catch {
             restoreError = error.localizedDescription
         }

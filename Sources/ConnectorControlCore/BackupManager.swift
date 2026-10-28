@@ -38,6 +38,14 @@ public struct BackupManager: Sendable {
         return FileManager.default.fileExists(atPath: dest.path) ? dest : nil
     }
 
+    /// Every backup the Restore sheet offers for a series: the timestamped ones newest first, then
+    /// the first-run original when there is one.
+    public func restorableBackups(series: String) throws -> [URL] {
+        var found = try backups(series: series)
+        if let original = originalSnapshotURL(series: series) { found.append(original) }
+        return found
+    }
+
     private func originalSnapshotPath(series: String) -> URL {
         backupsDir.appendingPathComponent("\(series).original.json")
     }

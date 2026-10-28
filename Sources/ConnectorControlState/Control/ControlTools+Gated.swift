@@ -259,6 +259,13 @@ extension ControlTools {
             : "Copied \(count) connectors into “\(collection)”, switched off."
     }
 
+    /// The import's answer when a Replace landed over a connector that was on: the copy kept its
+    /// switch, as the question said it would.
+    public static func importedReplacingText(_ count: Int, _ collection: String) -> String {
+        count == 1 ? "Copied \(count) connector into “\(collection)”; it replaced one that was switched on, so it stays on."
+            : "Copied \(count) connectors into “\(collection)”, switched off, but any that replaced one switched on stays on."
+    }
+
     public static func importedNotification(_ asker: String, _ count: Int, _ collection: String) -> String {
         count == 1 ? "\(asker) copied \(count) connector into “\(collection)”."
             : "\(asker) copied \(count) connectors into “\(collection)”."
@@ -475,7 +482,9 @@ extension ControlTools {
             if let error = state.importCopies(documentAt: url.path, into: target, choices: choices) {
                 return ControlTools.refused(error, naming: [url.lastPathComponent, target])
             }
-            return done([ControlTools.importedText(count, shownTarget)], ["collection": .string(target), "count": .int(count)],
+            let answer = replacesOn ? ControlTools.importedReplacingText(count, shownTarget)
+                : ControlTools.importedText(count, shownTarget)
+            return done([answer], ["collection": .string(target), "count": .int(count)],
                         touching: target, since: mark, restart: ControlTools.restartToApplyText,
                         notification: ControlTools.importedNotification(shownAsker, count, shownTarget))
         })

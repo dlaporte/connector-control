@@ -261,9 +261,7 @@ extension ControlTools {
 
     /// The backups the Restore sheet lists: newest first, the first-run original last.
     func backupURLs() throws -> [URL] {
-        var found = try state.service.backups.backups(series: RestoreModel.series)
-        if let original = state.service.backups.originalSnapshotURL(series: RestoreModel.series) { found.append(original) }
-        return found
+        try state.service.backups.restorableBackups(series: RestoreModel.series)
     }
 
     func listBackups() -> ControlResult {

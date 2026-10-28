@@ -94,6 +94,23 @@ final class ControlToolsDirectTests: XCTestCase {
         XCTAssertTrue(rig.h.notifier.sent.isEmpty, "what Claude runs did not change")
     }
 
+    /// The one setting that writes Claude's config: turned on from the command line while that write
+    /// fails, it says the change was saved and why Claude did not get it, as every other change does.
+    func testTurningTheIntegrationOnWhileClaudesConfigCannotBeWrittenSaysItWasSaved() throws {
+        let rig = ControlRig(integration: false); defer { rig.dispose() }
+        let block = try WriteBlock(rig.h.claudeConfigURL)
+        defer { block.dispose() }
+        XCTAssertTrue(block.isEffective)
+        let result = try XCTUnwrap(rig.call("set_setting", ["key": .string("claude-integration"), "value": .string("on")],
+                                            as: .cli))
+        XCTAssertFalse(result.isError, "the setting is saved")
+        XCTAssertEqual(result.text, ControlTools.integrationSetText("on") + "\n"
+                       + ControlTools.savedNotAppliedText(try XCTUnwrap(rig.state.lastError)))
+        XCTAssertEqual(result.structured.value(at: JSONPointer(["applied"])), .bool(false))
+        XCTAssertTrue(rig.state.settings.claudeIntegrationEnabled)
+        XCTAssertTrue(rig.state.applyRetryNeeded)
+    }
+
     func testSwitchingCollections() throws {
         let rig = ControlRig(); defer { rig.dispose() }
         XCTAssertEqual(rig.call("switch_collection", ["collection": .string("Nope")]), .refusal(MasterStore.noCollectionError("Nope")))

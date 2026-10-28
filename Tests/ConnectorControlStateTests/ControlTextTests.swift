@@ -38,6 +38,13 @@ final class ControlTextTests: XCTestCase {
         XCTAssertEqual(ControlText.escaped("Plain “a”.", naming: ["", "zz"]), "Plain “a”.")
     }
 
+    /// A name that contains another is escaped whole: replaced first, before the shorter name can
+    /// change part of it, so its own closing quote cannot read as the end of a name.
+    func testANameThatContainsAnotherIsEscapedWhole() {
+        XCTAssertEqual(ControlText.escaped("“a\n”b” and “a\n”", naming: ["a\n", "a\n”b"]),
+                       #"“a\n\u{201D}b” and “a\n”"#)
+    }
+
     func testControlAndFormatCharactersShowAsEscapes() {
         XCTAssertEqual(ControlText.escaped("a\nb\rc\td\u{0}e\u{7F}f\u{85}g\u{200B}h\u{202E}i\u{2066}j\u{FEFF}k\u{2028}l\u{61C}m"),
                        #"a\nb\rc\td\u{0000}e\u{007F}f\u{0085}g\u{200B}h\u{202E}i\u{2066}j\u{FEFF}k\u{2028}l\u{061C}m"#)

@@ -72,14 +72,20 @@ public static class ControlText
 
     /// <summary>One of the app's own sentences that quotes names someone else chose: each of
     /// <paramref name="names"/> as <see cref="EscapedName"/> shows it, and the rest — the sentence's own quotes
-    /// included — as <see cref="Escaped(string)"/> does. A name with nothing to escape reads as itself, so
-    /// replacing every place it appears can only ever escape more, never less.</summary>
+    /// included — as <see cref="Escaped(string)"/> does. The longest names are replaced first, so a name that
+    /// contains another is escaped whole before the shorter one can change part of it; a name with nothing to
+    /// escape reads as itself, so a later replacement can only ever escape more, never less.</summary>
     public static string Escaped(string text, IReadOnlyList<string> names)
     {
         var sentence = text;
+        // Longest first, counted in runes as the Mac mirror counts scalars; equal lengths in ordinal
+        // order, so both platforms replace in the same order.
+        var ordered = names.Where(name => name.Length > 0)
+            .OrderByDescending(name => name.EnumerateRunes().Count())
+            .ThenBy(name => name, StringComparer.Ordinal);
         // Platform idiom: replaced ordinally, as the Mac mirror replaces literally; a culture-aware
         // replace would also take a canonically equivalent spelling of a name.
-        foreach (var name in names.Where(name => name.Length > 0))
+        foreach (var name in ordered)
         {
             sentence = sentence.Replace(name, EscapedName(name), StringComparison.Ordinal);
         }

@@ -123,6 +123,24 @@ public class ControlToolsDirectTests
         Assert.Empty(rig.H.Notifier.Sent);
     }
 
+    /// <summary>The one setting that writes Claude's config: turned on from the command line while that write
+    /// fails, it says the change was saved and why Claude did not get it, as every other change does.</summary>
+    [Fact]
+    public void TurningTheIntegrationOnWhileClaudesConfigCannotBeWrittenSaysItWasSaved()
+    {
+        using var rig = new ControlRig(integration: false);
+        using var block = new WriteBlock(rig.H.ClaudeConfigPath);
+        Assert.True(block.IsEffective);
+        var result = rig.Call("set_setting", Args(("key", Text("claude-integration")), ("value", Text("on"))), new ControlCaller.Cli());
+        Assert.NotNull(result);
+        Assert.False(result.IsError);
+        Assert.Equal(ControlTools.IntegrationSetText("on") + "\n"
+            + ControlTools.SavedNotAppliedText(rig.State.LastError!), result.Text);
+        Assert.Equal(JsonValue.Bool(false), result.Structured.ValueAt(new JsonPointer(["applied"])));
+        Assert.True(rig.State.Settings.ClaudeIntegrationEnabled);
+        Assert.True(rig.State.ApplyRetryNeeded);
+    }
+
     [Fact]
     public void SwitchingCollections()
     {

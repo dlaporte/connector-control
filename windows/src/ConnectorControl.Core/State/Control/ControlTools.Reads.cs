@@ -310,19 +310,8 @@ public sealed partial class ControlTools
         return new ControlResult(structured, text, false);
     }
 
-    /// <summary>The backups the Restore sheet lists: newest first, the first-run original last. Platform
-    /// idiom: the Mac's BackupManager names the original's URL; here, as the Restore sheet does, it is
-    /// looked for beside the others.</summary>
-    internal List<string> BackupPaths()
-    {
-        var found = new List<string>(state.Service.Backups.Backups(RestoreModel.Series));
-        var original = Path.Combine(state.Service.Backups.BackupsDir, $"{RestoreModel.Series}.original.json");
-        if (File.Exists(original))
-        {
-            found.Add(original);
-        }
-        return found;
-    }
+    /// <summary>The backups the Restore sheet lists: newest first, the first-run original last.</summary>
+    internal List<string> BackupPaths() => new(state.Service.Backups.RestorableBackups(RestoreModel.Series));
 
     internal ControlResult ListBackups()
     {
