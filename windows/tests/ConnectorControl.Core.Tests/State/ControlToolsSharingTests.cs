@@ -358,8 +358,8 @@ public class ControlToolsSharingTests
     }
 
     // The Mac mirror also refuses a FIFO, which would hold the read until something writes to it; a
-    // Windows file system has none — a pipe here is a \\.\ path or a device-form \\?\ one, refused by its form below — so there
-    // is no such test here.
+    // Windows file system has none — a pipe here is a \\.\ path, or a \\?\ or \??\ one to neither a
+    // drive nor a share, refused by its form below — so there is no such test here.
 
     /// <summary>Windows-forced, as the <c>cmd /c</c> launcher's rule is: a path that reaches another computer
     /// or a device is refused by its form, before anything touches it. The relay is refused any full path

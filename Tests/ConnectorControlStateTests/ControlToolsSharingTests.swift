@@ -178,7 +178,7 @@ final class ControlToolsSharingTests: XCTestCase {
         rig.state.setEnabled("dbt", false)
         let off = try XCTUnwrap(rig.call("import_document", replace))
         XCTAssertFalse(off.isError)
-        XCTAssertTrue(off.text.hasPrefix(ControlTools.importedText(4, "Default")), "nothing replaced was on")
+        XCTAssertTrue(off.text.hasPrefix(ControlTools.importedText(4, "Default")), "nothing replaced was on, so the question did not say a copy stays on and neither does the answer")
         XCTAssertEqual(rig.confirmer.requests.last?.message, ControlTools.importMessage(4, "Default"), "nothing replaced is on")
         XCTAssertEqual(rig.confirmer.requests.last?.footer, from)
         var one = CollectionDocumentSamples.dataTeam

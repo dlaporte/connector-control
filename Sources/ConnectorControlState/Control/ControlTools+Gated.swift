@@ -422,9 +422,9 @@ extension ControlTools {
         // Windows mirror first refuses a path .NET cannot make full.
         let url = URL(fileURLWithPath: path).standardizedFileURL
         // The Windows mirror first refuses, by its form, a path that reaches another computer or a
-        // device: the relay any that starts with \\ once made full — opening one has Windows sign in
-        // to that host as the user, with nothing asked — and every caller a \\.\ path. A Mac path
-        // has no such form.
+        // device: the relay any that starts with \\ or \??\ once made full — opening one has Windows
+        // sign in to that host as the user, with nothing asked — and every caller a \\.\ path or a
+        // \\?\ or \??\ path to anything but a drive or a share. A Mac path has no such form.
         if let refusal = ControlTools.documentFileRefusal(url) { return .refused(refusal) }
         let file = ControlText.escapedName(url.lastPathComponent)
         let (read, bytes, failure) = AppState.readDocument(at: url)
