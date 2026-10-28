@@ -190,7 +190,7 @@ Assert-True ($versionLine -eq "connector-control $Version") "the copy says its v
 # CONNECTOR_CONTROL_STORE_DIR, set above and inherited, names the pipe the sandboxed app serves, and keeps
 # the tool from starting any other app.
 $statusJson = (& $tool status --json) -join "`n"
-Assert-True ($LASTEXITCODE -eq 0) "connector-control.exe status --json exited 0 (got $LASTEXITCODE: $statusJson)"
+Assert-True ($LASTEXITCODE -eq 0) "connector-control.exe status --json exited 0 (got ${LASTEXITCODE}: $statusJson)"
 $toolStatus = $statusJson | ConvertFrom-Json
 # Read safely: under strict mode a missing property (an error-shaped answer) would throw without the output.
 $toolVersion = if ($toolStatus.PSObject.Properties.Name -contains 'version') { $toolStatus.version } else { $null }

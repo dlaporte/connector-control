@@ -59,10 +59,20 @@ jobs:
           Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
           # -Path takes one string, and -EnableExit sets the host's exit code per call, so a clean
           # second folder would mask a finding in the first: collect both folders, then fail once.
-          $findings = @(foreach ($folder in 'windows/scripts', 'windows/tools') {
-            Invoke-ScriptAnalyzer -Path $folder -Recurse -Severity Error
+          # -Severity Error leaves out the analyzer's separate ParseError severity, so the parser also
+          # runs over every file itself: a script that does not parse fails here, not on a Windows runner.
+          $parseErrors = @(foreach ($file in Get-ChildItem -Path 'windows/scripts', 'windows/tools' -Recurse -Filter '*.ps1') {
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$null, [ref]$errors)
+            foreach ($e in $errors) { "$($file.FullName):$($e.Extent.StartLineNumber): $($e.Message)" }
           })
+          $findings = @(foreach ($folder in 'windows/scripts', 'windows/tools') {
+            Invoke-ScriptAnalyzer -Path $folder -Recurse -Severity Error, ParseError
+          })
+          if ($parseErrors.Count -gt 0) {
+            $parseErrors | Write-Host
+          }
           if ($findings.Count -gt 0) {
             $findings | Format-Table -AutoSize | Out-String | Write-Host
-            exit 1
           }
+          if ($parseErrors.Count -gt 0 -or $findings.Count -gt 0) { exit 1 }
