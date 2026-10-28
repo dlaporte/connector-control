@@ -181,7 +181,7 @@ public class ControlMaskingTests
         Assert.Equal(
             [
                 "command   docker",
-                """args      run -e API_KEY=hunter2 --token abc https://u:pw@h.example/x?k=v --header X-Key: ••• --static-oauth-client-info {"client_id":"a","client_secret":"set"} img""",
+                """args      run -e API_KEY=hunter2 --token abc https://u:pw@h.example/x?k=v --header 'X-Key: •••' --static-oauth-client-info {"client_id":"a","client_secret":"set"} img""",
                 "env       GITHUB_TOKEN = ••• (set)",
                 "apiKey    ••• (set)",
             ],
@@ -289,6 +289,34 @@ public class ControlMaskingTests
                 """args    --static-oauth-client-info {"client_id":"a","client_secret":"set","extra":1}""",
             ],
             ControlMasking.CodeLines(bridged, ControlMasking.Exposure.Dialog));
+    }
+
+    /// <summary>What the lines show reads back as what would run: two argument lists read differently, an
+    /// empty argument shows, and a newline or a bidi control in a value cannot forge or hide a row.</summary>
+    [Fact]
+    public void TheLinesCannotBeMisreadOrForged()
+    {
+        var spaced = Local("node", ["--name", "x y"]);
+        var split = Local("node", ["--name", "x", "y"]);
+        var forged = Local("node", ["s.js", "x\nenv       SAFE = ••• (set)"]);
+        var keyed = JsonValue.Object(("command", S("node")), ("x\nenv", S("v\nSAFE = ••• (set)")),
+            ("url", S("https://h.example/\u202Egpj.exe")));
+        foreach (var exposure in new[] { ControlMasking.Exposure.Masked, ControlMasking.Exposure.Dialog, ControlMasking.Exposure.Revealed })
+        {
+            Assert.Equal("args      --name 'x y'", ControlMasking.CodeLines(spaced, exposure)[^1]);
+            Assert.Equal("args      --name x y", ControlMasking.CodeLines(split, exposure)[^1]);
+            Assert.Equal(["args", "  − --name 'x y'", "  + --name x y"], ControlMasking.ChangeLines(spaced, split, exposure));
+            Assert.Equal("args      a '' b", ControlMasking.CodeLines(Local("node", ["a", "", "b"]), exposure)[^1]);
+            Assert.Equal(["command   node", """args      s.js 'x\nenv       SAFE = ••• (set)'"""], ControlMasking.CodeLines(forged, exposure));
+            Assert.Equal(["args", """  + s.js 'x\nenv       SAFE = ••• (set)'"""],
+                ControlMasking.ChangeLines(JsonValue.Object(("command", S("node"))), forged, exposure));
+            foreach (var line in ControlMasking.CodeLines(keyed, exposure).Concat(ControlMasking.ChangeLines(JsonValue.Object(), keyed, exposure)))
+            {
+                Assert.False(line.Contains('\n') || line.Contains('\u202E'), $"{exposure}: {line}");
+            }
+        }
+        Assert.Equal(["command   node", """url       https://h.example/\u{202E}gpj.exe""", """x\nenv    v\nSAFE = ••• (set)"""],
+            ControlMasking.CodeLines(keyed, ControlMasking.Exposure.Dialog));
     }
 
     [Fact]

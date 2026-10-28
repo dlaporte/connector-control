@@ -359,7 +359,8 @@ public enum ControlMasking {
     /// The fields an edit changes, for the change confirmation: each changed field's label, then
     /// "− " before each value it loses and "+ " before each it gains. A secret that changed shows
     /// as changed although both sides read "••• (set)". Every difference between the two configs
-    /// shows, as every key shows on the code lines.
+    /// shows, as every key shows on the code lines, and labels and values go through
+    /// `ControlText.escaped(_:)` as the code lines' do.
     public static func changeLines(from before: JSONValue, to after: JSONValue, exposure: Exposure = .masked) -> [String] {
         let old = fields(before, exposure)
         let new = fields(after, exposure)
@@ -372,9 +373,9 @@ public enum ControlMasking {
             let lost = was.filter { item in !now.contains { same($0, item) } }
             let gained = now.filter { item in !was.contains { same($0, item) } }
             guard !lost.isEmpty || !gained.isEmpty else { continue }
-            lines.append(label)
-            lines += lost.map { removedPrefix + $0.shown }
-            lines += gained.map { addedPrefix + $0.shown }
+            lines.append(ControlText.escaped(label))
+            lines += lost.map { removedPrefix + ControlText.escaped($0.shown) }
+            lines += gained.map { addedPrefix + ControlText.escaped($0.shown) }
         }
         return lines
     }
@@ -472,7 +473,7 @@ public enum ControlMasking {
         let kept = rest.compactMap { $0 }
         if !kept.isEmpty {
             fields.append(Field(label: argsLabel, values: [(raw(.array(rest.map { $0.map(JSONValue.string) ?? .null })),
-                                                            arguments(kept, exposure: exposure).joined(separator: " "))]))
+                                                            ControlText.words(arguments(kept, exposure: exposure)))]))
         }
         var shown: Set<String> = ["command", "args"]
         if case .object(let env)? = object["env"], !env.isEmpty {
@@ -548,7 +549,7 @@ public enum ControlMasking {
         if case .string? = object["command"] { shown.insert("command") }
         if !model.args.isEmpty {
             fields.append(Field(label: argsLabel, values: [(raw(.array(model.args.map(JSONValue.string))),
-                                                            arguments(model.args, exposure: exposure).joined(separator: " "))]))
+                                                            ControlText.words(arguments(model.args, exposure: exposure)))]))
         }
         if case .array(let items)? = object["args"], !items.isEmpty, items.count == model.args.count { shown.insert("args") }
         if case .object(let env)? = object["env"], !env.isEmpty {

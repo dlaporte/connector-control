@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace ConnectorControl.Core.State;
@@ -22,18 +23,21 @@ public static class ControlText
         text + new string(' ', Math.Max(0, width - Width(text)));
 
     /// <summary>"label   value" lines, every value starting in the same column. A row with an empty label
-    /// continues the one above it.</summary>
+    /// continues the one above it. Labels and values go through <see cref="Escaped"/>.</summary>
     public static IReadOnlyList<string> Labelled(IReadOnlyList<(string Label, string Value)> rows)
     {
-        var column = (rows.Count == 0 ? 0 : rows.Max(row => Width(row.Label))) + Gap;
-        return rows.Select(row => TrimmingTrailingSpaces(Pad(row.Label, column) + row.Value)).ToList();
+        var escaped = rows.Select(row => (Label: Escaped(row.Label), Value: Escaped(row.Value))).ToList();
+        var column = (escaped.Count == 0 ? 0 : escaped.Max(row => Width(row.Label))) + Gap;
+        return escaped.Select(row => TrimmingTrailingSpaces(Pad(row.Label, column) + row.Value)).ToList();
     }
 
     /// <summary>A table: every column but the last padded to its widest cell plus the gap; the header row,
-    /// when there is one, first. No line ends in spaces, whatever its last cells hold.</summary>
+    /// when there is one, first. No line ends in spaces, whatever its last cells hold. Every cell
+    /// goes through <see cref="Escaped"/>.</summary>
     public static IReadOnlyList<string> Table(IReadOnlyList<string>? header, IReadOnlyList<IReadOnlyList<string>> rows)
     {
-        var all = (header is null ? [] : new List<IReadOnlyList<string>> { header }).Concat(rows).ToList();
+        var all = (header is null ? [] : new List<IReadOnlyList<string>> { header }).Concat(rows)
+            .Select(cells => (IReadOnlyList<string>)cells.Select(Escaped).ToList()).ToList();
         var columns = all.Count == 0 ? 0 : all.Max(cells => cells.Count);
         var widths = Enumerable.Range(0, columns)
             .Select(index => all.Max(cells => index < cells.Count ? Width(cells[index]) : 0) + Gap)
@@ -51,6 +55,62 @@ public static class ControlText
 
     // Platform idiom: TrimEnd strips the spaces in one call here; the Mac mirror strips them one at a time.
     internal static string TrimmingTrailingSpaces(string line) => line.TrimEnd(' ');
+
+    /// <summary>Text as a line shows it: a control character, and a format character that reorders or hides
+    /// text (U+061C, U+200B–U+200F, U+2028–U+202E, U+2066–U+2069, U+FEFF), as a visible escape —
+    /// <c>\n</c>, <c>\r</c>, <c>\t</c> or <c>\u{202E}</c> — so a value can neither break its line nor hide part of it.</summary>
+    public static string Escaped(string text)
+    {
+        var line = new StringBuilder();
+        foreach (var c in text)
+        {
+            line.Append(Escape(c) ?? c.ToString());
+        }
+        return line.ToString();
+    }
+
+    // Platform idiom: one UTF-16 unit at a time here, one scalar on the Mac; every character escaped
+    // is in the Basic Plane, so both escape the same ones.
+    /// <summary>The escape for one character, or null for one shown as it is.</summary>
+    internal static string? Escape(char c) => c switch
+    {
+        '\n' => "\\n",
+        '\r' => "\\r",
+        '\t' => "\\t",
+        <= '\u001F' or (>= '\u007F' and <= '\u009F') or '\u061C' or (>= '\u200B' and <= '\u200F')
+            or (>= '\u2028' and <= '\u202E') or (>= '\u2066' and <= '\u2069') or '\uFEFF' => $"\\u{{{(int)c:X4}}}",
+        _ => null,
+    };
+
+    /// <summary>One argument of a command line: as written when it reads as one word — not empty, with no
+    /// space, no ' and nothing <see cref="Escaped"/> escapes — else between single quotes, with \ and '
+    /// escaped inside as well, so no two argument lists read alike.</summary>
+    public static string Word(string text)
+    {
+        if (text.Length > 0 && !text.Any(c => IsSpace(c) || c == '\'' || Escape(c) is not null))
+        {
+            return text;
+        }
+        var word = new StringBuilder("'");
+        foreach (var c in text)
+        {
+            word.Append(c switch
+            {
+                '\\' => "\\\\",
+                '\'' => "\\'",
+                _ => Escape(c) ?? c.ToString(),
+            });
+        }
+        return word.Append('\'').ToString();
+    }
+
+    /// <summary>An argument list on one line: each through <see cref="Word"/>, between spaces.</summary>
+    public static string Words(IReadOnlyList<string> args) =>
+        string.Join(" ", args.Select(Word));
+
+    /// <summary>A space, as <see cref="StringExtensions.TrimSpaces"/> reads one: any space separator.</summary>
+    internal static bool IsSpace(char c) =>
+        CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.SpaceSeparator;
 
     /// <summary>“a”, “a” and “b”, “a”, “b” and “c” — names as the app's sentences list them.</summary>
     public static string QuotedList(IReadOnlyList<string> names)

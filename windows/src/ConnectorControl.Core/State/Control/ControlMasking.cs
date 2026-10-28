@@ -437,7 +437,8 @@ public static class ControlMasking
     /// <summary>The fields an edit changes, for the change confirmation: each changed field's label, then
     /// "− " before each value it loses and "+ " before each it gains. A secret that changed shows
     /// as changed although both sides read "••• (set)". Every difference between the two configs
-    /// shows, as every key shows on the code lines.</summary>
+    /// shows, as every key shows on the code lines, and labels and values go through
+    /// <see cref="ControlText.Escaped"/> as the code lines' do.</summary>
     public static IReadOnlyList<string> ChangeLines(JsonValue before, JsonValue after, Exposure exposure = Exposure.Masked)
     {
         var old = Fields(before, exposure);
@@ -461,9 +462,9 @@ public static class ControlMasking
             {
                 continue;
             }
-            lines.Add(label);
-            lines.AddRange(lost.Select(item => RemovedPrefix + item.Shown));
-            lines.AddRange(gained.Select(item => AddedPrefix + item.Shown));
+            lines.Add(ControlText.Escaped(label));
+            lines.AddRange(lost.Select(item => RemovedPrefix + ControlText.Escaped(item.Shown)));
+            lines.AddRange(gained.Select(item => AddedPrefix + ControlText.Escaped(item.Shown)));
         }
         return lines;
     }
@@ -582,7 +583,7 @@ public static class ControlMasking
         if (kept.Count > 0)
         {
             fields.Add(new Field(ArgsLabel, [(Raw(JsonValue.Array(rest.Select(item => item is null ? JsonValue.Null : JsonValue.String(item)))),
-                string.Join(" ", Arguments(kept, exposure)))]));
+                ControlText.Words(Arguments(kept, exposure)))]));
         }
         var shown = new HashSet<string>(StringComparer.Ordinal) { "command", "args" };
         if (config["env"] is { Kind: JsonKind.Object } env && env.ObjectProperties.Count > 0)
@@ -691,7 +692,7 @@ public static class ControlMasking
         if (model.Args.Count > 0)
         {
             fields.Add(new Field(ArgsLabel, [(Raw(JsonValue.Array(model.Args.Select(JsonValue.String))),
-                string.Join(" ", Arguments(model.Args, exposure)))]));
+                ControlText.Words(Arguments(model.Args, exposure)))]));
         }
         if (config["args"] is { Kind: JsonKind.Array } items && items.ArrayItems.Length > 0 && items.ArrayItems.Length == model.Args.Count)
         {

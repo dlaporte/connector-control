@@ -152,7 +152,7 @@ final class ControlMaskingTests: XCTestCase {
         ])
         XCTAssertEqual(ControlMasking.codeLines(docker, exposure: .dialog), [
             "command   docker",
-            #"args      run -e API_KEY=hunter2 --token abc https://u:pw@h.example/x?k=v --header X-Key: ••• --static-oauth-client-info {"client_id":"a","client_secret":"set"} img"#,
+            #"args      run -e API_KEY=hunter2 --token abc https://u:pw@h.example/x?k=v --header 'X-Key: •••' --static-oauth-client-info {"client_id":"a","client_secret":"set"} img"#,
             "env       GITHUB_TOKEN = ••• (set)",
             "apiKey    ••• (set)",
         ])
@@ -240,6 +240,32 @@ final class ControlMaskingTests: XCTestCase {
             "oauth   client a, secret ••• (set)",
             #"args    --static-oauth-client-info {"client_id":"a","client_secret":"set","extra":1}"#,
         ])
+    }
+
+    /// What the lines show reads back as what would run: two argument lists read differently, an
+    /// empty argument shows, and a newline or a bidi control in a value cannot forge or hide a row.
+    func testTheLinesCannotBeMisreadOrForged() {
+        let spaced = local("node", ["--name", "x y"])
+        let split = local("node", ["--name", "x", "y"])
+        let forged = local("node", ["s.js", "x\nenv       SAFE = ••• (set)"])
+        let keyed: JSONValue = .object(["command": .string("node"), "x\nenv": .string("v\nSAFE = ••• (set)"),
+                                        "url": .string("https://h.example/\u{202E}gpj.exe")])
+        for exposure in [ControlMasking.Exposure.masked, .dialog, .revealed] {
+            XCTAssertEqual(ControlMasking.codeLines(spaced, exposure: exposure).last, "args      --name 'x y'", "\(exposure)")
+            XCTAssertEqual(ControlMasking.codeLines(split, exposure: exposure).last, "args      --name x y", "\(exposure)")
+            XCTAssertEqual(ControlMasking.changeLines(from: spaced, to: split, exposure: exposure),
+                           ["args", "  − --name 'x y'", "  + --name x y"], "\(exposure)")
+            XCTAssertEqual(ControlMasking.codeLines(local("node", ["a", "", "b"]), exposure: exposure).last, "args      a '' b", "\(exposure)")
+            XCTAssertEqual(ControlMasking.codeLines(forged, exposure: exposure),
+                           ["command   node", #"args      s.js 'x\nenv       SAFE = ••• (set)'"#], "\(exposure)")
+            XCTAssertEqual(ControlMasking.changeLines(from: .object(["command": .string("node")]), to: forged, exposure: exposure),
+                           ["args", #"  + s.js 'x\nenv       SAFE = ••• (set)'"#], "\(exposure)")
+            for line in ControlMasking.codeLines(keyed, exposure: exposure) + ControlMasking.changeLines(from: .object([:]), to: keyed, exposure: exposure) {
+                XCTAssertFalse(line.unicodeScalars.contains { $0 == "\n" || $0 == "\u{202E}" }, "\(exposure): \(line)")
+            }
+        }
+        XCTAssertEqual(ControlMasking.codeLines(keyed, exposure: .dialog),
+                       ["command   node", #"url       https://h.example/\u{202E}gpj.exe"#, #"x\nenv    v\nSAFE = ••• (set)"#])
     }
 
     func testANonStringEnvironmentOrHeaderValueReadsAsSet() {
