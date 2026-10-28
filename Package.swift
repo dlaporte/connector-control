@@ -15,6 +15,12 @@ let package = Package(
         .target(
             name: "ConnectorControlState",
             dependencies: ["ConnectorControlCore"]),
+        // Everything between bytes and ControlTools: the server the apps run, the client and relay
+        // the command-line tool runs, and the Mac's socket. Foundation only, so it runs under
+        // `swift test`; the Windows port keeps the same code in ConnectorControl.Core/Transport.
+        .target(
+            name: "ConnectorControlTransport",
+            dependencies: ["ConnectorControlCore", "ConnectorControlState"]),
         .executableTarget(
             name: "ConnectorControl",
             dependencies: [
@@ -36,6 +42,6 @@ let package = Package(
             dependencies: ["ConnectorControlCore", "ConnectorControlTestSupport"]),
         .testTarget(
             name: "ConnectorControlStateTests",
-            dependencies: ["ConnectorControlState", "ConnectorControlTestSupport"]),
+            dependencies: ["ConnectorControlState", "ConnectorControlTransport", "ConnectorControlTestSupport"]),
     ]
 )
