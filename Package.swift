@@ -8,6 +8,7 @@ let package = Package(
         .executable(name: "ConnectorControl", targets: ["ConnectorControl"]),
         // The command-line tool build-app.sh puts at Contents/MacOS/connector-control.
         .executable(name: "connector-control", targets: ["ConnectorControlCLI"]),
+        .executable(name: "connector-control-test-host", targets: ["ConnectorControlTestHost"]),
     ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.0"),
@@ -28,6 +29,11 @@ let package = Package(
             dependencies: ["ConnectorControlCore", "ConnectorControlState"]),
         .executableTarget(
             name: "ConnectorControlCLI",
+            dependencies: ["ConnectorControlCore", "ConnectorControlState", "ConnectorControlTransport"]),
+        // The real control layer over a sandbox folder, headless, for the MCP Inspector and the relay
+        // checks in CI. Never shipped: build-app.sh builds only the app and the tool.
+        .executableTarget(
+            name: "ConnectorControlTestHost",
             dependencies: ["ConnectorControlCore", "ConnectorControlState", "ConnectorControlTransport"]),
         .executableTarget(
             name: "ConnectorControl",

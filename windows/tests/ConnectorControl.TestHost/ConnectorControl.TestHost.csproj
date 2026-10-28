@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Windows only: it serves the named pipe. EnableWindowsTargeting lets it build on the Mac. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>ConnectorControl.TestHost</RootNamespace>
+    <!-- A tool for CI's Inspector check, not a test project: dotnet test passes it by. -->
+    <IsTestProject>false</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/ConnectorControl.Core/ConnectorControl.Core.csproj" />
+  </ItemGroup>
+</Project>

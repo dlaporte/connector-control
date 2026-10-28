@@ -49,6 +49,20 @@ jobs:
       - name: Test
         run: ./scripts/test-mac.sh
 
+      # The MCP Inspector (Node 22.19 or later) drives connector-control mcp against the headless
+      # test host: the MCP subset this repo writes for itself, checked by the reference client.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+
+      - name: Build the command-line tool and the test host
+        run: |
+          swift build --product connector-control
+          swift build --product connector-control-test-host
+
+      - name: MCP Inspector check
+        run: ./scripts/mac/inspector-check.sh .build/debug/connector-control .build/debug/connector-control-test-host
+
       # The same assembly the release performs, ad-hoc signed: a broken build-app.sh,
       # generate-icon.swift or Sparkle embedding fails here instead of on a tag.
       - name: Build the app bundle
