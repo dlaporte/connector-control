@@ -484,6 +484,9 @@
     "format": "“{0}” is required."
   },
   "ControlTools.nameHeader": "NAME",
+  "ControlTools.needsNewerAppError": {
+    "format": "This needs Connector Control {0}; restart the app."
+  },
   "ControlTools.needsValuesText": {
     "format": "It needs a value for {0}: fill it in Connector Control."
   },

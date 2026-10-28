@@ -9,7 +9,8 @@ namespace ConnectorControl.Core.State;
 /// Reads answer at once. Writes run one at a time, in the order they arrive. One that asks the user
 /// holds the line until the user answers, however long that takes, while its caller hears progress
 /// every <see cref="ProgressInterval"/> and, at <see cref="ConfirmationWait"/>, that the answer is
-/// still awaited.
+/// still awaited. The command line, which Claude's time limit does not bind, is never answered early: it
+/// hears progress until its own write has run.
 ///
 /// One per app: every connection's <c>ControlToolHost</c> shares the one instance. Claude Desktop opens
 /// two relay connections, one for chat and one for its agent mode, beside any command-line one, and
@@ -50,6 +51,10 @@ public sealed partial class ControlTools
 
     public static string UnknownToolError(string name) => $"There’s no tool named “{name}”.";
 
+    /// <summary>A tool the running app lacks, asked for by a newer command-line tool or relay: an update
+    /// replaced the app on disk while the old one still runs.</summary>
+    public static string NeedsNewerAppError(string version) => $"This needs Connector Control {version}; restart the app.";
+
     public static string MissingArgumentError(string name) => $"“{name}” is required.";
 
     public static string WrongTypeError(string name, string kind) => $"“{name}” must be {kind}.";
@@ -87,12 +92,17 @@ public sealed partial class ControlTools
         this.host = host;
     }
 
-    /// <summary>The running app's version: <c>get_status</c> says it, and the MCP session introduces itself with it.</summary>
-    public string Version => settings.Version;
+    /// <summary>The running app's version alone, without the build number the Mac shows beside it:
+    /// <c>get_status</c> says it, the MCP session introduces itself with it, and a hello's version is
+    /// compared with it.</summary>
+    public string Version => ControlVersion.Semantic(settings.Version) ?? settings.Version;
 
     /// <summary>Runs one tool for <paramref name="caller"/>. <paramref name="progress"/> reports how many
-    /// seconds a change has waited; <paramref name="completion"/> is called once.</summary>
-    public void Call(string name, JsonValue arguments, ControlCaller caller, Action<double> progress, Action<ControlResult> completion)
+    /// seconds a change has waited; <paramref name="completion"/> is called once. <paramref name="isAbandoned"/>
+    /// says the caller's connection has closed: a write still waiting for its turn then, whose caller was never
+    /// told it is waiting, is dropped unrun.</summary>
+    public void Call(string name, JsonValue arguments, ControlCaller caller, Action<double> progress, Action<ControlResult> completion,
+                     Func<bool>? isAbandoned = null)
     {
         var definition = Catalog.FirstOrDefault(tool => tool.Name == name);
         if (definition is null)
@@ -116,7 +126,7 @@ public sealed partial class ControlTools
             completion(ControlResult.Refusal(refuse.Reason));
             return;
         }
-        var call = new ToolCall(definition, new ControlArguments(values), caller, progress, completion);
+        var call = new ToolCall(definition, new ControlArguments(values), caller, progress, completion, isAbandoned ?? (() => false));
         if (definition.Gate == ControlGateClass.Read)
         {
             Read(definition.Name, call.Arguments, caller, result => Deliver(call, result));
@@ -170,6 +180,16 @@ public sealed partial class ControlTools
         }
         var call = writeQueue[0];
         writeQueue.RemoveAt(0);
+        // A write whose connection closed before its turn, and whose caller was never told it is
+        // waiting, is dropped unrun: nobody is left to hear of it, and a command line stopped with
+        // Control-C has taken it back. One already told it is queued runs, as it was told.
+        if (!call.Delivered && call.IsAbandoned())
+        {
+            call.Finished = true;
+            call.Delivered = true;
+            StartNextWrite();
+            return;
+        }
         writing = true;
         // Caught here, where the Mac has nothing to catch: a C# handler, the confirmer or the caller's
         // completion can throw, and a write that threw must still end and let the next start. Swift's
@@ -288,12 +308,12 @@ public sealed partial class ControlTools
 
     /// <summary>Announces a change that landed when nobody else will hear of it: always for one made without
     /// asking, for a direct change that moved what Claude runs (<c>Announces</c>), and for any other once
-    /// its caller has already been told it is still waiting, so a change Claude asked for never lands
-    /// unannounced. The command line's own changes are the user's, and never announced. The tool's
+    /// its caller has already been told it is still waiting, or its connection has closed and it will
+    /// never hear the answer, so a change Claude asked for never lands unannounced. The command line's own changes are the user's, and never announced. The tool's
     /// own notification says it, or else its answer; it is posted once, however many of these hold.</summary>
     private void Announce(ToolCall call, ControlOutcome outcome, bool unasked)
     {
-        if (outcome.Result.IsError || call.Caller is ControlCaller.Cli || !(unasked || outcome.Announces || call.Delivered))
+        if (outcome.Result.IsError || call.Caller is ControlCaller.Cli || !(unasked || outcome.Announces || call.Delivered || call.IsAbandoned()))
         {
             return;
         }
@@ -364,17 +384,20 @@ public sealed partial class ControlTools
     {
         host.Delay(TimeSpan.FromSeconds(ProgressInterval), () =>
         {
-            if (call.Delivered)
+            // A call whose connection has closed hears nothing more — no progress, no early answer — so
+            // one still waiting its turn stays untold, and is dropped when its turn comes.
+            if (call.Delivered || call.IsAbandoned())
             {
                 return;
             }
             call.Ticks++;
             var waited = call.Ticks * ProgressInterval;
             call.Progress(waited);
-            if (waited >= ConfirmationWait)
+            if (waited >= ConfirmationWait && call.Caller is not ControlCaller.Cli)
             {
-                // Only a call whose own dialog is open is waiting for an answer; any other is
-                // waiting for its turn, and the command line, never asked, is always the latter.
+                // Only a call whose own dialog is open is waiting for an answer; any other is waiting
+                // for its turn. The command line is never answered early: it is not bound by Claude's
+                // time limit, and the person who ran it waits for the change itself.
                 Deliver(call, call.Asking ? WaitingResult : QueuedResult);
             }
             else
@@ -387,13 +410,14 @@ public sealed partial class ControlTools
     /// <summary>One call on its way through. Named <c>ToolCall</c> where the Mac names it <c>Call</c>: C#
     /// cannot name a nested type after a method of its class.</summary>
     private sealed class ToolCall(ControlToolDefinition definition, ControlArguments arguments, ControlCaller caller,
-                              Action<double> progress, Action<ControlResult> completion)
+                              Action<double> progress, Action<ControlResult> completion, Func<bool> isAbandoned)
     {
         public ControlToolDefinition Definition { get; } = definition;
         public ControlArguments Arguments { get; } = arguments;
         public ControlCaller Caller { get; } = caller;
         public Action<double> Progress { get; } = progress;
         public Action<ControlResult> Completion { get; } = completion;
+        public Func<bool> IsAbandoned { get; } = isAbandoned;
         /// <summary>The caller has its answer — perhaps the early one that says the user's is awaited.</summary>
         public bool Delivered { get; set; }
         /// <summary>Its confirmation has been put to the user.</summary>

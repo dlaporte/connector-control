@@ -158,6 +158,7 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.installHint": ["X", "Y"],
         "ControlTools.integrationSetText": ["X"],
         "ControlTools.missingArgumentError": ["X"],
+        "ControlTools.needsNewerAppError": ["X"],
         "ControlTools.needsValuesText": ["X"],
         "ControlTools.noBackupError": ["X"],
         "ControlTools.noConnectorError": ["X", "Y"],
@@ -518,6 +519,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.masterListLabel"] = ControlTools.masterListLabel
         actual["ControlTools.missingArgumentError"] = ControlTools.missingArgumentError("X")
         actual["ControlTools.nameHeader"] = ControlTools.nameHeader
+        actual["ControlTools.needsNewerAppError"] = ControlTools.needsNewerAppError("X")
         actual["ControlTools.needsValuesText"] = ControlTools.needsValuesText("X")
         actual["ControlTools.noBackupError"] = ControlTools.noBackupError("X")
         actual["ControlTools.noBackupsText"] = ControlTools.noBackupsText

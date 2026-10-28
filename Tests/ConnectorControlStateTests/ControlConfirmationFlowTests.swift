@@ -250,4 +250,24 @@ final class ControlConfirmationFlowTests: XCTestCase {
         XCTAssertEqual(rig.h.dialogs.confirms.last?.message, EditorModel.changedOutsideMessage("scoutbook"))
         XCTAssertEqual(rig.state.store.mcps["scoutbook"]?.config, config, "Claude's change stands")
     }
+
+    /// The confirmer of a host that can show no dialog answers every question Don't Allow at once:
+    /// the relay's gated change is refused and nothing changes, while the command line, never asked,
+    /// still runs.
+    func testTheDecliningConfirmerRefusesEveryQuestion() throws {
+        let rig = ControlRig(); defer { rig.dispose() }
+        let tools = ControlTools(state: rig.state, settings: rig.settingsModel, confirmer: DecliningConfirmer(), host: rig.h.host)
+        var relay: ControlResult?
+        tools.call(name: "delete_connectors", arguments: .object(["names": .array([.string("aws-mcp")])]),
+                   caller: .relay(clientName: "claude-ai"), progress: { _ in }, completion: { relay = $0 })
+        rig.h.drain()
+        XCTAssertEqual(relay, .refusal(ControlTools.declinedError))
+        XCTAssertNotNil(rig.state.store.mcps["aws-mcp"])
+        var cli: ControlResult?
+        tools.call(name: "delete_connectors", arguments: .object(["names": .array([.string("aws-mcp")])]),
+                   caller: .cli, progress: { _ in }, completion: { cli = $0 })
+        rig.h.drain()
+        XCTAssertEqual(cli?.isError, false)
+        XCTAssertNil(rig.state.store.mcps["aws-mcp"])
+    }
 }

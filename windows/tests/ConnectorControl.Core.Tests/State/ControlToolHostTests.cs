@@ -120,4 +120,58 @@ public class ControlToolHostTests
         Assert.Same(ControlTools.McpDescriptors, relay.ListTools());
         Assert.Same(ControlTools.McpDescriptors, cli.ListTools());
     }
+
+    /// <summary>A tool or relay newer than the app it reached — an update replaced the app on disk while the
+    /// old one still runs — is told to restart the app, not that the tool does not exist.</summary>
+    [Fact]
+    public void ANewerClientAskingForAToolThisAppLacksIsToldToRestartTheApp()
+    {
+        using var rig = new ControlRig();
+        var host = new ControlToolHost(rig.Tools, isCli: true);
+        var unknown = McpSession.UnknownToolMessage("future_tool");
+        // No version was said.
+        Assert.Equal(unknown, host.UnknownToolMessage("future_tool"));
+        foreach (var older in new[] { "1.2.2", "1.2.1", "1.2.2-preview.1", "development build" })
+        {
+            host.ClientVersion = older;
+            Assert.Equal(unknown, host.UnknownToolMessage("future_tool"));
+        }
+        host.ClientVersion = "99.0.0";
+        Assert.Equal(ControlTools.NeedsNewerAppError("99.0.0"), host.UnknownToolMessage("future_tool"));
+        host.ClientVersion = "1.3.0-preview.2";
+        Assert.Equal(ControlTools.NeedsNewerAppError("1.3.0-preview.2"), host.UnknownToolMessage("future_tool"));
+    }
+
+    /// <summary>The version the session introduces itself with, and the one a hello is compared with, is the
+    /// version alone: the Mac shows its build number beside it, Windows does not.</summary>
+    [Fact]
+    public void TheToolsVersionIsTheSemanticVersionTheAppShows()
+    {
+        using var rig = new ControlRig();
+        rig.Updater.VersionDisplay = "1.5.0 (10500)";
+        Assert.Equal("1.5.0", rig.Tools.Version);
+        // A development build says so. Windows never shows a build number, but the rule is the same.
+        rig.Updater.VersionDisplay = "development build";
+        Assert.Equal("development build", rig.Tools.Version);
+    }
+
+    /// <summary>The host says when its connection has closed, so a write still waiting for its turn is dropped.</summary>
+    [Fact]
+    public void AClosedHostsWaitingWriteIsDropped()
+    {
+        using var rig = new ControlRig();
+        rig.Confirmer.Scripted = null;
+        rig.Start("delete_connectors", JsonValue.Object(("names", JsonValue.Array([JsonValue.String("aws-mcp")]))));
+        // A dialog holds the line.
+        Assert.Equal(1, rig.Confirmer.WaitingCount);
+        var host = new ControlToolHost(rig.Tools, isCli: true);
+        var answers = new List<JsonValue>();
+        host.CallTool("switch_collection", JsonValue.Object(("collection", JsonValue.String("Default"))), null,
+            _ => { }, answers.Add);
+        host.IsOpen = false;
+        rig.Confirmer.Answer(false);
+        rig.H.Drain();
+        // Nobody is left to answer.
+        Assert.Empty(answers);
+    }
 }

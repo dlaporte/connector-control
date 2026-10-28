@@ -10,7 +10,9 @@ import ConnectorControlCore
 ///
 /// Reads answer at once. Writes run one at a time, in the order they arrive. One that asks the user
 /// holds the line until the user answers, however long that takes, while its caller hears progress
-/// every `progressInterval` and, at `confirmationWait`, that the answer is still awaited.
+/// every `progressInterval` and, at `confirmationWait`, that the answer is still awaited. The command
+/// line, which Claude's time limit does not bind, is never answered early: it hears progress until
+/// its own write has run.
 ///
 /// One per app: every connection's `ControlToolHost` shares the one instance. Claude Desktop opens
 /// two relay connections, one for chat and one for its agent mode, beside any command-line one, and
@@ -47,6 +49,10 @@ public final class ControlTools {
     public static let restartDelay: TimeInterval = 1
 
     public static func unknownToolError(_ name: String) -> String { "There’s no tool named “\(name)”." }
+
+    /// A tool the running app lacks, asked for by a newer command-line tool or relay: an update
+    /// replaced the app on disk while the old one still runs.
+    public static func needsNewerAppError(_ version: String) -> String { "This needs Connector Control \(version); restart the app." }
 
     public static func missingArgumentError(_ name: String) -> String { "“\(name)” is required." }
 
@@ -86,13 +92,17 @@ public final class ControlTools {
         self.host = host
     }
 
-    /// The running app's version: `get_status` says it, and the MCP session introduces itself with it.
-    public var version: String { settings.version }
+    /// The running app's version alone, without the build number the Mac shows beside it:
+    /// `get_status` says it, the MCP session introduces itself with it, and a hello's version is
+    /// compared with it.
+    public var version: String { ControlVersion.semantic(settings.version) ?? settings.version }
 
     /// Runs one tool for `caller`. `progress` reports how many seconds a change has waited;
-    /// `completion` is called once.
+    /// `completion` is called once. `isAbandoned` says the caller's connection has closed: a write
+    /// still waiting for its turn then, whose caller was never told it is waiting, is dropped unrun.
     public func call(name: String, arguments: JSONValue, caller: ControlCaller,
-                     progress: @escaping (Double) -> Void, completion: @escaping (ControlResult) -> Void) {
+                     progress: @escaping (Double) -> Void, completion: @escaping (ControlResult) -> Void,
+                     isAbandoned: @escaping () -> Bool = { false }) {
         guard let definition = ControlTools.catalog.first(where: { $0.name == name }) else {
             completion(.refusal(ControlTools.unknownToolError(name)))
             return
@@ -110,7 +120,7 @@ public final class ControlTools {
             return
         }
         let call = Call(definition: definition, arguments: ControlArguments(values: values), caller: caller,
-                        progress: progress, completion: completion)
+                        progress: progress, completion: completion, isAbandoned: isAbandoned)
         guard definition.gate != .read else {
             read(definition.name, call.arguments, caller) { [weak self] result in self?.deliver(call, result) }
             return
@@ -147,6 +157,15 @@ public final class ControlTools {
     private func startNextWrite() {
         guard !writing, !writeQueue.isEmpty else { return }
         let call = writeQueue.removeFirst()
+        // A write whose connection closed before its turn, and whose caller was never told it is
+        // waiting, is dropped unrun: nobody is left to hear of it, and a command line stopped with
+        // Control-C has taken it back. One already told it is queued runs, as it was told.
+        if !call.delivered, call.isAbandoned() {
+            call.finished = true
+            call.delivered = true
+            startNextWrite()
+            return
+        }
         writing = true
         // The Windows mirror catches around what follows: a C# handler, the confirmer or the
         // caller's completion can throw, and a write that threw must still end and let the next
@@ -227,11 +246,12 @@ public final class ControlTools {
 
     /// Announces a change that landed when nobody else will hear of it: always for one made without
     /// asking, for a direct change that moved what Claude runs (`announces`), and for any other once
-    /// its caller has already been told it is still waiting, so a change Claude asked for never lands
-    /// unannounced. The command line's own changes are the user's, and never announced. The tool's
+    /// its caller has already been told it is still waiting, or its connection has closed and it will
+    /// never hear the answer, so a change Claude asked for never lands unannounced. The command line's own changes are the user's, and never announced. The tool's
     /// own notification says it, or else its answer; it is posted once, however many of these hold.
     private func announce(_ call: Call, _ outcome: ControlOutcome, unasked: Bool) {
-        guard !outcome.result.isError, call.caller != .cli, unasked || outcome.announces || call.delivered else { return }
+        guard !outcome.result.isError, call.caller != .cli,
+              unasked || outcome.announces || call.delivered || call.isAbandoned() else { return }
         // The Windows mirror catches around this: a C# notifier can throw, and Swift's does not. The
         // change has applied whatever the notifier does, so its answer stays a success.
         state.notifyClaudeChange(outcome.notification ?? outcome.result.text)
@@ -267,13 +287,16 @@ public final class ControlTools {
 
     private func scheduleTick(_ call: Call) {
         host.delay(ControlTools.progressInterval) { [weak self] in
-            guard let self, !call.delivered else { return }
+            // A call whose connection has closed hears nothing more — no progress, no early answer — so
+            // one still waiting its turn stays untold, and is dropped when its turn comes.
+            guard let self, !call.delivered, !call.isAbandoned() else { return }
             call.ticks += 1
             let waited = Double(call.ticks) * ControlTools.progressInterval
             call.progress(waited)
-            if waited >= ControlTools.confirmationWait {
-                // Only a call whose own dialog is open is waiting for an answer; any other is
-                // waiting for its turn, and the command line, never asked, is always the latter.
+            if waited >= ControlTools.confirmationWait, call.caller != .cli {
+                // Only a call whose own dialog is open is waiting for an answer; any other is waiting
+                // for its turn. The command line is never answered early: it is not bound by Claude's
+                // time limit, and the person who ran it waits for the change itself.
                 self.deliver(call, call.asking ? ControlTools.waitingResult : ControlTools.queuedResult)
             } else {
                 self.scheduleTick(call)
@@ -289,6 +312,7 @@ public final class ControlTools {
         let caller: ControlCaller
         let progress: (Double) -> Void
         let completion: (ControlResult) -> Void
+        let isAbandoned: () -> Bool
         /// The caller has its answer — perhaps the early one that says the user's is awaited.
         var delivered = false
         /// Its confirmation has been put to the user.
@@ -301,12 +325,14 @@ public final class ControlTools {
         var ticks = 0
 
         init(definition: ControlToolDefinition, arguments: ControlArguments, caller: ControlCaller,
-             progress: @escaping (Double) -> Void, completion: @escaping (ControlResult) -> Void) {
+             progress: @escaping (Double) -> Void, completion: @escaping (ControlResult) -> Void,
+             isAbandoned: @escaping () -> Bool) {
             self.definition = definition
             self.arguments = arguments
             self.caller = caller
             self.progress = progress
             self.completion = completion
+            self.isAbandoned = isAbandoned
         }
     }
 

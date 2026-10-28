@@ -16,6 +16,10 @@ public sealed class ControlToolHost(ControlTools tools, bool isCli) : IMcpToolHo
     /// <summary>The session this host serves, for the client's name. A plain reference: the GC has
     /// no cycle to break, where the Mac's is weak.</summary>
     public McpSession? Session { get; set; }
+    /// <summary>The version the connection's hello gave, or null when it gave none.</summary>
+    public string? ClientVersion { get; set; }
+    /// <summary>False once the connection has closed: a write it left waiting for its turn is dropped.</summary>
+    public bool IsOpen { get; set; } = true;
 
     /// <summary>What the session's <c>serverInfo</c> says.</summary>
     public string Version => Tools.Version;
@@ -26,9 +30,15 @@ public sealed class ControlToolHost(ControlTools tools, bool isCli) : IMcpToolHo
 
     public IReadOnlyList<JsonValue> ListTools() => ControlTools.McpDescriptors;
 
-    public string UnknownToolMessage(string name) => McpSession.UnknownToolMessage(name);
+    /// <summary>A tool this app does not list. Asked for by a newer command-line tool or relay — an update
+    /// replaced the app on disk while this one still runs — it needs the newer app, which a restart
+    /// starts.</summary>
+    public string UnknownToolMessage(string name) =>
+        ClientVersion is { } clientVersion && ControlVersion.IsNewer(clientVersion, Tools.Version)
+            ? ControlTools.NeedsNewerAppError(ControlVersion.Semantic(clientVersion) ?? clientVersion)
+            : McpSession.UnknownToolMessage(name);
 
     public void CallTool(string name, JsonValue arguments, JsonValue? progressToken,
                          Action<double> progress, Action<JsonValue> completion) =>
-        Tools.Call(name, arguments, Caller, progress, result => completion(result.McpResult));
+        Tools.Call(name, arguments, Caller, progress, result => completion(result.McpResult), () => !IsOpen);
 }

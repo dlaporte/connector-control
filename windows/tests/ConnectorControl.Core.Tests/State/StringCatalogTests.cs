@@ -164,6 +164,7 @@ public class StringCatalogTests
         ["ControlTools.installHint"] = ["X", "Y"],
         ["ControlTools.integrationSetText"] = ["X"],
         ["ControlTools.missingArgumentError"] = ["X"],
+        ["ControlTools.needsNewerAppError"] = ["X"],
         ["ControlTools.needsValuesText"] = ["X"],
         ["ControlTools.noBackupError"] = ["X"],
         ["ControlTools.noConnectorError"] = ["X", "Y"],
@@ -527,6 +528,7 @@ public class StringCatalogTests
         actual["ControlTools.masterListLabel"] = ControlTools.MasterListLabel;
         actual["ControlTools.missingArgumentError"] = ControlTools.MissingArgumentError("X");
         actual["ControlTools.nameHeader"] = ControlTools.NameHeader;
+        actual["ControlTools.needsNewerAppError"] = ControlTools.NeedsNewerAppError("X");
         actual["ControlTools.needsValuesText"] = ControlTools.NeedsValuesText("X");
         actual["ControlTools.networkPathError"] = ControlTools.NetworkPathError;
         actual["ControlTools.noBackupError"] = ControlTools.NoBackupError("X");

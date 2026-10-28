@@ -188,8 +188,8 @@ public sealed record ConfirmationRequest(string Title, string Message, IReadOnly
 /// answer included (as Don't Allow);</item>
 /// <item><c>Confirm</c> may return before the user answers or only after (a modal dialog): the call's wait
 /// has started before it is asked, and its progress and early answer run in the dialog's run loop;</item>
-/// <item>a <c>completion</c> never called holds the write queue for good: every later write, the command
-/// line's included, only ever answers "queued";</item>
+/// <item>a <c>completion</c> never called holds the write queue for good: every later relay write only ever
+/// answers "queued", and every later command-line write waits for good;</item>
 /// <item>C# only: it never throws once its dialog is showing. It may throw before showing anything,
 /// which ends the call as refused; after that, a failure calls <c>completion(false)</c>.</item>
 /// </list>
@@ -197,6 +197,15 @@ public sealed record ConfirmationRequest(string Title, string Message, IReadOnly
 public interface IControlConfirmer
 {
     void Confirm(ConfirmationRequest request, Action<bool> completion);
+}
+
+/// <summary>Answers every question Don't Allow, at once: the confirmer of a host that can show no dialog —
+/// the test host, and the app until it can show its own — so a change that must be asked about is
+/// refused, never made unasked. It keeps the confirmer's contract: one completion, every time. It never
+/// throws.</summary>
+public sealed class DecliningConfirmer : IControlConfirmer
+{
+    public void Confirm(ConfirmationRequest request, Action<bool> completion) => completion(false);
 }
 
 /// <summary>The settings <c>get_settings</c> lists and <c>set_setting</c> takes, by the names the command line uses.</summary>

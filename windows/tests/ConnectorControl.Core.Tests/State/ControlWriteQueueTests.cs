@@ -103,7 +103,6 @@ public class ControlWriteQueueTests
         ControlWrites(rig);
         var asking = Add(rig, "a");
         var queued = SwitchTo(rig, "b");
-        var fromCli = SwitchTo(rig, "c", new ControlCaller.Cli());
         RunOutTheClock(rig);
         var ticks = Enumerable.Range(1, (int)(ControlTools.ConfirmationWait / ControlTools.ProgressInterval))
             .Select(tick => tick * ControlTools.ProgressInterval).ToList();
@@ -111,8 +110,6 @@ public class ControlWriteQueueTests
         Assert.Equal(ticks, asking.Progress);
         Assert.Equal(ControlTools.QueuedResult, queued.Result);
         Assert.Equal(ticks, queued.Progress);
-        // The command line never hears of a dialog it did not raise.
-        Assert.Equal(ControlTools.QueuedResult, fromCli.Result);
         Assert.NotEqual(ControlTools.WaitingText, ControlTools.QueuedText);
         Assert.Empty(performed);
     }
@@ -124,8 +121,8 @@ public class ControlWriteQueueTests
         ControlWrites(rig);
         Add(rig, "a");
         SwitchTo(rig, "b");
-        SwitchTo(rig, "c", new ControlCaller.Cli());
         RunOutTheClock(rig);
+        SwitchTo(rig, "c", new ControlCaller.Cli());
         rig.H.Notifier.Sent.Clear();
         rig.Confirmer.Answer(true);
         rig.H.Drain();
@@ -240,5 +237,121 @@ public class ControlWriteQueueTests
         Assert.Equal(1, answers);
         Assert.Equal("Did b.", SwitchTo(rig, "b").Result?.Text);
         Assert.Equal(["a", "b"], performed);
+    }
+
+    /// <summary>Starts a write whose connection the test closes by clearing <paramref name="open"/>.</summary>
+    private static ControlRig.Answer Start(ControlRig rig, string name, JsonValue arguments, ControlCaller caller, Func<bool> open)
+    {
+        var answer = new ControlRig.Answer();
+        rig.Tools.Call(name, arguments, caller, answer.Progress.Add, result =>
+        {
+            answer.Result = result;
+            answer.Completions++;
+        }, () => !open());
+        rig.H.Drain();
+        return answer;
+    }
+
+    /// <summary>The command line is not bound by Claude's time limit: queued behind a dialog, it keeps hearing
+    /// progress, is never answered early, and is answered once its own change has run.</summary>
+    [Fact]
+    public void ACommandLineWriteQueuedBehindADialogWaitsForItsTurn()
+    {
+        using var rig = new ControlRig();
+        ControlWrites(rig);
+        var asking = Add(rig, "a");
+        var fromCli = SwitchTo(rig, "c", new ControlCaller.Cli());
+        for (var i = 0; i < 40; i++)
+        {
+            rig.H.Delays.RunNext();
+        }
+        Assert.Equal(ControlTools.WaitingResult, asking.Result);
+        // No early answer, however long it waits.
+        Assert.Null(fromCli.Result);
+        // It hears progress past the 50 s.
+        Assert.True(fromCli.Progress.LastOrDefault() > ControlTools.ConfirmationWait);
+        rig.Confirmer.Answer(false);
+        Assert.Equal("Did c.", fromCli.Result?.Text);
+        Assert.Equal(1, fromCli.Completions);
+        Assert.Equal(["c"], performed);
+    }
+
+    /// <summary>A write whose connection closed before its turn — a command line stopped with Control-C — is
+    /// dropped unrun: nobody is left to hear of it, and the queue moves on.</summary>
+    [Fact]
+    public void AWriteWhoseConnectionClosedBeforeItsTurnIsDroppedUnrun()
+    {
+        using var rig = new ControlRig();
+        ControlWrites(rig);
+        var open = true;
+        Add(rig, "a");
+        var gone = Start(rig, "switch_collection", JsonValue.Object(("collection", JsonValue.String("c"))), new ControlCaller.Cli(), () => open);
+        open = false;
+        rig.Confirmer.Answer(false);
+        Assert.Null(gone.Result);
+        Assert.Empty(performed);
+        // The next write runs.
+        Assert.Equal("Did d.", SwitchTo(rig, "d").Result?.Text);
+    }
+
+    /// <summary>A relay write already told it is queued still runs when its turn comes, as it was told, even
+    /// if its connection has closed since.</summary>
+    [Fact]
+    public void ARelayWriteToldItIsQueuedRunsAfterItsConnectionCloses()
+    {
+        using var rig = new ControlRig();
+        ControlWrites(rig);
+        var open = true;
+        Add(rig, "a");
+        var told = Start(rig, "switch_collection", JsonValue.Object(("collection", JsonValue.String("b"))), Claude, () => open);
+        RunOutTheClock(rig);
+        Assert.Equal(ControlTools.QueuedResult, told.Result);
+        open = false;
+        rig.Confirmer.Answer(false);
+        Assert.Equal(["b"], performed);
+    }
+
+    /// <summary>A relay write waiting its turn whose connection closes before its early answer hears nothing
+    /// more — no progress, no "queued" — and is dropped when its turn comes: Claude was never told it
+    /// was waiting, and a retry after "restarted — try again" must not land it twice.</summary>
+    [Fact]
+    public void ARelayWriteWhoseConnectionClosesBeforeItsEarlyAnswerIsDropped()
+    {
+        using var rig = new ControlRig();
+        ControlWrites(rig);
+        var open = true;
+        Add(rig, "a");
+        var queued = Start(rig, "switch_collection", JsonValue.Object(("collection", JsonValue.String("b"))), Claude, () => open);
+        // The two calls tick in turn: eighteen runs take each to 45 s.
+        for (var i = 0; i < 18; i++)
+        {
+            rig.H.Delays.RunNext();
+        }
+        Assert.Equal(9, queued.Progress.Count);
+        open = false;
+        RunOutTheClock(rig);
+        // No early answer once the connection has gone, and no more progress.
+        Assert.Null(queued.Result);
+        Assert.Equal(9, queued.Progress.Count);
+        rig.Confirmer.Answer(false);
+        Assert.Null(queued.Result);
+        Assert.Empty(performed);
+    }
+
+    /// <summary>A change Claude asked for whose connection has gone is still the user's to allow; allowed, it
+    /// lands and is announced once, since its caller will never hear the answer.</summary>
+    [Fact]
+    public void AnAllowedChangeWhoseConnectionClosedIsAnnouncedOnce()
+    {
+        using var rig = new ControlRig();
+        ControlWrites(rig);
+        var open = true;
+        Start(rig, "add_connector", JsonValue.Object(("name", JsonValue.String("a")), ("config", JsonValue.Object())), Claude, () => open);
+        open = false;
+        rig.H.Notifier.Sent.Clear();
+        rig.Confirmer.Answer(true);
+        rig.H.Drain();
+        Assert.Equal(["a"], performed);
+        Assert.Equal(["Did a."], rig.H.Notifier.Sent.Select(sent => sent.Body));
     }
 }

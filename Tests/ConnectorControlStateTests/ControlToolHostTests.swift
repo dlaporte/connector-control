@@ -100,4 +100,47 @@ final class ControlToolHostTests: XCTestCase {
         // The Windows mirror also asserts the two are the very same list; JSONValue arrays are values,
         // so Swift has no identity to compare.
     }
+
+    /// A tool or relay newer than the app it reached — an update replaced the app on disk while the
+    /// old one still runs — is told to restart the app, not that the tool does not exist.
+    func testANewerClientAskingForAToolThisAppLacksIsToldToRestartTheApp() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        let host = ControlToolHost(tools: rig.tools, isCLI: true)
+        let unknown = McpSession.unknownToolMessage("future_tool")
+        XCTAssertEqual(host.unknownToolMessage("future_tool"), unknown, "no version was said")
+        for older in ["1.2.2", "1.2.1", "1.2.2-preview.1", "development build"] {
+            host.clientVersion = older
+            XCTAssertEqual(host.unknownToolMessage("future_tool"), unknown, older)
+        }
+        host.clientVersion = "99.0.0"
+        XCTAssertEqual(host.unknownToolMessage("future_tool"), ControlTools.needsNewerAppError("99.0.0"))
+        host.clientVersion = "1.3.0-preview.2"
+        XCTAssertEqual(host.unknownToolMessage("future_tool"), ControlTools.needsNewerAppError("1.3.0-preview.2"))
+    }
+
+    /// The version the session introduces itself with, and the one a hello is compared with, is the
+    /// version alone: the Mac shows its build number beside it, Windows does not.
+    func testTheToolsVersionIsTheSemanticVersionTheAppShows() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        rig.updater.versionDisplay = "1.5.0 (10500)"
+        XCTAssertEqual(rig.tools.version, "1.5.0")
+        rig.updater.versionDisplay = AppVersion.developmentBuild
+        XCTAssertEqual(rig.tools.version, AppVersion.developmentBuild, "a development build says so")
+    }
+
+    /// The host says when its connection has closed, so a write still waiting for its turn is dropped.
+    func testAClosedHostsWaitingWriteIsDropped() throws {
+        let rig = ControlRig(); defer { rig.dispose() }
+        rig.confirmer.scripted = nil
+        _ = rig.start("delete_connectors", ["names": .array([.string("aws-mcp")])])
+        XCTAssertEqual(rig.confirmer.waitingCount, 1, "a dialog holds the line")
+        let host = ControlToolHost(tools: rig.tools, isCLI: true)
+        var answers: [JSONValue] = []
+        host.callTool(name: "switch_collection", arguments: .object(["collection": .string("Default")]), progressToken: nil,
+                      progress: { _ in }, completion: { answers.append($0) })
+        host.isOpen = false
+        rig.confirmer.answer(false)
+        rig.h.drain()
+        XCTAssertEqual(answers, [], "nobody is left to answer")
+    }
 }

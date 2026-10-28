@@ -13,6 +13,10 @@ public final class ControlToolHost: McpToolHost {
     public let isCLI: Bool
     /// The session this host serves, for the client's name. Weak: the session holds the host.
     public weak var session: McpSession?
+    /// The version the connection's hello gave, or nil when it gave none.
+    public var clientVersion: String?
+    /// False once the connection has closed: a write it left waiting for its turn is dropped.
+    public var isOpen = true
 
     public init(tools: ControlTools, isCLI: Bool) {
         self.tools = tools
@@ -28,11 +32,19 @@ public final class ControlToolHost: McpToolHost {
 
     public func listTools() -> [JSONValue] { ControlTools.mcpDescriptors }
 
-    public func unknownToolMessage(_ name: String) -> String { McpSession.unknownToolMessage(name) }
+    /// A tool this app does not list. Asked for by a newer command-line tool or relay — an update
+    /// replaced the app on disk while this one still runs — it needs the newer app, which a restart
+    /// starts.
+    public func unknownToolMessage(_ name: String) -> String {
+        if let clientVersion, ControlVersion.isNewer(clientVersion, than: tools.version) {
+            return ControlTools.needsNewerAppError(ControlVersion.semantic(clientVersion) ?? clientVersion)
+        }
+        return McpSession.unknownToolMessage(name)
+    }
 
     public func callTool(name: String, arguments: JSONValue, progressToken: JSONValue?,
                          progress: @escaping (Double) -> Void, completion: @escaping (JSONValue) -> Void) {
         tools.call(name: name, arguments: arguments, caller: caller, progress: progress,
-                   completion: { completion($0.mcpResult) })
+                   completion: { completion($0.mcpResult) }, isAbandoned: { [weak self] in !(self?.isOpen ?? false) })
     }
 }

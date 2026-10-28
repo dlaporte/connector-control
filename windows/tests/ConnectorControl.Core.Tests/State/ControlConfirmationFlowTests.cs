@@ -325,4 +325,25 @@ public class ControlConfirmationFlowTests
         // Claude's change stands.
         Assert.Equal(Config, rig.State.Store.Mcps["scoutbook"].Config);
     }
+
+    /// <summary>The confirmer of a host that can show no dialog answers every question Don't Allow at once:
+    /// the relay's gated change is refused and nothing changes, while the command line, never asked,
+    /// still runs.</summary>
+    [Fact]
+    public void TheDecliningConfirmerRefusesEveryQuestion()
+    {
+        using var rig = new ControlRig();
+        var tools = new ControlTools(rig.State, rig.SettingsModel, new DecliningConfirmer(), rig.H.Host);
+        var names = JsonValue.Object(("names", JsonValue.Array([JsonValue.String("aws-mcp")])));
+        ControlResult? relay = null;
+        tools.Call("delete_connectors", names, new ControlCaller.Relay("claude-ai"), _ => { }, result => relay = result);
+        rig.H.Drain();
+        Assert.Equal(ControlResult.Refusal(ControlTools.DeclinedError), relay);
+        Assert.True(rig.State.Store.Mcps.ContainsKey("aws-mcp"));
+        ControlResult? cli = null;
+        tools.Call("delete_connectors", names, new ControlCaller.Cli(), _ => { }, result => cli = result);
+        rig.H.Drain();
+        Assert.False(cli?.IsError);
+        Assert.False(rig.State.Store.Mcps.ContainsKey("aws-mcp"));
+    }
 }

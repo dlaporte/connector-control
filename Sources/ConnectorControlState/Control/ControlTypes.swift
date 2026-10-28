@@ -211,12 +211,24 @@ public struct ConfirmationRequest: Equatable, Sendable {
 ///   answer included (as Don't Allow);
 /// - `confirm` may return before the user answers or only after (a modal dialog): the call's wait
 ///   has started before it is asked, and its progress and early answer run in the dialog's run loop;
-/// - a `completion` never called holds the write queue for good: every later write, the command
-///   line's included, only ever answers "queued".
+/// - a `completion` never called holds the write queue for good: every later relay write only ever
+///   answers "queued", and every later command-line write waits for good.
 /// The Windows mirror adds that its confirmer never throws once its dialog is showing.
 @MainActor
 public protocol ControlConfirmer: AnyObject {
     func confirm(_ request: ConfirmationRequest, completion: @escaping (Bool) -> Void)
+}
+
+/// Answers every question Don't Allow, at once: the confirmer of a host that can show no dialog —
+/// the test host, and the app until it can show its own — so a change that must be asked about is
+/// refused, never made unasked. It keeps the confirmer's contract: one completion, every time.
+@MainActor
+public final class DecliningConfirmer: ControlConfirmer {
+    public init() {}
+
+    public func confirm(_ request: ConfirmationRequest, completion: @escaping (Bool) -> Void) {
+        completion(false)
+    }
 }
 
 /// The settings `get_settings` lists and `set_setting` takes, by the names the command line uses.
