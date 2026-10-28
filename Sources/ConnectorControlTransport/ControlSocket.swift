@@ -16,8 +16,8 @@ public enum ControlSocketError: Error, Equatable {
     case notASocket(String)
     /// The server at the path belongs to another user.
     case notOwner(String)
-    /// The socket's folder is a link, or is not this user's: a socket there would be reachable through
-    /// what someone else controls.
+    /// The socket's folder is a link, or is not this user's — a socket there would be reachable through
+    /// what someone else controls — or a regular file sits where the folder should be.
     case folderNotOwned(String)
     case system(String, Int32)
 }
@@ -99,7 +99,10 @@ public final class ControlSocketListener: @unchecked Sendable {
             // A file where the folder should be is a refusal of its own; anything else is the system's.
             var blocker = stat()
             if lstat(folder, &blocker) == 0, blocker.st_mode & S_IFMT != S_IFDIR { throw ControlSocketError.folderNotOwned(folder) }
-            throw ControlSocketError.system("createDirectory", Int32((error as NSError).code))
+            // `.system` carries an errno: the POSIX one under Foundation's error, or EIO when it has none.
+            let underlying = (error as NSError).userInfo[NSUnderlyingErrorKey] as? NSError
+            let code = underlying?.domain == NSPOSIXErrorDomain ? Int32(truncatingIfNeeded: underlying?.code ?? Int(EIO)) : EIO
+            throw ControlSocketError.system("createDirectory", code)
         }
         var folderInfo = stat()
         guard lstat(folder, &folderInfo) == 0, folderInfo.st_mode & S_IFMT == S_IFDIR, folderInfo.st_uid == getuid() else {
@@ -183,6 +186,8 @@ public final class ControlSocketListener: @unchecked Sendable {
                     queue.asyncAfter(deadline: .now() + ControlSocketListener.descriptorPause) { source.resume() }
                     return
                 }
+                // Set here and not left to what the kernel copies from the listener.
+                ControlSocket.noSIGPIPE(client)
                 let stream = ControlSocketStream(fd: client)
                 stream.makeNonBlocking()
                 accepted(stream)
@@ -192,6 +197,9 @@ public final class ControlSocketListener: @unchecked Sendable {
         self.source = source
         source.resume()
     }
+
+    /// Whether the listener is accepting: started, and not closed.
+    var isServing: Bool { lock.withLock { source != nil && !closed } }
 
     /// Stops listening and removes the socket file — if it is still the one this listener made — so
     /// the next start finds nothing stale.
@@ -304,8 +312,11 @@ public final class ControlSocketStream: ControlStream, @unchecked Sendable {
     }
 
     /// How long a write may take, in all, before it fails. Unset, a write waits for as long as it must.
+    /// Kept within 0 to a day, and a value that is not a number is taken as 30 seconds, so a bad one
+    /// cannot trap the deadline's arithmetic.
     public func setWriteTimeout(seconds: Double) {
-        lock.withLock { writeTimeout = seconds }
+        let limit = seconds.isNaN ? 30 : min(max(seconds, 0), 86_400)
+        lock.withLock { writeTimeout = limit }
     }
 
     public func close() {

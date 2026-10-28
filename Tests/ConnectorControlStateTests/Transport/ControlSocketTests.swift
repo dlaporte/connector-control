@@ -276,11 +276,12 @@ final class ControlSocketTests: XCTestCase {
         listener.start(queue: queue) { stream in count.add(); stream.close() }
         let first = try ControlSocketStream.connect(to: path)
         XCTAssertTrue(pollUntil { count.value == 1 })
-        XCTAssertEqual(first.read(maximum: 1), Data())
+        XCTAssertEqual(boundedRead(first), Data())
+        XCTAssertTrue(listener.isServing)
         listener.close()
+        XCTAssertFalse(listener.isServing)
         listener.start(queue: queue) { _ in count.add() }
-        listener.close()
-        XCTAssertThrowsError(try ControlSocketStream.connect(to: path))
+        XCTAssertFalse(listener.isServing, "a closed listener is not started again")
         XCTAssertEqual(count.value, 1)
     }
 
@@ -309,7 +310,7 @@ final class ControlSocketTests: XCTestCase {
         socket.stop()
         socket.rig.h.ui.pump()
         XCTAssertEqual(socket.server.connectionCount, 0)
-        XCTAssertEqual(client.read(maximum: 1), Data(), "it is closed")
+        XCTAssertEqual(boundedRead(client), Data(), "it is closed")
     }
 
     func testARestartedServerStillRefusesAnotherUser() throws {
@@ -341,7 +342,7 @@ final class ControlSocketTests: XCTestCase {
         let began = Date()
         XCTAssertFalse(server.write(Data(repeating: 0x61, count: 262_144)))
         // Cut at the deadline, not after a partial write and a second wait of the same length.
-        XCTAssertLessThan(Date().timeIntervalSince(began), 1.5 * WriteDeadline.short + 0.3)
+        XCTAssertLessThan(Date().timeIntervalSince(began), 1.8)
         withExtendedLifetime(client) {}
     }
 
@@ -363,7 +364,7 @@ final class ControlSocketTests: XCTestCase {
 /// The short write timeout the tests give the server, and how long a write past it may take to be
 /// cut: generous, since only a write that is never cut matters.
 enum WriteDeadline {
-    static let short = 0.5
+    static let short = 1.0
     static var bound: TimeInterval { 3 * short + 1 }
 }
 
@@ -384,4 +385,11 @@ func pollUntil(_ condition: () -> Bool) -> Bool {
         usleep(5_000)
     }
     return true
+}
+
+/// One byte, or the end, from a stream: nothing after 10 s fails the test and does not hang it.
+func boundedRead(_ stream: ControlSocketStream) -> Data? {
+    var pending = pollfd(fd: stream.fd, events: Int16(POLLIN), revents: 0)
+    guard poll(&pending, 1, 10_000) > 0 else { return nil }
+    return stream.read(maximum: 1)
 }
