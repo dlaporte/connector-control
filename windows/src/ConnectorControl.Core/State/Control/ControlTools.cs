@@ -135,8 +135,9 @@ public sealed partial class ControlTools
         }
     }
 
-    /// <summary><c>help</c>: every tool's command in its group, with the first sentence of its description.</summary>
-    public string HelpText()
+    /// <summary><c>help</c>: every tool's command in its group, with the first sentence of its description. Static,
+    /// since it reads only the catalog: the command-line tool prints it without an app.</summary>
+    public static string HelpText()
     {
         var lines = new List<string> { HelpUsage };
         foreach (var group in HelpGroups)

@@ -116,11 +116,11 @@ public class ControlCatalogTests
         }
     }
 
+    /// <summary>Help is static data, so the command-line tool can print it without an app.</summary>
     [Fact]
     public void HelpIsGeneratedFromTheToolListInItsGroups()
     {
-        using var rig = new ControlRig();
-        var lines = rig.Tools.HelpText().Split('\n');
+        var lines = ControlTools.HelpText().Split('\n');
         Assert.Equal(ControlTools.HelpUsage, lines[0]);
         Assert.Equal(ControlTools.HelpOptions, lines[^1]);
         Assert.Equal(ControlTools.HelpGroups, lines.Where(line => !line.StartsWith(' ')).Skip(1).SkipLast(1));

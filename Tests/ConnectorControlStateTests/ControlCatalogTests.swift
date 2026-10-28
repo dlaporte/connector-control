@@ -85,9 +85,9 @@ final class ControlCatalogTests: XCTestCase {
         }
     }
 
+    /// Help is static data, so the command-line tool can print it without an app.
     func testHelpIsGeneratedFromTheToolListInItsGroups() {
-        let rig = ControlRig(); defer { rig.dispose() }
-        let lines = rig.tools.helpText().components(separatedBy: "\n")
+        let lines = ControlTools.helpText().components(separatedBy: "\n")
         XCTAssertEqual(lines.first, ControlTools.helpUsage)
         XCTAssertEqual(lines.last, ControlTools.helpOptions)
         XCTAssertEqual(Array(lines.filter { !$0.hasPrefix(" ") }.dropFirst().dropLast()), ControlTools.helpGroups)

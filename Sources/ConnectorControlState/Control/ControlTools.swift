@@ -121,8 +121,9 @@ public final class ControlTools {
         if writing { startWaiting(call) } else { startNextWrite() }
     }
 
-    /// `help`: every tool's command in its group, with the first sentence of its description.
-    public func helpText() -> String {
+    /// `help`: every tool's command in its group, with the first sentence of its description. Static,
+    /// since it reads only the catalog: the command-line tool prints it without an app.
+    public static func helpText() -> String {
         var lines = [ControlTools.helpUsage]
         for group in ControlTools.helpGroups {
             var rows = ControlTools.catalog.filter { $0.cliGroup == group }.map { ($0.cliUsage, $0.summary) }
