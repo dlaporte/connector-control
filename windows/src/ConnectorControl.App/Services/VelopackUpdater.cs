@@ -84,8 +84,9 @@ public sealed class VelopackUpdater : IUpdater
     /// <summary>True for a preview install (prerelease version), so update checks include prereleases.</summary>
     public bool FollowsPrereleases { get; }
 
-    /// <summary>Velopack's process-start hook (install/update/uninstall callbacks). Call before anything else at startup.</summary>
-    public static void RunStartupHook() => VelopackApp.Build().Run();
+    /// <summary>Velopack's hooks, first thing at startup. Before an uninstall, the app's entry in Claude's config,
+    /// its PATH folder and its copy of the tool go (<see cref="UninstallCleanup"/>).</summary>
+    public static void RunStartupHook() => VelopackApp.Build().OnBeforeUninstallFastCallback(_ => UninstallCleanup.Run()).Run();
 
     public bool IsAvailable => manager is not null;
 

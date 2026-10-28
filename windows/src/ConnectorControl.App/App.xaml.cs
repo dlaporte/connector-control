@@ -148,7 +148,7 @@ public partial class App : Application
     /// otherwise go unseen — a tray app has no console, and Trace reaches only a debugger. The Mac's
     /// counterpart is NSLog, which the system keeps. One line each, stamped in UTC, from any thread.
     /// </summary>
-    private static void Log(string message)
+    internal static void Log(string message)
     {
         try
         {
