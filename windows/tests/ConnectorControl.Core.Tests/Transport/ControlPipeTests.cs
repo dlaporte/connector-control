@@ -31,6 +31,7 @@ namespace ConnectorControl.Core.Tests.Transport;
 /// apply per connection, that a client is on this computer, is its own fact.
 /// </summary>
 [SupportedOSPlatform("windows")]
+[Collection(RealEndpointsCollection.Name)]
 public class ControlPipeTests
 {
     private const string InitializeMessage = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"claude-ai","version":"1"}}}""";

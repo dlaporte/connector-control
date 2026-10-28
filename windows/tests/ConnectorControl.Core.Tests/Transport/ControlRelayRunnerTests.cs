@@ -14,6 +14,7 @@ namespace ConnectorControl.Core.Tests.Transport;
 /// are Windows only; the scripted one runs everywhere.
 /// </summary>
 [SupportedOSPlatform("windows")]
+[Collection(RealEndpointsCollection.Name)]
 public class ControlRelayRunnerTests
 {
     /// <summary>Claude's end: what it says goes to the relay's standard input; what the relay writes to its
