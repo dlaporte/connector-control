@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using System.Security.Principal;
 using System.Text;
+using ConnectorControl.Core.State;
 
 namespace ConnectorControl.Core.Transport;
 
@@ -47,7 +48,8 @@ public static class ControlEndpoint
 
     /// <summary>The app the tool starts: the one beside it — the packaged tool sits beside ConnectorControl.exe —
     /// else the one the app recorded beside the copy it keeps in bin\; null when neither is there, or the
-    /// record names anything but ConnectorControl.exe.</summary>
+    /// record names anything but a full path to ConnectorControl.exe: a relative one would resolve against
+    /// whatever folder the tool was run from.</summary>
     public static string? AppExecutable(string toolPath, Func<string, bool> exists, Func<string, string?> readText)
     {
         var folder = Path.GetDirectoryName(toolPath) ?? "";
@@ -58,7 +60,15 @@ public static class ControlEndpoint
         }
         var recorded = readText(Path.Combine(folder, AppPathFileName))?.Trim();
         return recorded is { Length: > 0 }
+            && Path.IsPathFullyQualified(recorded)
             && string.Equals(Path.GetFileName(recorded), AppFileName, StringComparison.OrdinalIgnoreCase)
             && exists(recorded) ? recorded : null;
     }
+
+    /// <summary>What the tool says for the version a build stamped — .NET's informational version, which
+    /// carries the source revision after a "+": its SemVer, or "development build" for a stamp that is none
+    /// — an empty one — or for <c>0.0.0</c>, what a build nobody stamped carries (Directory.Build.props), so
+    /// both platforms call such a build the same thing.</summary>
+    public static string ToolVersion(string stamped) =>
+        ControlVersion.Semantic(stamped) is { } version && version != "0.0.0" ? version : AppVersion.DevelopmentBuild;
 }

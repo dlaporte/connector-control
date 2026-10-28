@@ -36,8 +36,8 @@ public enum ControlEndpoint {
         var size: UInt32 = 0
         _ = _NSGetExecutablePath(nil, &size)
         var buffer = [CChar](repeating: 0, count: Int(size) + 1)
-        guard _NSGetExecutablePath(&buffer, &size) == 0 else { return CommandLine.arguments[0] }
-        return URL(fileURLWithPath: String(cString: buffer)).resolvingSymlinksInPath().path
+        let raw = _NSGetExecutablePath(&buffer, &size) == 0 ? String(cString: buffer) : CommandLine.arguments[0]
+        return URL(fileURLWithPath: raw).resolvingSymlinksInPath().path
     }
 
     /// The app bundle the tool runs from — `…/Connector Control.app` for its
@@ -61,7 +61,15 @@ public enum ControlEndpoint {
               let short = info["CFBundleShortVersionString"] as? String else {
             return AppVersion.developmentBuild
         }
-        return ControlVersion.semantic(short) ?? short
+        return toolVersion(stamped: short)
+    }
+
+    /// What the tool says for the version a build stamped: its SemVer, or "development build" for a stamp
+    /// that is none — build-app.sh's default `1.0`, an empty one — or for `0.0.0`, what a build nobody
+    /// stamped carries on Windows, so both platforms call such a build the same thing.
+    public static func toolVersion(stamped: String) -> String {
+        guard let version = ControlVersion.semantic(stamped), version != "0.0.0" else { return AppVersion.developmentBuild }
+        return version
     }
 
     /// Opens the app the tool came with, without bringing it forward: the bundle the tool runs from,
@@ -75,7 +83,8 @@ public enum ControlEndpoint {
 
     /// `/usr/bin/open` with `arguments`; its exit status. Public, as the default of a public function's
     /// argument must be. Its standard streams are the null device: the relay's are Claude's MCP stream,
-    /// which `open` must neither read nor write.
+    /// which `open` must neither read nor write. Platform-forced: LaunchServices starts the app with
+    /// launchd's own environment, not the tool's, where Windows' detached start inherits the tool's.
     public static func runOpen(_ arguments: [String]) -> Int32 {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")

@@ -59,4 +59,24 @@ final class ControlEndpointTests: XCTestCase {
                        "1.5.0", "the build number the Mac shows beside it is not part of the version")
         XCTAssertEqual(ControlEndpoint.toolVersion(executablePath: "/src/cc/.build/debug/connector-control"), AppVersion.developmentBuild)
     }
+
+    func testTheToolSaysItsVersionOnlyWhenItIsOne() {
+        XCTAssertEqual(ControlEndpoint.toolVersion(stamped: "1.5.0"), "1.5.0")
+        XCTAssertEqual(ControlEndpoint.toolVersion(stamped: "1.5.0-preview.1"), "1.5.0-preview.1")
+        XCTAssertEqual(ControlEndpoint.toolVersion(stamped: "0.0.0"), AppVersion.developmentBuild, "what nobody stamped")
+        XCTAssertEqual(ControlEndpoint.toolVersion(stamped: ""), AppVersion.developmentBuild)
+        XCTAssertEqual(ControlEndpoint.toolVersion(stamped: "1.0"), AppVersion.developmentBuild,
+                       "build-app.sh's default is not a version the hello can carry")
+    }
+
+    func testABundleStampedWithNoVersionIsADevelopmentBuild() throws {
+        let dir = TempDir(prefix: "toolversion-unstamped")
+        defer { dir.dispose() }
+        let app = dir.file("Connector Control.app")
+        try FileManager.default.createDirectory(at: app.appendingPathComponent("Contents/MacOS"), withIntermediateDirectories: true)
+        let info: NSDictionary = ["CFBundleShortVersionString": "1.0", "CFBundleVersion": "1"]
+        XCTAssertTrue(info.write(to: app.appendingPathComponent("Contents/Info.plist"), atomically: true))
+        XCTAssertEqual(ControlEndpoint.toolVersion(executablePath: app.appendingPathComponent("Contents/MacOS/connector-control").path),
+                       AppVersion.developmentBuild)
+    }
 }

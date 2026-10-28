@@ -51,6 +51,9 @@ enum ConnectorControlCLI {
             exit(ControlRelayRunner(client: client(announcing: false), version: version).run())
         case .call(let tool, let arguments, let json):
             let stream: ControlStream
+            // Anything connect throws ends as the tool's one other failure does, in a line: Swift has no
+            // unhandled exception to catch beyond this, and a terminal needs no code page put back after a
+            // Ctrl-C, which is what C#'s catch-all and ConsoleText exist for.
             do {
                 stream = try client(announcing: true).connect()
             } catch {

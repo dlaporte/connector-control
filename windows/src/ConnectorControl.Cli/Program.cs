@@ -19,29 +19,61 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        using var console = new ConsoleText();
+        try
+        {
+            return Execute(args, console);
+        }
+        catch (Exception)
+        {
+            // Whatever else goes wrong ends as the tool's one other failure does, in a line and not .NET's
+            // stack trace, and with the console put back by the dispose below. The Mac has no unhandled
+            // exceptions to catch: its errors are all handled where they arise.
+            console.Write(ControlOutput.Unreachable(ControlClient.UnreachableError));
+            return ControlOutput.UnreachableExit;
+        }
+    }
+
+    private static int Execute(string[] args, ConsoleText console)
+    {
         var environment = PathContext.Live().Environment;
         var toolPath = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, ControlEndpoint.ToolFileName);
         var version = ToolVersion();
         var pipe = ControlEndpoint.PipeName(environment, ControlEndpoint.CurrentUserSid());
         var invocation = ControlCommandLine.Parse(args, Environment.CurrentDirectory, File.ReadAllBytes);
-        if (invocation is ControlInvocation.Relay)
+        // Starting is allowed only for the tool that came with an app (AppExecutable finds no other), and
+        // never while CONNECTOR_CONTROL_STORE_DIR names a store the app it would start does not read.
+        Func<bool>? launch = ControlEndpoint.MayStartApp(environment) ? () => Launch(toolPath) : null;
+        ControlClient Client(Action? announce) => new(() => ControlPipe.TryConnect(pipe, ConnectWait), launch, announce);
+        switch (invocation)
         {
-            // Claude's streams are pipes: bytes, never the console's code page.
-            using var input = Console.OpenStandardInput();
-            using var output = Console.OpenStandardOutput();
-            return new ControlRelayRunner(Client(pipe, environment, toolPath, announce: null), version, input, output).Run();
+            case ControlInvocation.Relay:
+                // Claude's streams are pipes: bytes, never the console's code page. The relay's stdout is
+                // Claude's protocol stream: nothing of ours goes on it.
+                using (var input = Console.OpenStandardInput())
+                using (var output = Console.OpenStandardOutput())
+                {
+                    return new ControlRelayRunner(Client(announce: null), version, input, output).Run();
+                }
+            case ControlInvocation.Help:
+                return Emit(console, new ControlOutput(ControlTools.HelpText(), null, ControlOutput.DoneExit));
+            case ControlInvocation.Version:
+                return Emit(console, new ControlOutput(ControlCommandLine.VersionLine(version), null, ControlOutput.DoneExit));
+            case ControlInvocation.Usage usage:
+                return Emit(console, ControlOutput.Usage(usage.Message));
+            case ControlInvocation.Call call:
+                console.UseUtf8();
+                return Emit(console, Run(call, Client(() => console.Error(ControlClient.StartingText)), version, console));
+            default:
+                throw new System.Diagnostics.UnreachableException();
         }
-        using var console = new ConsoleText();
-        var result = invocation switch
-        {
-            ControlInvocation.Help => new ControlOutput(ControlTools.HelpText(), null, ControlOutput.DoneExit),
-            ControlInvocation.Version => new ControlOutput(ControlCommandLine.VersionLine(version), null, ControlOutput.DoneExit),
-            ControlInvocation.Usage usage => ControlOutput.Usage(usage.Message),
-            ControlInvocation.Call call => Run(call, Client(pipe, environment, toolPath, () => console.Error(ControlClient.StartingText)), version, console),
-            _ => ControlOutput.Usage(ControlTools.HelpText()),
-        };
-        console.Write(result);
-        return result.ExitCode;
+    }
+
+    private static int Emit(ConsoleText console, ControlOutput output)
+    {
+        console.UseUtf8();
+        console.Write(output);
+        return output.ExitCode;
     }
 
     private static ControlOutput Run(ControlInvocation.Call call, ControlClient client, string version, ConsoleText console)
@@ -51,9 +83,12 @@ internal static class Program
         {
             stream = client.Connect();
         }
-        catch (ControlClient.UnreachableException ex)
+        catch (Exception ex)
         {
-            return ControlOutput.Unreachable(ControlClient.Message(ex.Reason));
+            // As the Mac's catch: the reason Connect gave, else the sentence for a start that failed.
+            return ControlOutput.Unreachable(ex is ControlClient.UnreachableException unreachable
+                ? ControlClient.Message(unreachable.Reason)
+                : ControlClient.UnreachableError);
         }
         try
         {
@@ -64,11 +99,6 @@ internal static class Program
             stream.Close();
         }
     }
-
-    private static ControlClient Client(string pipe, IReadOnlyDictionary<string, string> environment, string toolPath, Action? announce) =>
-        new(() => ControlPipe.TryConnect(pipe, ConnectWait),
-            ControlEndpoint.MayStartApp(environment) ? () => Launch(toolPath) : null,
-            announce);
 
     /// <summary>Starts the app in the background: no flyout, and a second instance leaves without a word.</summary>
     private static bool Launch(string toolPath) =>
@@ -87,12 +117,7 @@ internal static class Program
         }
     }
 
-    /// <summary>The version the build stamped, without the source revision .NET adds after a "+". A build nobody
-    /// stamped — Directory.Build.props' 0.0.0 — is a development build, as the Mac's unbundled tool says.</summary>
-    private static string ToolVersion()
-    {
-        var stamped = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "";
-        var version = ControlVersion.Semantic(stamped) ?? stamped;
-        return version is "0.0.0" or "" ? AppVersion.DevelopmentBuild : version;
-    }
+    /// <summary>The version the build stamped, as the tool says it.</summary>
+    private static string ToolVersion() =>
+        ControlEndpoint.ToolVersion(typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "");
 }

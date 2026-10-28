@@ -4,10 +4,15 @@ using System.Text;
 namespace ConnectorControl.Cli;
 
 /// <summary>
+/// Windows only: the Mac counterpart is <c>ControlEndpoint.launchApp</c> in
+/// Sources/ConnectorControlTransport/ControlEndpoint.swift, which asks <c>open</c> to do this.
+///
 /// Starts the app as a process of its own. Claude Desktop runs the relay in a job object, and a child
 /// that inherited the relay's handles — Claude's pipes among them — or stayed in that job could hold
 /// Claude's pipes open after the relay ends, or be ended when Claude quits. So nothing is inherited,
-/// and the app leaves the job where the job allows it; where it does not, it starts inside it.
+/// and the app leaves the job where the job allows it; where it does not, it starts inside it. Platform-forced:
+/// the app inherits the tool's environment (a null environment block to CreateProcess), where the Mac's
+/// <c>open</c> gives it launchd's own.
 /// </summary>
 internal static class DetachedProcess
 {

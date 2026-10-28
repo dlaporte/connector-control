@@ -61,4 +61,44 @@ public class ControlEndpointTests
         files.Add(Path.Combine(current, "notepad.exe"));
         Assert.Null(ControlEndpoint.AppExecutable(Path.Combine(bin, ControlEndpoint.ToolFileName), files.Contains, Read));
     }
+
+    [Fact]
+    public void TheAppBesideTheToolWinsOverTheRecordedOne()
+    {
+        var current = Path.Combine(Path.GetTempPath(), "cc-endpoint", "current");
+        var bin = Path.Combine(Path.GetTempPath(), "cc-endpoint", "bin");
+        var other = Path.Combine(Path.GetTempPath(), "cc-endpoint", "other", ControlEndpoint.AppFileName);
+        var beside = Path.Combine(bin, ControlEndpoint.AppFileName);
+        var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { beside, other };
+        var texts = new Dictionary<string, string> { [Path.Combine(bin, ControlEndpoint.AppPathFileName)] = other };
+        Assert.Equal(beside, ControlEndpoint.AppExecutable(Path.Combine(bin, ControlEndpoint.ToolFileName), files.Contains, texts.GetValueOrDefault));
+    }
+
+    [Fact]
+    public void ANeverWrittenRecordNamesNoApp()
+    {
+        var bin = Path.Combine(Path.GetTempPath(), "cc-endpoint", "bin");
+        Assert.Null(ControlEndpoint.AppExecutable(Path.Combine(bin, ControlEndpoint.ToolFileName), _ => false, _ => null));
+    }
+
+    [Fact]
+    public void ARecordThatIsNotAFullPathNamesNoApp()
+    {
+        var bin = Path.Combine(Path.GetTempPath(), "cc-endpoint", "bin");
+        var relative = Path.Combine("current", ControlEndpoint.AppFileName);
+        var texts = new Dictionary<string, string> { [Path.Combine(bin, ControlEndpoint.AppPathFileName)] = relative };
+        // a relative record would resolve against whatever folder the tool was run from
+        Assert.Null(ControlEndpoint.AppExecutable(Path.Combine(bin, ControlEndpoint.ToolFileName), path => path == relative, texts.GetValueOrDefault));
+    }
+
+    [Theory]
+    [InlineData("1.5.0+1a2b3c4", "1.5.0")]
+    [InlineData("1.5.0-preview.1+1a2b3c4", "1.5.0-preview.1")]
+    [InlineData("1.5.0", "1.5.0")]
+    [InlineData("0.0.0+1a2b3c4", "development build")]
+    [InlineData("0.0.0", "development build")]
+    [InlineData("", "development build")]
+    [InlineData("1.0", "development build")]
+    public void TheToolSaysItsVersionOnlyWhenItIsOne(string stamped, string expected) =>
+        Assert.Equal(expected, ControlEndpoint.ToolVersion(stamped));
 }
