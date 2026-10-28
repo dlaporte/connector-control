@@ -177,29 +177,22 @@ public class ClaudeIntegrationCleanupTests : IDisposable
     [Fact]
     public void AConfigWhoseWriteFailsIsReportedAndTheCopyAndPathStillGo()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "a read-only folder is a Unix permission");
         Write(RoamingConfig, (ClaudeIntegration.EntryName, ClaudeIntegration.Entry(Tool)));
         Write(MsixConfig, (ClaudeIntegration.EntryName, ClaudeIntegration.Entry(Tool)));
         Directory.CreateDirectory(Bin);
         File.WriteAllText(Tool, "tool");
         var environment = new FakeEnvironment(@"C:\Windows;" + Bin);
-        var locked = System.IO.Path.GetDirectoryName(RoamingConfig)!;
         var reported = new List<string>();
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserExecute);
-        }
-        try
-        {
-            ClaudeIntegrationCleanup.Uninstall(Paths(), new PathOverrides(), DataDir, environment, BackupManager.DefaultKeepCount, reported.Add);
-        }
-        finally
-        {
-            if (!OperatingSystem.IsWindows())
+        // The Roaming config's write fails, whatever the platform; the others are written as usual.
+        ClaudeIntegrationCleanup.Uninstall(Paths(), new PathOverrides(), DataDir, environment, BackupManager.DefaultKeepCount, reported.Add,
+            ControlToolCopy.Remove, (servers, path) =>
             {
-                File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            }
-        }
+                if (path == RoamingConfig)
+                {
+                    throw new IOException("write refused");
+                }
+                ClaudeConfigIO.Write(servers, path);
+            });
         Assert.Contains(reported, line => line.Contains(RoamingConfig));
         Assert.True(ClaudeConfigIO.ReadMcpServers(RoamingConfig).ContainsKey(ClaudeIntegration.EntryName));
         Assert.Empty(ClaudeConfigIO.ReadMcpServers(MsixConfig));

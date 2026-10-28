@@ -41,7 +41,13 @@ public static class ClaudeIntegrationCleanup
     /// fails or a write that fails: left as it is too, and said to <paramref name="failed"/>, since the entry may
     /// still be there. An entry that is the app's but carries other keys, such as <c>env</c>, is still removed: it
     /// runs a copy that is being deleted.</summary>
-    public static bool RemoveEntry(string configPath, string toolPath, Action<string>? backUp = null, Action<string>? failed = null)
+    public static bool RemoveEntry(string configPath, string toolPath, Action<string>? backUp = null, Action<string>? failed = null) =>
+        RemoveEntry(configPath, toolPath, backUp, failed, ClaudeConfigIO.Write);
+
+    /// <summary><paramref name="write"/> saves the config, as <see cref="ClaudeConfigIO.Write"/> does: a test's way to a
+    /// write that fails on any platform.</summary>
+    internal static bool RemoveEntry(string configPath, string toolPath, Action<string>? backUp, Action<string>? failed,
+        Action<IReadOnlyDictionary<string, JsonValue>, string> write)
     {
         try
         {
@@ -52,7 +58,7 @@ public static class ClaudeIntegrationCleanup
             }
             backUp?.Invoke(configPath);
             var kept = servers.Where(server => server.Key != ClaudeIntegration.EntryName).ToDictionary(server => server.Key, server => server.Value, StringComparer.Ordinal);
-            ClaudeConfigIO.Write(kept, configPath);
+            write(kept, configPath);
             return true;
         }
         catch (Exception ex) when (ex is ClaudeConfigException or IOException or UnauthorizedAccessException)
@@ -68,13 +74,14 @@ public static class ClaudeIntegrationCleanup
     /// answer to its broadcast. Each step stands alone: one that fails is said to <paramref name="failed"/> — the
     /// app's log — and never keeps another from running, since nobody will see the failure and this runs once.</summary>
     public static void Uninstall(PathContext paths, PathOverrides overrides, string dataDir, IUserEnvironment environment, int keepCount, Action<string>? failed = null) =>
-        Uninstall(paths, overrides, dataDir, environment, keepCount, failed, ControlToolCopy.Remove);
+        Uninstall(paths, overrides, dataDir, environment, keepCount, failed, ControlToolCopy.Remove, ClaudeConfigIO.Write);
 
     /// <summary><paramref name="removeCopy"/> deletes the copy, as <see cref="ControlToolCopy.Remove"/> does: a test's
-    /// way to a copy step that throws.</summary>
+    /// way to a copy step that throws; <paramref name="write"/> saves a config, as <see cref="ClaudeConfigIO.Write"/> does.</summary>
     internal static void Uninstall(PathContext paths, PathOverrides overrides, string dataDir, IUserEnvironment environment, int keepCount,
-        Action<string>? failed, Action<string> removeCopy)
+        Action<string>? failed, Action<string> removeCopy, Action<IReadOnlyDictionary<string, JsonValue>, string>? write = null)
     {
+        write ??= ClaudeConfigIO.Write;
         var tool = ControlToolCopy.ToolPath(dataDir);
         var bin = ControlToolCopy.BinDir(dataDir);
         IReadOnlyList<string> configs = [];
@@ -87,7 +94,7 @@ public static class ClaudeIntegrationCleanup
         foreach (var config in configs)
         {
             Step(failed, $"Connector Control's entry was left in {config}", () =>
-                RemoveEntry(config, tool, path => backups!.BackUp(path, RestoreModel.Series), failed));
+                RemoveEntry(config, tool, path => backups!.BackUp(path, RestoreModel.Series), failed, write));
         }
         Step(failed, $"The command-line tool's copy could not be removed from {bin}", () =>
         {
