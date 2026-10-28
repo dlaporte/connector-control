@@ -254,6 +254,23 @@ final class ClaudeIntegrationTests: XCTestCase {
         XCTAssertNil(try h.claudeServers()[reserved])
     }
 
+    /// With the switch on but no entry in Claude's config, an app run from where it will not stay
+    /// adds none — not at launch, and not when an apply writes Claude's config for another reason.
+    func testAnAppRunFromWhereItWillNotStayAddsNoEntryWhereClaudeHasNone() throws {
+        let h = AppStateHarness(); defer { h.dispose() }
+        h.settings.claudeIntegrationEnabled = true
+        h.controlToolPath = "/private/var/folders/xy/T/AppTranslocation/0A1B/d/Connector Control.app/Contents/MacOS/connector-control"
+        h.controlToolIsTransient = true
+        let state = h.create()
+        h.drain()
+        XCTAssertNil(try h.claudeServers()[reserved])
+        XCTAssertFalse(state.isDirty)
+        state.setEnabled("scoutbook", false)
+        XCTAssertNil(try h.claudeServers()["scoutbook"], "the apply wrote Claude's config")
+        XCTAssertNil(try h.claudeServers()[reserved])
+        XCTAssertFalse(state.isDirty)
+    }
+
     func testTheOfferIsNotMadeWhereTurningItOnWouldBeRefused() {
         let h = AppStateHarness(); defer { h.dispose() }
         h.controlToolPath = toolPath

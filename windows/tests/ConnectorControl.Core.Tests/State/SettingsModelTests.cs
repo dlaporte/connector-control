@@ -159,6 +159,24 @@ public class SettingsModelTests
         Assert.Equal(expected, rig.Model.InstallKindText);
     }
 
+    /// <summary>Windows only: the Mac has no install to detect. Detecting walks every package registered for
+    /// the user, too slow to run at each launch for a model the Claude tab may never show — the control layer
+    /// builds one at launch and never reads the install — so it runs when the install is first read, and again
+    /// only after a refresh.</summary>
+    [Fact]
+    public void TheInstallIsDetectedOnlyWhenItIsRead()
+    {
+        using var rig = new Rig();
+        rig.Model.Refresh();
+        Assert.Equal(0, rig.Install.DetectCalls);
+        _ = rig.Model.InstallKindText;
+        _ = rig.Model.LaunchTargetText;
+        Assert.Equal(1, rig.Install.DetectCalls);
+        rig.Model.Refresh();
+        _ = rig.Model.LaunchTargetText;
+        Assert.Equal(2, rig.Install.DetectCalls);
+    }
+
     [Fact]
     public void LaunchTargetShowsTheOverrideOrTheDetectedTarget()
     {

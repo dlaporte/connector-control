@@ -286,6 +286,26 @@ public class ClaudeIntegrationTests
         Assert.False(h.ClaudeServers().ContainsKey(Reserved));
     }
 
+    /// <summary>With the switch on but no entry in Claude's config, an app run from where it will not stay
+    /// adds none — not at launch, and not when an apply writes Claude's config for another reason.</summary>
+    [Fact]
+    public void AnAppRunFromWhereItWillNotStayAddsNoEntryWhereClaudeHasNone()
+    {
+        using var h = new AppStateHarness();
+        h.Settings.ClaudeIntegrationEnabled = true;
+        h.ControlToolPath = "/private/var/folders/xy/T/AppTranslocation/0A1B/d/Connector Control.app/Contents/MacOS/connector-control";
+        h.ControlToolIsTransient = true;
+        using var state = h.Create();
+        h.Drain();
+        Assert.False(h.ClaudeServers().ContainsKey(Reserved));
+        Assert.False(state.IsDirty);
+        state.SetEnabled("scoutbook", false);
+        // The apply wrote Claude's config.
+        Assert.False(h.ClaudeServers().ContainsKey("scoutbook"));
+        Assert.False(h.ClaudeServers().ContainsKey(Reserved));
+        Assert.False(state.IsDirty);
+    }
+
     [Fact]
     public void TheOfferIsNotMadeWhereTurningItOnWouldBeRefused()
     {

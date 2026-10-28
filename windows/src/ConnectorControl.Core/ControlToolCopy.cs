@@ -25,22 +25,42 @@ public static class ControlToolCopy
     public static string ToolPath(string dataDir) => Path.Combine(BinDir(dataDir), ControlEndpoint.ToolFileName);
 
     /// <summary>Brings the copy up to date with <paramref name="packaged"/> and records <paramref name="appExecutable"/>,
-    /// when a packaged tool sits beside the app. True when it copied. A failure leaves the copy that is there
-    /// serving; the next launch tries again.</summary>
-    public static bool Refresh(string packaged, string dataDir, string appExecutable)
+    /// when a packaged tool sits beside the app. True when it copied; false also when there was nothing to do.
+    /// A failure leaves the copy that is there serving, is said to <paramref name="failed"/> — the app's log —
+    /// and is tried again at the next launch.
+    /// <para>
+    /// Two refreshes can run at once: the app's single-instance mutex is per logon session, so one person
+    /// signed in twice — at the console and over Remote Desktop — runs two apps against the one bin\. Their
+    /// steps can interleave: one's sweep of leftovers can delete the other's staging copy, or the old copy the
+    /// other has just renamed aside. The worst that leaves is a failed refresh, a stale copy or none until the
+    /// next launch, whose refresh recovers it.
+    /// </para></summary>
+    public static bool Refresh(string packaged, string dataDir, string appExecutable, Action<string>? failed = null) =>
+        Refresh(packaged, dataDir, appExecutable, failed, File.Move);
+
+    /// <summary><paramref name="move"/> renames the copies, as <see cref="File.Move(string, string)"/> does: a test's
+    /// way to a move that fails after the old copy is aside.</summary>
+    internal static bool Refresh(string packaged, string dataDir, string appExecutable, Action<string>? failed, Action<string, string> move)
     {
-        var bin = BinDir(dataDir);
-        var target = ToolPath(dataDir);
         // A development run has no packaged tool beside it, and touches neither the copy nor the record.
         if (!File.Exists(packaged))
         {
             return false;
         }
+        var bin = BinDir(dataDir);
+        var copied = Copy(packaged, bin, failed, move);
+        // Its own step, after the copy: a record that cannot be written never stops the copy.
+        Record(bin, appExecutable, failed);
+        return copied;
+    }
+
+    private static bool Copy(string packaged, string bin, Action<string>? failed, Action<string, string> move)
+    {
+        var target = Path.Combine(bin, ControlEndpoint.ToolFileName);
         try
         {
             Directory.CreateDirectory(bin);
             DeleteLeftovers(bin);
-            File.WriteAllText(Path.Combine(bin, ControlEndpoint.AppPathFileName), appExecutable);
             if (SameBytes(packaged, target))
             {
                 return false;
@@ -53,22 +73,44 @@ public static class ControlToolCopy
             if (File.Exists(target))
             {
                 aside = AsidePath(bin);
-                File.Move(target, aside);
+                move(target, aside);
             }
             try
             {
-                File.Move(staging, target);
+                move(staging, target);
             }
             catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && aside is not null)
             {
-                File.Move(aside, target);
+                move(aside, target);
                 throw;
             }
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            failed?.Invoke($"The command-line tool could not be copied to {target}: {ex.Message}");
             return false;
+        }
+    }
+
+    /// <summary>The app's executable, for the copy to start it: written only when it differs, and then whole —
+    /// a new record is written beside the old one and moved into place, so the tool never reads half of one.</summary>
+    private static void Record(string bin, string appExecutable, Action<string>? failed)
+    {
+        var record = Path.Combine(bin, ControlEndpoint.AppPathFileName);
+        try
+        {
+            if (File.Exists(record) && File.ReadAllText(record) == appExecutable)
+            {
+                return;
+            }
+            var staging = record + StagingSuffix;
+            File.WriteAllText(staging, appExecutable);
+            File.Move(staging, record, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            failed?.Invoke($"The app's path could not be recorded in {record}: {ex.Message}");
         }
     }
 
@@ -95,8 +137,8 @@ public static class ControlToolCopy
         }
     }
 
-    /// <summary>Old copies an earlier launch renamed aside, and a copy left half made: deleted now unless
-    /// something still runs them.</summary>
+    /// <summary>Old copies an earlier launch renamed aside, and a copy or record left half made: deleted now
+    /// unless something still runs them.</summary>
     internal static void DeleteLeftovers(string bin)
     {
         foreach (var file in Directory.EnumerateFiles(bin))

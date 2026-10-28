@@ -44,7 +44,12 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     private readonly UpdateCoordinator updates;
     private bool launchAtStartup;
     private string? loginItemNote;
-    private ClaudeInstallInfo installInfo;
+    /// <summary>
+    /// Windows only: the Mac has no install to detect. Null until the install is first read, and again after
+    /// each <see cref="Refresh"/>: detecting walks every package registered for the user, too slow for the UI
+    /// thread at each launch, and the control layer builds a model at launch that never reads it.
+    /// </summary>
+    private ClaudeInstallInfo? installInfo;
 
     public SettingsModel(AppState state, ISettings settings, IAutostart autostart, IClaudeInstall install, IUpdater updater, UpdateCoordinator updates)
     {
@@ -55,17 +60,19 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         this.updater = updater;
         this.updates = updates;
         launchAtStartup = autostart.IsEnabled;
-        installInfo = install.Detect();
         state.PropertyChanged += OnStateChanged;
     }
 
-    /// <summary>Called whenever the window opens: autostart and the install are read fresh (the user may have changed either since).</summary>
+    /// <summary>Called whenever the window opens: autostart is read fresh, and the install the next time it is
+    /// shown (the user may have changed either since).</summary>
     public void Refresh()
     {
         launchAtStartup = autostart.IsEnabled;
-        installInfo = install.Detect();
+        installInfo = null;
         RaiseAll();
     }
+
+    private ClaudeInstallInfo InstallInfo => installInfo ??= install.Detect();
 
     // MARK: General
 
@@ -236,7 +243,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
 
     // MARK: Claude
 
-    public string InstallKindText => installInfo.Kind switch
+    public string InstallKindText => InstallInfo.Kind switch
     {
         ClaudeInstallKind.Msix => "MSIX package",
         ClaudeInstallKind.Legacy => "Legacy installer",
@@ -260,7 +267,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     }
 
     public string LaunchTargetText =>
-        settings.ClaudeLaunchTarget is { Length: > 0 } overridden ? overridden : installInfo.LaunchTarget ?? ToolNote.NotFoundText;
+        settings.ClaudeLaunchTarget is { Length: > 0 } overridden ? overridden : InstallInfo.LaunchTarget ?? ToolNote.NotFoundText;
 
     public bool CanUseDefaultLaunchTarget => !string.IsNullOrEmpty(settings.ClaudeLaunchTarget);
 

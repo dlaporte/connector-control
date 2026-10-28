@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
 using ConnectorControl.App.Services;
@@ -19,6 +18,9 @@ namespace ConnectorControl.App;
 /// </summary>
 public partial class App : Application
 {
+    private const string LogFileName = "crash.log";
+    private static readonly Lock LogGate = new();
+
     private SingleInstance? instance;
     private PlatformServices? services;
     private AppState? state;
@@ -62,7 +64,19 @@ public partial class App : Application
         // rewrites, ending whatever runs from it. The copy is refreshed off the UI thread; its path never
         // changes, so the entry names it whatever the refresh finds.
         var appExecutable = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, ControlEndpoint.AppFileName);
-        _ = Task.Run(() => ControlToolCopy.Refresh(Path.Combine(AppContext.BaseDirectory, ControlEndpoint.ToolFileName), dataDir, appExecutable));
+        _ = Task.Run(() =>
+        {
+            // The task's boundary: nothing awaits it, so whatever goes wrong is logged here or never seen. A copy
+            // that failed leaves Claude's entry naming a tool that may not be there.
+            try
+            {
+                ControlToolCopy.Refresh(Path.Combine(AppContext.BaseDirectory, ControlEndpoint.ToolFileName), dataDir, appExecutable, failed: Log);
+            }
+            catch (Exception ex)
+            {
+                Log($"The command-line tool's copy could not be refreshed: {ex}");
+            }
+        });
         var host = UiThread.Host(ControlToolCopy.ToolPath(dataDir));
         // CreateDefault performs the toast COM registration, so it must precede any Notify.
         services = ServiceFactory.CreateDefault(host.Marshal);
@@ -95,13 +109,17 @@ public partial class App : Application
         try
         {
             controlEndpoint = ControlPipeServer.Start(ControlEndpoint.PipeName(paths.Environment, ControlEndpoint.CurrentUserSid()),
-                controlServer, host, stopped: appState.ReportControlEndpointUnavailable);
+                controlServer, host, stopped: () =>
+                {
+                    Log("The control pipe stopped serving.");
+                    appState.ReportControlEndpointUnavailable();
+                });
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // Another copy of the app serves the pipe, or another account holds its name: the app runs without
             // one, and says so.
-            Trace.TraceWarning($"Connector Control: the control pipe is unavailable: {ex.Message}");
+            Log($"The control pipe is unavailable: {ex.Message}");
             appState.ReportControlEndpointUnavailable();
         }
     }
@@ -123,12 +141,22 @@ public partial class App : Application
     }
 
     /// <summary>A tray app that dies silently is indistinguishable from one that never started: leave a note, then let it die.</summary>
-    private void OnUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    private void OnUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e) => Log(e.Exception.ToString());
+
+    /// <summary>
+    /// The app's one durable log, crash.log in its data folder: a crash, and the few failures that would
+    /// otherwise go unseen — a tray app has no console, and Trace reaches only a debugger. The Mac's
+    /// counterpart is NSLog, which the system keeps. One line each, stamped in UTC, from any thread.
+    /// </summary>
+    private static void Log(string message)
     {
         try
         {
-            Directory.CreateDirectory(ServiceFactory.DefaultDataDir);
-            File.AppendAllText(Path.Combine(ServiceFactory.DefaultDataDir, "crash.log"), $"{DateTime.UtcNow:o} {e.Exception}{Environment.NewLine}");
+            lock (LogGate)
+            {
+                Directory.CreateDirectory(ServiceFactory.DefaultDataDir);
+                File.AppendAllText(Path.Combine(ServiceFactory.DefaultDataDir, LogFileName), $"{DateTime.UtcNow:o} {message}{Environment.NewLine}");
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

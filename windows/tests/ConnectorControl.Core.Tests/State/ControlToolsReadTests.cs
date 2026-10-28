@@ -186,6 +186,16 @@ public class ControlToolsReadTests
             "confirm-claude-changes    on"), rig.Call("get_settings")?.Text);
     }
 
+    /// <summary>Windows only: the Mac has no install to detect. Reading the settings reads launch at login fresh
+    /// but never walks Claude's packages, which only the Claude tab shows.</summary>
+    [Fact]
+    public void ReadingTheSettingsNeverDetectsClaudesInstall()
+    {
+        using var rig = new ControlRig();
+        rig.Call("get_settings");
+        Assert.Equal(0, rig.Install.DetectCalls);
+    }
+
     /// <summary>Arguments for the read tools that need some: each names something that is there, so every
     /// read answers in full.</summary>
     private static readonly Dictionary<string, JsonValue> ReadArguments = new(StringComparer.Ordinal)
