@@ -80,7 +80,8 @@ public static class ControlCommandLine
         }
         var command = words[0];
         var rest = words.Skip(1).ToList();
-        if (words.Count == 1 && command == VersionFlag)
+        // --version wherever --json sits: asking for the structure changes nothing about the version.
+        if (arguments.Where(word => word != JsonFlag).SequenceEqual([VersionFlag]))
         {
             return new ControlInvocation.Version();
         }
@@ -235,6 +236,8 @@ public static class ControlCommandLine
         {
             var word = words[index];
             index++;
+            // Ordinal, so a combining mark after the dashes cannot join them into something else; the Mac
+            // mirror reads UTF-8 for the same reason.
             if (namesOnly || !word.StartsWith("--", StringComparison.Ordinal))
             {
                 read.Positionals.Add(word);
@@ -300,9 +303,9 @@ public static class ControlCommandLine
             {
                 data = readFile(full);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex)
             {
-                throw new UsageException(AppState.SourceUnreadableError(Path.GetFileName(full), AppState.Friendly(ex)));
+                throw new UsageException(AppState.SourceUnreadableError(Path.GetFileName(Path.TrimEndingDirectorySeparator(full)), AppState.Friendly(ex)));
             }
             return ParseConfig(data);
         }
@@ -377,7 +380,7 @@ public sealed record ControlOutput(string? Stdout, string? Stderr, int ExitCode)
             var isRefusal = result["isError"] == JsonValue.Bool(true);
             if (json)
             {
-                return new ControlOutput(structured.CompactLine(), null, isRefusal ? RefusedExit : DoneExit);
+                return new ControlOutput(structured.CompactLine(escapeSlashes: false), null, isRefusal ? RefusedExit : DoneExit);
             }
             return isRefusal ? new ControlOutput(null, text, RefusedExit) : new ControlOutput(text, null, DoneExit);
         }
@@ -390,6 +393,6 @@ public sealed record ControlOutput(string? Stdout, string? Stderr, int ExitCode)
     }
 
     private static ControlOutput Refused(string message, bool json) =>
-        json ? new ControlOutput(JsonValue.Object(("error", JsonValue.String(message))).CompactLine(), null, RefusedExit)
+        json ? new ControlOutput(JsonValue.Object(("error", JsonValue.String(message))).CompactLine(escapeSlashes: false), null, RefusedExit)
             : new ControlOutput(null, message, RefusedExit);
 }

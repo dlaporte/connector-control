@@ -7,8 +7,10 @@ namespace ConnectorControl.Core.Tests.Transport;
 /// <summary>Mirror: Tests/ConnectorControlStateTests/Transport/ControlCommandLineTests.swift</summary>
 public class ControlCommandLineTests
 {
-    // Platform-forced difference: a working directory is a different kind of path on each platform, and
-    // the expected paths are built with Path.GetFullPath against it, as the tool builds them.
+    // Platform-forced differences: a working directory is a different kind of path on each platform, and
+    // the expected paths are built with Path.GetFullPath against it, as the tool builds them; the missing
+    // file throws a FileNotFoundException where the Mac mirror throws a CocoaError, each read through
+    // AppState.Friendly.
     private static readonly string Cwd = OperatingSystem.IsWindows() ? @"C:\Users\me\work" : "/Users/me/work";
     private readonly Dictionary<string, byte[]> files = [];
 
@@ -54,7 +56,7 @@ public class ControlCommandLineTests
             (["collection", "delete", "Team"], Call("delete_collection", ("collection", S("Team")))),
             (["import", "team.json", "--into", "Team", "--on-clash", "replace"],
                 Call("import_document", ("path", S(Full("team.json"))), ("into", S("Team")), ("onClash", S("replace")))),
-            (["import", Full("x/team.json"), "--new", "Crew"], Call("import_document", ("path", S(Full("x/team.json"))), ("newCollection", S("Crew")))),
+            (["import", "/x/team.json", "--new", "Crew"], Call("import_document", ("path", S(Full("/x/team.json"))), ("newCollection", S("Crew")))),
             (["subscribe", "../team.json", "--name", "Team"], Call("subscribe", ("path", S(Full("../team.json"))), ("name", S("Team")))),
             (["updates", "Team"], Call("get_pending_update", ("collection", S("Team")))),
             (["apply-update", "Team"], Call("apply_update", ("collection", S("Team")))),
@@ -109,12 +111,24 @@ public class ControlCommandLineTests
     }
 
     [Fact]
+    public void AReadErrorOfAnyKindNamesTheFileAndAFolderIsNamedWithoutItsSlash()
+    {
+        var odd = new NotSupportedException("odd");
+        Assert.Equal(new ControlInvocation.Usage(AppState.SourceUnreadableError("odd.json", AppState.Friendly(odd))),
+            ControlCommandLine.Parse(["add", "github", "--file", "odd.json"], Cwd, _ => throw odd));
+        Assert.Equal(new ControlInvocation.Usage(AppState.SourceUnreadableError("sub", AppState.Friendly(new FileNotFoundException("missing.json")))),
+            Parse("add", "github", "--file", "sub/"));
+    }
+
+    [Fact]
     public void HelpVersionAndTheRelay()
     {
         Assert.Equal(new ControlInvocation.Help(), Parse("help"));
         Assert.Equal(new ControlInvocation.Help(), Parse("--help"));
         Assert.Equal(new ControlInvocation.Help(), Parse("-h"));
         Assert.Equal(new ControlInvocation.Version(), Parse("--version"));
+        Assert.Equal(new ControlInvocation.Version(), Parse("--json", "--version"));
+        Assert.Equal(new ControlInvocation.Version(), Parse("--version", "--json"));
         Assert.Equal(new ControlInvocation.Relay(), Parse("mcp"));
         Assert.Equal(new ControlInvocation.Usage(ControlTools.HelpText()), ControlCommandLine.Parse([], Cwd, _ => []));
         Assert.Equal("connector-control 1.5.0", ControlCommandLine.VersionLine("1.5.0"));
@@ -130,6 +144,8 @@ public class ControlCommandLineTests
         Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UsageError("status")), Parse("status", "extra"));
         Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UnknownOptionError("--reveal")), Parse("status", "--reveal"));
         Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.MissingValueError("--collection")), Parse("connectors", "--collection"));
+        // a combining mark after the dashes does not make the word a name
+        Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UnknownOptionError("--\u0301x")), Parse("connectors", "--\u0301x"));
         Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UnknownOptionError("extra")), Parse("mcp", "extra"));
         Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UnknownOptionError("status")), Parse("help", "status"));
     }

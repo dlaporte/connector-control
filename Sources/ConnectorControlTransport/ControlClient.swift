@@ -28,16 +28,17 @@ public final class ControlClient: @unchecked Sendable {
     private let launch: (@Sendable () -> Bool)?
     private let announce: (@Sendable () -> Void)?
     private let sleep: @Sendable (TimeInterval) -> Void
-    private let now: @Sendable () -> Date
+    private let now: @Sendable () -> TimeInterval
 
     /// `connectOnce` tries the endpoint once; `launch` starts the app, nil where starting is not
     /// allowed; `announce` says it is being started — the command line prints `startingText`, the
     /// relay says nothing on Claude's stream. All are @Sendable: the relay calls them on its own
-    /// queue, not where they were made.
+    /// queue, not where they were made. `now` reads a monotonic clock, in seconds, so a change to the
+    /// clock cannot stretch the wait.
     public init(connectOnce: @escaping @Sendable () -> ControlStream?, launch: (@Sendable () -> Bool)?,
                 announce: (@Sendable () -> Void)?,
                 sleep: @escaping @Sendable (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) },
-                now: @escaping @Sendable () -> Date = { Date() }) {
+                now: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
         self.connectOnce = connectOnce
         self.launch = launch
         self.announce = announce
@@ -52,7 +53,7 @@ public final class ControlClient: @unchecked Sendable {
         // Said only once something has been started: a tool that starts nothing says only that it could not.
         guard launch() else { throw Failure.couldNotStart }
         announce?()
-        let deadline = now().addingTimeInterval(ControlClient.startTimeout)
+        let deadline = now() + ControlClient.startTimeout
         while now() < deadline {
             sleep(ControlClient.pollInterval)
             if let stream = connectOnce() { return stream }

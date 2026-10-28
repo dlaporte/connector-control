@@ -35,6 +35,18 @@ public class ControlOutputTests
             ControlOutput.Answer(error, true).Stdout);
     }
 
+    /// <summary><c>--json</c> is for reading and scripts: a path comes out as written. The wire format still escapes it.</summary>
+    [Fact]
+    public void JsonOutputWritesSlashesAsTheyAre()
+    {
+        const string path = "/Users/me/work/team.json";
+        var done = Response(new ControlResult(JsonValue.Object(("path", JsonValue.String(path))), "x", false));
+        Assert.Equal("""{"path":"/Users/me/work/team.json"}""", ControlOutput.Answer(done, true).Stdout);
+        Assert.Equal("""{"error":"/Users/me/work/team.json"}""", ControlOutput.Answer(Response(ControlResult.Refusal(path)), true).Stdout);
+        Assert.Equal("\"\\/Users\\/me\\/work\\/team.json\"", JsonValue.String(path).CompactLine());
+        Assert.Equal("\"/Users/me/work/team.json\"", JsonValue.String(path).CompactLine(escapeSlashes: false));
+    }
+
     [Fact]
     public void TheExitCodes()
     {

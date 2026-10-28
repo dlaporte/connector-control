@@ -56,6 +56,40 @@ final class ControlCommandRunnerTests: XCTestCase {
                        ControlOutput.unreachable(ControlClient.droppedError))
     }
 
+    /// An answer that follows the oversized line is never reached, so only a working limit ends in the
+    /// dropped result: a broken one would print the answer.
+    func testAnOversizedLineIsNeverFollowedByTheAnswerThatComesAfterIt() {
+        let stream = ScriptedStream([String(repeating: "x", count: 100), answerLine(padded: 0)])
+        XCTAssertEqual(ControlCommandRunner.run(tool: "get_status", arguments: .object([:]), json: false, version: "1.5.0",
+                                                over: stream, notice: {}, limit: 64),
+                       ControlOutput.unreachable(ControlClient.droppedError))
+    }
+
+    func testALineJustOverTheLimitIsRefusedAndOneJustUnderIsAccepted() {
+        let limit = answerLine(padded: 0).utf8.count + 10
+        XCTAssertEqual(ControlCommandRunner.run(tool: "get_status", arguments: .object([:]), json: false, version: "1.5.0",
+                                                over: ScriptedStream([answerLine(padded: 11)]), notice: {}, limit: limit),
+                       ControlOutput.unreachable(ControlClient.droppedError), "limit + 1 bytes")
+        XCTAssertEqual(ControlCommandRunner.run(tool: "get_status", arguments: .object([:]), json: false, version: "1.5.0",
+                                                over: ScriptedStream([answerLine(padded: 10)]), notice: {}, limit: limit),
+                       ControlOutput(stdout: String(repeating: "p", count: 10), stderr: nil, exitCode: 0), "exactly the limit")
+    }
+
+    /// The default is the client's 64 MB, not the framer's 1 MB, which a long answer would pass.
+    func testTheDefaultLimitIsTheClientsAnswerLimit() {
+        XCTAssertEqual(ControlClient.maxAnswerBytes, 64 * 1_048_576)
+        let size = McpSession.maxMessageBytes + 1
+        XCTAssertEqual(ControlCommandRunner.run(tool: "get_status", arguments: .object([:]), json: false, version: "1.5.0",
+                                                over: ScriptedStream([answerLine(padded: size)]), notice: {}).exitCode, 0)
+    }
+
+    /// The call's answer with `padded` bytes of text in it.
+    private func answerLine(padded: Int) -> String {
+        let text = String(repeating: "p", count: padded)
+        return #"{"id":2,"jsonrpc":"2.0","result":{"content":[{"text":""# + text
+            + #"","type":"text"}],"isError":false,"structuredContent":{}}}"#
+    }
+
     func testAConnectionThatEndsBeforeTheAnswerIsUnreachable() {
         XCTAssertEqual(ControlCommandRunner.run(tool: "get_status", arguments: .object([:]), json: false, version: "1.5.0",
                                                 over: ScriptedStream([answered]), notice: {}),

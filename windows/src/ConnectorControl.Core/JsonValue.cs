@@ -125,8 +125,11 @@ public sealed class JsonValue : IEquatable<JsonValue>
     /// Platform idiom: the Mac writer answers <c>"null"</c> for a value JSON cannot hold (NaN,
     /// infinity); a C# <see cref="JsonValue"/> cannot hold one — <see cref="Double"/> refuses them — so
     /// this never does.
+    /// <c>escapeSlashes: false</c> is for what the command line prints under <c>--json</c>, which people and
+    /// scripts read: a path comes out as written. The wire is always escaped.
     /// </summary>
-    public string CompactLine() => AppleJsonWriter.Write(this, AppleJsonFormat.SerializationCompact);
+    public string CompactLine(bool escapeSlashes = true) =>
+        AppleJsonWriter.Write(this, AppleJsonFormat.SerializationCompact with { EscapeSlashes = escapeSlashes });
 
     // MARK: parsing
 

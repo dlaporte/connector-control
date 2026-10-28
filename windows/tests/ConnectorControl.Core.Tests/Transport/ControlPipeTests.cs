@@ -276,6 +276,7 @@ public class ControlPipeTests
         pipe.Rig.Confirmer.Answer(false);
         Assert.True(pipe.Until(() => task.IsCompleted));
         Assert.Equal(0, output?.ExitCode);
+        Assert.Equal(1, Volatile.Read(ref noticed));
         Assert.True(pipe.Rig.State.Store.Collections.ContainsKey("Later"));
     }
 

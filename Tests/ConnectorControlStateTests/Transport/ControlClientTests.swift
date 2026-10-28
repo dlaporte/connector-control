@@ -12,7 +12,8 @@ final class ControlClientTests: XCTestCase {
     /// What the client's closures count and the clock they read: a class, since the client's closures
     /// are @Sendable and may not change a captured variable.
     final class Seen: @unchecked Sendable {
-        var clock = Date(timeIntervalSince1970: 0)
+        /// Seconds on a monotonic clock, which the client reads as `now`.
+        var clock: TimeInterval = 0
         var attempts = 0
         var launches = 0
         var announced = 0
@@ -46,7 +47,7 @@ final class ControlClientTests: XCTestCase {
         let client = ControlClient(connectOnce: { nil }, launch: { true }, announce: nil,
                                    sleep: { seen.clock += $0 }, now: { seen.clock })
         XCTAssertThrowsError(try client.connect()) { XCTAssertEqual($0 as? ControlClient.Failure, .couldNotStart) }
-        XCTAssertEqual(seen.clock.timeIntervalSince1970, ControlClient.startTimeout, accuracy: ControlClient.pollInterval * 1.5)
+        XCTAssertEqual(seen.clock, ControlClient.startTimeout, accuracy: ControlClient.pollInterval * 1.5)
         XCTAssertEqual(ControlClient.Failure.couldNotStart.message, ControlClient.unreachableError)
     }
 
@@ -55,7 +56,7 @@ final class ControlClientTests: XCTestCase {
         let client = ControlClient(connectOnce: { nil }, launch: { false }, announce: { seen.announced += 1 },
                                    sleep: { seen.clock += $0 }, now: { seen.clock })
         XCTAssertThrowsError(try client.connect()) { XCTAssertEqual($0 as? ControlClient.Failure, .couldNotStart) }
-        XCTAssertEqual(seen.clock.timeIntervalSince1970, 0, "no wait for an app that did not start")
+        XCTAssertEqual(seen.clock, 0, "no wait for an app that did not start")
         XCTAssertEqual(seen.announced, 0, "nothing was started, so nothing is announced")
     }
 }

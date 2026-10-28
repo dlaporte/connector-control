@@ -6,6 +6,9 @@ import ConnectorControlCore
 /// Mirror: windows/tests/ConnectorControl.Core.Tests/Transport/ControlCommandLineTests.cs
 @MainActor
 final class ControlCommandLineTests: XCTestCase {
+    // Platform-forced differences: the Windows mirror's working directory is a Windows path and its
+    // expected paths are built with Path.GetFullPath against it; its missing file throws a
+    // FileNotFoundException where this one throws a CocoaError, each read through AppState.friendly.
     private let cwd = "/Users/me/work"
     private var files: [String: Data] = [:]
 
@@ -92,11 +95,21 @@ final class ControlCommandLineTests: XCTestCase {
                        .usage(AppState.sourceUnreadableError("missing.json", AppState.friendly(CocoaError(.fileReadNoSuchFile)))))
     }
 
+    func testAReadErrorOfAnyKindNamesTheFileAndAFolderIsNamedWithoutItsSlash() {
+        struct Odd: Error {}
+        let odd = ControlCommandLine.parse(["add", "github", "--file", "odd.json"], workingDirectory: cwd, readFile: { _ in throw Odd() })
+        XCTAssertEqual(odd, .usage(AppState.sourceUnreadableError("odd.json", AppState.friendly(Odd()))))
+        XCTAssertEqual(parse("add", "github", "--file", "sub/"),
+                       .usage(AppState.sourceUnreadableError("sub", AppState.friendly(CocoaError(.fileReadNoSuchFile)))))
+    }
+
     func testHelpVersionAndTheRelay() {
         XCTAssertEqual(parse("help"), .help)
         XCTAssertEqual(parse("--help"), .help)
         XCTAssertEqual(parse("-h"), .help)
         XCTAssertEqual(parse("--version"), .version)
+        XCTAssertEqual(parse("--json", "--version"), .version)
+        XCTAssertEqual(parse("--version", "--json"), .version)
         XCTAssertEqual(parse("mcp"), .relay)
         XCTAssertEqual(ControlCommandLine.parse([], workingDirectory: cwd, readFile: { _ in Data() }), .usage(ControlTools.helpText()))
         XCTAssertEqual(ControlCommandLine.versionLine("1.5.0"), "connector-control 1.5.0")
@@ -110,6 +123,8 @@ final class ControlCommandLineTests: XCTestCase {
         XCTAssertEqual(parse("status", "extra"), .usage(ControlCommandLine.usageError("status")))
         XCTAssertEqual(parse("status", "--reveal"), .usage(ControlCommandLine.unknownOptionError("--reveal")))
         XCTAssertEqual(parse("connectors", "--collection"), .usage(ControlCommandLine.missingValueError("--collection")))
+        XCTAssertEqual(parse("connectors", "--\u{301}x"), .usage(ControlCommandLine.unknownOptionError("--\u{301}x")),
+                       "a combining mark after the dashes does not make the word a name")
         XCTAssertEqual(parse("mcp", "extra"), .usage(ControlCommandLine.unknownOptionError("extra")))
         XCTAssertEqual(parse("help", "status"), .usage(ControlCommandLine.unknownOptionError("status")))
     }

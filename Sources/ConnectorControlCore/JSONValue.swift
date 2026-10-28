@@ -60,12 +60,17 @@ public extension JSONValue {
     /// One line of compact, key-sorted JSON: the control layer's wire format. JSONSerialization
     /// writes it, which the Windows mirror reproduces byte for byte
     /// (`AppleJsonFormat.SerializationCompact`, pinned by the serialization-compact goldens).
-    func compactLine() -> String {
+    ///
+    /// `escapingSlashes: false` is for what the command line prints under `--json`, which people and
+    /// scripts read: a path comes out as written. The wire is always escaped.
+    func compactLine(escapingSlashes: Bool = true) -> String {
         // JSONSerialization raises an Objective-C exception, which aborts the process, for NaN and
         // infinity, so a value it cannot write is checked for first. Wrapped in an array so a bare
         // fragment is checked too.
         guard JSONSerialization.isValidJSONObject([anyValue]),
-              let data = try? JSONSerialization.data(withJSONObject: anyValue, options: [.sortedKeys, .fragmentsAllowed]) else {
+              let data = try? JSONSerialization.data(withJSONObject: anyValue,
+                                                   options: escapingSlashes ? [.sortedKeys, .fragmentsAllowed]
+                                                       : [.sortedKeys, .fragmentsAllowed, .withoutEscapingSlashes]) else {
             return "null"
         }
         return String(decoding: data, as: UTF8.self)

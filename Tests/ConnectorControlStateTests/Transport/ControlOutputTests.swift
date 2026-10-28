@@ -31,6 +31,16 @@ final class ControlOutputTests: XCTestCase {
                        JSONValue.object(["error": .string(ControlTools.needsNewerAppError("9.0.0"))]).compactLine())
     }
 
+    /// `--json` is for reading and scripts: a path comes out as written. The wire format still escapes it.
+    func testJSONOutputWritesSlashesAsTheyAre() {
+        let path = "/Users/me/work/team.json"
+        let done = response(ControlResult(structured: .object(["path": .string(path)]), text: "x", isError: false))
+        XCTAssertEqual(ControlOutput.answer(done, json: true).stdout, #"{"path":"/Users/me/work/team.json"}"#)
+        XCTAssertEqual(ControlOutput.answer(response(.refusal(path)), json: true).stdout, #"{"error":"/Users/me/work/team.json"}"#)
+        XCTAssertEqual(JSONValue.string(path).compactLine(), #""\/Users\/me\/work\/team.json""#, "the wire format is unchanged")
+        XCTAssertEqual(JSONValue.string(path).compactLine(escapingSlashes: false), #""/Users/me/work/team.json""#)
+    }
+
     func testTheExitCodes() {
         XCTAssertEqual([ControlOutput.doneExit, ControlOutput.refusedExit, ControlOutput.usageExit, ControlOutput.unreachableExit], [0, 1, 2, 3])
         XCTAssertEqual(ControlOutput.usage("x"), ControlOutput(stdout: nil, stderr: "x", exitCode: 2))

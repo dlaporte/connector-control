@@ -73,6 +73,41 @@ public class ControlCommandRunnerTests
             ControlCommandRunner.Run("get_status", JsonValue.Object(), false, "1.5.0", stream, () => { }, limit: 64));
     }
 
+    /// <summary>An answer that follows the oversized line is never reached, so only a working limit ends in the
+    /// dropped result: a broken one would print the answer.</summary>
+    [Fact]
+    public void AnOversizedLineIsNeverFollowedByTheAnswerThatComesAfterIt()
+    {
+        var stream = new ScriptedStream([new string('x', 100), AnswerLine(0)]);
+        Assert.Equal(ControlOutput.Unreachable(ControlClient.DroppedError),
+            ControlCommandRunner.Run("get_status", JsonValue.Object(), false, "1.5.0", stream, () => { }, limit: 64));
+    }
+
+    [Fact]
+    public void ALineJustOverTheLimitIsRefusedAndOneJustUnderIsAccepted()
+    {
+        var limit = Encoding.UTF8.GetByteCount(AnswerLine(0)) + 10;
+        Assert.Equal(ControlOutput.Unreachable(ControlClient.DroppedError),
+            ControlCommandRunner.Run("get_status", JsonValue.Object(), false, "1.5.0", new ScriptedStream([AnswerLine(11)]), () => { }, limit: limit));
+        Assert.Equal(new ControlOutput(new string('p', 10), null, 0),
+            ControlCommandRunner.Run("get_status", JsonValue.Object(), false, "1.5.0", new ScriptedStream([AnswerLine(10)]), () => { }, limit: limit));
+    }
+
+    /// <summary>The default is the client's 64 MB, not the framer's 1 MB, which a long answer would pass.</summary>
+    [Fact]
+    public void TheDefaultLimitIsTheClientsAnswerLimit()
+    {
+        Assert.Equal(64 * 1_048_576, ControlClient.MaxAnswerBytes);
+        var output = ControlCommandRunner.Run("get_status", JsonValue.Object(), false, "1.5.0",
+            new ScriptedStream([AnswerLine(McpSession.MaxMessageBytes + 1)]), () => { });
+        Assert.Equal(0, output.ExitCode);
+    }
+
+    /// <summary>The call's answer with <paramref name="padded"/> bytes of text in it.</summary>
+    private static string AnswerLine(int padded) =>
+        "{\"id\":2,\"jsonrpc\":\"2.0\",\"result\":{\"content\":[{\"text\":\"" + new string('p', padded)
+        + "\",\"type\":\"text\"}],\"isError\":false,\"structuredContent\":{}}}";
+
     [Fact]
     public void AConnectionThatEndsBeforeTheAnswerIsUnreachable()
     {

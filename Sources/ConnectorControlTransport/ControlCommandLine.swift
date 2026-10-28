@@ -60,7 +60,8 @@ public enum ControlCommandLine {
         }
         guard let command = words.first else { return .usage(ControlTools.helpText()) }
         let rest = words.dropFirst()
-        if Array(words) == [versionFlag] { return .version }
+        // --version wherever --json sits: asking for the structure changes nothing about the version.
+        if arguments.filter({ $0 != jsonFlag }) == [versionFlag] { return .version }
         if helpWords.contains(command) { return rest.first.map { ControlInvocation.usage(unknownOptionError($0)) } ?? .help }
         if command == ClaudeIntegration.relayArgument {
             return rest.first.map { ControlInvocation.usage(unknownOptionError($0)) } ?? .relay
@@ -191,7 +192,9 @@ public enum ControlCommandLine {
         while index < words.endIndex {
             let word = words[index]
             index += 1
-            if namesOnly || !word.hasPrefix("--") {
+            // On UTF-8, not characters: a combining mark after the dashes would join the second one into a
+            // single character that is no longer "--", where the Windows mirror reads the two dashes.
+            if namesOnly || !word.utf8.starts(with: "--".utf8) {
                 read.positionals.append(word)
             } else if word == endOfOptions {
                 namesOnly = true
@@ -296,7 +299,7 @@ public struct ControlOutput: Equatable, Sendable {
                 text = words
             }
             let isRefusal = result["isError"] == .bool(true)
-            if json { return ControlOutput(stdout: structured.compactLine(), stderr: nil, exitCode: isRefusal ? refusedExit : doneExit) }
+            if json { return ControlOutput(stdout: structured.compactLine(escapingSlashes: false), stderr: nil, exitCode: isRefusal ? refusedExit : doneExit) }
             return isRefusal ? ControlOutput(stdout: nil, stderr: text, exitCode: refusedExit)
                 : ControlOutput(stdout: text, stderr: nil, exitCode: doneExit)
         }
@@ -306,7 +309,7 @@ public struct ControlOutput: Equatable, Sendable {
     }
 
     static func refused(_ message: String, json: Bool) -> ControlOutput {
-        json ? ControlOutput(stdout: JSONValue.object(["error": .string(message)]).compactLine(), stderr: nil, exitCode: refusedExit)
+        json ? ControlOutput(stdout: JSONValue.object(["error": .string(message)]).compactLine(escapingSlashes: false), stderr: nil, exitCode: refusedExit)
             : ControlOutput(stdout: nil, stderr: message, exitCode: refusedExit)
     }
 }

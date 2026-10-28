@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace ConnectorControl.Core.Transport;
 
 /// <summary>
@@ -38,19 +40,20 @@ public sealed class ControlClient
     private readonly Func<bool>? launch;
     private readonly Action? announce;
     private readonly Action<TimeSpan> sleep;
-    private readonly Func<DateTime> now;
+    private readonly Func<TimeSpan> now;
 
     /// <summary><paramref name="connectOnce"/> tries the endpoint once; <paramref name="launch"/> starts the
     /// app, null where starting is not allowed; <paramref name="announce"/> says it is being started — the
-    /// command line prints <see cref="StartingText"/>, the relay says nothing on Claude's stream.</summary>
+    /// command line prints <see cref="StartingText"/>, the relay says nothing on Claude's stream.
+    /// <paramref name="now"/> reads a monotonic clock, so a change to the clock cannot stretch the wait.</summary>
     public ControlClient(Func<IControlStream?> connectOnce, Func<bool>? launch, Action? announce,
-        Action<TimeSpan>? sleep = null, Func<DateTime>? now = null)
+        Action<TimeSpan>? sleep = null, Func<TimeSpan>? now = null)
     {
         this.connectOnce = connectOnce;
         this.launch = launch;
         this.announce = announce;
         this.sleep = sleep ?? Thread.Sleep;
-        this.now = now ?? (() => DateTime.UtcNow);
+        this.now = now ?? (() => Stopwatch.GetElapsedTime(0));
     }
 
     /// <summary>A connection to the app; throws <see cref="UnreachableException"/> when there is none to be had.</summary>

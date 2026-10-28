@@ -17,7 +17,8 @@ public class ControlClientTests
     /// <summary>What the client's closures count and the clock they read.</summary>
     private sealed class Seen
     {
-        public DateTime Clock = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        /// <summary>Time on a monotonic clock, which the client reads as <c>now</c>.</summary>
+        public TimeSpan Clock = TimeSpan.Zero;
         public int Attempts;
         public int Launches;
         public int Announced;

@@ -238,6 +238,25 @@
   "ConfigService.malformedClaudeConfigNote": "Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.",
   "ControlCaller.claudeName": "Claude",
   "ControlCaller.unknownClientName": "Another app",
+  "ControlClient.droppedError": "Connector Control closed the connection before answering.",
+  "ControlClient.notRunningError": "Connector Control isn’t running.",
+  "ControlClient.startingText": "Starting Connector Control…",
+  "ControlClient.unreachableError": "Connector Control isn’t running and couldn’t be started.",
+  "ControlCommandLine.missingValueError": {
+    "format": "“{0}” needs a value."
+  },
+  "ControlCommandLine.unknownCommandError": {
+    "format": "There’s no command named “{0}”. Run connector-control help to see them all."
+  },
+  "ControlCommandLine.unknownOptionError": {
+    "format": "“{0}” isn’t an option of this command."
+  },
+  "ControlCommandLine.usageError": {
+    "format": "Usage: connector-control {0}"
+  },
+  "ControlCommandLine.versionLine": {
+    "format": "connector-control {0}"
+  },
   "ControlMasking.addedPrefix": "  + ",
   "ControlMasking.argsLabel": "args",
   "ControlMasking.assignment": {
@@ -272,25 +291,6 @@
   "ControlSettingKey.launchAtLogin": "launch-at-login",
   "ControlSettingKey.notifyExternalChanges": "notify-external-changes",
   "ControlText.listAnd": " and ",
-  "ControlClient.droppedError": "Connector Control closed the connection before answering.",
-  "ControlClient.notRunningError": "Connector Control isn’t running.",
-  "ControlClient.startingText": "Starting Connector Control…",
-  "ControlClient.unreachableError": "Connector Control isn’t running and couldn’t be started.",
-  "ControlCommandLine.missingValueError": {
-    "format": "“{0}” needs a value."
-  },
-  "ControlCommandLine.unknownCommandError": {
-    "format": "There’s no command named “{0}”. Run connector-control help to see them all."
-  },
-  "ControlCommandLine.unknownOptionError": {
-    "format": "“{0}” isn’t an option of this command."
-  },
-  "ControlCommandLine.usageError": {
-    "format": "Usage: connector-control {0}"
-  },
-  "ControlCommandLine.versionLine": {
-    "format": "connector-control {0}"
-  },
   "ControlTools.activeCollectionLabel": "Active collection",
   "ControlTools.activeMark": "active",
   "ControlTools.addActiveMessage": {

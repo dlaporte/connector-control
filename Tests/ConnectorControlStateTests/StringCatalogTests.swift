@@ -106,14 +106,14 @@ final class StringCatalogTests: XCTestCase {
         "ConfigService.corruptStoreRestoredNote": ["X", "Y"],
         "ConfigService.invalidBackupError": ["X", "Y"],
         "ConfigService.invalidBackupMcpServersError": ["X"],
-        "ControlMasking.assignment": ["X", "Y"],
-        "ControlMasking.oauthClientText": ["X", "Y"],
-        "ControlMasking.remoteBridgeType": ["X"],
         "ControlCommandLine.missingValueError": ["X"],
         "ControlCommandLine.unknownCommandError": ["X"],
         "ControlCommandLine.unknownOptionError": ["X"],
         "ControlCommandLine.usageError": ["X"],
         "ControlCommandLine.versionLine": ["X"],
+        "ControlMasking.assignment": ["X", "Y"],
+        "ControlMasking.oauthClientText": ["X", "Y"],
+        "ControlMasking.remoteBridgeType": ["X"],
         "ControlTools.addActiveMessage": ["X", "Y"],
         "ControlTools.addMessage": ["X", "Y"],
         "ControlTools.addTitle": ["X", "Y"],
@@ -410,6 +410,15 @@ final class StringCatalogTests: XCTestCase {
 
         // MARK: ControlMasking / ControlText
 
+        actual["ControlClient.droppedError"] = ControlClient.droppedError
+        actual["ControlClient.notRunningError"] = ControlClient.notRunningError
+        actual["ControlClient.startingText"] = ControlClient.startingText
+        actual["ControlClient.unreachableError"] = ControlClient.unreachableError
+        actual["ControlCommandLine.missingValueError"] = ControlCommandLine.missingValueError("X")
+        actual["ControlCommandLine.unknownCommandError"] = ControlCommandLine.unknownCommandError("X")
+        actual["ControlCommandLine.unknownOptionError"] = ControlCommandLine.unknownOptionError("X")
+        actual["ControlCommandLine.usageError"] = ControlCommandLine.usageError("X")
+        actual["ControlCommandLine.versionLine"] = ControlCommandLine.versionLine("X")
         actual["ControlMasking.addedPrefix"] = ControlMasking.addedPrefix
         actual["ControlMasking.argsLabel"] = ControlMasking.argsLabel
         actual["ControlMasking.assignment"] = ControlMasking.assignment("X", "Y")
@@ -443,15 +452,6 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlSettingKey.confirmRestart"] = ControlSettingKey.confirmRestart
         actual["ControlSettingKey.launchAtLogin"] = ControlSettingKey.launchAtLogin
         actual["ControlSettingKey.notifyExternalChanges"] = ControlSettingKey.notifyExternalChanges
-        actual["ControlClient.droppedError"] = ControlClient.droppedError
-        actual["ControlClient.notRunningError"] = ControlClient.notRunningError
-        actual["ControlClient.startingText"] = ControlClient.startingText
-        actual["ControlClient.unreachableError"] = ControlClient.unreachableError
-        actual["ControlCommandLine.missingValueError"] = ControlCommandLine.missingValueError("X")
-        actual["ControlCommandLine.unknownCommandError"] = ControlCommandLine.unknownCommandError("X")
-        actual["ControlCommandLine.unknownOptionError"] = ControlCommandLine.unknownOptionError("X")
-        actual["ControlCommandLine.usageError"] = ControlCommandLine.usageError("X")
-        actual["ControlCommandLine.versionLine"] = ControlCommandLine.versionLine("X")
         actual["ControlTools.activeCollectionLabel"] = ControlTools.activeCollectionLabel
         actual["ControlTools.activeMark"] = ControlTools.activeMark
         actual["ControlTools.addActiveMessage"] = ControlTools.addActiveMessage("X", "Y")
