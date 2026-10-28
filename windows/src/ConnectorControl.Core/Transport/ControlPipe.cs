@@ -23,29 +23,45 @@ public static class ControlPipe
     /// <summary>What Windows answers <c>GetNamedPipeClientComputerName</c> for a client on this computer.</summary>
     public const int ErrorPipeLocal = 229;
 
+    /// <summary>What each direction of a pipe holds before a write waits for the client to read. With none
+    /// (the default), every write would wait for its reader, and a client paused with one line outstanding
+    /// would be cut at the write deadline; the Mac's socket buffers absorb several lines first, so this is
+    /// parity with that buffering.</summary>
+    public const int BufferBytes = 65_536;
+
     /// <summary>One server instance. Asynchronous, so a read waiting on the pipe never holds up a write
     /// to it: Windows runs synchronous I/O on one pipe handle one operation at a time.</summary>
     [SupportedOSPlatform("windows")]
     public static NamedPipeServerStream CreateServer(string name, bool first) =>
         new(name, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte,
-            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly | (first ? PipeOptions.FirstPipeInstance : PipeOptions.None));
+            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly | (first ? PipeOptions.FirstPipeInstance : PipeOptions.None),
+            BufferBytes, BufferBytes);
 
     /// <summary>Whether a connected client is on this computer. .NET never asks Windows to refuse remote clients
     /// (<c>PIPE_REJECT_REMOTE_CLIENTS</c>), and the access list <see cref="PipeOptions.CurrentUserOnly"/> builds
     /// admits this user from any computer — nor can a stricter list be given alongside it, which .NET refuses — so
-    /// the server asks after each connection. A local client is <see cref="ErrorPipeLocal"/>, or a name that is this
-    /// computer's; any other answer is taken as remote.</summary>
-    public static bool IsLocalClient(bool answered, int error, string? clientComputer, string thisComputer) =>
-        answered ? string.Equals(clientComputer, thisComputer, StringComparison.OrdinalIgnoreCase) : error == ErrorPipeLocal;
+    /// the server asks after each connection. Windows answers a local client with the failure
+    /// <see cref="ErrorPipeLocal"/>; only the SMB server sets a client computer name, and only for a remote
+    /// connection, so a name is never taken as proof of being local — a remote client could claim this
+    /// computer's — and every other answer is taken as remote.</summary>
+    public static bool IsLocalClient(bool answered, int error) => !answered && error == ErrorPipeLocal;
 
-    /// <summary><see cref="IsLocalClient(bool, int, string?, string)"/> for a connected server instance.</summary>
+    /// <summary>What Windows answers <c>GetNamedPipeClientComputerName</c> for a connected server instance:
+    /// whether it succeeded and, when it did not, the error.</summary>
     [SupportedOSPlatform("windows")]
-    public static bool IsLocalClient(NamedPipeServerStream pipe)
+    internal static (bool Answered, int Error) ClientComputerAnswer(NamedPipeServerStream pipe)
     {
         var name = new StringBuilder(256);
         var answered = GetNamedPipeClientComputerName(pipe.SafePipeHandle, name, (uint)(name.Capacity * sizeof(char)));
-        var error = answered ? 0 : Marshal.GetLastPInvokeError();
-        return IsLocalClient(answered, error, answered ? name.ToString() : null, Environment.MachineName);
+        return (answered, answered ? 0 : Marshal.GetLastPInvokeError());
+    }
+
+    /// <summary><see cref="IsLocalClient(bool, int)"/> for a connected server instance.</summary>
+    [SupportedOSPlatform("windows")]
+    public static bool IsLocalClient(NamedPipeServerStream pipe)
+    {
+        var (answered, error) = ClientComputerAnswer(pipe);
+        return IsLocalClient(answered, error);
     }
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetNamedPipeClientComputerNameW", SetLastError = true)]

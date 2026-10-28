@@ -31,14 +31,14 @@ public class ControlEndpointTests
         Assert.False(ControlEndpoint.MayStartApp(Store(Path.GetTempPath())));
     }
 
-    /// <summary>The pipe's rule for who it serves, apart from any pipe: a client on this computer only, and
-    /// anything Windows answers that says neither is taken as remote.</summary>
+    /// <summary>The pipe's rule for who it serves, apart from any pipe: a client on this computer only, which
+    /// Windows answers with one failure; a name, or any other answer, is taken as remote.</summary>
     [Fact]
     public void OnlyAClientOnThisComputerIsServed()
     {
-        Assert.True(ControlPipe.IsLocalClient(false, ControlPipe.ErrorPipeLocal, null, "BUILD01"));
-        Assert.True(ControlPipe.IsLocalClient(true, 0, "build01", "BUILD01"), "this computer's own name, in any case");
-        Assert.False(ControlPipe.IsLocalClient(true, 0, "LAPTOP7", "BUILD01"), "another computer");
-        Assert.False(ControlPipe.IsLocalClient(false, 6, null, "BUILD01"), "a failure that says neither");
+        Assert.True(ControlPipe.IsLocalClient(false, ControlPipe.ErrorPipeLocal));
+        Assert.False(ControlPipe.IsLocalClient(true, 0), "a computer name, whoever's, is not proof of being local");
+        Assert.False(ControlPipe.IsLocalClient(false, 6), "a failure that says neither");
+        Assert.False(ControlPipe.IsLocalClient(false, 0));
     }
 }

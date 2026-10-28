@@ -26,8 +26,9 @@ public sealed class ControlPipeServer : IDisposable
     private readonly TimeSpan timeout;
     private readonly CancellationTokenSource stopping = new();
     private readonly Lock gate = new();
-    /// <summary>The instance waiting for the next client: disposed at once when the app stops, so the name is
-    /// free the moment <see cref="Dispose"/> returns.</summary>
+    /// <summary>The instance waiting for the next client, held from the moment it is made: disposed at once
+    /// when the app stops, so no instance that is not yet serving a client keeps the name past
+    /// <see cref="Dispose"/>.</summary>
     private NamedPipeServerStream? waiting;
     private Action? stopped;
 
@@ -43,8 +44,11 @@ public sealed class ControlPipeServer : IDisposable
 
     /// <summary>Creates the pipe's first instance — which throws if anything already holds the name — and
     /// serves it. <paramref name="stopped"/> runs on the UI thread if serving ever stops on its own: the pipe
-    /// would take no more instances. The Mac's socket has no such case, so its server takes no such action.
-    /// <paramref name="timeout"/> is a test's way to a short write timeout.</summary>
+    /// would take no more instances, or the accept loop failed for any other reason. The Mac's socket has no
+    /// such case, so its server takes no such action. A name something else holds surfaces as
+    /// <see cref="UnauthorizedAccessException"/> (ERROR_ACCESS_DENIED under FIRST_PIPE_INSTANCE) or
+    /// <see cref="IOException"/>, for the app to catch and report. <paramref name="timeout"/> is a test's way
+    /// to a short write timeout.</summary>
     public static ControlPipeServer Start(string name, ControlServer server, AppHost host, Action? stopped = null,
         TimeSpan? timeout = null)
     {
@@ -55,7 +59,10 @@ public sealed class ControlPipeServer : IDisposable
         return endpoint;
     }
 
-    /// <summary>The app is quitting: no new connections, and the name is let go before this returns.</summary>
+    /// <summary>The app is quitting: no new connections, and no instance still waiting for one keeps the name.
+    /// A connection already handed on keeps its instance, and so the name, until the server closes it:
+    /// the app calls this and then <see cref="ControlServer.CloseAll"/>, both on the UI thread, and
+    /// <see cref="Hand"/>'s second check relies on that order, as the Mac's stop() does.</summary>
     public void Dispose()
     {
         NamedPipeServerStream? last;
@@ -68,7 +75,32 @@ public sealed class ControlPipeServer : IDisposable
         last?.Dispose();
     }
 
+    /// <summary>The accept loop, and the one place it can die unseen: anything but the app stopping that ends
+    /// it tells the app, which would otherwise be left not serving without knowing.</summary>
     private async Task AcceptAsync(NamedPipeServerStream first)
+    {
+        try
+        {
+            await ServeAsync(first).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // The instance still waiting, if any, is let go; one already handed on is its connection's.
+            NamedPipeServerStream? last;
+            lock (gate)
+            {
+                last = waiting;
+                waiting = null;
+            }
+            last?.Dispose();
+            if (!stopping.IsCancellationRequested)
+            {
+                host.Marshal(() => stopped?.Invoke());
+            }
+        }
+    }
+
+    private async Task ServeAsync(NamedPipeServerStream first)
     {
         var current = first;
         while (true)
@@ -112,6 +144,7 @@ public sealed class ControlPipeServer : IDisposable
                 {
                     // Made before this one is handed on or let go, so the name is never free for anything else.
                     next = ControlPipe.CreateServer(Name, first: false);
+                    waiting = next;   // held at once, so a Dispose from here on frees it too
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {

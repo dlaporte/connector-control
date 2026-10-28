@@ -80,7 +80,8 @@ internal sealed class PipeClient
     public PipeClient(IControlStream stream)
     {
         Stream = stream;
-        _ = Task.Run(() =>
+        // A thread of its own, as the Mac's: this read blocks, and a pool thread per client would starve the pool.
+        new Thread(() =>
         {
             var framer = new McpLineFramer(64 * 1_048_576);
             while (true)
@@ -105,7 +106,8 @@ internal sealed class PipeClient
             {
                 ended = true;
             }
-        });
+        })
+        { IsBackground = true }.Start();
     }
 
     public IControlStream Stream { get; }

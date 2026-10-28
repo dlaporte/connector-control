@@ -7,6 +7,13 @@ import ConnectorControlState
 /// The app's socket, serving `ControlServer`. Each connection is read on a thread of its own and
 /// written on a queue of its own; what it reads reaches the server on the main actor, through the
 /// app's `AppHost`, so the server and the tools never leave it.
+///
+/// Two things the Windows pipe server has that this one does not. Its `stopped` callback reports an accept
+/// loop that ends on its own, whether the pipe can take no more instances or the loop failed; here the
+/// listener is a dispatch source with no loop that can die unseen, and a listener that cannot start throws
+/// from `start`. Its remote-client check closes a client from another computer, which the pipe's access
+/// list alone would admit; a Unix socket cannot be reached from another machine, and `peerUID` already
+/// decides who is served.
 public final class ControlSocketServer: @unchecked Sendable {
     /// A write that takes longer than this, in all, closes its connection: a client that stops reading,
     /// or reads too slowly, would otherwise hold its lines in the app.

@@ -15,19 +15,20 @@ namespace ConnectorControl.Core.Tests.Transport;
 ///
 /// The control layer on a real pipe: what reaches the server, what it answers, and who it lets in.
 ///
-/// Four of the Mac's facts have no pipe to test, and the file says so here rather than leaving them out
+/// Ten of the Mac's facts have no pipe to test, and the file says so here rather than leaving them out
 /// unremarked. A pipe leaves no file behind, so there is no stale socket to replace, no file that is not a
 /// socket to leave alone, no socket whose connect fails for another reason, and no listener that is started
 /// twice or after it is closed (testALiveSocketIsLeftAloneAndAStaleOneIsReplaced,
 /// testAFileThatIsNotASocketIsLeftAlone, testASocketThatFailsForAnotherReasonIsLeftAlone,
-/// testStartingAClosedOrStartedListenerDoesNothing); the live-name half of the first is the first-instance
-/// fact below. A pipe has no folder, so none can be a link or a file or too open
-/// (testAFolderThatIsALinkIsRefused, testAFileWhereTheFolderShouldBeIsRefused, and the folder half of the
-/// first fact), and its name has no length limit like a socket path's (testAPathTooLongForASocketIsRefusedBeforeAnythingIsMade).
-/// Who may connect is the access list, not a peer-id check the server makes per connection, so the
-/// other-user facts (testAnotherUsersConnectionIsClosedBeforeAnythingIsRead, testTheToolRefusesAServerAnotherUserRuns,
-/// testARestartedServerStillRefusesAnotherUser) are the access-list fact below; the one rule the server
-/// does apply per connection, that a client is on this computer, is its own fact.
+/// testStartingAClosedOrStartedListenerDoesNothing: four); the live-name half of the first is the
+/// first-instance fact below. A pipe has no folder, so none can be a link or a file, and its name has no
+/// length limit like a socket path's (testAFolderThatIsALinkIsRefused, testAFileWhereTheFolderShouldBeIsRefused,
+/// testAPathTooLongForASocketIsRefusedBeforeAnythingIsMade: three); the owner-only-folder fact's
+/// mode half is the access-list fact below, which it shares with the other-user facts. Who may connect is
+/// the access list, not a peer-id check the server makes per connection, so
+/// testAnotherUsersConnectionIsClosedBeforeAnythingIsRead, testTheToolRefusesAServerAnotherUserRuns and
+/// testARestartedServerStillRefusesAnotherUser (three) are that fact too; the one rule the server does
+/// apply per connection, that a client is on this computer, is its own fact.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public class ControlPipeTests
@@ -77,8 +78,17 @@ public class ControlPipeTests
         var client = ControlPipe.TryConnect(name, TimeSpan.FromSeconds(5));
         Assert.NotNull(client);
         Assert.True(Done(connecting, Wait.Eventually));
-        Assert.True(ControlPipe.IsLocalClient(server));
-        client.Close();
+        try
+        {
+            // The raw answer, not only the rule's verdict: a local client makes the call fail with
+            // ERROR_PIPE_LOCAL, and no computer name is ever given for it.
+            Assert.Equal((false, ControlPipe.ErrorPipeLocal), ControlPipe.ClientComputerAnswer(server));
+            Assert.True(ControlPipe.IsLocalClient(server));
+        }
+        finally
+        {
+            client.Close();
+        }
     }
 
     [Fact]
@@ -287,17 +297,20 @@ public class ControlPipeTests
         var burst = new List<byte>();
         burst.AddRange(Encoding.UTF8.GetBytes(ControlHello.Line(ControlHello.CliClient, "1.2.2") + "\n"));
         burst.AddRange(Encoding.UTF8.GetBytes(InitializeMessage + "\n" + InitializedMessage + "\n"));
-        for (var id = 2; id < 4_000; id++)
+        // 8,000 answers, not the Mac's 4,000: the pipe's buffers (65,536 bytes each way) must be passed with room to spare.
+        for (var id = 2; id < 8_000; id++)
         {
             burst.AddRange(Encoding.UTF8.GetBytes("{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"method\":\"ping\"}\n"));
         }
         // The burst is written on a task of its own: its write may itself wait, since nothing here reads.
-        _ = Background(() => stream.Write([.. burst]));
+        var burstWrite = Background(() => stream.Write([.. burst]));
         Assert.True(pipe.Until(() => pipe.Server.ConnectionCount == 1));
         var began = Stopwatch.StartNew();
         Assert.True(pipe.Until(() => pipe.Server.ConnectionCount == 0));
         Assert.True(began.Elapsed < 3 * ShortTimeout + TimeSpan.FromSeconds(3), $"closed after {began.Elapsed}");
         stream.Close();
+        Assert.True(Done(burstWrite, Wait.Eventually), "the burst's write is not finished");
+        Assert.True(Outcome(burstWrite), "the burst was written");
     }
 
     /// <summary>A connection accepted before the app stops, but opened after it has closed them all, is
@@ -309,18 +322,25 @@ public class ControlPipeTests
         using var pipe = new PipeRig();
         var endpoint = pipe.Endpoint!;
         var name = "ConnectorControl-test-" + Guid.NewGuid().ToString("N");
-        var served = ControlPipe.CreateServer(name, first: true);
+        using var served = ControlPipe.CreateServer(name, first: true);
         var connecting = Accepting(served);
         var client = ControlPipe.TryConnect(name, TimeSpan.FromSeconds(5));
         Assert.NotNull(client);
-        Assert.True(Done(connecting, Wait.Eventually));
-        endpoint.Hand(served);
-        pipe.Stop();
-        pipe.Rig.H.Ui.Pump();
-        Assert.Equal(0, pipe.Server.ConnectionCount);
-        var read = Background(() => client.Read(1));
-        Assert.True(Done(read, Wait.Eventually), "it is not closed");
-        Assert.Empty(Outcome(read));   // it is closed
+        try
+        {
+            Assert.True(Done(connecting, Wait.Eventually));
+            endpoint.Hand(served);
+            pipe.Stop();
+            pipe.Rig.H.Ui.Pump();
+            Assert.Equal(0, pipe.Server.ConnectionCount);
+            var read = Background(() => client.Read(1));
+            Assert.True(Done(read, Wait.Eventually), "it is not closed");
+            Assert.Empty(Outcome(read));   // it is closed
+        }
+        finally
+        {
+            client.Close();
+        }
     }
 
     /// <summary>A write is bounded as a whole: a peer that reads nothing, and a line bigger than what is
@@ -333,9 +353,12 @@ public class ControlPipeTests
         using (server)
         using (client)
         {
-            var write = ControlPipeServer.TryWriteAsync(server, new byte[1 << 20], ShortTimeout);
+            var began = Stopwatch.StartNew();
+            var write = ControlPipeServer.TryWriteAsync(server, new byte[262_144], ShortTimeout);
             Assert.True(Done(write, CutBound), "the write is not cut");
             Assert.False(Outcome(write));
+            // Cut at the deadline, not after a partial write and a second wait of the same length.
+            Assert.True(began.Elapsed < TimeSpan.FromSeconds(1.8), $"cut after {began.Elapsed}");
         }
     }
 
@@ -359,12 +382,12 @@ public class ControlPipeTests
                         Thread.Sleep(50);   // the pace of a slow reader, not an assertion
                     }
                 }
-                catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
+                catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException or OperationCanceledException)
                 {
                     // the test closed it
                 }
             });
-            var write = ControlPipeServer.TryWriteAsync(server, new byte[1 << 20], ShortTimeout);
+            var write = ControlPipeServer.TryWriteAsync(server, new byte[262_144], ShortTimeout);
             Assert.True(Done(write, CutBound), "the write is not cut");
             Assert.False(Outcome(write));
         }

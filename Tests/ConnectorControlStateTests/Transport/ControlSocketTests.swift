@@ -6,6 +6,10 @@ import ConnectorControlCore
 /// Mac only: the Windows counterpart is windows/tests/ConnectorControl.Core.Tests/Transport/ControlPipeTests.cs.
 ///
 /// The control layer on a real socket: what reaches the server, what it answers, and who it lets in.
+///
+/// The Windows file also has facts for the pipe server's `stopped` callback and its refusal of a client on
+/// another computer (AClientOnThisComputerIsLocal). The Mac has neither to test: its listener has no accept
+/// loop that can die unseen, and a Unix socket cannot be reached from another machine.
 @MainActor
 final class ControlSocketTests: XCTestCase {
     private let initialize = ControlServerTests.initializeMessage
