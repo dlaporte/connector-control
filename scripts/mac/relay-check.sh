@@ -15,9 +15,27 @@ SANDBOX=$(mktemp -d /tmp/cc-relay-XXXXXX)
 COPY="$SANDBOX/Connector Control.app"
 HOST_PID=""
 RELAY_PID=""
+# SIGTERM first, as a quit; SIGKILL if the process is still there after about 3 s.
+stop_process() { # <pid>
+    kill -TERM "$1" 2>/dev/null || return 0
+    for _ in $(seq 1 30); do
+        kill -0 "$1" 2>/dev/null || return 0
+        sleep 0.1
+    done
+    kill -KILL "$1" 2>/dev/null || true
+}
 cleanup() {
-    if [ -n "$RELAY_PID" ]; then kill "$RELAY_PID" 2>/dev/null || true; fi
-    if [ -n "$HOST_PID" ]; then kill "$HOST_PID" 2>/dev/null || true; fi
+    local code=$?
+    if [ "$code" != 0 ]; then
+        for log in relay.err host.err; do
+            if [ -s "$SANDBOX/$log" ]; then
+                echo "== $log" >&2
+                cat "$SANDBOX/$log" >&2
+            fi
+        done
+    fi
+    if [ -n "$RELAY_PID" ]; then stop_process "$RELAY_PID"; fi
+    if [ -n "$HOST_PID" ]; then stop_process "$HOST_PID"; fi
     rm -rf "$SANDBOX"
 }
 trap cleanup EXIT
@@ -40,6 +58,8 @@ start_host() {
     wait_for '^ready ' "$SANDBOX/host.out" "the test host"
 }
 
+[ -x "$APP/Contents/MacOS/connector-control" ] \
+    || { echo "::error::$APP has no executable Contents/MacOS/connector-control" >&2; exit 1; }
 ditto "$APP" "$COPY"
 start_host
 mkfifo "$SANDBOX/claude-in"
@@ -61,8 +81,8 @@ rm -rf "$COPY.old"
 kill -KILL "$HOST_PID"
 wait "$HOST_PID" 2>/dev/null || true
 start_host
-# Time for the relay to have read its old connection's end before Claude asks again.
-sleep 1
+# What this proves: a relay that is already running outlives its bundle being replaced and the app
+# being restarted. Starting the new app from the replaced bundle is the release checklist's.
 say '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_status","arguments":{}}}'
 wait_for '"id":2,' "$SANDBOX/claude-out" "the answer after the update"
 
@@ -76,7 +96,16 @@ if grep -q 'connector-control-replay-' "$SANDBOX/claude-out"; then
     exit 1
 fi
 
+# Claude closing its end ends the relay, within a bounded wait.
 exec 3>&-
-wait "$RELAY_PID"
+for _ in $(seq 1 150); do
+    kill -0 "$RELAY_PID" 2>/dev/null || break
+    sleep 0.2
+done
+if kill -0 "$RELAY_PID" 2>/dev/null; then
+    echo "::error::the relay did not end when Claude closed its end" >&2
+    exit 1
+fi
+wait "$RELAY_PID" || { echo "::error::the relay ended with an error" >&2; exit 1; }
 RELAY_PID=""
 echo "Relay check passed"

@@ -18,8 +18,22 @@ INSPECTOR="@modelcontextprotocol/inspector@2.12.0"
 # Short: a socket path holds at most 103 bytes.
 SANDBOX=$(mktemp -d /tmp/cc-inspect-XXXXXX)
 HOST_PID=""
+# SIGTERM first, as a quit; SIGKILL if the process is still there after about 3 s.
+stop_process() { # <pid>
+    kill -TERM "$1" 2>/dev/null || return 0
+    for _ in $(seq 1 30); do
+        kill -0 "$1" 2>/dev/null || return 0
+        sleep 0.1
+    done
+    kill -KILL "$1" 2>/dev/null || true
+}
 cleanup() {
-    if [ -n "$HOST_PID" ]; then kill "$HOST_PID" 2>/dev/null || true; fi
+    local code=$?
+    if [ "$code" != 0 ] && [ -s "$SANDBOX/host.err" ]; then
+        echo "== the test host's stderr" >&2
+        cat "$SANDBOX/host.err" >&2
+    fi
+    if [ -n "$HOST_PID" ]; then stop_process "$HOST_PID"; fi
     rm -rf "$SANDBOX"
 }
 trap cleanup EXIT
@@ -70,5 +84,8 @@ echo "== restart_claude, which always asks and which the test host declines"
 code=0
 inspect --method tools/call --tool-name restart_claude > "$SANDBOX/declined.json" 2> "$SANDBOX/declined.err" || code=$?
 [ "$code" = 5 ] || { echo "::error::a declined change should exit 5 (isError), got $code" >&2; cat "$SANDBOX/declined.err" >&2; exit 1; }
+# Exit 5 also covers a tool the server does not have, which writes nothing: read the answer itself.
+jq -e '(.isError // .result.isError) == true and (((.structuredContent // .result.structuredContent).error // "") | test("You declined this change"))' \
+    "$SANDBOX/declined.json" > /dev/null || { echo "::error::restart_claude was not declined by the test host" >&2; cat "$SANDBOX/declined.json" >&2; exit 1; }
 
 echo "Inspector check passed"

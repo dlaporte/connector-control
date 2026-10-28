@@ -47,6 +47,8 @@ internal static class Program
                 ClaudeIntegrationEnabled = true,
                 ConfirmClaudeChanges = true,
                 ClaudeIntegrationOfferAnswered = true,
+                NotifyExternalChanges = false,
+                SweepVersion = PermissionsSweep.CurrentVersion,
             };
             var notifier = new TestHostNotifier();
             var dialogs = new TestHostDialogs();
@@ -56,7 +58,20 @@ internal static class Program
                 new UpdateCoordinator(updater, settings, notifier, dialogs, host));
             var server = new ControlServer(new ControlTools(state, model, new DecliningConfirmer(), host));
             var name = ControlEndpoint.PipeName(environment, ControlEndpoint.CurrentUserSid());
-            loop.Keep(ControlPipeServer.Start(name, server, host));
+            var endpoint = ControlPipeServer.Start(name, server, host);
+            loop.Keep(endpoint);
+            // Ctrl+C stops it as a quit stops the app, and so does closing its console; killing the process,
+            // as an update would, leaves nothing to clean up on Windows, where a pipe goes with its process.
+            Console.CancelKeyPress += (_, e) =>
+            {
+                e.Cancel = true;
+                loop.Post(() =>
+                {
+                    endpoint.Dispose();
+                    server.CloseAll();
+                    loop.Stop();
+                });
+            };
             Console.Out.WriteLine("ready " + name);
             Console.Out.Flush();
         });
@@ -78,6 +93,8 @@ internal static class Program
 
         /// <summary>What must live as long as the loop.</summary>
         public void Keep(object value) => kept.Add(value);
+
+        public void Stop() => work.CompleteAdding();
 
         public void Run()
         {

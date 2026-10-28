@@ -42,7 +42,8 @@ function Invoke-Inspector {
     # The Inspector hands its server only a few variables; a framework-dependent build needs to find .NET.
     if ($env:DOTNET_ROOT) { $all += @('-e', "DOTNET_ROOT=$env:DOTNET_ROOT") }
     $all += $Arguments + @('--', $Tool, 'mcp')
-    $output = & npx @all
+    # npx.cmd, named: the npx.ps1 shim re-parses its arguments.
+    $output = & npx.cmd @all
     [pscustomobject]@{ Code = $LASTEXITCODE; Text = ($output -join "`n") }
 }
 
@@ -54,12 +55,13 @@ function Get-Result {
 
 $hostOut = Join-Path $sandbox 'host.out'
 $hostErr = Join-Path $sandbox 'host.err'
-$testHostProcess = Start-Process -FilePath $TestHost -ArgumentList @($sandbox) -RedirectStandardOutput $hostOut `
-    -RedirectStandardError $hostErr -PassThru -NoNewWindow
+$testHostProcess = $null
 try {
+    $testHostProcess = Start-Process -FilePath $TestHost -ArgumentList @($sandbox) -RedirectStandardOutput $hostOut `
+        -RedirectStandardError $hostErr -PassThru -NoNewWindow
     $deadline = (Get-Date).AddSeconds(20)
     while (-not ((Test-Path $hostOut) -and (Select-String -Path $hostOut -Pattern '^ready ' -Quiet))) {
-        if ($testHostProcess.HasExited) { Get-Content $hostErr | Write-Host; throw 'the test host exited before it was ready' }
+        if ($testHostProcess.HasExited) { throw 'the test host exited before it was ready' }
         if ((Get-Date) -gt $deadline) { throw 'the test host never said it was ready' }
         Start-Sleep -Milliseconds 100
     }
@@ -86,11 +88,28 @@ try {
     Write-Host '== restart_claude, which always asks and which the test host declines'
     $declined = Invoke-Inspector @('--method', 'tools/call', '--tool-name', 'restart_claude')
     if ($declined.Code -ne 5) { throw "a declined change should exit 5 (isError), got $($declined.Code)" }
+    # Exit 5 also covers a tool the server does not have, which writes nothing: read the answer itself.
+    $declinedResult = Get-Result $declined.Text
+    if ($declinedResult.isError -ne $true -or $declinedResult.structuredContent.error -notlike '*You declined this change*') {
+        throw "restart_claude was not declined by the test host: $($declined.Text)"
+    }
 
     Write-Host 'Inspector check passed'
 }
+catch {
+    # A failed check shows what the test host said, then fails the step as before.
+    if ((Test-Path $hostErr) -and (Get-Item $hostErr).Length -gt 0) {
+        Write-Host '== the test host''s stderr'
+        Get-Content $hostErr | Write-Host
+    }
+    throw
+}
 finally {
-    if (-not $testHostProcess.HasExited) { Stop-Process -Id $testHostProcess.Id -Force }
+    if ($null -ne $testHostProcess) {
+        if (-not $testHostProcess.HasExited) { Stop-Process -Id $testHostProcess.Id -Force }
+        # Gone before its sandbox is removed: a running host holds files open there.
+        $null = $testHostProcess.WaitForExit(5000)
+    }
     Remove-Item -Recurse -Force $sandbox -ErrorAction SilentlyContinue
 }
 
