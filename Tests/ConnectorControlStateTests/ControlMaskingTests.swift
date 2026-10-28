@@ -104,6 +104,96 @@ final class ControlMaskingTests: XCTestCase {
         }
     }
 
+    /// Every masked view of `config` — its structured form, its code lines and its change lines
+    /// from nothing — without any of `secrets`.
+    private func assertHidden(_ secrets: [String], in config: JSONValue,
+                              file: StaticString = #filePath, line: UInt = #line) throws {
+        let structured = try XCTUnwrap(String(data: try ControlMasking.maskedConfig(config).serialized(), encoding: .utf8))
+        let text = (ControlMasking.codeLines(config) + ControlMasking.changeLines(from: .object([:]), to: config))
+            .joined(separator: "\n")
+        for secret in secrets {
+            XCTAssertFalse(structured.contains(secret), "structured: \(secret)", file: file, line: line)
+            XCTAssertFalse(text.contains(secret), "text: \(secret)", file: file, line: line)
+        }
+    }
+
+    private func local(_ command: String, _ args: [String]) -> JSONValue {
+        .object(["command": .string(command), "args": .array(args.map(JSONValue.string))])
+    }
+
+    func testAPlaceholderInsideAnArgumentLeavesTheRestMasked() throws {
+        let args = ["-y", "mcp-remote", "https://h.example/mcp?api_key=sk-live-1234&user=${CC_NEEDS:user}"]
+        XCTAssertEqual(ControlMasking.arguments(args),
+                       ["-y", "mcp-remote", "https://h.example/mcp?api_key=•••&user=${CC_NEEDS:user}"])
+        XCTAssertEqual(ControlMasking.argument("https://user:hunter2@h.example/${CC_NEEDS:path}"),
+                       "https://user:•••@h.example/${CC_NEEDS:path}")
+        XCTAssertEqual(ControlMasking.argument("--api-key=sk-123${CC_NEEDS:rest}"), "--api-key=•••")
+        XCTAssertEqual(ControlMasking.argument("sk-live-1234${CC_NEEDS:rest}"), "•••")
+        XCTAssertEqual(ControlMasking.argument("${CC_NEEDS:server_path}"), "${CC_NEEDS:server_path}")
+        try assertHidden(["sk-live-1234"], in: local("npx", args))
+        try assertHidden(["hunter2"], in: local("node", ["s.js", "https://user:hunter2@h.example/${CC_NEEDS:path}"]))
+        try assertHidden(["sk-123", "sk-live-1234"],
+                         in: local("node", ["--api-key=sk-123${CC_NEEDS:rest}", "sk-live-1234${CC_NEEDS:rest}"]))
+    }
+
+    func testAURLMasksACredentialInItsUserNamePathOrFragment() throws {
+        let zapier = "https://actions.zapier.com/mcp/sk-ak-ZjQ2YTk1NzQtYmM0Ny00/sse"
+        let user = "https://ghp_0123456789abcdefghijklmnopqrstuvwxAB@api.example.com/mcp"
+        let basic = "https://ghp_0123456789abcdefghijklmnopqrstuvwxAB:x-oauth-basic@api.example.com/mcp"
+        let fragment = "https://h.example/cb#access_token=hunter2"
+        XCTAssertEqual(ControlMasking.url(zapier), "https://actions.zapier.com/mcp/•••/sse")
+        XCTAssertEqual(ControlMasking.url(user), "https://•••@api.example.com/mcp")
+        XCTAssertEqual(ControlMasking.url(basic), "https://•••:•••@api.example.com/mcp")
+        XCTAssertEqual(ControlMasking.url(fragment), "https://h.example/cb#access_token=•••")
+        XCTAssertEqual(ControlMasking.url("https://bob@h.example/a/b/#top"), "https://bob@h.example/a/b/#top",
+                       "a plain user name, path and fragment show as written")
+        try assertHidden(["sk-ak-ZjQ2YTk1NzQtYmM0Ny00"], in: .object(["url": .string(zapier)]))
+        try assertHidden(["ghp_0123456789abcdefghijklmnopqrstuvwxAB", "hunter2"], in: local("node", ["s.js", user, basic, fragment]))
+    }
+
+    func testANameEqualsValueWordNamedForASecretIsMasked() throws {
+        let docker = ["run", "-i", "--rm", "-e", "DB_PASSWORD=hunter2", "-e", "API_KEY=abc-123", "img"]
+        XCTAssertEqual(ControlMasking.arguments(docker),
+                       ["run", "-i", "--rm", "-e", "DB_PASSWORD=•••", "-e", "API_KEY=•••", "img"])
+        XCTAssertEqual(ControlMasking.arguments(["API_KEY=hunter2", "node", "s.js"]), ["API_KEY=•••", "node", "s.js"])
+        XCTAssertEqual(ControlMasking.argument("apikeyQ2xpZW50U2VjcmV0MTIzNDU2Nzg5MA=="), "•••",
+                       "a token padded with = is no name: the whole word stays masked")
+        try assertHidden(["hunter2", "abc-123"], in: local("docker", docker))
+        try assertHidden(["hunter2"], in: local("env", ["API_KEY=hunter2", "node", "s.js"]))
+    }
+
+    func testAValueUnderAKeyNamedForASecretIsMasked() throws {
+        let oauth: JSONValue = .object([
+            "url": .string("https://h.example/mcp"),
+            "oauth": .object(["clientId": .string("a"), "clientSecret": .string("hunter2")]),
+        ])
+        XCTAssertEqual(ControlMasking.maskedConfig(oauth), .object([
+            "url": .string("https://h.example/mcp"),
+            "oauth": .object(["clientId": .string("set"), "clientSecret": .string("set")]),
+        ]), "everything under a key named for a secret is masked, as `oauth` is")
+        let key: JSONValue = .object(["command": .string("node"), "args": .array([.string("s.js")]), "apiKey": .string("hunter2")])
+        XCTAssertEqual(ControlMasking.maskedConfig(key),
+                       .object(["command": .string("node"), "args": .array([.string("s.js")]), "apiKey": .string("set")]))
+        try assertHidden(["hunter2"], in: oauth)
+        try assertHidden(["hunter2"], in: key)
+        try assertHidden(["hunter2"], in: .object(["command": .string("node"), "args": .array([.string("--token"), .string("hunter2"), .int(1)])]))
+    }
+
+    func testAFlagAfterASecretNamedFlagIsNotTakenForItsValue() {
+        XCTAssertEqual(ControlMasking.arguments(["--no-auth", "--allow-http", "--bypass-sandbox", "--yolo", "--token", "abc"]),
+                       ["--no-auth", "--allow-http", "--bypass-sandbox", "--yolo", "--token", "•••"])
+    }
+
+    /// The Windows mirror cuts at a delimiter by UTF-16 unit; a combining mark after the delimiter
+    /// must not move the cut, or the two platforms show the same text differently.
+    func testACombiningMarkAfterADelimiterCutsTheSameOnBothPlatforms() {
+        XCTAssertEqual(ControlMasking.url("https://u:hunter2@\u{301}h.example/"), "https://u:•••@\u{301}h.example/")
+        XCTAssertEqual(ControlMasking.url("https://h.example/?a=b&\u{301}c=hunter2"), "https://h.example/?a=•••&\u{301}c=•••")
+        XCTAssertEqual(ControlMasking.argument("--api-key=\u{301}hunter2"), "--api-key=•••")
+        XCTAssertEqual(ControlMasking.argument("-\u{301}-api-key=hunter2"), "-\u{301}-api-key=•••")
+        XCTAssertEqual(ControlMasking.arguments(["--header", "X-Key:\u{301}hunter2"]), ["--header", "X-Key: •••"])
+    }
+
     func testNoSecretSurvivesInArgumentsURLsOrChanges() {
         let shown = (ControlMasking.arguments(["--token", "abc9", "--api-key=sk-123x", token, "--header", "X-Team: blue7"])
             + [ControlMasking.url("https://user:hunter2@example.com/mcp?api_key=abc9&region=us7#top")]

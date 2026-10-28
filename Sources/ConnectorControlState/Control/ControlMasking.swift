@@ -4,11 +4,14 @@ import ConnectorControlCore
 ///
 /// What a connector looks like to anyone but its owner: the command line and URL in full, with
 /// every secret value replaced. Environment and header values are never shown, only whether they
-/// are set; an argument that reads as a credential, the value after a flag named for a secret, a
-/// header's value and a URL's password and query values read "•••". Placeholders — `${CC_NEEDS:…}`
-/// and `${COLLECTION_DIR}` — name what is missing rather than what is secret, and show as written.
-/// Every rule is plain string work, with no URL parser, so both platforms mask the same text the
-/// same way. `reveal` (the command-line tool's `show --reveal`, never Claude's) turns it all off.
+/// are set, and nor is a value under a key named for a secret; an argument that reads as a
+/// credential, the value after a flag named for a secret, a `NAME=value` word's value when the
+/// name is a secret's, a header's value, a URL's password and query and fragment values, and a
+/// URL's user name or path segment that reads as a credential, read "•••". Placeholders —
+/// `${CC_NEEDS:…}` and `${COLLECTION_DIR}` — name what is missing rather than what is secret, and
+/// show as written when they are the whole value. Every rule is plain string work, with no URL
+/// parser, so both platforms mask the same text the same way. `reveal` (the command-line tool's
+/// `show --reveal`, never Claude's) turns it all off.
 /// Main-actor only: it reads `EditorModel.needsValue` and `CollectionsModel.remoteType`, which are.
 @MainActor
 public enum ControlMasking {
@@ -39,15 +42,42 @@ public enum ControlMasking {
 
     // MARK: Values
 
-    /// A placeholder names what is missing, never what is secret.
-    static func isPlaceholder(_ value: String) -> Bool {
-        Placeholder.containsMarker(value) || value.contains(Placeholder.directoryToken)
+    /// A value that is wholly a reference — a placeholder, `${COLLECTION_DIR}`, or a `${NAME}` /
+    /// `$NAME` — takes its secret from elsewhere and holds none itself. One with a placeholder
+    /// inside other text can still hold a secret beside it, so it is masked like any other.
+    static func refersElsewhere(_ value: String) -> Bool {
+        CredentialHeuristics.isReference(value)
     }
 
-    /// A value that takes its secret from elsewhere — a placeholder, or a `${NAME}` / `$NAME`
-    /// reference — holds none itself.
-    static func refersElsewhere(_ value: String) -> Bool {
-        isPlaceholder(value) || CredentialHeuristics.isReference(value)
+    /// Whether `text` reads as a credential or a random token, as written or with every `${…}`
+    /// taken out: the heuristics take a placeholder for a value still to come, so
+    /// `sk-live-…${CC_NEEDS:x}` would otherwise pass.
+    static func looksSecret(_ text: String) -> Bool {
+        [text, withoutReferences(text)].contains {
+            CredentialHeuristics.looksLikeCredential($0) || CredentialHeuristics.looksLikeRandomToken($0)
+        }
+    }
+
+    /// Whether a piece of a URL is a secret: it reads as one and is not wholly a reference.
+    static func secretShaped(_ text: String) -> Bool {
+        !refersElsewhere(text) && looksSecret(text)
+    }
+
+    /// `text` with every `${…}` taken out.
+    static func withoutReferences(_ text: String) -> String {
+        let scalars = Array(text.unicodeScalars)
+        var kept: [Unicode.Scalar] = []
+        var index = 0
+        while index < scalars.count {
+            if scalars[index] == "$", index + 1 < scalars.count, scalars[index + 1] == "{",
+               let close = scalars[(index + 2)...].firstIndex(of: "}") {
+                index = close + 1
+            } else {
+                kept.append(scalars[index])
+                index += 1
+            }
+        }
+        return string(kept[...])
     }
 
     /// "needs value" for an empty value or one still holding a `${CC_NEEDS:…}` marker; else "set".
@@ -61,76 +91,128 @@ public enum ControlMasking {
         return secretState(value) == setState ? setText : EditorModel.needsValue
     }
 
-    /// `text` with a URL's password and every query value replaced by "•••"; anything that is not
-    /// `scheme://…` comes back as it is, and so does a value that is a placeholder or a reference.
-    /// The fragment is kept as written.
-    public static func url(_ text: String, reveal: Bool = false) -> String {
-        guard !reveal, let schemeEnd = text.range(of: "://") else { return text }
-        var rest = String(text[schemeEnd.upperBound...])
-        var fragment = ""
-        if let hash = rest.firstIndex(of: "#") {
-            fragment = String(rest[hash...])
-            rest = String(rest[..<hash])
+    // MARK: Cutting text
+
+    // Platform idiom: text is cut scalar by scalar here and by UTF-16 unit on Windows, which cut
+    // in the same places; a Swift `Character` would carry a combining mark after a delimiter
+    // along with it and cut elsewhere.
+
+    /// The text before and after the first `delimiter`, or nil when there is none.
+    static func cut(_ text: String, at delimiter: String) -> (before: String, after: String)? {
+        let scalars = Array(text.unicodeScalars)
+        let mark = Array(delimiter.unicodeScalars)
+        guard scalars.count >= mark.count else { return nil }
+        for index in 0...(scalars.count - mark.count) where Array(scalars[index..<(index + mark.count)]) == mark {
+            return (string(scalars[..<index]), string(scalars[(index + mark.count)...]))
         }
-        var query: String?
-        if let question = rest.firstIndex(of: "?") {
-            query = String(rest[rest.index(after: question)...])
-            rest = String(rest[..<question])
-        }
-        let slash = rest.firstIndex(of: "/") ?? rest.endIndex
-        var authority = String(rest[..<slash])
-        let path = String(rest[slash...])
-        if let at = authority.lastIndex(of: "@") {
-            let userInfo = String(authority[..<at])
-            if let colon = userInfo.firstIndex(of: ":") {
-                let password = String(userInfo[userInfo.index(after: colon)...])
-                if !password.isEmpty, !refersElsewhere(password) {
-                    authority = String(userInfo[...colon]) + mask + String(authority[at...])
-                }
-            }
-        }
-        var result = String(text[..<schemeEnd.upperBound]) + authority + path
-        if let query {
-            let pairs = query.split(separator: "&", omittingEmptySubsequences: false).map { pair -> String in
-                let parts = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
-                if parts.count == 2 {
-                    let value = String(parts[1])
-                    return value.isEmpty || refersElsewhere(value) ? String(pair) : String(parts[0]) + "=" + mask
-                }
-                let bare = String(pair)
-                return CredentialHeuristics.looksLikeCredential(bare) || CredentialHeuristics.looksLikeRandomToken(bare) ? mask : bare
-            }
-            result += "?" + pairs.joined(separator: "&")
-        }
-        return result + fragment
+        return nil
     }
 
-    /// One argument on its own: a placeholder as written, a URL through `url(_:)`, `--flag=value`
-    /// with the value masked when the flag is named for a secret, and "•••" for anything that
-    /// reads as a credential or a random token.
-    public static func argument(_ arg: String, reveal: Bool = false) -> String {
-        if reveal || isPlaceholder(arg) { return arg }
-        if arg.contains("://") { return url(arg) }
-        if arg.hasPrefix("-"), let equals = arg.firstIndex(of: "=") {
-            let flag = String(arg[..<equals])
-            let value = String(arg[arg.index(after: equals)...])
-            if CredentialHeuristics.namesASecret(flag), !refersElsewhere(value) { return flag + "=" + mask }
-            return flag + "=" + argument(value)
+    /// The text before and after the last `delimiter`, or nil when there is none.
+    static func cutLast(_ text: String, at delimiter: Unicode.Scalar) -> (before: String, after: String)? {
+        let scalars = Array(text.unicodeScalars)
+        guard let index = scalars.lastIndex(of: delimiter) else { return nil }
+        return (string(scalars[..<index]), string(scalars[(index + 1)...]))
+    }
+
+    /// `text` in the pieces between its `delimiter`s, empty ones included.
+    static func pieces(_ text: String, by delimiter: Unicode.Scalar) -> [String] {
+        Array(text.unicodeScalars).split(separator: delimiter, omittingEmptySubsequences: false).map(string)
+    }
+
+    /// Whether `text` starts with "-".
+    static func isFlag(_ text: String) -> Bool {
+        text.unicodeScalars.first == "-"
+    }
+
+    static func string(_ scalars: ArraySlice<Unicode.Scalar>) -> String {
+        var text = String.UnicodeScalarView()
+        text.append(contentsOf: scalars)
+        return String(text)
+    }
+
+    // MARK: Arguments and URLs
+
+    /// `text` with a URL's password and every query and fragment value replaced by "•••", and
+    /// so its user name and any path segment that reads as a credential or a random token;
+    /// anything that is not `scheme://…` comes back as it is, and so does a value that is wholly
+    /// a reference.
+    public static func url(_ text: String, reveal: Bool = false) -> String {
+        guard !reveal, let scheme = cut(text, at: "://") else { return text }
+        var rest = scheme.after
+        var fragment: String?
+        if let piece = cut(rest, at: "#") {
+            rest = piece.before
+            fragment = piece.after
         }
-        if CredentialHeuristics.looksLikeCredential(arg) || CredentialHeuristics.looksLikeRandomToken(arg) { return mask }
-        return arg
+        var query: String?
+        if let piece = cut(rest, at: "?") {
+            rest = piece.before
+            query = piece.after
+        }
+        var authority = rest
+        var path: String?
+        if let piece = cut(rest, at: "/") {
+            authority = piece.before
+            path = piece.after
+        }
+        if let piece = cutLast(authority, at: "@") {
+            authority = userInfo(piece.before) + "@" + piece.after
+        }
+        var result = scheme.before + "://" + authority
+        if let path {
+            result += "/" + pieces(path, by: "/").map { secretShaped($0) ? mask : $0 }.joined(separator: "/")
+        }
+        if let query { result += "?" + pairs(query) }
+        if let fragment { result += "#" + pairs(fragment) }
+        return result
+    }
+
+    /// A URL's `user:password`: the password masked unless it is empty or a reference, and the
+    /// user name when it reads as a credential or a random token.
+    static func userInfo(_ text: String) -> String {
+        guard let piece = cut(text, at: ":") else { return secretShaped(text) ? mask : text }
+        let password = piece.after.isEmpty || refersElsewhere(piece.after) ? piece.after : mask
+        return (secretShaped(piece.before) ? mask : piece.before) + ":" + password
+    }
+
+    /// A query's or a fragment's `name=value&…`: each value masked unless it is empty or a
+    /// reference, and a piece with no "=" when it reads as a credential or a random token.
+    static func pairs(_ text: String) -> String {
+        pieces(text, by: "&").map { pair in
+            guard let piece = cut(pair, at: "=") else { return secretShaped(pair) ? mask : pair }
+            return piece.after.isEmpty || refersElsewhere(piece.after) ? pair : piece.before + "=" + mask
+        }.joined(separator: "&")
+    }
+
+    /// One argument on its own: a URL through `url(_:)`, a value that is wholly a reference as
+    /// written, `name=value` with the value masked when the name is a secret's (`--api-key=…`,
+    /// Docker's `-e API_KEY=…`), and "•••" for anything that reads as a credential or a random
+    /// token — a "name" that does is part of the token, so the whole word is masked.
+    public static func argument(_ arg: String, reveal: Bool = false) -> String {
+        if reveal { return arg }
+        if cut(arg, at: "://") != nil { return url(arg) }
+        if refersElsewhere(arg) { return arg }
+        if let piece = cut(arg, at: "="), !looksSecret(piece.before) {
+            if CredentialHeuristics.namesASecret(piece.before), !refersElsewhere(piece.after) {
+                return piece.before + "=" + mask
+            }
+            return piece.before + "=" + argument(piece.after)
+        }
+        return looksSecret(arg) ? mask : arg
     }
 
     /// An argument list: each through `argument(_:)`, and also the value after a flag named for a
-    /// secret (`--api-key x`, `--static-oauth-client-info {…}`) and a header after `--header`.
+    /// secret (`--api-key x`, `--static-oauth-client-info {…}`) unless it is itself a flag, and a
+    /// header after `--header` or `-H`.
     public static func arguments(_ args: [String], reveal: Bool = false) -> [String] {
         guard !reveal else { return args }
         return args.enumerated().map { index, arg in
             if index > 0 {
                 let previous = args[index - 1]
                 if previous == "--header" || previous == "-H" { return header(arg) }
-                if previous.hasPrefix("-"), !previous.contains("="), CredentialHeuristics.namesASecret(previous),
-                   !refersElsewhere(arg) {
+                if isFlag(previous), cut(previous, at: "=") == nil, CredentialHeuristics.namesASecret(previous),
+                   !isFlag(arg), !refersElsewhere(arg) {
                     return mask
                 }
             }
@@ -138,52 +220,67 @@ public enum ControlMasking {
         }
     }
 
-    /// "Name: value" with the value masked unless it refers elsewhere.
+    /// "Name: value" with the value masked unless it is empty or a reference.
     static func header(_ text: String) -> String {
-        guard let colon = text.firstIndex(of: ":") else { return argument(text) }
-        let value = String(text[text.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
+        guard let piece = cut(text, at: ":") else { return argument(text) }
+        let value = piece.after.trimmingCharacters(in: .whitespaces)
         if value.isEmpty || refersElsewhere(value) { return text }
-        return String(text[...colon]) + " " + mask
+        return piece.before + ": " + mask
     }
 
     // MARK: Whole configs
 
+    /// The keys whose values are secrets by name: every value under them is.
+    static let secretKeys: Set<String> = ["env", "headers"]
+
     /// The config as structured output carries it, in its own shape: `env` and `headers` values
-    /// become "set" or "needs value", `args` go through `arguments(_:)`, `url` through `url(_:)`,
-    /// and every other string through `argument(_:)`.
+    /// become "set" or "needs value", and so does every string or number under a key named for a
+    /// secret; an array is an argument list through `arguments(_:)`, and every other string goes
+    /// through `argument(_:)`, a URL through `url(_:)`.
     public static func maskedConfig(_ config: JSONValue, reveal: Bool = false) -> JSONValue {
-        guard !reveal, case .object(let object) = config else { return config }
+        guard !reveal else { return config }
+        guard case .object(let object) = config else { return maskedLeaves(config, secret: false) }
         var out: [String: JSONValue] = [:]
         for (key, value) in object {
-            switch (key, value) {
-            case ("env", .object(let values)), ("headers", .object(let values)):
+            if secretKeys.contains(key), case .object(let values) = value {
                 out[key] = .object(values.mapValues { item in
                     if case .string(let text) = item { return .string(secretState(text)) }
                     return .string(setState)
                 })
-            case ("args", .array(let items)):
-                let strings = items.compactMap { item -> String? in
-                    if case .string(let text) = item { return text }
-                    return nil
-                }
-                out[key] = strings.count == items.count
-                    ? .array(arguments(strings).map(JSONValue.string))
-                    : .array(items.map(maskedLeaves))
-            case ("url", .string(let address)):
-                out[key] = .string(url(address))
-            default:
-                out[key] = maskedLeaves(value)
+            } else {
+                out[key] = maskedLeaves(value, secret: secretKeys.contains(key) || CredentialHeuristics.namesASecret(key))
             }
         }
         return .object(out)
     }
 
-    static func maskedLeaves(_ value: JSONValue) -> JSONValue {
+    /// `value` masked: under a key named for a secret (`secret`) every string or number reads
+    /// "set" or "needs value"; elsewhere an array is an argument list, its strings masked as
+    /// `arguments(_:)` masks them, and every other string goes through `argument(_:)`.
+    static func maskedLeaves(_ value: JSONValue, secret: Bool) -> JSONValue {
         switch value {
-        case .string(let text): return .string(argument(text))
-        case .array(let items): return .array(items.map(maskedLeaves))
-        case .object(let object): return .object(object.mapValues(maskedLeaves))
-        default: return value
+        case .string(let text):
+            return .string(secret ? secretState(text) : argument(text))
+        case .int, .double:
+            return secret ? .string(setState) : value
+        case .array(let items):
+            if secret { return .array(items.map { maskedLeaves($0, secret: true) }) }
+            let shown = arguments(items.map { item -> String in
+                if case .string(let text) = item { return text }
+                return ""
+            })
+            return .array(zip(items, shown).map { item, text in
+                if case .string = item { return .string(text) }
+                return maskedLeaves(item, secret: false)
+            })
+        case .object(let object):
+            var out: [String: JSONValue] = [:]
+            for (key, item) in object {
+                out[key] = maskedLeaves(item, secret: secret || CredentialHeuristics.namesASecret(key))
+            }
+            return .object(out)
+        case .null, .bool:
+            return value
         }
     }
 

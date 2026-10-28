@@ -1,13 +1,18 @@
+using System.Text;
+
 namespace ConnectorControl.Core.State;
 
 /// <summary>
 /// What a connector looks like to anyone but its owner: the command line and URL in full, with
 /// every secret value replaced. Environment and header values are never shown, only whether they
-/// are set; an argument that reads as a credential, the value after a flag named for a secret, a
-/// header's value and a URL's password and query values read "•••". Placeholders — <c>${CC_NEEDS:…}</c>
-/// and <c>${COLLECTION_DIR}</c> — name what is missing rather than what is secret, and show as written.
-/// Every rule is plain string work, with no URL parser, so both platforms mask the same text the
-/// same way. <c>reveal</c> (the command-line tool's <c>show --reveal</c>, never Claude's) turns it all off.
+/// are set, and nor is a value under a key named for a secret; an argument that reads as a
+/// credential, the value after a flag named for a secret, a <c>NAME=value</c> word's value when the
+/// name is a secret's, a header's value, a URL's password and query and fragment values, and a
+/// URL's user name or path segment that reads as a credential, read "•••". Placeholders —
+/// <c>${CC_NEEDS:…}</c> and <c>${COLLECTION_DIR}</c> — name what is missing rather than what is secret, and
+/// show as written when they are the whole value. Every rule is plain string work, with no URL
+/// parser, so both platforms mask the same text the same way. <c>reveal</c> (the command-line tool's
+/// <c>show --reveal</c>, never Claude's) turns it all off.
 /// The Mac mirror is main-actor only; C# has no isolation to declare.
 ///
 /// Mirror: Sources/ConnectorControlState/Control/ControlMasking.swift
@@ -41,14 +46,43 @@ public static class ControlMasking
 
     // MARK: Values
 
-    /// <summary>A placeholder names what is missing, never what is secret.</summary>
-    internal static bool IsPlaceholder(string value) =>
-        Placeholder.ContainsMarker(value) || value.Contains(Placeholder.DirectoryToken, StringComparison.Ordinal);
-
-    /// <summary>A value that takes its secret from elsewhere — a placeholder, or a <c>${NAME}</c> / <c>$NAME</c>
-    /// reference — holds none itself.</summary>
+    /// <summary>A value that is wholly a reference — a placeholder, <c>${COLLECTION_DIR}</c>, or a <c>${NAME}</c> /
+    /// <c>$NAME</c> — takes its secret from elsewhere and holds none itself. One with a placeholder
+    /// inside other text can still hold a secret beside it, so it is masked like any other.</summary>
     internal static bool RefersElsewhere(string value) =>
-        IsPlaceholder(value) || CredentialHeuristics.IsReference(value);
+        CredentialHeuristics.IsReference(value);
+
+    /// <summary>Whether <c>text</c> reads as a credential or a random token, as written or with every <c>${…}</c>
+    /// taken out: the heuristics take a placeholder for a value still to come, so
+    /// <c>sk-live-…${CC_NEEDS:x}</c> would otherwise pass.</summary>
+    internal static bool LooksSecret(string text) =>
+        new[] { text, WithoutReferences(text) }.Any(candidate =>
+            CredentialHeuristics.LooksLikeCredential(candidate) || CredentialHeuristics.LooksLikeRandomToken(candidate));
+
+    /// <summary>Whether a piece of a URL is a secret: it reads as one and is not wholly a reference.</summary>
+    internal static bool SecretShaped(string text) =>
+        !RefersElsewhere(text) && LooksSecret(text);
+
+    /// <summary><c>text</c> with every <c>${…}</c> taken out.</summary>
+    internal static string WithoutReferences(string text)
+    {
+        var kept = new StringBuilder();
+        var index = 0;
+        while (index < text.Length)
+        {
+            if (text[index] == '$' && index + 1 < text.Length && text[index + 1] == '{'
+                && text.IndexOf('}', index + 2) is var close and >= 0)
+            {
+                index = close + 1;
+            }
+            else
+            {
+                kept.Append(text[index]);
+                index += 1;
+            }
+        }
+        return kept.ToString();
+    }
 
     /// <summary>"needs value" for an empty value or one still holding a <c>${CC_NEEDS:…}</c> marker; else "set".</summary>
     public static string SecretState(string value) =>
@@ -64,104 +98,142 @@ public static class ControlMasking
         return SecretState(value) == SetState ? SetText : EditorModel.NeedsValue;
     }
 
-    /// <summary><c>text</c> with a URL's password and every query value replaced by "•••"; anything that is not
-    /// <c>scheme://…</c> comes back as it is, and so does a value that is a placeholder or a reference.
-    /// The fragment is kept as written.</summary>
+    // MARK: Cutting text
+
+    // Platform idiom: text is cut scalar by scalar on the Mac and by UTF-16 unit here, which cut
+    // in the same places; a Swift `Character` would carry a combining mark after a delimiter
+    // along with it and cut elsewhere.
+
+    /// <summary>The text before and after the first <c>delimiter</c>, or null when there is none.</summary>
+    internal static (string Before, string After)? Cut(string text, string delimiter)
+    {
+        var index = text.IndexOf(delimiter, StringComparison.Ordinal);
+        return index < 0 ? null : (text[..index], text[(index + delimiter.Length)..]);
+    }
+
+    /// <summary>The text before and after the last <c>delimiter</c>, or null when there is none.</summary>
+    internal static (string Before, string After)? CutLast(string text, char delimiter)
+    {
+        var index = text.LastIndexOf(delimiter);
+        return index < 0 ? null : (text[..index], text[(index + 1)..]);
+    }
+
+    /// <summary><c>text</c> in the pieces between its <c>delimiter</c>s, empty ones included.</summary>
+    internal static string[] Pieces(string text, char delimiter) =>
+        text.Split(delimiter);
+
+    /// <summary>Whether <c>text</c> starts with "-".</summary>
+    internal static bool IsFlag(string text) =>
+        text.StartsWith('-');
+
+    // MARK: Arguments and URLs
+
+    /// <summary><c>text</c> with a URL's password and every query and fragment value replaced by "•••", and
+    /// so its user name and any path segment that reads as a credential or a random token;
+    /// anything that is not <c>scheme://…</c> comes back as it is, and so does a value that is wholly
+    /// a reference.</summary>
     public static string Url(string text, bool reveal = false)
     {
-        var schemeEnd = text.IndexOf("://", StringComparison.Ordinal);
-        if (reveal || schemeEnd < 0)
+        if (reveal || Cut(text, "://") is not { } scheme)
         {
             return text;
         }
-        var afterScheme = schemeEnd + "://".Length;
-        var rest = text[afterScheme..];
-        var fragment = "";
-        var hash = rest.IndexOf('#');
-        if (hash >= 0)
+        var rest = scheme.After;
+        string? fragment = null;
+        if (Cut(rest, "#") is { } fragmentPiece)
         {
-            fragment = rest[hash..];
-            rest = rest[..hash];
+            rest = fragmentPiece.Before;
+            fragment = fragmentPiece.After;
         }
         string? query = null;
-        var question = rest.IndexOf('?');
-        if (question >= 0)
+        if (Cut(rest, "?") is { } queryPiece)
         {
-            query = rest[(question + 1)..];
-            rest = rest[..question];
+            rest = queryPiece.Before;
+            query = queryPiece.After;
         }
-        var slash = rest.IndexOf('/');
-        if (slash < 0)
+        var authority = rest;
+        string? path = null;
+        if (Cut(rest, "/") is { } pathPiece)
         {
-            slash = rest.Length;
+            authority = pathPiece.Before;
+            path = pathPiece.After;
         }
-        var authority = rest[..slash];
-        var path = rest[slash..];
-        var at = authority.LastIndexOf('@');
-        if (at >= 0)
+        if (CutLast(authority, '@') is { } userPiece)
         {
-            var userInfo = authority[..at];
-            var colon = userInfo.IndexOf(':');
-            if (colon >= 0)
-            {
-                var password = userInfo[(colon + 1)..];
-                if (password.Length > 0 && !RefersElsewhere(password))
-                {
-                    authority = userInfo[..(colon + 1)] + Mask + authority[at..];
-                }
-            }
+            authority = UserInfo(userPiece.Before) + "@" + userPiece.After;
         }
-        var result = text[..afterScheme] + authority + path;
+        var result = scheme.Before + "://" + authority;
+        if (path is not null)
+        {
+            result += "/" + string.Join("/", Pieces(path, '/').Select(segment => SecretShaped(segment) ? Mask : segment));
+        }
         if (query is not null)
         {
-            var pairs = query.Split('&').Select(pair =>
-            {
-                var parts = pair.Split('=', 2);
-                if (parts.Length == 2)
-                {
-                    var value = parts[1];
-                    return value.Length == 0 || RefersElsewhere(value) ? pair : parts[0] + "=" + Mask;
-                }
-                return CredentialHeuristics.LooksLikeCredential(pair) || CredentialHeuristics.LooksLikeRandomToken(pair) ? Mask : pair;
-            });
-            result += "?" + string.Join("&", pairs);
+            result += "?" + Pairs(query);
         }
-        return result + fragment;
+        if (fragment is not null)
+        {
+            result += "#" + Pairs(fragment);
+        }
+        return result;
     }
 
-    /// <summary>One argument on its own: a placeholder as written, a URL through <see cref="Url"/>, <c>--flag=value</c>
-    /// with the value masked when the flag is named for a secret, and "•••" for anything that
-    /// reads as a credential or a random token.</summary>
+    /// <summary>A URL's <c>user:password</c>: the password masked unless it is empty or a reference, and the
+    /// user name when it reads as a credential or a random token.</summary>
+    internal static string UserInfo(string text)
+    {
+        if (Cut(text, ":") is not { } piece)
+        {
+            return SecretShaped(text) ? Mask : text;
+        }
+        var password = piece.After.Length == 0 || RefersElsewhere(piece.After) ? piece.After : Mask;
+        return (SecretShaped(piece.Before) ? Mask : piece.Before) + ":" + password;
+    }
+
+    /// <summary>A query's or a fragment's <c>name=value&amp;…</c>: each value masked unless it is empty or a
+    /// reference, and a piece with no "=" when it reads as a credential or a random token.</summary>
+    internal static string Pairs(string text) =>
+        string.Join("&", Pieces(text, '&').Select(pair =>
+        {
+            if (Cut(pair, "=") is not { } piece)
+            {
+                return SecretShaped(pair) ? Mask : pair;
+            }
+            return piece.After.Length == 0 || RefersElsewhere(piece.After) ? pair : piece.Before + "=" + Mask;
+        }));
+
+    /// <summary>One argument on its own: a URL through <see cref="Url"/>, a value that is wholly a reference as
+    /// written, <c>name=value</c> with the value masked when the name is a secret's (<c>--api-key=…</c>,
+    /// Docker's <c>-e API_KEY=…</c>), and "•••" for anything that reads as a credential or a random
+    /// token — a "name" that does is part of the token, so the whole word is masked.</summary>
     public static string Argument(string arg, bool reveal = false)
     {
-        if (reveal || IsPlaceholder(arg))
+        if (reveal)
         {
             return arg;
         }
-        if (arg.Contains("://", StringComparison.Ordinal))
+        if (Cut(arg, "://") is not null)
         {
             return Url(arg);
         }
-        var equals = arg.IndexOf('=');
-        if (arg.StartsWith('-') && equals >= 0)
+        if (RefersElsewhere(arg))
         {
-            var flag = arg[..equals];
-            var value = arg[(equals + 1)..];
-            if (CredentialHeuristics.NamesASecret(flag) && !RefersElsewhere(value))
+            return arg;
+        }
+        if (Cut(arg, "=") is { } piece && !LooksSecret(piece.Before))
+        {
+            if (CredentialHeuristics.NamesASecret(piece.Before) && !RefersElsewhere(piece.After))
             {
-                return flag + "=" + Mask;
+                return piece.Before + "=" + Mask;
             }
-            return flag + "=" + Argument(value);
+            return piece.Before + "=" + Argument(piece.After);
         }
-        if (CredentialHeuristics.LooksLikeCredential(arg) || CredentialHeuristics.LooksLikeRandomToken(arg))
-        {
-            return Mask;
-        }
-        return arg;
+        return LooksSecret(arg) ? Mask : arg;
     }
 
     /// <summary>An argument list: each through <see cref="Argument"/>, and also the value after a flag named for a
-    /// secret (<c>--api-key x</c>, <c>--static-oauth-client-info {…}</c>) and a header after <c>--header</c>.</summary>
+    /// secret (<c>--api-key x</c>, <c>--static-oauth-client-info {…}</c>) unless it is itself a flag, and a
+    /// header after <c>--header</c> or <c>-H</c>.</summary>
     public static IReadOnlyList<string> Arguments(IReadOnlyList<string> args, bool reveal = false)
     {
         if (reveal)
@@ -177,8 +249,8 @@ public static class ControlMasking
                 {
                     return Header(arg);
                 }
-                if (previous.StartsWith('-') && !previous.Contains('=') && CredentialHeuristics.NamesASecret(previous)
-                    && !RefersElsewhere(arg))
+                if (IsFlag(previous) && Cut(previous, "=") is null && CredentialHeuristics.NamesASecret(previous)
+                    && !IsFlag(arg) && !RefersElsewhere(arg))
                 {
                     return Mask;
                 }
@@ -187,68 +259,83 @@ public static class ControlMasking
         }).ToList();
     }
 
-    /// <summary>"Name: value" with the value masked unless it refers elsewhere.</summary>
+    /// <summary>"Name: value" with the value masked unless it is empty or a reference.</summary>
     internal static string Header(string text)
     {
-        var colon = text.IndexOf(':');
-        if (colon < 0)
+        if (Cut(text, ":") is not { } piece)
         {
             return Argument(text);
         }
-        var value = text[(colon + 1)..].TrimSpaces();
+        var value = piece.After.TrimSpaces();
         if (value.Length == 0 || RefersElsewhere(value))
         {
             return text;
         }
-        return text[..(colon + 1)] + " " + Mask;
+        return piece.Before + ": " + Mask;
     }
 
     // MARK: Whole configs
 
+    /// <summary>The keys whose values are secrets by name: every value under them is.</summary>
+    internal static readonly IReadOnlySet<string> SecretKeys = new HashSet<string>(StringComparer.Ordinal) { "env", "headers" };
+
     /// <summary>The config as structured output carries it, in its own shape: <c>env</c> and <c>headers</c> values
-    /// become "set" or "needs value", <c>args</c> go through <see cref="Arguments"/>, <c>url</c> through <see cref="Url"/>,
-    /// and every other string through <see cref="Argument"/>.</summary>
+    /// become "set" or "needs value", and so does every string or number under a key named for a
+    /// secret; an array is an argument list through <see cref="Arguments"/>, and every other string goes
+    /// through <see cref="Argument"/>, a URL through <see cref="Url"/>.</summary>
     public static JsonValue MaskedConfig(JsonValue config, bool reveal = false)
     {
-        if (reveal || config.Kind != JsonKind.Object)
+        if (reveal)
         {
             return config;
+        }
+        if (config.Kind != JsonKind.Object)
+        {
+            return MaskedLeaves(config, secret: false);
         }
         var result = new Dictionary<string, JsonValue>(StringComparer.Ordinal);
         foreach (var (key, value) in config.ObjectProperties)
         {
-            if ((key == "env" || key == "headers") && value.Kind == JsonKind.Object)
+            if (SecretKeys.Contains(key) && value.Kind == JsonKind.Object)
             {
                 result[key] = JsonValue.Object(value.ObjectProperties.Select(item => new KeyValuePair<string, JsonValue>(
                     item.Key, JsonValue.String(item.Value.Kind == JsonKind.String ? SecretState(item.Value.StringValue) : SetState))));
             }
-            else if (key == "args" && value.Kind == JsonKind.Array)
-            {
-                var items = value.ArrayItems;
-                result[key] = items.All(item => item.Kind == JsonKind.String)
-                    ? JsonValue.Array(Arguments(items.Select(item => item.StringValue).ToList()).Select(JsonValue.String))
-                    : JsonValue.Array(items.Select(MaskedLeaves));
-            }
-            else if (key == "url" && value.Kind == JsonKind.String)
-            {
-                result[key] = JsonValue.String(Url(value.StringValue));
-            }
             else
             {
-                result[key] = MaskedLeaves(value);
+                result[key] = MaskedLeaves(value, secret: SecretKeys.Contains(key) || CredentialHeuristics.NamesASecret(key));
             }
         }
         return JsonValue.Object(result);
     }
 
-    internal static JsonValue MaskedLeaves(JsonValue value) => value.Kind switch
+    /// <summary><c>value</c> masked: under a key named for a secret (<c>secret</c>) every string or number reads
+    /// "set" or "needs value"; elsewhere an array is an argument list, its strings masked as
+    /// <see cref="Arguments"/> masks them, and every other string goes through <see cref="Argument"/>.</summary>
+    internal static JsonValue MaskedLeaves(JsonValue value, bool secret)
     {
-        JsonKind.String => JsonValue.String(Argument(value.StringValue)),
-        JsonKind.Array => JsonValue.Array(value.ArrayItems.Select(MaskedLeaves)),
-        JsonKind.Object => JsonValue.Object(value.ObjectProperties.Select(item =>
-            new KeyValuePair<string, JsonValue>(item.Key, MaskedLeaves(item.Value)))),
-        _ => value,
-    };
+        switch (value.Kind)
+        {
+            case JsonKind.String:
+                return JsonValue.String(secret ? SecretState(value.StringValue) : Argument(value.StringValue));
+            case JsonKind.Int:
+            case JsonKind.Double:
+                return secret ? JsonValue.String(SetState) : value;
+            case JsonKind.Array:
+                if (secret)
+                {
+                    return JsonValue.Array(value.ArrayItems.Select(item => MaskedLeaves(item, secret: true)));
+                }
+                var shown = Arguments(value.ArrayItems.Select(item => item.Kind == JsonKind.String ? item.StringValue : "").ToList());
+                return JsonValue.Array(value.ArrayItems.Zip(shown, (item, text) =>
+                    item.Kind == JsonKind.String ? JsonValue.String(text) : MaskedLeaves(item, secret: false)));
+            case JsonKind.Object:
+                return JsonValue.Object(value.ObjectProperties.Select(item => new KeyValuePair<string, JsonValue>(
+                    item.Key, MaskedLeaves(item.Value, secret || CredentialHeuristics.NamesASecret(item.Key)))));
+            default:
+                return value;
+        }
+    }
 
     /// <summary>One field of a config as a person reads it: its label, and each value as written (<c>Raw</c>,
     /// which tells a changed secret from an unchanged one) and as shown.</summary>
