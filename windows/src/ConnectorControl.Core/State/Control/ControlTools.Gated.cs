@@ -543,10 +543,17 @@ public sealed partial class ControlTools
         var file = ControlText.EscapedName(Path.GetFileName(Path.TrimEndingDirectorySeparator(full)));
         try
         {
+            // A folder, or a link Windows marks as one, is refused before any link is followed.
+            if (Directory.Exists(full))
+            {
+                return NotAFileError(file);
+            }
             FileSystemInfo info = new FileInfo(full);
             if (info.LinkTarget is not null)
             {
-                // A link is read as what it finally names.
+                // A link is read as what it finally names. Following it opens what it names, so a local
+                // link to a UNC path would reach that host here; making one takes write access to this
+                // disk already.
                 info = info.ResolveLinkTarget(returnFinalTarget: true) ?? info;
             }
             if (Directory.Exists(info.FullName) || (info.Exists && info.Attributes.HasFlag(FileAttributes.Device)))

@@ -328,7 +328,8 @@ public class ControlToolsSharingTests
         var toDocument = rig.H.Dir.File("alias.json");
         try
         {
-            File.CreateSymbolicLink(toFolder, folder);
+            // A link to a folder is a directory link on Windows, as Explorer and mklink /D make one.
+            Directory.CreateSymbolicLink(toFolder, folder);
             File.CreateSymbolicLink(toDocument, document);
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
