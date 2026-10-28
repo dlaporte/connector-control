@@ -98,7 +98,8 @@ public final class ControlTools {
     public var version: String { ControlVersion.semantic(settings.version) ?? settings.version }
 
     /// Runs one tool for `caller`. `progress` reports how many seconds a change has waited;
-    /// `completion` is called once. `isAbandoned` says the caller's connection has closed: a write
+    /// `completion` is called once, or never for a write dropped because its connection closed first.
+    /// `isAbandoned` says the caller's connection has closed: a write
     /// still waiting for its turn then, whose caller was never told it is waiting, is dropped unrun.
     public func call(name: String, arguments: JSONValue, caller: ControlCaller,
                      progress: @escaping (Double) -> Void, completion: @escaping (ControlResult) -> Void,
@@ -160,6 +161,8 @@ public final class ControlTools {
         // A write whose connection closed before its turn, and whose caller was never told it is
         // waiting, is dropped unrun: nobody is left to hear of it, and a command line stopped with
         // Control-C has taken it back. One already told it is queued runs, as it was told.
+        // The Windows mirror calls `IsAbandoned` outside its catches: its one supplier, the host's
+        // `IsOpen`, cannot throw, and neither can this closure by its type.
         if !call.delivered, call.isAbandoned() {
             call.finished = true
             call.delivered = true
@@ -247,8 +250,9 @@ public final class ControlTools {
     /// Announces a change that landed when nobody else will hear of it: always for one made without
     /// asking, for a direct change that moved what Claude runs (`announces`), and for any other once
     /// its caller has already been told it is still waiting, or its connection has closed and it will
-    /// never hear the answer, so a change Claude asked for never lands unannounced. The command line's own changes are the user's, and never announced. The tool's
-    /// own notification says it, or else its answer; it is posted once, however many of these hold.
+    /// never hear the answer, so a change Claude asked for never lands unannounced. The command line's
+    /// own changes are the user's, and never announced. The tool's own notification says it, or else its
+    /// answer; it is posted once, however many of these hold.
     private func announce(_ call: Call, _ outcome: ControlOutcome, unasked: Bool) {
         guard !outcome.result.isError, call.caller != .cli,
               unasked || outcome.announces || call.delivered || call.isAbandoned() else { return }
@@ -278,7 +282,8 @@ public final class ControlTools {
 
     /// Progress every `progressInterval` while a call waits — for its turn, or for the user's
     /// answer — and, at `confirmationWait`, the early answer that says so. The call carries on: its
-    /// turn still comes, and the user's answer still counts.
+    /// turn still comes, and the user's answer still counts. The command line is never answered
+    /// early, and a call whose connection has closed hears nothing more and gets no early answer.
     private func startWaiting(_ call: Call) {
         guard !call.waiting, !call.delivered else { return }
         call.waiting = true

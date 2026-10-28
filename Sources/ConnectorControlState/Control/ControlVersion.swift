@@ -80,6 +80,8 @@ public enum ControlVersion {
     /// Digits without their leading zeros: "" for zero, as the Windows mirror's TrimStart('0') leaves it.
     static func withoutLeadingZeros(_ digits: String) -> Substring { digits.drop { $0 == "0" } }
 
+    /// Swift-only helpers: the Windows mirror uses `char.IsAsciiDigit` and `char.IsAsciiLetterOrDigit`,
+    /// which are ASCII-only as these are.
     static func isDigit(_ scalar: Unicode.Scalar) -> Bool { scalar.value >= 0x30 && scalar.value <= 0x39 }
 
     static func isLetter(_ scalar: Unicode.Scalar) -> Bool {

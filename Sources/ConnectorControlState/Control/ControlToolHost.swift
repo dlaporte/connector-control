@@ -15,7 +15,10 @@ public final class ControlToolHost: McpToolHost {
     public weak var session: McpSession?
     /// The version the connection's hello gave, or nil when it gave none.
     public var clientVersion: String?
-    /// False once the connection has closed: a write it left waiting for its turn is dropped.
+    /// False once the connection has closed: a write it left waiting for its turn is dropped. The
+    /// server clears it when it closes a connection, which is what keeps the two platforms the same:
+    /// the closure `callTool` hands the tools captures the host weakly, to break the cycle tools →
+    /// write queue → call → host, so a host that has been released also counts as closed.
     public var isOpen = true
 
     public init(tools: ControlTools, isCLI: Bool) {

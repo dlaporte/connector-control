@@ -201,8 +201,11 @@ final class ControlWriteQueueTests: XCTestCase {
         runOutTheClock(rig)
         XCTAssertEqual(told.result, ControlTools.queuedResult)
         open = false
+        rig.h.notifier.clearSent()
         rig.confirmer.answer(false)
+        rig.h.drain()
         XCTAssertEqual(performed, ["b"])
+        XCTAssertEqual(rig.h.notifier.sent.map(\.body), ["Did b."], "announced once, since it will never hear the answer")
     }
 
     /// A relay write waiting its turn whose connection closes before its early answer hears nothing
@@ -241,5 +244,45 @@ final class ControlWriteQueueTests: XCTestCase {
         rig.h.drain()
         XCTAssertEqual(performed, ["a"])
         XCTAssertEqual(rig.h.notifier.sent.map(\.body), ["Did a."])
+    }
+
+    /// An asking call whose connection closes hears no more progress and is never told it is waiting;
+    /// the user's Allow still applies, and the change is announced once.
+    func testAnAskingCallWhoseConnectionClosesHearsNothingMoreButStillLandsOnAllow() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        controlWrites(rig)
+        var open = true
+        let asking = start(rig, "add_connector", ["name": .string("a"), "config": .object([:])], as: .relay(clientName: "claude-ai"),
+                           open: { open })
+        for _ in 0..<4 { rig.h.delays.runNext() }
+        XCTAssertEqual(asking.progress.count, 4)
+        open = false
+        runOutTheClock(rig)
+        XCTAssertNil(asking.result, "never told it is waiting")
+        XCTAssertEqual(asking.progress.count, 4, "and no more progress")
+        rig.h.notifier.clearSent()
+        rig.confirmer.answer(true)
+        rig.h.drain()
+        XCTAssertEqual(performed, ["a"])
+        XCTAssertEqual(rig.h.notifier.sent.map(\.body), ["Did a."])
+        XCTAssertEqual(asking.result?.text, "Did a.", "the answer goes to a connection that is closed, and is dropped there")
+    }
+
+    /// Dropping a write moves on to the next, which may be dropped too: two abandoned writes in a row
+    /// both go, and the write after them runs.
+    func testTwoAbandonedWritesInARowAreBothDroppedAndTheNextRuns() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        controlWrites(rig)
+        var open = true
+        _ = add(rig, "a")
+        let first = start(rig, "switch_collection", ["collection": .string("b")], as: .cli, open: { open })
+        let second = start(rig, "switch_collection", ["collection": .string("c")], as: .cli, open: { open })
+        let third = switchTo(rig, "d", as: .cli)
+        open = false
+        rig.confirmer.answer(false)
+        XCTAssertNil(first.result)
+        XCTAssertNil(second.result)
+        XCTAssertEqual(third.result?.text, "Did d.")
+        XCTAssertEqual(performed, ["d"])
     }
 }

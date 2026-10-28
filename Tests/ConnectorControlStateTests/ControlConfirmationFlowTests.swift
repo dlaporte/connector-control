@@ -254,7 +254,7 @@ final class ControlConfirmationFlowTests: XCTestCase {
     /// The confirmer of a host that can show no dialog answers every question Don't Allow at once:
     /// the relay's gated change is refused and nothing changes, while the command line, never asked,
     /// still runs.
-    func testTheDecliningConfirmerRefusesEveryQuestion() throws {
+    func testTheDecliningConfirmerRefusesEveryQuestion() {
         let rig = ControlRig(); defer { rig.dispose() }
         let tools = ControlTools(state: rig.state, settings: rig.settingsModel, confirmer: DecliningConfirmer(), host: rig.h.host)
         var relay: ControlResult?

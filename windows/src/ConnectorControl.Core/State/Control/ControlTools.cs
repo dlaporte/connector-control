@@ -98,7 +98,8 @@ public sealed partial class ControlTools
     public string Version => ControlVersion.Semantic(settings.Version) ?? settings.Version;
 
     /// <summary>Runs one tool for <paramref name="caller"/>. <paramref name="progress"/> reports how many
-    /// seconds a change has waited; <paramref name="completion"/> is called once. <paramref name="isAbandoned"/>
+    /// seconds a change has waited; <paramref name="completion"/> is called once, or never for a write dropped
+    /// because its connection closed first. <paramref name="isAbandoned"/>
     /// says the caller's connection has closed: a write still waiting for its turn then, whose caller was never
     /// told it is waiting, is dropped unrun.</summary>
     public void Call(string name, JsonValue arguments, ControlCaller caller, Action<double> progress, Action<ControlResult> completion,
@@ -183,6 +184,8 @@ public sealed partial class ControlTools
         // A write whose connection closed before its turn, and whose caller was never told it is
         // waiting, is dropped unrun: nobody is left to hear of it, and a command line stopped with
         // Control-C has taken it back. One already told it is queued runs, as it was told.
+        // Outside the catches below on purpose: the one supplier of <c>IsAbandoned</c>, the host's
+        // <c>IsOpen</c>, cannot throw, and the Mac's closure cannot by its type.
         if (!call.Delivered && call.IsAbandoned())
         {
             call.Finished = true;
@@ -309,8 +312,9 @@ public sealed partial class ControlTools
     /// <summary>Announces a change that landed when nobody else will hear of it: always for one made without
     /// asking, for a direct change that moved what Claude runs (<c>Announces</c>), and for any other once
     /// its caller has already been told it is still waiting, or its connection has closed and it will
-    /// never hear the answer, so a change Claude asked for never lands unannounced. The command line's own changes are the user's, and never announced. The tool's
-    /// own notification says it, or else its answer; it is posted once, however many of these hold.</summary>
+    /// never hear the answer, so a change Claude asked for never lands unannounced. The command line's
+    /// own changes are the user's, and never announced. The tool's own notification says it, or else its
+    /// answer; it is posted once, however many of these hold.</summary>
     private void Announce(ToolCall call, ControlOutcome outcome, bool unasked)
     {
         if (outcome.Result.IsError || call.Caller is ControlCaller.Cli || !(unasked || outcome.Announces || call.Delivered || call.IsAbandoned()))
@@ -369,7 +373,8 @@ public sealed partial class ControlTools
 
     /// <summary>Progress every <see cref="ProgressInterval"/> while a call waits — for its turn, or for the
     /// user's answer — and, at <see cref="ConfirmationWait"/>, the early answer that says so. The call
-    /// carries on: its turn still comes, and the user's answer still counts.</summary>
+    /// carries on: its turn still comes, and the user's answer still counts. The command line is never answered
+    /// early, and a call whose connection has closed hears nothing more and gets no early answer.</summary>
     private void StartWaiting(ToolCall call)
     {
         if (call.Waiting || call.Delivered)

@@ -129,7 +129,7 @@ final class ControlToolHostTests: XCTestCase {
     }
 
     /// The host says when its connection has closed, so a write still waiting for its turn is dropped.
-    func testAClosedHostsWaitingWriteIsDropped() throws {
+    func testAClosedHostsWaitingWriteIsDropped() {
         let rig = ControlRig(); defer { rig.dispose() }
         rig.confirmer.scripted = nil
         _ = rig.start("delete_connectors", ["names": .array([.string("aws-mcp")])])

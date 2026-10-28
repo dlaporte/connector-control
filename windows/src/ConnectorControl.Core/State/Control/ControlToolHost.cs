@@ -18,7 +18,10 @@ public sealed class ControlToolHost(ControlTools tools, bool isCli) : IMcpToolHo
     public McpSession? Session { get; set; }
     /// <summary>The version the connection's hello gave, or null when it gave none.</summary>
     public string? ClientVersion { get; set; }
-    /// <summary>False once the connection has closed: a write it left waiting for its turn is dropped.</summary>
+    /// <summary>False once the connection has closed: a write it left waiting for its turn is dropped. The
+    /// server clears it when it closes a connection, which is what keeps the two platforms the same:
+    /// <c>CallTool</c> captures the host with a plain reference, as the GC has no cycle to break, where
+    /// the Mac's closure is weak and counts a released host as closed.</summary>
     public bool IsOpen { get; set; } = true;
 
     /// <summary>What the session's <c>serverInfo</c> says.</summary>

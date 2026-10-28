@@ -307,8 +307,12 @@ public class ControlWriteQueueTests
         RunOutTheClock(rig);
         Assert.Equal(ControlTools.QueuedResult, told.Result);
         open = false;
+        rig.H.Notifier.Sent.Clear();
         rig.Confirmer.Answer(false);
+        rig.H.Drain();
         Assert.Equal(["b"], performed);
+        // Announced once, since it will never hear the answer.
+        Assert.Equal(["Did b."], rig.H.Notifier.Sent.Select(sent => sent.Body));
     }
 
     /// <summary>A relay write waiting its turn whose connection closes before its early answer hears nothing
@@ -353,5 +357,53 @@ public class ControlWriteQueueTests
         rig.H.Drain();
         Assert.Equal(["a"], performed);
         Assert.Equal(["Did a."], rig.H.Notifier.Sent.Select(sent => sent.Body));
+    }
+
+    /// <summary>An asking call whose connection closes hears no more progress and is never told it is waiting;
+    /// the user's Allow still applies, and the change is announced once.</summary>
+    [Fact]
+    public void AnAskingCallWhoseConnectionClosesHearsNothingMoreButStillLandsOnAllow()
+    {
+        using var rig = new ControlRig();
+        ControlWrites(rig);
+        var open = true;
+        var asking = Start(rig, "add_connector", JsonValue.Object(("name", JsonValue.String("a")), ("config", JsonValue.Object())), Claude, () => open);
+        for (var i = 0; i < 4; i++)
+        {
+            rig.H.Delays.RunNext();
+        }
+        Assert.Equal(4, asking.Progress.Count);
+        open = false;
+        RunOutTheClock(rig);
+        // Never told it is waiting, and no more progress.
+        Assert.Null(asking.Result);
+        Assert.Equal(4, asking.Progress.Count);
+        rig.H.Notifier.Sent.Clear();
+        rig.Confirmer.Answer(true);
+        rig.H.Drain();
+        Assert.Equal(["a"], performed);
+        Assert.Equal(["Did a."], rig.H.Notifier.Sent.Select(sent => sent.Body));
+        // The answer goes to a connection that is closed, and is dropped there.
+        Assert.Equal("Did a.", asking.Result?.Text);
+    }
+
+    /// <summary>Dropping a write moves on to the next, which may be dropped too: two abandoned writes in a row
+    /// both go, and the write after them runs.</summary>
+    [Fact]
+    public void TwoAbandonedWritesInARowAreBothDroppedAndTheNextRuns()
+    {
+        using var rig = new ControlRig();
+        ControlWrites(rig);
+        var open = true;
+        Add(rig, "a");
+        var first = Start(rig, "switch_collection", JsonValue.Object(("collection", JsonValue.String("b"))), new ControlCaller.Cli(), () => open);
+        var second = Start(rig, "switch_collection", JsonValue.Object(("collection", JsonValue.String("c"))), new ControlCaller.Cli(), () => open);
+        var third = SwitchTo(rig, "d", new ControlCaller.Cli());
+        open = false;
+        rig.Confirmer.Answer(false);
+        Assert.Null(first.Result);
+        Assert.Null(second.Result);
+        Assert.Equal("Did d.", third.Result?.Text);
+        Assert.Equal(["d"], performed);
     }
 }
