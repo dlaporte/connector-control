@@ -1,0 +1,175 @@
+import Foundation
+import ConnectorControlCore
+import ConnectorControlState
+
+/// Mirror: windows/src/ConnectorControl.Core/Transport/ControlRelay.cs
+///
+/// `connector-control mcp`, the relay Claude Desktop runs, as a state machine: lines from Claude, lines
+/// from the app and the connection's comings and goings in; what to send where out. Every line passes
+/// as it came. The relay keeps only what it needs to outlive the app restarting: Claude's
+/// `initialize` and `notifications/initialized`, replayed to a new connection with the replayed
+/// answer dropped, and the requests still open, which a dropped connection answers "restarted". It
+/// reconnects only when Claude next sends something. No I/O: `ControlRelayRunner` does that. The
+/// Windows mirror has no enum payloads, so its actions are records.
+public final class ControlRelay {
+    public static let restartedError = "Connector Control restarted — try again."
+    /// The replayed `initialize` goes out under an id of this form, which Claude never uses, so its
+    /// answer is known and dropped.
+    public static let replayIDPrefix = "connector-control-replay-"
+
+    public enum Action: Equatable, Sendable {
+        case toApp(String)
+        case toClaude(String)
+        /// Connect — starting the app where that is allowed — and report with `connectSucceeded()` or
+        /// `connectFailed(_:)`.
+        case connect
+        case exit(Int32)
+    }
+
+    public private(set) var isConnected = false
+    /// Claude's `initialize`, as it sent it.
+    private var initialize: [String: JSONValue]?
+    /// Claude's `notifications/initialized`, as it sent it.
+    private var initialized: String?
+    /// The app has answered Claude's own `initialize`.
+    private var handshakeDone = false
+    /// Requests forwarded and not yet answered, oldest first.
+    private var pending: [(id: JSONValue, method: String)] = []
+    /// Lines from Claude waiting for a connection.
+    private var held: [String] = []
+    private var replayID: JSONValue?
+    private var replays = 0
+    /// Claude has closed its side: the relay ends once nothing it forwarded is left unanswered.
+    private var closing = false
+
+    public init() {}
+
+    public func fromClaude(_ line: String) -> [Action] {
+        let message = ControlRelay.message(line)
+        if let message, message["id"] != nil, message["method"] == .string("initialize"), initialize == nil {
+            initialize = message
+        }
+        if let message, message["id"] == nil, message["method"] == .string("notifications/initialized"), initialized == nil {
+            initialized = line
+        }
+        // A cancelled request is never answered — the session drops its answer — so it is waited for
+        // no longer.
+        if let message, message["id"] == nil, message["method"] == .string("notifications/cancelled"),
+           case .object(let params)? = message["params"], let id = params["requestId"] {
+            pending.removeAll { $0.id == id }
+        }
+        guard isConnected else {
+            held.append(line)
+            // After the first handshake only a request reconnects, and may start the app: a
+            // notification, or a line that is no message at all, waits for the next request.
+            return handshakeDone && message?["id"] == nil ? [] : [.connect]
+        }
+        var actions = forward(line, message)
+        if closing, pending.isEmpty { actions.append(.exit(ControlOutput.doneExit)) }
+        return actions
+    }
+
+    public func connectSucceeded() -> [Action] {
+        isConnected = true
+        var actions: [Action] = []
+        if handshakeDone, var replay = initialize {
+            replays += 1
+            let id = JSONValue.string(ControlRelay.replayIDPrefix + String(replays))
+            replay["id"] = id
+            replayID = id
+            actions.append(.toApp(JSONValue.object(replay).compactLine()))
+            if let initialized { actions.append(.toApp(initialized)) }
+        }
+        let lines = held
+        held = []
+        for line in lines { actions += forward(line, ControlRelay.message(line)) }
+        return actions
+    }
+
+    /// No connection could be made: each request held for it is answered with `reason`. Before the
+    /// first handshake there is nothing to keep running for, and the relay ends.
+    public func connectFailed(_ reason: String) -> [Action] {
+        let lines = held
+        held = []
+        var actions: [Action] = lines.compactMap { line in
+            ControlRelay.message(line).flatMap { ControlRelay.failure($0, reason) }.map(Action.toClaude)
+        }
+        if !handshakeDone {
+            actions.append(.exit(ControlOutput.unreachableExit))
+        } else if closing {
+            actions.append(.exit(ControlOutput.doneExit))
+        }
+        return actions
+    }
+
+    public func fromApp(_ line: String) -> [Action] {
+        let message = ControlRelay.message(line)
+        if let message, message["method"] == nil, let id = message["id"] {
+            if id == replayID {
+                replayID = nil
+                return []
+            }
+            if let index = pending.firstIndex(where: { $0.id == id }), pending.remove(at: index).method == "initialize" {
+                handshakeDone = true
+            }
+        }
+        var actions: [Action] = [.toClaude(line)]
+        if closing, pending.isEmpty { actions.append(.exit(ControlOutput.doneExit)) }
+        return actions
+    }
+
+    /// The connection to the app has gone: each request it held is answered "restarted". Before the
+    /// app answered Claude's own `initialize`, the relay ends.
+    public func connectionLost() -> [Action] {
+        guard isConnected else { return [] }
+        isConnected = false
+        replayID = nil
+        let waiting = pending
+        pending = []
+        var actions = waiting.map { Action.toClaude(ControlRelay.failure(id: $0.id, method: $0.method, ControlRelay.restartedError)) }
+        if !handshakeDone {
+            actions.append(.exit(ControlOutput.unreachableExit))
+        } else if closing {
+            actions.append(.exit(ControlOutput.doneExit))
+        }
+        return actions
+    }
+
+    /// Claude closed its side: the relay ends now, or once what it forwarded is answered.
+    public func claudeClosed() -> [Action] {
+        closing = true
+        return pending.isEmpty || !isConnected ? [.exit(ControlOutput.doneExit)] : []
+    }
+
+    /// Passes a line on. A request is waited for only when the session will answer it under its own id:
+    /// one whose id is neither a string nor an integer, or is already running, is answered with id null
+    /// or not at all.
+    private func forward(_ line: String, _ message: [String: JSONValue]?) -> [Action] {
+        if let message, case .string(let method)? = message["method"], let raw = message["id"],
+           let id = McpSession.validID(raw), !pending.contains(where: { $0.id == id }) {
+            pending.append((id, method))
+        }
+        return [.toApp(line)]
+    }
+
+    /// The object a line holds, read only to know what the line is — never to change it.
+    static func message(_ line: String) -> [String: JSONValue]? {
+        guard McpSession.nests(atMost: McpSession.maxNestingDepth, line),
+              case .object(let fields)? = try? JSONValue.parse(Data(line.utf8)) else { return nil }
+        return fields
+    }
+
+    static func failure(_ message: [String: JSONValue], _ reason: String) -> String? {
+        guard let id = message["id"], case .string(let method)? = message["method"] else { return nil }
+        return failure(id: id, method: method, reason)
+    }
+
+    /// What a request gets when the app cannot answer it: a tool call a refusal, read as Claude reads
+    /// any other; anything else a JSON-RPC error.
+    static func failure(id: JSONValue, method: String, _ reason: String) -> String {
+        guard method == "tools/call" else {
+            return McpSession.errorLine(code: McpSession.internalErrorCode, message: reason, id: id)
+        }
+        return JSONValue.object(["jsonrpc": .string("2.0"), "id": id, "result": ControlResult.refusal(reason).mcpResult]).compactLine()
+    }
+}

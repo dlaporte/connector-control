@@ -19,8 +19,8 @@ public class ControlServerTests
         public void Close() => Closed = true;
     }
 
-    private const string InitializeMessage = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"claude-ai","version":"1"}}}""";
-    private const string InitializedMessage = """{"jsonrpc":"2.0","method":"notifications/initialized"}""";
+    internal const string InitializeMessage = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"claude-ai","version":"1"}}}""";
+    internal const string InitializedMessage = """{"jsonrpc":"2.0","method":"notifications/initialized"}""";
 
     private static McpFrame Line(string text) => new McpFrame.Line(Encoding.UTF8.GetBytes(text));
 

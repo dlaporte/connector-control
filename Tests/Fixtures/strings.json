@@ -282,6 +282,7 @@
   "ControlMasking.setText": "••• (set)",
   "ControlMasking.typeLabel": "type",
   "ControlMasking.urlLabel": "url",
+  "ControlRelay.restartedError": "Connector Control restarted — try again.",
   "ControlSettingKey.automaticUpdates": "automatic-updates",
   "ControlSettingKey.backupsToKeep": "backups-to-keep",
   "ControlSettingKey.claudeIntegration": "claude-integration",

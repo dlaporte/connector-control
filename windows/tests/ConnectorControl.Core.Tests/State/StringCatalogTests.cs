@@ -447,6 +447,7 @@ public class StringCatalogTests
         actual["ControlMasking.setText"] = ControlMasking.SetText;
         actual["ControlMasking.typeLabel"] = ControlMasking.TypeLabel;
         actual["ControlMasking.urlLabel"] = ControlMasking.UrlLabel;
+        actual["ControlRelay.restartedError"] = ControlRelay.RestartedError;
         actual["ControlText.listAnd"] = ControlText.ListAnd;
 
         // MARK: ControlCaller / ControlSettingKey / ControlTools

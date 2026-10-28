@@ -37,18 +37,21 @@ internal sealed class PipeRig : IDisposable
         Server.CloseAll();
     }
 
-    /// <summary>The app starting again, with the same state and the same write timeout. Windows may take a
+    /// <summary>The app starting again, with the same state and the same write timeout.</summary>
+    public void Restart() => Endpoint = StartAgain();
+
+    /// <summary>The app's pipe served again over the same server, for the caller to keep and dispose: what
+    /// <see cref="Restart"/> keeps itself, and what a launch the relay asks for brings up. Windows may take a
     /// moment to let the old pipe's name go after its last handle closes, so the first instance is retried
-    /// until it is free.</summary>
-    public void Restart()
+    /// until it is free. Safe off the test's thread: it reads only what never changes.</summary>
+    public ControlPipeServer StartAgain()
     {
         var deadline = DateTime.UtcNow + Wait.Eventually;
         while (true)
         {
             try
             {
-                Endpoint = ControlPipeServer.Start(Name, Server, Rig.H.Host, timeout: writeTimeout);
-                return;
+                return ControlPipeServer.Start(Name, Server, Rig.H.Host, timeout: writeTimeout);
             }
             catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && DateTime.UtcNow < deadline)
             {

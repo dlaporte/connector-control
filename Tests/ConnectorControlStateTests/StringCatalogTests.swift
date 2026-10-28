@@ -438,6 +438,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlMasking.setText"] = ControlMasking.setText
         actual["ControlMasking.typeLabel"] = ControlMasking.typeLabel
         actual["ControlMasking.urlLabel"] = ControlMasking.urlLabel
+        actual["ControlRelay.restartedError"] = ControlRelay.restartedError
         actual["ControlText.listAnd"] = ControlText.listAnd
 
         // MARK: ControlCaller / ControlSettingKey / ControlTools

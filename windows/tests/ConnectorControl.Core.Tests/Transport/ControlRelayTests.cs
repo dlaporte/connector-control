@@ -1,0 +1,169 @@
+using ConnectorControl.Core.State;
+using ConnectorControl.Core.Transport;
+
+namespace ConnectorControl.Core.Tests.Transport;
+
+/// <summary>
+/// Mirror: Tests/ConnectorControlStateTests/Transport/ControlRelayTests.swift
+/// </summary>
+public class ControlRelayTests
+{
+    private const string Initialize = """{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"claude-ai","version":"0.1.0"}}}""";
+    private const string Initialized = """{"jsonrpc":"2.0","method":"notifications/initialized"}""";
+    private const string InitializeAnswer = """{"id":0,"jsonrpc":"2.0","result":{"capabilities":{"tools":{}},"protocolVersion":"2025-11-25","serverInfo":{"name":"connector-control","version":"1.5.0"}}}""";
+
+    private static string Call(int id) =>
+        $$$$"""{"jsonrpc":"2.0","id":{{{{id}}}},"method":"tools/call","params":{"name":"get_status","arguments":{}}}""";
+
+    private static string Answer(int id) =>
+        $$$$"""{"id":{{{{id}}}},"jsonrpc":"2.0","result":{"content":[],"isError":false,"structuredContent":{}}}""";
+
+    private static ControlRelay.Action Refused(int id, string reason) =>
+        new ControlRelay.Action.ToClaude(JsonValue.Object(("jsonrpc", JsonValue.String("2.0")), ("id", JsonValue.Int(id)),
+            ("result", ControlResult.Refusal(reason).McpResult)).CompactLine());
+
+    private static ControlRelay.Action ToApp(string line) => new ControlRelay.Action.ToApp(line);
+
+    private static ControlRelay.Action ToClaude(string line) => new ControlRelay.Action.ToClaude(line);
+
+    private static ControlRelay.Action Connect() => new ControlRelay.Action.Connect();
+
+    private static ControlRelay.Action Exit(int code) => new ControlRelay.Action.Exit(code);
+
+    /// <summary>A relay through its first handshake.</summary>
+    private static ControlRelay Started()
+    {
+        var relay = new ControlRelay();
+        Assert.Equal([Connect()], relay.FromClaude(Initialize));   // nothing connects before Claude says something
+        Assert.Equal([ToApp(Initialize)], relay.ConnectSucceeded());
+        Assert.Equal([ToClaude(InitializeAnswer)], relay.FromApp(InitializeAnswer));
+        Assert.Equal([ToApp(Initialized)], relay.FromClaude(Initialized));
+        return relay;
+    }
+
+    [Fact]
+    public void EveryLinePassesAsItCame()
+    {
+        var relay = Started();
+        Assert.Equal([ToApp(Call(1))], relay.FromClaude(Call(1)));
+        const string progress = """{"jsonrpc":"2.0","method":"notifications/progress","params":{"progress":5,"progressToken":"t"}}""";
+        Assert.Equal([ToClaude(progress)], relay.FromApp(progress));
+        Assert.Equal([ToClaude(Answer(1))], relay.FromApp(Answer(1)));
+        Assert.Equal([ToApp("not json")], relay.FromClaude("not json"));   // the app answers what it cannot read
+    }
+
+    [Fact]
+    public void AfterTheAppGoesTheNextRequestReconnectsAndReplaysTheHandshake()
+    {
+        var relay = Started();
+        Assert.Empty(relay.ConnectionLost());   // nothing was waiting, and nothing happens until Claude asks
+        Assert.False(relay.IsConnected);
+        Assert.Equal([Connect()], relay.FromClaude(Call(2)));
+        var replay = relay.ConnectSucceeded();
+        Assert.Equal(3, replay.Count);
+        var replayed = Assert.IsType<ControlRelay.Action.ToApp>(replay[0]).Line;
+        var fields = ControlRelay.Message(replayed);
+        Assert.NotNull(fields);
+        Assert.Equal(JsonValue.String(ControlRelay.ReplayIdPrefix + "1"), fields["id"]);   // never an id Claude uses
+        Assert.Equal(ControlRelay.Message(Initialize)?["params"], fields["params"]);   // Claude's own initialize, its name included
+        Assert.Equal([ToApp(Initialized), ToApp(Call(2))], replay.Skip(1));
+        Assert.Empty(relay.FromApp("""{"id":"connector-control-replay-1","jsonrpc":"2.0","result":{}}"""));   // the replayed answer is dropped
+        Assert.Equal([ToClaude(Answer(2))], relay.FromApp(Answer(2)));
+    }
+
+    [Fact]
+    public void ARequestInFlightWhenTheAppGoesIsToldToTryAgain()
+    {
+        var relay = Started();
+        _ = relay.FromClaude(Call(3));
+        _ = relay.FromClaude("""{"jsonrpc":"2.0","id":4,"method":"tools/list"}""");
+        Assert.Equal([
+            Refused(3, ControlRelay.RestartedError),
+            ToClaude(McpSession.ErrorLine(McpSession.InternalErrorCode, ControlRelay.RestartedError, JsonValue.Int(4))),
+        ], relay.ConnectionLost());
+        // held for the next connection, and no reconnect for it
+        Assert.Empty(relay.FromClaude("""{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":3}}"""));
+    }
+
+    /// <summary>A cancelled request is never answered — the session drops its answer — so the relay stops
+    /// waiting for it: Claude closing its side ends the relay, and a lost connection answers nothing
+    /// for it.</summary>
+    [Fact]
+    public void ACancelledRequestIsNoLongerWaitedFor()
+    {
+        var relay = Started();
+        _ = relay.FromClaude(Call(8));
+        const string cancel = """{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":8}}""";
+        Assert.Equal([ToApp(cancel)], relay.FromClaude(cancel));
+        Assert.Equal([Exit(ControlOutput.DoneExit)], relay.ClaudeClosed());
+        var other = Started();
+        _ = other.FromClaude(Call(9));
+        _ = other.FromClaude("""{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":9}}""");
+        Assert.Empty(other.ConnectionLost());   // no stray answer for a cancelled request
+    }
+
+    /// <summary>A request the session answers with id null — an id that is neither a string nor an integer, or
+    /// one already running — is not waited for under that id.</summary>
+    [Fact]
+    public void ARequestTheSessionCannotAnswerByItsIdIsNotWaitedFor()
+    {
+        var relay = Started();
+        _ = relay.FromClaude("""{"jsonrpc":"2.0","id":1.5,"method":"ping"}""");
+        _ = relay.FromClaude(Call(10));
+        _ = relay.FromClaude(Call(10));
+        Assert.Equal([Refused(10, ControlRelay.RestartedError)], relay.ConnectionLost());   // one answer for 10, none for 1.5
+    }
+
+    /// <summary>After the first handshake only a request reconnects, and may start the app: a notification, or a
+    /// line that is no message, waits, held, and reaches the app after the replayed handshake.</summary>
+    [Fact]
+    public void OnlyARequestReconnects()
+    {
+        var relay = Started();
+        _ = relay.ConnectionLost();
+        const string cancel = """{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":3}}""";
+        Assert.Empty(relay.FromClaude(cancel));
+        Assert.Empty(relay.FromClaude(""));
+        Assert.Equal([Connect()], relay.FromClaude(Call(11)));
+        Assert.Equal([ToApp(Initialized), ToApp(cancel), ToApp(""), ToApp(Call(11))], relay.ConnectSucceeded().Skip(1));
+    }
+
+    [Fact]
+    public void AFailedReconnectAnswersTheRequestAndTheNextTriesAgain()
+    {
+        var relay = Started();
+        _ = relay.ConnectionLost();
+        Assert.Equal([Connect()], relay.FromClaude(Call(5)));
+        Assert.Equal([Refused(5, ControlClient.UnreachableError)], relay.ConnectFailed(ControlClient.UnreachableError));
+        Assert.Equal([Connect()], relay.FromClaude(Call(6)));
+    }
+
+    [Fact]
+    public void AFailedFirstHandshakeEndsTheRelay()
+    {
+        var refused = new ControlRelay();
+        _ = refused.FromClaude(Initialize);
+        Assert.Equal([
+            ToClaude(McpSession.ErrorLine(McpSession.InternalErrorCode, ControlClient.NotRunningError, JsonValue.Int(0))),
+            Exit(ControlOutput.UnreachableExit),
+        ], refused.ConnectFailed(ControlClient.NotRunningError));
+        var dropped = new ControlRelay();
+        _ = dropped.FromClaude(Initialize);
+        _ = dropped.ConnectSucceeded();
+        // the app went before it answered initialize
+        Assert.Equal([
+            ToClaude(McpSession.ErrorLine(McpSession.InternalErrorCode, ControlRelay.RestartedError, JsonValue.Int(0))),
+            Exit(ControlOutput.UnreachableExit),
+        ], dropped.ConnectionLost());
+    }
+
+    [Fact]
+    public void WhenClaudeClosesTheRelayEndsOnceItsRequestsAreAnswered()
+    {
+        Assert.Equal([Exit(ControlOutput.DoneExit)], Started().ClaudeClosed());   // nothing waiting: at once
+        var relay = Started();
+        _ = relay.FromClaude(Call(7));
+        Assert.Empty(relay.ClaudeClosed());
+        Assert.Equal([ToClaude(Answer(7)), Exit(ControlOutput.DoneExit)], relay.FromApp(Answer(7)));
+    }
+}
