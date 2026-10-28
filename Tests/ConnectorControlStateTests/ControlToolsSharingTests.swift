@@ -158,6 +158,35 @@ final class ControlToolsSharingTests: XCTestCase {
         XCTAssertEqual(rig.confirmer.requests.count, 3)
     }
 
+    /// A Replace keeps the switch of what it replaces: over a connector that is on, the copy stays on,
+    /// so the question says so and, in the collection Claude runs, that it takes effect when Claude
+    /// restarts. Over one that is off, it asks what any import asks.
+    func testAReplaceOverAConnectorThatIsOnSaysItStaysOn() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let url = try rig.h.writeDocument(CollectionDocumentSamples.dataTeam, named: "team.json")
+        let from = ControlTools.fromFooter(url.path)
+        let replace: [String: JSONValue] = ["path": .string(url.path), "onClash": .string("replace")]
+        XCTAssertNil(rig.state.upsert(name: "dbt", entry: AppStateHarness.localConnector("mine"), renamedFrom: nil))
+        XCTAssertEqual(rig.call("import_document", replace)?.isError, false)
+        XCTAssertEqual(rig.confirmer.requests.last?.message, ControlTools.importReplacingMessage(4, "Default"))
+        XCTAssertEqual(rig.confirmer.requests.last?.footer, ControlTools.takesEffectFooter + " " + from)
+        XCTAssertEqual(rig.state.store.mcps["dbt"]?.enabled, true, "the copy kept the switch of what it replaced")
+        XCTAssertNotNil(try rig.h.claudeServers()["dbt"], "and Claude runs it")
+        rig.state.setEnabled("dbt", false)
+        XCTAssertEqual(rig.call("import_document", replace)?.isError, false)
+        XCTAssertEqual(rig.confirmer.requests.last?.message, ControlTools.importMessage(4, "Default"), "nothing replaced is on")
+        XCTAssertEqual(rig.confirmer.requests.last?.footer, from)
+        var one = CollectionDocumentSamples.dataTeam
+        one.connectors = one.connectors.filter { $0.key == "dbt" }
+        let single = try rig.h.writeDocument(one, named: "dbt.json")
+        XCTAssertNil(rig.state.addEmptyCollection(named: "Team"))
+        XCTAssertNil(rig.state.upsert(name: "dbt", entry: AppStateHarness.localConnector("mine"), renamedFrom: nil, in: "Team"))
+        XCTAssertEqual(rig.call("import_document", ["path": .string(single.path), "into": .string("Team"), "onClash": .string("replace")])?.isError, false)
+        XCTAssertEqual(rig.confirmer.requests.last?.message, ControlTools.importReplacingMessage(1, "Team"))
+        XCTAssertEqual(rig.confirmer.requests.last?.footer, ControlTools.fromFooter(single.path), "nothing Claude runs changes")
+        XCTAssertEqual(rig.state.store.collections["Team"]?.mcps["dbt"]?.enabled, true)
+    }
+
     /// A clash nothing is said about is skipped, and the question says which; the rest come across.
     func testAClashIsSkippedUnlessOnClashSaysOtherwise() throws {
         let rig = rig(); defer { rig.dispose() }

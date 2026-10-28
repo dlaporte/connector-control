@@ -218,6 +218,41 @@ public class ControlToolsSharingTests
         Assert.Equal(3, rig.Confirmer.Requests.Count);
     }
 
+    /// <summary>A Replace keeps the switch of what it replaces: over a connector that is on, the copy stays on,
+    /// so the question says so and, in the collection Claude runs, that it takes effect when Claude
+    /// restarts. Over one that is off, it asks what any import asks.</summary>
+    [Fact]
+    public void AReplaceOverAConnectorThatIsOnSaysItStaysOn()
+    {
+        using var rig = Rig();
+        var path = rig.H.WriteDocument(CollectionDocumentSamples.DataTeam, "team.json");
+        var from = ControlTools.FromFooter(path);
+        var replace = Args(("path", Text(path)), ("onClash", Text("replace")));
+        Assert.Null(rig.State.Upsert("dbt", AppStateHarness.LocalConnector("mine"), null));
+        Assert.False(rig.Call("import_document", replace)?.IsError);
+        Assert.Equal(ControlTools.ImportReplacingMessage(4, "Default"), rig.Confirmer.Requests[^1].Message);
+        Assert.Equal(ControlTools.TakesEffectFooter + " " + from, rig.Confirmer.Requests[^1].Footer);
+        // The copy kept the switch of what it replaced, and Claude runs it.
+        Assert.True(rig.State.Store.Mcps["dbt"].Enabled);
+        Assert.True(rig.H.ClaudeServers().ContainsKey("dbt"));
+        rig.State.SetEnabled("dbt", false);
+        Assert.False(rig.Call("import_document", replace)?.IsError);
+        // Nothing replaced is on.
+        Assert.Equal(ControlTools.ImportMessage(4, "Default"), rig.Confirmer.Requests[^1].Message);
+        Assert.Equal(from, rig.Confirmer.Requests[^1].Footer);
+        var one = new CollectionDocument(CollectionDocumentSamples.DataTeam.Name, CollectionDocumentSamples.DataTeam.Author,
+            CollectionDocumentSamples.DataTeam.Origin, CollectionDocumentSamples.DataTeam.Exported,
+            CollectionDocumentSamples.DataTeam.Connectors.Where(item => item.Key == "dbt").ToDictionary(StringComparer.Ordinal));
+        var single = rig.H.WriteDocument(one, "dbt.json");
+        Assert.Null(rig.State.AddEmptyCollection("Team"));
+        Assert.Null(rig.State.Upsert("dbt", AppStateHarness.LocalConnector("mine"), null, "Team"));
+        Assert.False(rig.Call("import_document", Args(("path", Text(single)), ("into", Text("Team")), ("onClash", Text("replace"))))?.IsError);
+        Assert.Equal(ControlTools.ImportReplacingMessage(1, "Team"), rig.Confirmer.Requests[^1].Message);
+        // Nothing Claude runs changes.
+        Assert.Equal(ControlTools.FromFooter(single), rig.Confirmer.Requests[^1].Footer);
+        Assert.True(rig.State.Store.Collections["Team"].Mcps["dbt"].Enabled);
+    }
+
     /// <summary>A clash nothing is said about is skipped, and the question says which; the rest come across.</summary>
     [Fact]
     public void AClashIsSkippedUnlessOnClashSaysOtherwise()

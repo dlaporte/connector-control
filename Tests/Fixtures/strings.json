@@ -428,6 +428,12 @@
   "ControlTools.importNewMessage.one": {
     "format": "{0} connector would be copied into a new collection, “{1}”, switched off:"
   },
+  "ControlTools.importReplacingMessage.many": {
+    "format": "{0} connectors would be copied into “{1}”, switched off, but any that replaces one switched on stays on:"
+  },
+  "ControlTools.importReplacingMessage.one": {
+    "format": "{0} connector would be copied into “{1}”, replacing one that is switched on, so it stays on:"
+  },
   "ControlTools.importTitle": {
     "format": "{0} wants to import “{1}”"
   },

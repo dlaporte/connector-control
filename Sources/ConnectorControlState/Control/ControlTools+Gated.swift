@@ -245,6 +245,13 @@ extension ControlTools {
             : "\(count) connectors would be copied into a new collection, “\(collection)”, switched off:"
     }
 
+    /// The import question when a Replace lands over a connector that is on: the copy keeps its
+    /// switch, so it stays on.
+    public static func importReplacingMessage(_ count: Int, _ collection: String) -> String {
+        count == 1 ? "\(count) connector would be copied into “\(collection)”, replacing one that is switched on, so it stays on:"
+            : "\(count) connectors would be copied into “\(collection)”, switched off, but any that replaces one switched on stays on:"
+    }
+
     public static func fromFooter(_ path: String) -> String { "From \(path)" }
 
     public static func importedText(_ count: Int, _ collection: String) -> String {
@@ -448,11 +455,17 @@ extension ControlTools {
         let count = choices.values.filter { $0 != .skip }.count
         guard count > 0 else { return .refused(ControlTools.nothingToImportError(file)) }
         let shownAsker = ControlText.escapedName(caller.askerName)
+        // A Replace keeps the switch of what it replaces, as the Import sheet's does: over a connector
+        // that is on, the copy stays on and, in the collection Claude runs, changes what Claude runs.
+        let replacesOn = choices.contains { $0.value == .replace && held[$0.key]?.enabled == true }
+        let from = ControlTools.fromFooter(ControlText.escaped(url.path))
+        let message = newCollection != nil ? ControlTools.importNewMessage(count, shownTarget)
+            : replacesOn ? ControlTools.importReplacingMessage(count, shownTarget) : ControlTools.importMessage(count, shownTarget)
         let request = ConfirmationRequest(
             title: ControlTools.importTitle(shownAsker, file),
-            message: newCollection == nil ? ControlTools.importMessage(count, shownTarget) : ControlTools.importNewMessage(count, shownTarget),
+            message: message,
             code: ControlTools.documentLines(rendered, present: { held[$0] != nil }, choice: clash),
-            footer: ControlTools.fromFooter(ControlText.escaped(url.path)))
+            footer: replacesOn && target == state.activeCollection ? ControlTools.takesEffectFooter + " " + from : from)
         // What the question cannot show, the document's masked values among them, the bytes stand for.
         return .ready(request, fingerprint: ContentHash.sha256(bytes), perform: { [self] in
             let mark = state.appliedServers

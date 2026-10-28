@@ -327,6 +327,12 @@ public sealed partial class ControlTools
         ? $"{count} connector would be copied into a new collection, “{collection}”, switched off:"
         : $"{count} connectors would be copied into a new collection, “{collection}”, switched off:";
 
+    /// <summary>The import question when a Replace lands over a connector that is on: the copy keeps its
+    /// switch, so it stays on.</summary>
+    public static string ImportReplacingMessage(int count, string collection) => count == 1
+        ? $"{count} connector would be copied into “{collection}”, replacing one that is switched on, so it stays on:"
+        : $"{count} connectors would be copied into “{collection}”, switched off, but any that replaces one switched on stays on:";
+
     public static string FromFooter(string path) => $"From {path}";
 
     public static string ImportedText(int count, string collection) => count == 1
@@ -635,11 +641,17 @@ public sealed partial class ControlTools
             return new ControlStep.Refused(NothingToImportError(file));
         }
         var shownAsker = ControlText.EscapedName(caller.AskerName);
+        // A Replace keeps the switch of what it replaces, as the Import sheet's does: over a connector
+        // that is on, the copy stays on and, in the collection Claude runs, changes what Claude runs.
+        var replacesOn = choices.Any(choice => choice.Value == ImportChoice.Replace && held.TryGetValue(choice.Key, out var entry) && entry.Enabled);
+        var from = FromFooter(ControlText.Escaped(full));
+        var message = newCollection is not null ? ImportNewMessage(count, shownTarget)
+            : replacesOn ? ImportReplacingMessage(count, shownTarget) : ImportMessage(count, shownTarget);
         var request = new ConfirmationRequest(
             ImportTitle(shownAsker, file),
-            newCollection is null ? ImportMessage(count, shownTarget) : ImportNewMessage(count, shownTarget),
+            message,
             DocumentLines(rendered, held.ContainsKey, clash),
-            FromFooter(ControlText.Escaped(full)));
+            replacesOn && target == state.ActiveCollection ? TakesEffectFooter + " " + from : from);
         // What the question cannot show, the document's masked values among them, the bytes stand for.
         return new ControlStep.Ready(request, Fingerprint: ContentHash.Sha256(bytes), Perform: () =>
         {

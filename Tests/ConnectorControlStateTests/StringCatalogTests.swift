@@ -146,6 +146,8 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.importMessage.one": ["1", "X"],
         "ControlTools.importNewMessage.many": ["3", "X"],
         "ControlTools.importNewMessage.one": ["1", "X"],
+        "ControlTools.importReplacingMessage.many": ["3", "X"],
+        "ControlTools.importReplacingMessage.one": ["1", "X"],
         "ControlTools.importTitle": ["X", "Y"],
         "ControlTools.importedNotification.many": ["X", "3", "Y"],
         "ControlTools.importedNotification.one": ["X", "1", "Y"],
@@ -490,6 +492,8 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.importMessage.one"] = ControlTools.importMessage(1, "X")
         actual["ControlTools.importNewMessage.many"] = ControlTools.importNewMessage(3, "X")
         actual["ControlTools.importNewMessage.one"] = ControlTools.importNewMessage(1, "X")
+        actual["ControlTools.importReplacingMessage.many"] = ControlTools.importReplacingMessage(3, "X")
+        actual["ControlTools.importReplacingMessage.one"] = ControlTools.importReplacingMessage(1, "X")
         actual["ControlTools.importTitle"] = ControlTools.importTitle("X", "Y")
         actual["ControlTools.importedNotification.many"] = ControlTools.importedNotification("X", 3, "Y")
         actual["ControlTools.importedNotification.one"] = ControlTools.importedNotification("X", 1, "Y")

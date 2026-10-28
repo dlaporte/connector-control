@@ -152,6 +152,8 @@ public class StringCatalogTests
         ["ControlTools.importMessage.one"] = ["1", "X"],
         ["ControlTools.importNewMessage.many"] = ["3", "X"],
         ["ControlTools.importNewMessage.one"] = ["1", "X"],
+        ["ControlTools.importReplacingMessage.many"] = ["3", "X"],
+        ["ControlTools.importReplacingMessage.one"] = ["1", "X"],
         ["ControlTools.importTitle"] = ["X", "Y"],
         ["ControlTools.importedNotification.many"] = ["X", "3", "Y"],
         ["ControlTools.importedNotification.one"] = ["X", "1", "Y"],
@@ -499,6 +501,8 @@ public class StringCatalogTests
         actual["ControlTools.importMessage.one"] = ControlTools.ImportMessage(1, "X");
         actual["ControlTools.importNewMessage.many"] = ControlTools.ImportNewMessage(3, "X");
         actual["ControlTools.importNewMessage.one"] = ControlTools.ImportNewMessage(1, "X");
+        actual["ControlTools.importReplacingMessage.many"] = ControlTools.ImportReplacingMessage(3, "X");
+        actual["ControlTools.importReplacingMessage.one"] = ControlTools.ImportReplacingMessage(1, "X");
         actual["ControlTools.importTitle"] = ControlTools.ImportTitle("X", "Y");
         actual["ControlTools.importedNotification.many"] = ControlTools.ImportedNotification("X", 3, "Y");
         actual["ControlTools.importedNotification.one"] = ControlTools.ImportedNotification("X", 1, "Y");
