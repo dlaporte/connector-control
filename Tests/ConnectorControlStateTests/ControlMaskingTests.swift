@@ -410,6 +410,28 @@ final class ControlMaskingTests: XCTestCase {
         try assertHidden(["987654321"], in: .object(["command": .string("node"), "args": .array([.string("--token"), .int(987654321)])]))
     }
 
+    /// `env` and `headers` hold secrets wherever they sit, not only at the top of a config.
+    func testEnvironmentAndHeadersUnderAnotherKeyAreMasked() throws {
+        let nested: JSONValue = .object([
+            "command": .string("node"), "args": .array([.string("s.js")]),
+            "options": .object(["env": .object(["DB": .string("hunter2a")]), "headers": .object(["X-Custom": .string("hunter2b")])]),
+        ])
+        let transport: JSONValue = .object([
+            "url": .string("https://h.example/mcp"),
+            "transport": .object(["headers": .object(["X-Custom": .string("hunter2c")])]),
+        ])
+        try assertHidden(["hunter2a", "hunter2b"], in: nested)
+        try assertHidden(["hunter2c"], in: transport)
+        XCTAssertEqual(ControlMasking.codeLines(nested, exposure: .dialog),
+                       ["command   node", "args      s.js", #"options   {"env":{"DB":"set"},"headers":{"X-Custom":"set"}}"#])
+        XCTAssertEqual(ControlMasking.codeLines(transport, exposure: .dialog),
+                       ["type        remote", "url         https://h.example/mcp", #"transport   {"headers":{"X-Custom":"set"}}"#])
+        let dialog = (ControlMasking.changeLines(from: .object([:]), to: nested, exposure: .dialog)
+            + ControlMasking.changeLines(from: .object([:]), to: transport, exposure: .dialog)).joined(separator: "\n")
+        for secret in ["hunter2a", "hunter2b", "hunter2c"] { XCTAssertFalse(dialog.contains(secret), secret) }
+        XCTAssertTrue(dialog.contains(#""DB":"set""#) && dialog.contains(#""X-Custom":"set""#))
+    }
+
     func testAFlagAfterASecretNamedFlagIsNotTakenForItsValue() {
         XCTAssertEqual(ControlMasking.arguments(["--no-auth", "--allow-http", "--bypass-sandbox", "--yolo", "--token", "abc"]),
                        ["--no-auth", "--allow-http", "--bypass-sandbox", "--yolo", "--token", "•••"])

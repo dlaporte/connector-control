@@ -316,6 +316,8 @@ public static class ControlMasking
     /// <summary>The keys whose values are secrets by name: every value under them is.</summary>
     internal static readonly IReadOnlySet<string> SecretKeys = new HashSet<string>(StringComparer.Ordinal) { "env", "headers" };
 
+    /// <summary>Whether a key's values are secrets: <c>env</c> and <c>headers</c> wherever they sit, and any key named
+    /// for a secret.</summary>
     internal static bool NamesASecret(string key) =>
         SecretKeys.Contains(key) || CredentialHeuristics.NamesASecret(key);
 
@@ -381,7 +383,7 @@ public static class ControlMasking
                     item.Kind == JsonKind.String ? JsonValue.String(text) : Leaves(item, exposure, secret: text == Mask)));
             case JsonKind.Object:
                 return JsonValue.Object(value.ObjectProperties.Select(item => new KeyValuePair<string, JsonValue>(
-                    item.Key, Leaves(item.Value, exposure, secret || CredentialHeuristics.NamesASecret(item.Key)))));
+                    item.Key, Leaves(item.Value, exposure, secret || NamesASecret(item.Key)))));
             default:
                 return value;
         }

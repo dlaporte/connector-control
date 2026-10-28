@@ -262,6 +262,8 @@ public enum ControlMasking {
     /// The keys whose values are secrets by name: every value under them is.
     static let secretKeys: Set<String> = ["env", "headers"]
 
+    /// Whether a key's values are secrets: `env` and `headers` wherever they sit, and any key named
+    /// for a secret.
     static func namesASecret(_ key: String) -> Bool {
         secretKeys.contains(key) || CredentialHeuristics.namesASecret(key)
     }
@@ -312,7 +314,7 @@ public enum ControlMasking {
             })
         case .object(let object):
             var out: [String: JSONValue] = [:]
-            for (key, item) in object { out[key] = leaves(item, exposure, secret: secret || CredentialHeuristics.namesASecret(key)) }
+            for (key, item) in object { out[key] = leaves(item, exposure, secret: secret || namesASecret(key)) }
             return .object(out)
         case .null, .bool:
             return value

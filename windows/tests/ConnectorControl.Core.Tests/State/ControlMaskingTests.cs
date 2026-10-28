@@ -486,6 +486,31 @@ public class ControlMaskingTests
         AssertHidden(["987654321"], JsonValue.Object(("command", S("node")), ("args", JsonValue.Array([S("--token"), JsonValue.Int(987654321)]))));
     }
 
+    /// <summary><c>env</c> and <c>headers</c> hold secrets wherever they sit, not only at the top of a config.</summary>
+    [Fact]
+    public void EnvironmentAndHeadersUnderAnotherKeyAreMasked()
+    {
+        var nested = JsonValue.Object(
+            ("command", S("node")), ("args", JsonValue.Array([S("s.js")])),
+            ("options", JsonValue.Object(("env", JsonValue.Object(("DB", S("hunter2a")))), ("headers", JsonValue.Object(("X-Custom", S("hunter2b")))))));
+        var transport = JsonValue.Object(
+            ("url", S("https://h.example/mcp")),
+            ("transport", JsonValue.Object(("headers", JsonValue.Object(("X-Custom", S("hunter2c")))))));
+        AssertHidden(["hunter2a", "hunter2b"], nested);
+        AssertHidden(["hunter2c"], transport);
+        Assert.Equal(["command   node", "args      s.js", """options   {"env":{"DB":"set"},"headers":{"X-Custom":"set"}}"""],
+            ControlMasking.CodeLines(nested, ControlMasking.Exposure.Dialog));
+        Assert.Equal(["type        remote", "url         https://h.example/mcp", """transport   {"headers":{"X-Custom":"set"}}"""],
+            ControlMasking.CodeLines(transport, ControlMasking.Exposure.Dialog));
+        var dialog = string.Join("\n", ControlMasking.ChangeLines(JsonValue.Object(), nested, ControlMasking.Exposure.Dialog)
+            .Concat(ControlMasking.ChangeLines(JsonValue.Object(), transport, ControlMasking.Exposure.Dialog)));
+        foreach (var secret in new[] { "hunter2a", "hunter2b", "hunter2c" })
+        {
+            Assert.DoesNotContain(secret, dialog);
+        }
+        Assert.True(dialog.Contains("\"DB\":\"set\"") && dialog.Contains("\"X-Custom\":\"set\""));
+    }
+
     [Fact]
     public void AFlagAfterASecretNamedFlagIsNotTakenForItsValue()
     {
