@@ -68,6 +68,28 @@ jobs:
       - name: Build the app bundle
         run: ./scripts/build-app.sh
 
+      # The tool inside the bundle: signed on its own, before the app, with its own identifier, and
+      # runnable from there without an app.
+      - name: The nested tool's signature
+        run: |
+          TOOL="build/Connector Control.app/Contents/MacOS/connector-control"
+          codesign --verify --strict --verbose=2 "$TOOL"
+          codesign --verify --strict --deep --verbose=2 "build/Connector Control.app"
+          # Captured first: grep -q leaving a pipe early would end codesign with SIGPIPE, which pipefail
+          # reports as a failure.
+          details=$(codesign -d --verbose=2 "$TOOL" 2>&1)
+          grep -qx 'Identifier=com.dlaporte.connector-control.cli' <<< "$details" \
+            || { echo "::error::$TOOL is not signed as com.dlaporte.connector-control.cli"; exit 1; }
+          "$TOOL" --version
+          usage=$("$TOOL" help)
+          [ "$(head -1 <<< "$usage")" = 'Usage: connector-control <command> [options]' ] \
+            || { echo "::error::help printed something else"; exit 1; }
+
+      # A Sparkle update replaces the bundle and ends only the app; the relay Claude runs from the old
+      # bundle must carry on. CI cannot run a signed update, so the replacement is done by hand here.
+      - name: A running relay survives the app being replaced
+        run: ./scripts/mac/relay-check.sh "build/Connector Control.app" .build/debug/connector-control-test-host
+
       # Proves make-dmg.sh too, the same way, before a tag ever reaches it.
       - name: Build the DMG
         run: ./scripts/make-dmg.sh build/ConnectorControl-ci.dmg

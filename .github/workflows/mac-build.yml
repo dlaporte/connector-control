@@ -104,6 +104,17 @@ jobs:
             UNIVERSAL=1 SIGNING_IDENTITY="$APPLE_SIGNING_IDENTITY" \
             ./scripts/build-app.sh
 
+      # Notarization refuses a nested executable without the hardened runtime or a secure timestamp;
+      # checked here, where a failure names the file, rather than in Apple's log.
+      - name: The nested tool's hardened runtime and timestamp
+        run: |
+          TOOL="build/Connector Control.app/Contents/MacOS/connector-control"
+          codesign --verify --strict --verbose=2 "$TOOL"
+          codesign --verify --strict --deep --verbose=2 "build/Connector Control.app"
+          details=$(codesign -d --verbose=4 "$TOOL" 2>&1)
+          grep -q 'flags=0x10000(runtime)' <<< "$details" || { echo "::error::$TOOL lacks the hardened runtime"; exit 1; }
+          grep -q '^Timestamp=' <<< "$details" || { echo "::error::$TOOL has no secure timestamp"; exit 1; }
+
       - name: Notarize and staple the app
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}

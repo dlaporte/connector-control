@@ -149,7 +149,8 @@ jobs:
           node-version: '22'
 
       # The tool as it ships — single-file, self-contained, compressed and trimmed — so the Inspector
-      # check below also proves the trimmed exe works, on every push and not only when packaging.
+      # check below also proves the trimmed exe works, on every push and not only when packaging. The
+      # flags are windows/scripts/package.ps1's for the tool: change them in both places.
       - name: Publish the command-line tool as it ships
         shell: pwsh
         run: |
@@ -228,9 +229,9 @@ jobs:
             ConvertTo-Json | Set-Content -Path $file -Encoding utf8NoBOM
           "SIGN_FILE=$file" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      # publish + pack only now (no delta download to stall on): ~4 min on a green run.
+      # publish + pack only now (no delta download to stall on): ~5 min on a green run, the trimmed tool included.
       - name: Publish and pack
-        timeout-minutes: 6
+        timeout-minutes: 8
         shell: pwsh
         env:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -256,7 +257,7 @@ jobs:
           name: velopack-${{ matrix.rid }}
           path: windows/artifacts/${{ matrix.rid }}
           if-no-files-found: error
-          # ~145 MB per RID. The published release is the durable copy of these files;
+          # ~155 MB per RID, the trimmed command-line tool (about 11 MB) included. The published release is the durable copy of these files;
           # the artifact only has to outlive the smoke and publish jobs and any re-run.
           retention-days: 14
 
