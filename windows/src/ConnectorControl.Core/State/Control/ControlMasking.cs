@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 
 namespace ConnectorControl.Core.State;
 
@@ -246,7 +247,7 @@ public static class ControlMasking
         Arguments(args, reveal ? Exposure.Revealed : Exposure.Masked);
 
     /// <summary>An argument list as <c>exposure</c> shows it. The dialog keeps every argument as written but a
-    /// header's value and the OAuth client info, which holds the client secret.</summary>
+    /// header's value and the OAuth client secret.</summary>
     internal static IReadOnlyList<string> Arguments(IReadOnlyList<string> args, Exposure exposure)
     {
         if (exposure == Exposure.Revealed)
@@ -264,7 +265,7 @@ public static class ControlMasking
                 }
                 if (HidesNext(previous, exposure) && !IsFlag(arg) && !RefersElsewhere(arg))
                 {
-                    return Mask;
+                    return exposure == Exposure.Dialog ? ClientInfo(arg) : Mask;
                 }
             }
             return exposure == Exposure.Masked ? Argument(arg) : DialogArgument(arg);
@@ -279,7 +280,24 @@ public static class ControlMasking
         {
             return arg;
         }
-        return piece.Before + "=" + Mask;
+        return piece.Before + "=" + ClientInfo(piece.After);
+    }
+
+    /// <summary>The OAuth client info as the dialog shows it: its JSON on one line with the client secret,
+    /// and any value under a key named for a secret, masked; "•••" for text that is not a JSON
+    /// object, which could be the secret itself.</summary>
+    internal static string ClientInfo(string text)
+    {
+        JsonValue value;
+        try
+        {
+            value = JsonValue.Parse(text);
+        }
+        catch (JsonException)
+        {
+            return Mask;
+        }
+        return value.Kind == JsonKind.Object ? CompactText(Leaves(value, Exposure.Dialog, secret: false)) : Mask;
     }
 
     /// <summary>The flag whose value holds an OAuth client's secret.</summary>

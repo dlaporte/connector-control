@@ -152,7 +152,7 @@ final class ControlMaskingTests: XCTestCase {
         ])
         XCTAssertEqual(ControlMasking.codeLines(docker, exposure: .dialog), [
             "command   docker",
-            "args      run -e API_KEY=hunter2 --token abc https://u:pw@h.example/x?k=v --header X-Key: ••• --static-oauth-client-info ••• img",
+            #"args      run -e API_KEY=hunter2 --token abc https://u:pw@h.example/x?k=v --header X-Key: ••• --static-oauth-client-info {"client_id":"a","client_secret":"set"} img"#,
             "env       GITHUB_TOKEN = ••• (set)",
             "apiKey    ••• (set)",
         ])
@@ -165,7 +165,7 @@ final class ControlMaskingTests: XCTestCase {
             "scopes   read",
         ])
         XCTAssertEqual(ControlMasking.codeLines(local("node", [#"--static-oauth-client-info={"client_id":"a","client_secret":"csec"}"#]),
-                                                exposure: .dialog), ["command   node", "args      --static-oauth-client-info=•••"])
+                                                exposure: .dialog), ["command   node", #"args      --static-oauth-client-info={"client_id":"a","client_secret":"set"}"#])
         XCTAssertEqual(ControlMasking.codeLines(notion, exposure: .dialog), [
             "type      remote",
             "url       https://mcp.notion.com/mcp?x=1",
@@ -214,6 +214,32 @@ final class ControlMaskingTests: XCTestCase {
             XCTAssertTrue(lines[3].contains("apiKey    "), "\(exposure)")
             XCTAssertEqual(lines[3].contains("topsecret") || lines[3].contains("hunter2"), exposure == .revealed, "\(exposure)")
         }
+    }
+
+    /// The dialog masks the OAuth client secret, not the client: the client info shows with only
+    /// its secret, and any value under a key named for a secret, masked. Text that is not a JSON
+    /// object stays masked whole, and tool output masks it whole either way.
+    func testTheDialogShowsTheOAuthClientInfoButItsSecret() {
+        let info = #"{"client_id":"cid9","client_secret":"csec9","redirect_uris":["https://a.example/cb"]}"#
+        XCTAssertEqual(ControlMasking.codeLines(local("node", ["--static-oauth-client-info", info]), exposure: .dialog), [
+            "command   node",
+            #"args      --static-oauth-client-info {"client_id":"cid9","client_secret":"set","redirect_uris":["https://a.example/cb"]}"#,
+        ])
+        XCTAssertEqual(ControlMasking.codeLines(local("node", ["--static-oauth-client-info", info]), exposure: .masked).last,
+                       "args      --static-oauth-client-info •••")
+        for text in ["not-json-csec8", #""csec7""#, #"["csec6"]"#] {
+            XCTAssertEqual(ControlMasking.codeLines(local("node", ["--static-oauth-client-info", text]), exposure: .dialog).last,
+                           "args      --static-oauth-client-info •••", text)
+            XCTAssertEqual(ControlMasking.codeLines(local("node", ["--static-oauth-client-info=" + text]), exposure: .dialog).last,
+                           "args      --static-oauth-client-info=•••", text)
+        }
+        let bridged = remote(["--static-oauth-client-info", #"{"client_id":"a","client_secret":"csec5","extra":1}"#])
+        XCTAssertEqual(ControlMasking.codeLines(bridged, exposure: .dialog), [
+            "type    remote, through mcp-remote",
+            "url     https://h.example/mcp",
+            "oauth   client a, secret ••• (set)",
+            #"args    --static-oauth-client-info {"client_id":"a","client_secret":"set","extra":1}"#,
+        ])
     }
 
     func testANonStringEnvironmentOrHeaderValueReadsAsSet() {

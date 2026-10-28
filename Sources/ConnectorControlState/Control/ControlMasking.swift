@@ -219,14 +219,16 @@ public enum ControlMasking {
     }
 
     /// An argument list as `exposure` shows it. The dialog keeps every argument as written but a
-    /// header's value and the OAuth client info, which holds the client secret.
+    /// header's value and the OAuth client secret.
     static func arguments(_ args: [String], exposure: Exposure) -> [String] {
         guard exposure != .revealed else { return args }
         return args.enumerated().map { index, arg in
             if index > 0 {
                 let previous = args[index - 1]
                 if previous == "--header" || previous == "-H" { return header(arg) }
-                if hidesNext(previous, exposure), !isFlag(arg), !refersElsewhere(arg) { return mask }
+                if hidesNext(previous, exposure), !isFlag(arg), !refersElsewhere(arg) {
+                    return exposure == .dialog ? clientInfo(arg) : mask
+                }
             }
             return exposure == .masked ? argument(arg) : dialogArgument(arg)
         }
@@ -236,7 +238,15 @@ public enum ControlMasking {
     /// `--static-oauth-client-info=…`, which holds the client secret.
     static func dialogArgument(_ arg: String) -> String {
         guard let piece = cut(arg, at: "="), hidesNext(piece.before, .dialog), !refersElsewhere(piece.after) else { return arg }
-        return piece.before + "=" + mask
+        return piece.before + "=" + clientInfo(piece.after)
+    }
+
+    /// The OAuth client info as the dialog shows it: its JSON on one line with the client secret,
+    /// and any value under a key named for a secret, masked; "•••" for text that is not a JSON
+    /// object, which could be the secret itself.
+    static func clientInfo(_ text: String) -> String {
+        guard let value = try? JSONValue.parse(Data(text.utf8)), case .object = value else { return mask }
+        return compactText(leaves(value, .dialog, secret: false))
     }
 
     /// The flag whose value holds an OAuth client's secret.

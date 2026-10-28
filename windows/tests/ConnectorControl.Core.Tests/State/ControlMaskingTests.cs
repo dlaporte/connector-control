@@ -181,7 +181,7 @@ public class ControlMaskingTests
         Assert.Equal(
             [
                 "command   docker",
-                "args      run -e API_KEY=hunter2 --token abc https://u:pw@h.example/x?k=v --header X-Key: ••• --static-oauth-client-info ••• img",
+                """args      run -e API_KEY=hunter2 --token abc https://u:pw@h.example/x?k=v --header X-Key: ••• --static-oauth-client-info {"client_id":"a","client_secret":"set"} img""",
                 "env       GITHUB_TOKEN = ••• (set)",
                 "apiKey    ••• (set)",
             ],
@@ -195,7 +195,7 @@ public class ControlMaskingTests
                 "scopes   read",
             ],
             ControlMasking.CodeLines(oauth, ControlMasking.Exposure.Dialog));
-        Assert.Equal(["command   node", "args      --static-oauth-client-info=•••"],
+        Assert.Equal(["command   node", """args      --static-oauth-client-info={"client_id":"a","client_secret":"set"}"""],
             ControlMasking.CodeLines(Local("node", ["""--static-oauth-client-info={"client_id":"a","client_secret":"csec"}"""]), ControlMasking.Exposure.Dialog));
         Assert.Equal(
             [
@@ -256,6 +256,39 @@ public class ControlMaskingTests
             Assert.True(lines[3].Contains("apiKey    "), $"{exposure}");
             Assert.True((lines[3].Contains("topsecret") || lines[3].Contains("hunter2")) == (exposure == ControlMasking.Exposure.Revealed), $"{exposure}");
         }
+    }
+
+    /// <summary>The dialog masks the OAuth client secret, not the client: the client info shows with only
+    /// its secret, and any value under a key named for a secret, masked. Text that is not a JSON
+    /// object stays masked whole, and tool output masks it whole either way.</summary>
+    [Fact]
+    public void TheDialogShowsTheOAuthClientInfoButItsSecret()
+    {
+        const string info = """{"client_id":"cid9","client_secret":"csec9","redirect_uris":["https://a.example/cb"]}""";
+        Assert.Equal(
+            [
+                "command   node",
+                """args      --static-oauth-client-info {"client_id":"cid9","client_secret":"set","redirect_uris":["https://a.example/cb"]}""",
+            ],
+            ControlMasking.CodeLines(Local("node", ["--static-oauth-client-info", info]), ControlMasking.Exposure.Dialog));
+        Assert.Equal("args      --static-oauth-client-info •••",
+            ControlMasking.CodeLines(Local("node", ["--static-oauth-client-info", info]), ControlMasking.Exposure.Masked)[^1]);
+        foreach (var text in new[] { "not-json-csec8", "\"csec7\"", "[\"csec6\"]" })
+        {
+            Assert.Equal("args      --static-oauth-client-info •••",
+                ControlMasking.CodeLines(Local("node", ["--static-oauth-client-info", text]), ControlMasking.Exposure.Dialog)[^1]);
+            Assert.Equal("args      --static-oauth-client-info=•••",
+                ControlMasking.CodeLines(Local("node", ["--static-oauth-client-info=" + text]), ControlMasking.Exposure.Dialog)[^1]);
+        }
+        var bridged = Remote(["--static-oauth-client-info", """{"client_id":"a","client_secret":"csec5","extra":1}"""]);
+        Assert.Equal(
+            [
+                "type    remote, through mcp-remote",
+                "url     https://h.example/mcp",
+                "oauth   client a, secret ••• (set)",
+                """args    --static-oauth-client-info {"client_id":"a","client_secret":"set","extra":1}""",
+            ],
+            ControlMasking.CodeLines(bridged, ControlMasking.Exposure.Dialog));
     }
 
     [Fact]
