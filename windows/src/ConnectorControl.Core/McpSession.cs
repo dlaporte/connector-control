@@ -20,6 +20,11 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
     public static readonly IReadOnlyList<string> SupportedProtocolVersions = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
     /// <summary>The largest message read; anything longer is refused without being parsed.</summary>
     public const int MaxMessageBytes = 1_048_576;
+    /// <summary>
+    /// How deeply a message may nest arrays and objects; the Windows parser's own limit, set on both
+    /// sides so neither accepts what the other refuses.
+    /// </summary>
+    public const int MaxNestingDepth = 64;
     public const int ParseErrorCode = -32700;
     public const int InvalidRequestCode = -32600;
     public const int MethodNotFoundCode = -32601;
@@ -40,7 +45,10 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
 
     /// <summary>Requests still running, by id.</summary>
     private readonly HashSet<JsonValue> running = [];
-    /// <summary>Running requests the client has cancelled: their progress and their answer are dropped.</summary>
+    /// <summary>
+    /// Running requests the client has cancelled: their progress and their answer are dropped. The
+    /// tool keeps running, only its answer is dropped, so an id stays here until the tool completes.
+    /// </summary>
     private readonly HashSet<JsonValue> cancelled = [];
 
     public void Receive(string line)
@@ -55,6 +63,7 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
         JsonValue message;
         try
         {
+            if (!Nests(MaxNestingDepth, trimmed)) { throw new JsonException("Nested too deeply."); }
             message = JsonValue.Parse(trimmed);
         }
         catch (JsonException)
@@ -86,6 +95,12 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
             Reply(InvalidRequestCode, InvalidRequestMessage, JsonValue.Null);
             return;
         }
+        if (running.Contains(id))
+        {
+            // Answering with the id would be taken for the running request's answer.
+            Reply(InvalidRequestCode, InvalidRequestMessage, JsonValue.Null);
+            return;
+        }
         Request(method, parameters, id);
     }
 
@@ -101,7 +116,7 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
             case "ping":
                 Respond(id, JsonValue.Object());
                 break;
-            case not null when !IsInitialized:
+            case string when !IsInitialized:
                 Reply(NotInitializedCode, NotInitializedMessage, id);
                 break;
             case "tools/list":
@@ -118,6 +133,12 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
 
     private void Initialize(JsonValue parameters, JsonValue id)
     {
+        if (IsInitialized)
+        {
+            // The name the gate shows as the asker must not change mid-session.
+            Reply(InvalidRequestCode, InvalidRequestMessage, id);
+            return;
+        }
         if (parameters.Kind != JsonKind.Object)
         {
             Reply(InvalidParamsCode, InvalidParamsMessage, id);
@@ -167,11 +188,11 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
         // The Swift side captures self weakly; the GC has no cycle to break here.
         host.CallTool(name, arguments, token, value =>
         {
-            if (token is null || !running.Contains(id) || cancelled.Contains(id)) { return; }
+            if (token is null || Number(value) is not { } number || !running.Contains(id) || cancelled.Contains(id)) { return; }
             Write(JsonValue.Object(
                 ("jsonrpc", JsonValue.String("2.0")),
                 ("method", JsonValue.String("notifications/progress")),
-                ("params", JsonValue.Object(("progressToken", token), ("progress", Number(value))))));
+                ("params", JsonValue.Object(("progressToken", token), ("progress", number)))));
         }, result =>
         {
             if (!running.Remove(id)) { return; }
@@ -221,7 +242,40 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
     internal static string? ToolName(JsonValue descriptor) =>
         descriptor.Kind == JsonKind.Object && descriptor["name"] is { Kind: JsonKind.String } name ? name.StringValue : null;
 
-    /// <summary>Whole numbers go out as integers, which both platforms write the same way.</summary>
-    internal static JsonValue Number(double value) =>
-        value == Math.Round(value) && Math.Abs(value) < 1e15 ? JsonValue.Int((long)value) : JsonValue.Double(value);
+    /// <summary>
+    /// Whole numbers go out as integers, which both platforms write the same way. NaN and infinity
+    /// have no JSON form, so they are no progress at all.
+    /// </summary>
+    internal static JsonValue? Number(double value) =>
+        !double.IsFinite(value) ? null
+        : value == Math.Round(value) && Math.Abs(value) < 1e15 ? JsonValue.Int((long)value) : JsonValue.Double(value);
+
+    /// <summary>Whether <paramref name="text"/> nests arrays and objects no deeper than <paramref name="limit"/>, brackets inside strings not counted.</summary>
+    internal static bool Nests(int limit, string text)
+    {
+        var depth = 0;
+        var inString = false;
+        var escaped = false;
+        foreach (var ch in text)
+        {
+            if (inString)
+            {
+                if (escaped) { escaped = false; } else if (ch == '\\') { escaped = true; } else if (ch == '"') { inString = false; }
+            }
+            else if (ch == '"')
+            {
+                inString = true;
+            }
+            else if (ch is '[' or '{')
+            {
+                depth++;
+                if (depth > limit) { return false; }
+            }
+            else if (ch is ']' or '}')
+            {
+                depth--;
+            }
+        }
+        return true;
+    }
 }

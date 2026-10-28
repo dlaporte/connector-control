@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace ConnectorControl.Core.Tests;
 
 /// <summary>Mirror: Tests/ConnectorControlCoreTests/McpSessionTests.swift</summary>
@@ -172,6 +174,115 @@ public class McpSessionTests
         session.Receive("""{"jsonrpc":"2.0","id":99,"result":{}}""");
         session.Receive("");
         Assert.Single(sent);
+    }
+
+    [Fact]
+    public void ProgressThatIsNotFiniteIsDroppedAndFractionsSurvive()
+    {
+        Initialize();
+        session.Receive("""{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"echo","_meta":{"progressToken":"t"}}}""");
+        host.Calls[0].Progress(double.NaN);
+        host.Calls[0].Progress(double.PositiveInfinity);
+        host.Calls[0].Progress(double.NegativeInfinity);
+        Assert.Single(sent);
+        host.Calls[0].Progress(0.5);
+        Assert.Equal("""{"jsonrpc":"2.0","method":"notifications\/progress","params":{"progress":0.5,"progressToken":"t"}}""", sent[^1]);
+    }
+
+    private static string PingLine(string padding) =>
+        """{"jsonrpc":"2.0","id":1,"method":"ping","pad":"%P%"}""".Replace("%P%", padding);
+
+    [Fact]
+    public void NestingDeeperThanSixtyFourIsAParseError()
+    {
+        var ok = """{"jsonrpc":"2.0","id":1,"method":"ping","p":""" + new string('[', 63) + new string(']', 63) + "}";
+        var deep = """{"jsonrpc":"2.0","id":1,"method":"ping","p":""" + new string('[', 64) + new string(']', 64) + "}";
+        session.Receive(ok);
+        session.Receive(deep);
+        Assert.Equal(
+            [
+                """{"id":1,"jsonrpc":"2.0","result":{}}""",
+                """{"error":{"code":-32700,"message":"Parse error"},"id":null,"jsonrpc":"2.0"}""",
+            ],
+            sent);
+    }
+
+    [Fact]
+    public void BracketsInsideStringsDoNotCountAsNesting()
+    {
+        session.Receive(PingLine(new string('[', 200) + "\\\"" + new string('[', 200)));
+        Assert.Equal(["""{"id":1,"jsonrpc":"2.0","result":{}}"""], sent);
+    }
+
+    [Fact]
+    public void TwoObjectsOnOneLineAreAParseError()
+    {
+        session.Receive("""{"jsonrpc":"2.0","id":1,"method":"ping"}{"b":2}""");
+        Assert.Equal(["""{"error":{"code":-32700,"message":"Parse error"},"id":null,"jsonrpc":"2.0"}"""], sent);
+    }
+
+    [Fact]
+    public void AnIntegerIdBeyondSixtyFourBitsIsAnInvalidRequest()
+    {
+        session.Receive("""{"jsonrpc":"2.0","id":123456789012345678901234567890,"method":"ping"}""");
+        Assert.Equal(["""{"error":{"code":-32600,"message":"Invalid Request"},"id":null,"jsonrpc":"2.0"}"""], sent);
+    }
+
+    [Fact]
+    public void AWhitespaceOnlyLineIsIgnoredAndANullIdIsInvalid()
+    {
+        session.Receive("  \t ");
+        session.Receive("""{"jsonrpc":"2.0","id":null,"method":"ping"}""");
+        Assert.Equal(["""{"error":{"code":-32600,"message":"Invalid Request"},"id":null,"jsonrpc":"2.0"}"""], sent);
+    }
+
+    [Fact]
+    public void InvalidUtf8IsReadAsReplacementCharacters()
+    {
+        // A lone surrogate is what invalid bytes become in a .NET string.
+        session.Receive(PingLine("𐀀".Substring(0, 1)));
+        Assert.Equal(["""{"id":1,"jsonrpc":"2.0","result":{}}"""], sent);
+    }
+
+    [Fact]
+    public void TheSizeLimitCountsBytesNotCharacters()
+    {
+        var baseBytes = Encoding.UTF8.GetByteCount(PingLine(""));
+        var room = McpSession.MaxMessageBytes - baseBytes;
+        var padding = "";
+        if (room % 2 == 1) { padding = "x"; room -= 1; }
+        padding += new string('é', room / 2);
+        var exact = PingLine(padding);
+        Assert.Equal(McpSession.MaxMessageBytes, Encoding.UTF8.GetByteCount(exact));
+        session.Receive(exact);
+        session.Receive(PingLine(padding + "x"));
+        Assert.Equal(
+            [
+                """{"id":1,"jsonrpc":"2.0","result":{}}""",
+                """{"error":{"code":-32600,"message":"Message too large"},"id":null,"jsonrpc":"2.0"}""",
+            ],
+            sent);
+    }
+
+    [Fact]
+    public void ARequestIdAlreadyRunningIsRefusedWithoutAnId()
+    {
+        Initialize();
+        session.Receive("""{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"echo"}}""");
+        session.Receive("""{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"echo"}}""");
+        Assert.Equal("""{"error":{"code":-32600,"message":"Invalid Request"},"id":null,"jsonrpc":"2.0"}""", sent[^1]);
+        Assert.Single(host.Calls);
+        host.Calls[0].Completion(JsonValue.Object());
+        Assert.Equal("""{"id":3,"jsonrpc":"2.0","result":{}}""", sent[^1]);
+    }
+
+    [Fact]
+    public void ASecondInitializeIsRefusedAndKeepsTheFirstName()
+    {
+        Initialize();
+        session.Receive("""{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"someone-else"}}}""");
+        Assert.Equal("""{"error":{"code":-32600,"message":"Invalid Request"},"id":2,"jsonrpc":"2.0"}""", sent[^1]);
+        Assert.Equal("claude-ai", session.ClientName);
     }
 
     [Fact]

@@ -61,7 +61,11 @@ public extension JSONValue {
     /// writes it, which the Windows mirror reproduces byte for byte
     /// (`AppleJsonFormat.SerializationCompact`, pinned by the serialization-compact goldens).
     func compactLine() -> String {
-        guard let data = try? JSONSerialization.data(withJSONObject: anyValue, options: [.sortedKeys, .fragmentsAllowed]) else {
+        // JSONSerialization raises an Objective-C exception, which aborts the process, for NaN and
+        // infinity, so a value it cannot write is checked for first. Wrapped in an array so a bare
+        // fragment is checked too.
+        guard JSONSerialization.isValidJSONObject([anyValue]),
+              let data = try? JSONSerialization.data(withJSONObject: anyValue, options: [.sortedKeys, .fragmentsAllowed]) else {
             return "null"
         }
         return String(decoding: data, as: UTF8.self)

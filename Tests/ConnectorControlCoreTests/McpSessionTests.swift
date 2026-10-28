@@ -137,6 +137,93 @@ final class McpSessionTests: XCTestCase {
         XCTAssertEqual(sent.count, 1)
     }
 
+    func testProgressThatIsNotFiniteIsDroppedAndFractionsSurvive() {
+        initialize()
+        session.receive(#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"echo","_meta":{"progressToken":"t"}}}"#)
+        host.calls[0].progress(.nan)
+        host.calls[0].progress(.infinity)
+        host.calls[0].progress(-.infinity)
+        XCTAssertEqual(sent.count, 1)
+        host.calls[0].progress(0.5)
+        XCTAssertEqual(sent.last, #"{"jsonrpc":"2.0","method":"notifications\/progress","params":{"progress":0.5,"progressToken":"t"}}"#)
+    }
+
+    func testCompactLineNeverAbortsOnANonFiniteNumber() {
+        XCTAssertEqual(JSONValue.object(["a": .double(.nan)]).compactLine(), "null")
+        XCTAssertEqual(JSONValue.double(.infinity).compactLine(), "null")
+    }
+
+    private func pingLine(padding: String) -> String {
+        #"{"jsonrpc":"2.0","id":1,"method":"ping","pad":"\#(padding)"}"#
+    }
+
+    func testNestingDeeperThanSixtyFourIsAParseError() {
+        let ok = #"{"jsonrpc":"2.0","id":1,"method":"ping","p":"# + String(repeating: "[", count: 63) + String(repeating: "]", count: 63) + "}"
+        let deep = #"{"jsonrpc":"2.0","id":1,"method":"ping","p":"# + String(repeating: "[", count: 64) + String(repeating: "]", count: 64) + "}"
+        session.receive(ok)
+        session.receive(deep)
+        XCTAssertEqual(sent, [#"{"id":1,"jsonrpc":"2.0","result":{}}"#,
+                              #"{"error":{"code":-32700,"message":"Parse error"},"id":null,"jsonrpc":"2.0"}"#])
+    }
+
+    func testBracketsInsideStringsDoNotCountAsNesting() {
+        session.receive(pingLine(padding: String(repeating: "[", count: 200) + #"\""# + String(repeating: "[", count: 200)))
+        XCTAssertEqual(sent, [#"{"id":1,"jsonrpc":"2.0","result":{}}"#])
+    }
+
+    func testTwoObjectsOnOneLineAreAParseError() {
+        session.receive(#"{"jsonrpc":"2.0","id":1,"method":"ping"}{"b":2}"#)
+        XCTAssertEqual(sent, [#"{"error":{"code":-32700,"message":"Parse error"},"id":null,"jsonrpc":"2.0"}"#])
+    }
+
+    func testAnIntegerIdBeyondSixtyFourBitsIsAnInvalidRequest() {
+        session.receive(#"{"jsonrpc":"2.0","id":123456789012345678901234567890,"method":"ping"}"#)
+        XCTAssertEqual(sent, [#"{"error":{"code":-32600,"message":"Invalid Request"},"id":null,"jsonrpc":"2.0"}"#])
+    }
+
+    func testAWhitespaceOnlyLineIsIgnoredAndANullIdIsInvalid() {
+        session.receive("  \t ")
+        session.receive(#"{"jsonrpc":"2.0","id":null,"method":"ping"}"#)
+        XCTAssertEqual(sent, [#"{"error":{"code":-32600,"message":"Invalid Request"},"id":null,"jsonrpc":"2.0"}"#])
+    }
+
+    func testInvalidUTF8IsReadAsReplacementCharacters() {
+        let bad = String(decoding: [0xFF, 0xFE], as: UTF8.self)
+        session.receive(pingLine(padding: bad))
+        XCTAssertEqual(sent, [#"{"id":1,"jsonrpc":"2.0","result":{}}"#])
+    }
+
+    func testTheSizeLimitCountsBytesNotCharacters() {
+        let base = pingLine(padding: "").utf8.count
+        var room = McpSession.maxMessageBytes - base
+        var padding = ""
+        if room % 2 == 1 { padding = "x"; room -= 1 }
+        padding += String(repeating: "é", count: room / 2)
+        let exact = pingLine(padding: padding)
+        XCTAssertEqual(exact.utf8.count, McpSession.maxMessageBytes)
+        session.receive(exact)
+        session.receive(pingLine(padding: padding + "x"))
+        XCTAssertEqual(sent, [#"{"id":1,"jsonrpc":"2.0","result":{}}"#,
+                              #"{"error":{"code":-32600,"message":"Message too large"},"id":null,"jsonrpc":"2.0"}"#])
+    }
+
+    func testARequestIdAlreadyRunningIsRefusedWithoutAnID() {
+        initialize()
+        session.receive(#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"echo"}}"#)
+        session.receive(#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"echo"}}"#)
+        XCTAssertEqual(sent.last, #"{"error":{"code":-32600,"message":"Invalid Request"},"id":null,"jsonrpc":"2.0"}"#)
+        XCTAssertEqual(host.calls.count, 1)
+        host.calls[0].completion(.object([:]))
+        XCTAssertEqual(sent.last, #"{"id":3,"jsonrpc":"2.0","result":{}}"#)
+    }
+
+    func testASecondInitializeIsRefusedAndKeepsTheFirstName() {
+        initialize()
+        session.receive(#"{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"someone-else"}}}"#)
+        XCTAssertEqual(sent.last, #"{"error":{"code":-32600,"message":"Invalid Request"},"id":2,"jsonrpc":"2.0"}"#)
+        XCTAssertEqual(session.clientName, "claude-ai")
+    }
+
     func testCompactLinesAreOneLineKeySortedJSON() {
         XCTAssertEqual(JSONValue.object(["b": .int(1), "a": .string("x/y “q”"), "c": .array([.bool(true), .null])]).compactLine(),
                        #"{"a":"x\/y “q”","b":1,"c":[true,null]}"#)

@@ -27,6 +27,9 @@ public final class McpSession {
     public static let supportedProtocolVersions = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]
     /// The largest message read; anything longer is refused without being parsed.
     public static let maxMessageBytes = 1_048_576
+    /// How deeply a message may nest arrays and objects; the Windows parser's own limit, set on both
+    /// sides so neither accepts what the other refuses.
+    public static let maxNestingDepth = 64
     public static let parseErrorCode = -32700
     public static let invalidRequestCode = -32600
     public static let methodNotFoundCode = -32601
@@ -50,7 +53,8 @@ public final class McpSession {
     private let send: (String) -> Void
     /// Requests still running, by id.
     private var running: Set<JSONValue> = []
-    /// Running requests the client has cancelled: their progress and their answer are dropped.
+    /// Running requests the client has cancelled: their progress and their answer are dropped. The
+    /// tool keeps running, only its answer is dropped, so an id stays here until the tool completes.
     private var cancelled: Set<JSONValue> = []
 
     public init(host: McpToolHost, version: String, send: @escaping (String) -> Void) {
@@ -66,7 +70,8 @@ public final class McpSession {
         }
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        guard let message = try? JSONValue.parse(Data(trimmed.utf8)) else {
+        guard McpSession.nests(atMost: McpSession.maxNestingDepth, trimmed),
+              let message = try? JSONValue.parse(Data(trimmed.utf8)) else {
             reply(error: McpSession.parseErrorCode, McpSession.parseErrorMessage, id: .null)
             return
         }
@@ -86,6 +91,11 @@ public final class McpSession {
             return
         }
         guard let id = McpSession.validID(rawID) else {
+            reply(error: McpSession.invalidRequestCode, McpSession.invalidRequestMessage, id: .null)
+            return
+        }
+        guard !running.contains(id) else {
+            // Answering with the id would be taken for the running request's answer.
             reply(error: McpSession.invalidRequestCode, McpSession.invalidRequestMessage, id: .null)
             return
         }
@@ -112,6 +122,11 @@ public final class McpSession {
     }
 
     private func initialize(_ params: JSONValue, id: JSONValue) {
+        guard !isInitialized else {
+            // The name the gate shows as the asker must not change mid-session.
+            reply(error: McpSession.invalidRequestCode, McpSession.invalidRequestMessage, id: id)
+            return
+        }
         guard case .object(let fields) = params else {
             reply(error: McpSession.invalidParamsCode, McpSession.invalidParamsMessage, id: id)
             return
@@ -151,11 +166,12 @@ public final class McpSession {
         }
         running.insert(id)
         host.callTool(name: name, arguments: arguments, progressToken: token, progress: { [weak self] value in
-            guard let self, let token, self.running.contains(id), !self.cancelled.contains(id) else { return }
+            guard let self, let token, let number = McpSession.number(value),
+                  self.running.contains(id), !self.cancelled.contains(id) else { return }
             self.write(.object([
                 "jsonrpc": .string("2.0"),
                 "method": .string("notifications/progress"),
-                "params": .object(["progressToken": token, "progress": McpSession.number(value)]),
+                "params": .object(["progressToken": token, "progress": number]),
             ]))
         }, completion: { [weak self] result in
             guard let self, self.running.remove(id) != nil else { return }
@@ -206,8 +222,30 @@ public final class McpSession {
         return name
     }
 
-    /// Whole numbers go out as integers, which both platforms write the same way.
-    static func number(_ value: Double) -> JSONValue {
-        value == value.rounded() && abs(value) < 1e15 ? .int(Int(value)) : .double(value)
+    /// Whole numbers go out as integers, which both platforms write the same way. NaN and infinity
+    /// have no JSON form, so they are no progress at all.
+    static func number(_ value: Double) -> JSONValue? {
+        guard value.isFinite else { return nil }
+        return value == value.rounded() && abs(value) < 1e15 ? .int(Int(value)) : .double(value)
+    }
+
+    /// Whether `text` nests arrays and objects no deeper than `limit`, brackets inside strings not counted.
+    static func nests(atMost limit: Int, _ text: String) -> Bool {
+        var depth = 0
+        var inString = false
+        var escaped = false
+        for byte in text.utf8 {
+            if inString {
+                if escaped { escaped = false } else if byte == UInt8(ascii: "\\") { escaped = true } else if byte == UInt8(ascii: "\"") { inString = false }
+            } else if byte == UInt8(ascii: "\"") {
+                inString = true
+            } else if byte == UInt8(ascii: "[") || byte == UInt8(ascii: "{") {
+                depth += 1
+                if depth > limit { return false }
+            } else if byte == UInt8(ascii: "]") || byte == UInt8(ascii: "}") {
+                depth -= 1
+            }
+        }
+        return true
     }
 }
