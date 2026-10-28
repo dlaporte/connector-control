@@ -63,7 +63,7 @@ public static class ClaudeIntegrationCleanup
         }
         catch (Exception ex) when (ex is ClaudeConfigException or IOException or UnauthorizedAccessException)
         {
-            failed?.Invoke($"Connector Control's entry was left in {configPath}: {ex.Message}");
+            failed?.Invoke($"Connector Control's entry may still be in {configPath}: {ex.Message}");
             return false;
         }
     }
@@ -86,15 +86,20 @@ public static class ClaudeIntegrationCleanup
         var bin = ControlToolCopy.BinDir(dataDir);
         IReadOnlyList<string> configs = [];
         BackupManager? backups = null;
-        Step(failed, "The Claude configs could not be listed", () =>
-        {
-            configs = CandidateConfigs(paths, overrides);
-            backups = new BackupManager(AppPaths.Resolve(paths.Environment, overrides, paths.Folders, paths.Probe).BackupsDir, keepCount);
-        });
+        Step(failed, "The Claude configs could not be listed", () => configs = CandidateConfigs(paths, overrides));
+        Step(failed, "The backups folder could not be resolved", () =>
+            backups = new BackupManager(AppPaths.Resolve(paths.Environment, overrides, paths.Folders, paths.Probe).BackupsDir, keepCount));
         foreach (var config in configs)
         {
-            Step(failed, $"Connector Control's entry was left in {config}", () =>
-                RemoveEntry(config, tool, path => backups!.BackUp(path, RestoreModel.Series), failed, write));
+            if (backups is null)
+            {
+                // A config is never changed without its backup.
+                failed?.Invoke($"Connector Control's entry may still be in {config}: there was nowhere to back it up.");
+                continue;
+            }
+            var backUps = backups;
+            Step(failed, $"Connector Control's entry may still be in {config}", () =>
+                RemoveEntry(config, tool, path => backUps.BackUp(path, RestoreModel.Series), failed, write));
         }
         Step(failed, $"The command-line tool's copy could not be removed from {bin}", () =>
         {
@@ -102,7 +107,7 @@ public static class ClaudeIntegrationCleanup
             // A copy Claude's relay is still running cannot be deleted; nothing will start it again.
             if (File.Exists(tool) || Directory.Exists(bin))
             {
-                failed?.Invoke($"The command-line tool's copy in {bin} was left: something still runs it.");
+                failed?.Invoke($"The command-line tool's copy in {bin} could not be deleted.");
             }
         });
         Step(failed, "Connector Control's folder could not be taken out of the user PATH", () =>

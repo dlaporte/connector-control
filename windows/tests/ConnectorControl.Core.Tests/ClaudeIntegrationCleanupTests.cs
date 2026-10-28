@@ -119,7 +119,8 @@ public class ClaudeIntegrationCleanupTests : IDisposable
     [Fact]
     public void AKeepCountOfOneLeavesOneBackupOverTwoConfigs()
     {
-        Write(RoamingConfig, (ClaudeIntegration.EntryName, ClaudeIntegration.Entry(Tool)));
+        // The two differ, or the second backup would be skipped as a copy of the first whatever the count.
+        Write(RoamingConfig, ("github", Github), (ClaudeIntegration.EntryName, ClaudeIntegration.Entry(Tool)));
         Write(MsixConfig, (ClaudeIntegration.EntryName, ClaudeIntegration.Entry(Tool)));
         var paths = Paths();
         ClaudeIntegrationCleanup.Uninstall(paths, new PathOverrides(), DataDir, new FakeEnvironment(null), 1);
@@ -220,7 +221,7 @@ public class ClaudeIntegrationCleanupTests : IDisposable
         var reported = new List<string>();
         ClaudeIntegrationCleanup.Uninstall(Paths(), new PathOverrides(), DataDir, new FakeEnvironment(null), BackupManager.DefaultKeepCount, reported.Add,
             _ => { });
-        Assert.Contains("still runs it", Assert.Single(reported));
+        Assert.Contains("could not be deleted", Assert.Single(reported));
     }
 
     [Fact]
