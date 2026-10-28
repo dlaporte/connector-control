@@ -118,6 +118,13 @@ public sealed class JsonValue : IEquatable<JsonValue>
     /// <summary>Swift <c>editorText()</c>: same as <see cref="Serialize"/> without escaping slashes.</summary>
     public string EditorText() => AppleJsonWriter.Write(this, AppleJsonFormat.EditorText);
 
+    /// <summary>
+    /// One line of compact, key-sorted JSON: the control layer's wire format. JSONSerialization
+    /// writes it on the Swift side, which this reproduces byte for byte
+    /// (<c>AppleJsonFormat.SerializationCompact</c>, pinned by the serialization-compact goldens).
+    /// </summary>
+    public string CompactLine() => AppleJsonWriter.Write(this, AppleJsonFormat.SerializationCompact);
+
     // MARK: parsing
 
     public static JsonValue Parse(string json) => Parse(Encoding.UTF8.GetBytes(json));

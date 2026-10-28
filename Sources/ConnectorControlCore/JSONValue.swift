@@ -57,6 +57,16 @@ public extension JSONValue {
         return (try? e.encode(self)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
     }
 
+    /// One line of compact, key-sorted JSON: the control layer's wire format. JSONSerialization
+    /// writes it, which the Windows mirror reproduces byte for byte
+    /// (`AppleJsonFormat.SerializationCompact`, pinned by the serialization-compact goldens).
+    func compactLine() -> String {
+        guard let data = try? JSONSerialization.data(withJSONObject: anyValue, options: [.sortedKeys, .fragmentsAllowed]) else {
+            return "null"
+        }
+        return String(decoding: data, as: UTF8.self)
+    }
+
     var anyValue: Any {
         switch self {
         case .null: return NSNull()
