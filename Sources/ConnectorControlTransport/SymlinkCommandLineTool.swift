@@ -17,20 +17,28 @@ public final class SymlinkCommandLineTool: CommandLineTool {
     static let userCancelled = "(-128)"
     /// What the install script says when a file that is not a link holds the link's path.
     static let occupiedMarker = "connector-control-occupied"
+    /// The shell command as an AppleScript expression, apart from the privileges it runs with: tests run it
+    /// on its own, so none of them can ever ask for a password.
+    static let installShell = #""if [ -L " & quoted form of (item 2 of argv) & " ]; then /bin/ln -sfn " & quoted form of (item 1 of argv) & " " & quoted form of (item 2 of argv) & "; elif [ -e " & quoted form of (item 2 of argv) & " ]; then echo \#(occupiedMarker) >&2; exit 3; else /bin/mkdir -p " & quoted form of (item 3 of argv) & " && /bin/ln -s " & quoted form of (item 1 of argv) & " " & quoted form of (item 2 of argv) & "; fi""#
     /// The tool, the link, the link's folder and the prompt are the run handler's items 1 to 4. A link is repointed
     /// with `ln -sfn`; where nothing is, a plain `ln -s`, which refuses at once if a file appears there after the
     /// check. Only a file that is swapped in for an existing link between the `-L` test and `ln -sfn` can be
     /// replaced: the shell has no rename that refuses to replace a file, and the folder is the administrator's.
     static let installScript = [
         "on run argv",
-        #"do shell script "if [ -L " & quoted form of (item 2 of argv) & " ]; then /bin/ln -sfn " & quoted form of (item 1 of argv) & " " & quoted form of (item 2 of argv) & "; elif [ -e " & quoted form of (item 2 of argv) & " ]; then echo \#(occupiedMarker) >&2; exit 3; else /bin/mkdir -p " & quoted form of (item 3 of argv) & " && /bin/ln -s " & quoted form of (item 1 of argv) & " " & quoted form of (item 2 of argv) & "; fi" with prompt (item 4 of argv) with administrator privileges"#,
+        "do shell script \(installShell) with prompt (item 4 of argv) with administrator privileges",
         "end run",
     ]
+    /// The shell command as an AppleScript expression, apart from the privileges it runs with: tests run it
+    /// on its own, so none of them can ever ask for a password.
+    static let removeShell = #""if [ \"$(/usr/bin/readlink " & quoted form of (item 1 of argv) & ")\" = " & quoted form of (item 2 of argv) & " ]; then /bin/rm -f " & quoted form of (item 1 of argv) & "; fi""#
     /// The link, the tool and the prompt are items 1 to 3: the link goes only while `readlink` still gives the tool
-    /// exactly as `remove` read it from the link, so the script and `isInstalled` judge the same text.
+    /// exactly as `remove` read it from the link, so the script and `isInstalled` judge the same text. Between
+    /// `readlink` and `rm -f` a regular file swapped in for the link would go too: the folder is the
+    /// administrator's, as for `ln -sfn` above, and the shell has no remove that refuses a file.
     static let removeScript = [
         "on run argv",
-        #"do shell script "if [ \"$(/usr/bin/readlink " & quoted form of (item 1 of argv) & ")\" = " & quoted form of (item 2 of argv) & " ]; then /bin/rm -f " & quoted form of (item 1 of argv) & "; fi" with prompt (item 3 of argv) with administrator privileges"#,
+        "do shell script \(removeShell) with prompt (item 3 of argv) with administrator privileges",
         "end run",
     ]
 
@@ -136,7 +144,8 @@ public final class SymlinkCommandLineTool: CommandLineTool {
     }
 
     /// `unlink(2)`, which never removes a directory, unlike `FileManager.removeItem`, which would take one that
-    /// was swapped in for the link with everything inside it.
+    /// was swapped in for the link with everything inside it. A regular file swapped in between `isLink` and
+    /// here would still go, from the person's own folder: only the directory case is closed.
     private static func unlink(_ path: String) throws {
         guard Darwin.unlink(path) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
     }

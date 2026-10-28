@@ -147,7 +147,7 @@ final class SymlinkCommandLineToolTests: XCTestCase {
     func testTheScriptsRunWithoutAnAdministratorOnHostilePaths() throws {
         let dir = TempDir(prefix: "cli-link"); defer { dir.dispose() }
         let canary = dir.file("CANARY").path
-        let hostile = "it's \"q\" $(touch \(canary)) `touch \(canary)` ; touch \(canary) \\back -lead $HOME %s & | > x"
+        let hostile = "it's \"q\" $(touch \(canary)) `touch \(canary)` ; touch \(canary) \\back\nnew-line -lead $HOME %s & | > x"
         let toolFile = dir.file("App \(hostile)/-Contents/MacOS/connector-control")
         try FileManager.default.createDirectory(at: toolFile.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data("#!/bin/sh\n".utf8).write(to: toolFile)
@@ -155,40 +155,46 @@ final class SymlinkCommandLineToolTests: XCTestCase {
         let link = bin.appendingPathComponent("connector-control").path
         let tool = toolFile.path
         let prompt = CommandLineToolText.adminPrompt
-        /// The script as the test may run it: no `with administrator privileges`, so no password is ever asked.
-        func run(_ script: [String], _ arguments: [String]) throws -> (Int32, String) {
-            let plain = script.map { line in
-                line.replacingOccurrences(of: #" with prompt \(item \d of argv\) with administrator privileges$"#, with: "",
-                                          options: .regularExpression)
+        /// Only the shell text, through a plain `do shell script`: the production wrapper, with its administrator
+        /// clause, is never handed to osascript here, and a script that mentions one never runs.
+        func run(_ shell: String, _ arguments: [String]) throws -> (Int32, String) {
+            let lines = ["on run argv", "do shell script " + shell, "end run"]
+            if lines.contains(where: { $0.contains("administrator") }) {
+                XCTFail("a script with an administrator clause must not run")
+                throw CancellationError()
             }
-            XCTAssertFalse(plain.contains { $0.contains("administrator") }, "the administrator clause must be gone")
-            return SymlinkCommandLineTool.osascript(plain.flatMap { ["-e", $0] } + arguments)
+            return SymlinkCommandLineTool.osascript(lines.flatMap { ["-e", $0] } + arguments)
         }
+        // The production scripts are these shell texts and the privileges, nothing more.
+        XCTAssertEqual(SymlinkCommandLineTool.installScript, ["on run argv", "do shell script \(SymlinkCommandLineTool.installShell)"
+            + " with prompt (item 4 of argv) with administrator privileges", "end run"])
+        XCTAssertEqual(SymlinkCommandLineTool.removeScript, ["on run argv", "do shell script \(SymlinkCommandLineTool.removeShell)"
+            + " with prompt (item 3 of argv) with administrator privileges", "end run"])
         let fileManager = FileManager.default
-        XCTAssertEqual(try run(SymlinkCommandLineTool.installScript, [tool, link, bin.path, prompt]).0, 0)
+        XCTAssertEqual(try run(SymlinkCommandLineTool.installShell, [tool, link, bin.path, prompt]).0, 0)
         XCTAssertEqual(try fileManager.destinationOfSymbolicLink(atPath: link), tool, "the link is made byte for byte")
-        XCTAssertEqual(try run(SymlinkCommandLineTool.installScript, [tool, link, bin.path, prompt]).0, 0, "again, over the link")
+        XCTAssertEqual(try run(SymlinkCommandLineTool.installShell, [tool, link, bin.path, prompt]).0, 0, "again, over the link")
         XCTAssertEqual(try fileManager.destinationOfSymbolicLink(atPath: link), tool)
 
         // Remove takes only a link that still names the tool.
         let other = tool + "-other"
         try fileManager.removeItem(atPath: link)
         try fileManager.createSymbolicLink(atPath: link, withDestinationPath: other)
-        XCTAssertEqual(try run(SymlinkCommandLineTool.removeScript, [link, tool, prompt]).0, 0)
+        XCTAssertEqual(try run(SymlinkCommandLineTool.removeShell, [link, tool, prompt]).0, 0)
         XCTAssertEqual(try fileManager.destinationOfSymbolicLink(atPath: link), other, "another copy's link survives")
         try fileManager.removeItem(atPath: link)
         try fileManager.createSymbolicLink(atPath: link, withDestinationPath: tool)
-        XCTAssertEqual(try run(SymlinkCommandLineTool.removeScript, [link, tool, prompt]).0, 0)
+        XCTAssertEqual(try run(SymlinkCommandLineTool.removeShell, [link, tool, prompt]).0, 0)
         XCTAssertFalse(fileManager.fileExists(atPath: link))
         XCTAssertNil(try? fileManager.destinationOfSymbolicLink(atPath: link))
 
         // A file that is not a link: install says so and leaves it, remove leaves it.
         try Data("mine".utf8).write(to: URL(fileURLWithPath: link))
-        let occupied = try run(SymlinkCommandLineTool.installScript, [tool, link, bin.path, prompt])
+        let occupied = try run(SymlinkCommandLineTool.installShell, [tool, link, bin.path, prompt])
         XCTAssertNotEqual(occupied.0, 0)
         XCTAssertTrue(SymlinkCommandLineTool.reason(from: occupied.1).hasSuffix(SymlinkCommandLineTool.occupiedMarker), occupied.1)
         XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: link)), Data("mine".utf8))
-        XCTAssertEqual(try run(SymlinkCommandLineTool.removeScript, [link, tool, prompt]).0, 0)
+        XCTAssertEqual(try run(SymlinkCommandLineTool.removeShell, [link, tool, prompt]).0, 0)
         XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: link)), Data("mine".utf8))
         XCTAssertFalse(fileManager.fileExists(atPath: canary), "no path was ever run as a command")
     }
