@@ -74,14 +74,18 @@ public class ControlToolsSharingTests
     }
 
     /// <summary>A document whose one connector the masked view and the dialog show differently: an argument
-    /// after a flag named for a secret, and an environment value.</summary>
+    /// after a flag named for a secret, an environment value the dialog shows, and one it masks.</summary>
     private static readonly CollectionDocument Secretive = new(
         "Acme", null, "acme-origin", "2026-10-01T00:00:00Z",
         new Dictionary<string, CollectionDocument.Connector>
         {
             ["acme"] = new(
                 new CollectionDocument.Launcher.Local("node", ["${COLLECTION_DIR}/server.js", "--api-key", "sk-live-abc123"], CollectionPlatform.Mac),
-                new Dictionary<string, CollectionDocument.EnvValue> { ["ACME_TOKEN"] = new CollectionDocument.EnvValue.Value("literal-env-secret") },
+                new Dictionary<string, CollectionDocument.EnvValue>
+                {
+                    ["ACME_TOKEN"] = new CollectionDocument.EnvValue.Value("literal-env-secret"),
+                    ["NODE_OPTIONS"] = new CollectionDocument.EnvValue.Value("--require ./hook.js"),
+                },
                 new Dictionary<string, string?>(), new Dictionary<string, JsonValue>()),
         });
 
@@ -326,9 +330,9 @@ public class ControlToolsSharingTests
 
     // MARK: What the questions show
 
-    /// <summary>Import and subscribe show what each connector would run, argument as written and
-    /// <c>${COLLECTION_DIR}</c> as the document writes it, with environment values masked, where the
-    /// masked view would hide the argument; the answers carry none of it.</summary>
+    /// <summary>Import and subscribe show what each connector would run, argument and environment value as
+    /// written and <c>${COLLECTION_DIR}</c> as the document writes it, with a secret's environment value
+    /// masked, where the masked view would hide the argument; the answers carry none of it.</summary>
     [Fact]
     public void TheQuestionsShowWhatWouldRunAndTheAnswersNoSecret()
     {
@@ -345,14 +349,15 @@ public class ControlToolsSharingTests
             Assert.Equal(Listed("acme", config), request.Code);
             var code = string.Join("\n", request.Code);
             Assert.Contains("${COLLECTION_DIR}/server.js --api-key sk-live-abc123", code);
-            Assert.Contains("ACME_TOKEN", code);
+            Assert.Contains("ACME_TOKEN = ••• (set)", code);
+            Assert.Contains("NODE_OPTIONS = '--require ./hook.js'", code);
             Assert.DoesNotContain("literal-env-secret", code);
         }
         foreach (var result in new[] { imported, subscribed })
         {
             Assert.NotNull(result);
             Assert.False(result.IsError);
-            foreach (var secret in new[] { "sk-live-abc123", "literal-env-secret" })
+            foreach (var secret in new[] { "sk-live-abc123", "literal-env-secret", "hook.js" })
             {
                 Assert.DoesNotContain(secret, result.Text);
                 Assert.DoesNotContain(secret, result.Structured.CompactLine());

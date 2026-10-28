@@ -163,8 +163,8 @@ public class ControlMaskingTests
     }
 
     /// <summary>The confirmation dialog, which nothing sends back to Claude, shows what would run in full:
-    /// only environment and header values, the OAuth client secret and a key named for a secret
-    /// stay masked.</summary>
+    /// only an environment value under a secret's name, header values, the OAuth client secret and a
+    /// key named for a secret stay masked.</summary>
     [Fact]
     public void TheDialogShowsTheCommandArgumentsAndUrlInFull()
     {
@@ -342,6 +342,79 @@ public class ControlMaskingTests
             ControlMasking.CodeLines(bridged));
     }
 
+    /// <summary>The dialog shows an environment value as written, quoted as an argument is, since a variable
+    /// can change what runs (<c>NODE_OPTIONS</c>, <c>PATH</c>, <c>LD_PRELOAD</c>): every one but a variable whose
+    /// name reads as a secret's. A header's value stays masked whatever its name, and tool output and
+    /// <c>show --reveal</c> are as they were.</summary>
+    [Fact]
+    public void TheDialogShowsAnEnvironmentValueUnlessItsNameIsASecrets()
+    {
+        var node = JsonValue.Object(("command", S("node")), ("env", JsonValue.Object(
+            ("NODE_OPTIONS", S("--require ./hook.js")), ("PATH", S("/opt/x/bin")), ("PORT", JsonValue.Int(8080)),
+            ("EMPTY", S("")), ("API_KEY", S("hunter2")), ("DB_PASSWORD", S("")))));
+        Assert.Equal(
+            [
+                "command   node",
+                "env       API_KEY = ••• (set)",
+                "          DB_PASSWORD = needs your value",
+                "          EMPTY = ''",
+                "          NODE_OPTIONS = '--require ./hook.js'",
+                "          PATH = /opt/x/bin",
+                "          PORT = 8080",
+            ],
+            ControlMasking.CodeLines(node, ControlMasking.Exposure.Dialog));
+        // Tool output masks every one.
+        Assert.Equal(
+            [
+                "command   node",
+                "env       API_KEY = ••• (set)",
+                "          DB_PASSWORD = needs your value",
+                "          EMPTY = needs your value",
+                "          NODE_OPTIONS = ••• (set)",
+                "          PATH = ••• (set)",
+                "          PORT = ••• (set)",
+            ],
+            ControlMasking.CodeLines(node));
+        Assert.Equal("          NODE_OPTIONS = --require ./hook.js", ControlMasking.CodeLines(node, ControlMasking.Exposure.Revealed)[4]);
+        var bridged = Remote(["--header", "Authorization:${AUTH_HEADER}"],
+            new() { ["AUTH_HEADER"] = S("Bearer s3cr3t"), ["NODE_OPTIONS"] = S("--require ./hook.js") });
+        Assert.Equal(
+            [
+                "type      remote, through mcp-remote",
+                "url       https://h.example/mcp",
+                "headers   Authorization = ••• (set)",
+                "env       NODE_OPTIONS = '--require ./hook.js'",
+            ],
+            ControlMasking.CodeLines(bridged, ControlMasking.Exposure.Dialog));
+        var native = JsonValue.Object(("url", S("https://h.example/mcp")), ("headers", JsonValue.Object(("X-Region", S("eu")))));
+        // A header stays masked.
+        Assert.Equal("headers   X-Region = ••• (set)", ControlMasking.CodeLines(native, ControlMasking.Exposure.Dialog)[^1]);
+        var before = Adding("env", JsonValue.Object(("NODE_OPTIONS", S("--require ./a.js")), ("API_KEY", S("secret-one"))), Local("node", []));
+        var after = Adding("env", JsonValue.Object(("NODE_OPTIONS", S("--require ./b.js")), ("API_KEY", S("secret-two"))), Local("node", []));
+        Assert.Equal(
+            [
+                "env",
+                "  − API_KEY = ••• (set)",
+                "  − NODE_OPTIONS = '--require ./a.js'",
+                "  + API_KEY = ••• (set)",
+                "  + NODE_OPTIONS = '--require ./b.js'",
+            ],
+            ControlMasking.ChangeLines(before, after, ControlMasking.Exposure.Dialog));
+        Assert.Equal(["env", "  + API_KEY = ••• (set)", "  + NODE_OPTIONS = '--require ./a.js'"],
+            ControlMasking.ChangeLines(Local("node", []), before, ControlMasking.Exposure.Dialog));
+        var dialog = string.Join("\n", ControlMasking.CodeLines(node, ControlMasking.Exposure.Dialog)
+            .Concat(ControlMasking.ChangeLines(before, after, ControlMasking.Exposure.Dialog)));
+        foreach (var secret in new[] { "hunter2", "secret-one", "secret-two" })
+        {
+            Assert.DoesNotContain(secret, dialog);
+        }
+        var masked = string.Join("\n", ControlMasking.CodeLines(node).Concat(ControlMasking.ChangeLines(before, after)));
+        foreach (var value in new[] { "hook.js", "/opt/x/bin", "8080", "a.js", "b.js", "secret-one", "secret-two" })
+        {
+            Assert.DoesNotContain(value, masked);
+        }
+    }
+
     [Fact]
     public void ChangeLinesShowOnlyWhatDiffersAndAChangedSecretAsChanged()
     {
@@ -396,8 +469,8 @@ public class ControlMaskingTests
                 Remote(["--static-oauth-client-info", "not json two"])),
             ("client metadata", Remote(["--static-oauth-client-info", info, "--static-oauth-client-metadata", """{"redirect_uri":"https://a.example/cb","scope":"read"}"""]),
                 Remote(["--static-oauth-client-info", info, "--static-oauth-client-metadata", """{"redirect_uri":"https://evil.example/cb","scope":"read"}"""])),
-            ("an env value", Adding("env", JsonValue.Object(("A", S("one"))), Local("node", [])),
-                Adding("env", JsonValue.Object(("A", S("two"))), Local("node", []))),
+            ("a secret's env value", Adding("env", JsonValue.Object(("API_KEY", S("one"))), Local("node", [])),
+                Adding("env", JsonValue.Object(("API_KEY", S("two"))), Local("node", []))),
             ("a header value", Adding("headers", JsonValue.Object(("Authorization", S("Bearer one"))), url),
                 Adding("headers", JsonValue.Object(("Authorization", S("Bearer two"))), url)),
             ("a bridged env value", Remote([], new() { ["DEBUG"] = S("1") }), Remote([], new() { ["DEBUG"] = S("2") })),
@@ -433,11 +506,11 @@ public class ControlMaskingTests
             ControlMasking.ChangeLines(edits[3].Before, edits[3].After, ControlMasking.Exposure.Dialog));
         foreach (var exposure in new[] { ControlMasking.Exposure.Masked, ControlMasking.Exposure.Dialog })
         {
-            Assert.Equal(["env", "  − A = ••• (set)", "  + A = ••• (set)"], ControlMasking.ChangeLines(edits[4].Before, edits[4].After, exposure));
+            Assert.Equal(["env", "  − API_KEY = ••• (set)", "  + API_KEY = ••• (set)"], ControlMasking.ChangeLines(edits[4].Before, edits[4].After, exposure));
             Assert.Equal(["apiKey", "  − ••• (set)", "  + ••• (set)"],
                 ControlMasking.ChangeLines(Adding("apiKey", S("one"), Local("node", [])), Adding("apiKey", S("two"), Local("node", [])), exposure));
         }
-        Assert.Equal(["env", "  − A = one", "  + A = two"], ControlMasking.ChangeLines(edits[4].Before, edits[4].After, ControlMasking.Exposure.Revealed));
+        Assert.Equal(["env", "  − API_KEY = one", "  + API_KEY = two"], ControlMasking.ChangeLines(edits[4].Before, edits[4].After, ControlMasking.Exposure.Revealed));
     }
 
     /// <summary>A key no field models shows its value as one line of JSON, written the same on both platforms.</summary>

@@ -44,11 +44,12 @@ final class ControlToolsSharingTests: XCTestCase {
     }
 
     /// A document whose one connector the masked view and the dialog show differently: an argument
-    /// after a flag named for a secret, and an environment value.
+    /// after a flag named for a secret, an environment value the dialog shows, and one it masks.
     private let secretive = CollectionDocument(
         name: "Acme", author: nil, origin: "acme-origin", exported: "2026-10-01T00:00:00Z",
         connectors: ["acme": .init(launcher: .local(.init(command: "node", args: ["${COLLECTION_DIR}/server.js", "--api-key", "sk-live-abc123"], platform: .mac)),
-                                   env: ["ACME_TOKEN": .value("literal-env-secret")], needs: [:], additional: [:])])
+                                   env: ["ACME_TOKEN": .value("literal-env-secret"), "NODE_OPTIONS": .value("--require ./hook.js")],
+                                   needs: [:], additional: [:])])
 
     /// A document whose one connector holds `value` where the dialog shows only that it is set.
     private func masked(_ value: String) -> CollectionDocument {
@@ -244,9 +245,9 @@ final class ControlToolsSharingTests: XCTestCase {
 
     // MARK: What the questions show
 
-    /// Import and subscribe show what each connector would run, argument as written and
-    /// `${COLLECTION_DIR}` as the document writes it, with environment values masked, where the
-    /// masked view would hide the argument; the answers carry none of it.
+    /// Import and subscribe show what each connector would run, argument and environment value as
+    /// written and `${COLLECTION_DIR}` as the document writes it, with a secret's environment value
+    /// masked, where the masked view would hide the argument; the answers carry none of it.
     func testTheQuestionsShowWhatWouldRunAndTheAnswersNoSecret() throws {
         let rig = rig(); defer { rig.dispose() }
         let url = try rig.h.writeDocument(secretive, named: "acme.json")
@@ -259,12 +260,13 @@ final class ControlToolsSharingTests: XCTestCase {
             XCTAssertEqual(request.code, listed("acme", config))
             let code = request.code.joined(separator: "\n")
             XCTAssertTrue(code.contains("${COLLECTION_DIR}/server.js --api-key sk-live-abc123"), code)
-            XCTAssertTrue(code.contains("ACME_TOKEN"), code)
+            XCTAssertTrue(code.contains("ACME_TOKEN = ••• (set)"), code)
+            XCTAssertTrue(code.contains("NODE_OPTIONS = '--require ./hook.js'"), code)
             XCTAssertFalse(code.contains("literal-env-secret"), code)
         }
         for result in [imported, subscribed] {
             XCTAssertFalse(result.isError)
-            for secret in ["sk-live-abc123", "literal-env-secret"] {
+            for secret in ["sk-live-abc123", "literal-env-secret", "hook.js"] {
                 XCTAssertFalse(result.text.contains(secret), result.text)
                 XCTAssertFalse(result.structured.compactLine().contains(secret), result.structured.compactLine())
             }

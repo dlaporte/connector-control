@@ -139,8 +139,8 @@ final class ControlMaskingTests: XCTestCase {
     }
 
     /// The confirmation dialog, which nothing sends back to Claude, shows what would run in full:
-    /// only environment and header values, the OAuth client secret and a key named for a secret
-    /// stay masked.
+    /// only an environment value under a secret's name, header values, the OAuth client secret and a
+    /// key named for a secret stay masked.
     func testTheDialogShowsTheCommandArgumentsAndURLInFull() {
         let docker: JSONValue = .object([
             "command": .string("docker"),
@@ -286,6 +286,62 @@ final class ControlMaskingTests: XCTestCase {
         ])
     }
 
+    /// The dialog shows an environment value as written, quoted as an argument is, since a variable
+    /// can change what runs (`NODE_OPTIONS`, `PATH`, `LD_PRELOAD`): every one but a variable whose
+    /// name reads as a secret's. A header's value stays masked whatever its name, and tool output and
+    /// `show --reveal` are as they were.
+    func testTheDialogShowsAnEnvironmentValueUnlessItsNameIsASecrets() {
+        let node: JSONValue = .object(["command": .string("node"), "env": .object([
+            "NODE_OPTIONS": .string("--require ./hook.js"), "PATH": .string("/opt/x/bin"), "PORT": .int(8080),
+            "EMPTY": .string(""), "API_KEY": .string("hunter2"), "DB_PASSWORD": .string(""),
+        ])])
+        XCTAssertEqual(ControlMasking.codeLines(node, exposure: .dialog), [
+            "command   node",
+            "env       API_KEY = ••• (set)",
+            "          DB_PASSWORD = needs your value",
+            "          EMPTY = ''",
+            "          NODE_OPTIONS = '--require ./hook.js'",
+            "          PATH = /opt/x/bin",
+            "          PORT = 8080",
+        ])
+        XCTAssertEqual(ControlMasking.codeLines(node), [
+            "command   node",
+            "env       API_KEY = ••• (set)",
+            "          DB_PASSWORD = needs your value",
+            "          EMPTY = needs your value",
+            "          NODE_OPTIONS = ••• (set)",
+            "          PATH = ••• (set)",
+            "          PORT = ••• (set)",
+        ], "tool output masks every one")
+        XCTAssertEqual(ControlMasking.codeLines(node, exposure: .revealed)[4], "          NODE_OPTIONS = --require ./hook.js")
+        let bridged = remote(["--header", "Authorization:${AUTH_HEADER}"],
+                             env: ["AUTH_HEADER": .string("Bearer s3cr3t"), "NODE_OPTIONS": .string("--require ./hook.js")])
+        XCTAssertEqual(ControlMasking.codeLines(bridged, exposure: .dialog), [
+            "type      remote, through mcp-remote",
+            "url       https://h.example/mcp",
+            "headers   Authorization = ••• (set)",
+            "env       NODE_OPTIONS = '--require ./hook.js'",
+        ])
+        let native: JSONValue = .object(["url": .string("https://h.example/mcp"), "headers": .object(["X-Region": .string("eu")])])
+        XCTAssertEqual(ControlMasking.codeLines(native, exposure: .dialog).last, "headers   X-Region = ••• (set)", "a header stays masked")
+        let before = adding("env", .object(["NODE_OPTIONS": .string("--require ./a.js"), "API_KEY": .string("secret-one")]), to: local("node", []))
+        let after = adding("env", .object(["NODE_OPTIONS": .string("--require ./b.js"), "API_KEY": .string("secret-two")]), to: local("node", []))
+        XCTAssertEqual(ControlMasking.changeLines(from: before, to: after, exposure: .dialog), [
+            "env",
+            "  − API_KEY = ••• (set)",
+            "  − NODE_OPTIONS = '--require ./a.js'",
+            "  + API_KEY = ••• (set)",
+            "  + NODE_OPTIONS = '--require ./b.js'",
+        ])
+        XCTAssertEqual(ControlMasking.changeLines(from: local("node", []), to: before, exposure: .dialog),
+                       ["env", "  + API_KEY = ••• (set)", "  + NODE_OPTIONS = '--require ./a.js'"])
+        let dialog = (ControlMasking.codeLines(node, exposure: .dialog) + ControlMasking.changeLines(from: before, to: after, exposure: .dialog))
+            .joined(separator: "\n")
+        for secret in ["hunter2", "secret-one", "secret-two"] { XCTAssertFalse(dialog.contains(secret), secret) }
+        let masked = (ControlMasking.codeLines(node) + ControlMasking.changeLines(from: before, to: after)).joined(separator: "\n")
+        for value in ["hook.js", "/opt/x/bin", "8080", "a.js", "b.js", "secret-one", "secret-two"] { XCTAssertFalse(masked.contains(value), value) }
+    }
+
     func testChangeLinesShowOnlyWhatDiffersAndAChangedSecretAsChanged() {
         let before = splunk(url: "https://a.example/mcp", token: "one")
         let after = splunk(url: "https://b.example/mcp", token: "two")
@@ -329,8 +385,8 @@ final class ControlMaskingTests: XCTestCase {
              remote(["--static-oauth-client-info", "not json two"])),
             ("client metadata", remote(["--static-oauth-client-info", info, "--static-oauth-client-metadata", #"{"redirect_uri":"https://a.example/cb","scope":"read"}"#]),
              remote(["--static-oauth-client-info", info, "--static-oauth-client-metadata", #"{"redirect_uri":"https://evil.example/cb","scope":"read"}"#])),
-            ("an env value", adding("env", .object(["A": .string("one")]), to: local("node", [])),
-             adding("env", .object(["A": .string("two")]), to: local("node", []))),
+            ("a secret's env value", adding("env", .object(["API_KEY": .string("one")]), to: local("node", [])),
+             adding("env", .object(["API_KEY": .string("two")]), to: local("node", []))),
             ("a header value", adding("headers", .object(["Authorization": .string("Bearer one")]), to: .object(["url": .string("https://h.example/mcp")])),
              adding("headers", .object(["Authorization": .string("Bearer two")]), to: .object(["url": .string("https://h.example/mcp")]))),
             ("a bridged env value", remote([], env: ["DEBUG": .string("1")]), remote([], env: ["DEBUG": .string("2")])),
@@ -362,12 +418,12 @@ final class ControlMaskingTests: XCTestCase {
         ])
         for exposure in [ControlMasking.Exposure.masked, .dialog] {
             XCTAssertEqual(ControlMasking.changeLines(from: edits[4].1, to: edits[4].2, exposure: exposure),
-                           ["env", "  − A = ••• (set)", "  + A = ••• (set)"], "a secret that changed shows as changed, still masked")
+                           ["env", "  − API_KEY = ••• (set)", "  + API_KEY = ••• (set)"], "a secret that changed shows as changed, still masked")
             XCTAssertEqual(ControlMasking.changeLines(from: adding("apiKey", .string("one"), to: local("node", [])),
                                                       to: adding("apiKey", .string("two"), to: local("node", [])), exposure: exposure),
                            ["apiKey", "  − ••• (set)", "  + ••• (set)"])
         }
-        XCTAssertEqual(ControlMasking.changeLines(from: edits[4].1, to: edits[4].2, exposure: .revealed), ["env", "  − A = one", "  + A = two"])
+        XCTAssertEqual(ControlMasking.changeLines(from: edits[4].1, to: edits[4].2, exposure: .revealed), ["env", "  − API_KEY = one", "  + API_KEY = two"])
     }
 
     /// A key no field models shows its value as one line of JSON, written the same on both platforms.

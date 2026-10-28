@@ -220,8 +220,9 @@ public class ControlToolsGatedTests
 
     // MARK: what the question shows
 
-    /// <summary>The dialog shows what would run, argument and URL as written, with the environment's values
-    /// masked, where the masked view would hide all three; the answer to the caller shows none of them.</summary>
+    /// <summary>The dialog shows what would run, argument and URL as written, with a secret's environment
+    /// value masked, where the masked view would hide all three; the answer to the caller shows none
+    /// of them.</summary>
     [Fact]
     public void TheQuestionShowsWhatWouldRunAndTheAnswerNoSecret()
     {
@@ -243,6 +244,34 @@ public class ControlToolsGatedTests
             Assert.NotNull(result);
             Assert.False(result.IsError);
             foreach (var secret in new[] { "sk-live-abc123", "token=abc", "literal-env-secret" })
+            {
+                Assert.DoesNotContain(secret, result.Text);
+                Assert.DoesNotContain(secret, result.Structured.CompactLine());
+            }
+        }
+    }
+
+    /// <summary>The question shows an environment value as written, since a variable can change what runs,
+    /// unless its name reads as a secret's: an add lists it, and a change to it alone shows what it
+    /// was and what it becomes. The answers to the caller carry none of it.</summary>
+    [Fact]
+    public void TheQuestionShowsAnEnvironmentValueAndTheAnswerNone()
+    {
+        using var rig = Rig();
+        static JsonValue Hooked(string hook) => JsonValue.Object(("command", Text("node")), ("args", JsonValue.Array([Text("server.js")])),
+            ("env", JsonValue.Object(("NODE_OPTIONS", Text("--require " + hook)), ("ACME_TOKEN", Text("literal-env-secret")))));
+        var added = rig.Call("add_connector", Args(("name", Text("acme")), ("config", Hooked("./a.js"))));
+        var changed = rig.Call("update_connector", Args(("name", Text("acme")), ("config", Hooked("./b.js"))));
+        Assert.Equal(2, rig.Confirmer.Requests.Count);
+        Assert.Equal(["command   node", "args      server.js", "env       ACME_TOKEN = ••• (set)", "          NODE_OPTIONS = '--require ./a.js'"],
+            rig.Confirmer.Requests[0].Code);
+        Assert.Equal(["env", "  − NODE_OPTIONS = '--require ./a.js'", "  + NODE_OPTIONS = '--require ./b.js'"],
+            rig.Confirmer.Requests[1].Code);
+        foreach (var result in new[] { added, changed })
+        {
+            Assert.NotNull(result);
+            Assert.False(result.IsError, result.Text);
+            foreach (var secret in new[] { "a.js", "b.js", "literal-env-secret" })
             {
                 Assert.DoesNotContain(secret, result.Text);
                 Assert.DoesNotContain(secret, result.Structured.CompactLine());

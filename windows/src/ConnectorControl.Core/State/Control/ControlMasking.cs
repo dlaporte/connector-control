@@ -14,7 +14,8 @@ namespace ConnectorControl.Core.State;
 /// show as written when they are the whole value. Every rule is plain string work, with no URL
 /// parser, so both platforms mask the same text the same way. Structured output is masked or, for
 /// the command-line tool's <c>show --reveal</c> (never Claude's), revealed; the line renderers take an
-/// <see cref="Exposure"/>, which adds the confirmation dialog's.
+/// <see cref="Exposure"/>, which adds the confirmation dialog's, where an environment value shows unless its
+/// variable is named for a secret.
 /// The Mac mirror is main-actor only; C# has no isolation to declare.
 ///
 /// Mirror: Sources/ConnectorControlState/Control/ControlMasking.swift
@@ -23,9 +24,9 @@ public static class ControlMasking
 {
     /// <summary>How much a line renderer shows. <c>Masked</c>: what Claude and the command-line tool see.
     /// <c>Dialog</c>: the confirmation dialogs, whose text never goes back to Claude — the command,
-    /// arguments and URL in full, with environment and header values, the OAuth client secret and
-    /// every value under a key named for a secret still masked. <c>Revealed</c>: everything as written,
-    /// for the command-line tool's <c>show --reveal</c>.</summary>
+    /// arguments, URL and environment values in full, with a variable named for a secret, header
+    /// values, the OAuth client secret and every value under a key named for a secret still masked.
+    /// <c>Revealed</c>: everything as written, for the command-line tool's <c>show --reveal</c>.</summary>
     public enum Exposure { Masked, Dialog, Revealed }
 
     public const string Mask = "•••";
@@ -591,7 +592,7 @@ public static class ControlMasking
             var passthrough = env.ObjectProperties.Where(item => !signIn.Variables.Contains(item.Key)).ToDictionary(StringComparer.Ordinal);
             if (passthrough.Count > 0)
             {
-                fields.Add(SecretField(EnvLabel, passthrough, exposure));
+                fields.Add(SecretField(EnvLabel, passthrough, exposure, shownInDialog: true));
             }
             shown.Add("env");
         }
@@ -700,15 +701,19 @@ public static class ControlMasking
         }
         if (config["env"] is { Kind: JsonKind.Object } env && env.ObjectProperties.Count > 0)
         {
-            fields.Add(SecretField(EnvLabel, env.ObjectProperties, exposure));
+            fields.Add(SecretField(EnvLabel, env.ObjectProperties, exposure, shownInDialog: true));
             shown.Add("env");
         }
         return (fields, shown);
     }
 
     /// <summary>Environment variables or headers by name, each value as <see cref="SecretText"/> shows it; one that is
-    /// not a string is set, and shows as JSON only when revealed.</summary>
-    private static Field SecretField(string label, IReadOnlyDictionary<string, JsonValue> values, Exposure exposure) =>
+    /// not a string is set, and shows as JSON only when revealed. The dialog shows a value of
+    /// <paramref name="shownInDialog"/> values — the environment's, since a variable can change what runs
+    /// (<c>NODE_OPTIONS</c>, <c>PATH</c>, <c>LD_PRELOAD</c>) — as written, a string quoted as an argument is and
+    /// anything else as JSON, unless its variable is named for a secret; a header's stays masked.</summary>
+    private static Field SecretField(string label, IReadOnlyDictionary<string, JsonValue> values, Exposure exposure,
+                                     bool shownInDialog = false) =>
         new(label, values.Keys.Order(StringComparer.Ordinal).Select(name =>
         {
             var value = values[name];
@@ -716,6 +721,14 @@ public static class ControlMasking
             if (value.Kind == JsonKind.String)
             {
                 shown = SecretText(value.StringValue, exposure == Exposure.Revealed);
+            }
+            if (exposure == Exposure.Dialog && shownInDialog && !CredentialHeuristics.NamesASecret(name))
+            {
+                shown = CompactText(value);
+                if (value.Kind == JsonKind.String)
+                {
+                    shown = ControlText.Word(value.StringValue);
+                }
             }
             return (Raw(JsonValue.Array([JsonValue.String(name), value])), Assignment(name, shown));
         }).ToList());

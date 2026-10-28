@@ -175,8 +175,9 @@ final class ControlToolsGatedTests: XCTestCase {
 
     // MARK: What the question shows
 
-    /// The dialog shows what would run, argument and URL as written, with the environment's values
-    /// masked, where the masked view would hide all three; the answer to the caller shows none of them.
+    /// The dialog shows what would run, argument and URL as written, with a secret's environment
+    /// value masked, where the masked view would hide all three; the answer to the caller shows none
+    /// of them.
     func testTheQuestionShowsWhatWouldRunAndTheAnswerNoSecret() throws {
         let rig = rig(); defer { rig.dispose() }
         let added = try XCTUnwrap(rig.call("add_connector", ["name": .string("acme"), "config": secretive]))
@@ -192,6 +193,30 @@ final class ControlToolsGatedTests: XCTestCase {
         for result in [added, changed] {
             XCTAssertFalse(result.isError)
             for secret in ["sk-live-abc123", "token=abc", "literal-env-secret"] {
+                XCTAssertFalse(result.text.contains(secret), result.text)
+                XCTAssertFalse(result.structured.compactLine().contains(secret), result.structured.compactLine())
+            }
+        }
+    }
+
+    /// The question shows an environment value as written, since a variable can change what runs,
+    /// unless its name reads as a secret's: an add lists it, and a change to it alone shows what it
+    /// was and what it becomes. The answers to the caller carry none of it.
+    func testTheQuestionShowsAnEnvironmentValueAndTheAnswerNone() throws {
+        let rig = rig(); defer { rig.dispose() }
+        func hooked(_ hook: String) -> JSONValue {
+            .object(["command": .string("node"), "args": .array([.string("server.js")]),
+                     "env": .object(["NODE_OPTIONS": .string("--require " + hook), "ACME_TOKEN": .string("literal-env-secret")])])
+        }
+        let added = try XCTUnwrap(rig.call("add_connector", ["name": .string("acme"), "config": hooked("./a.js")]))
+        let changed = try XCTUnwrap(rig.call("update_connector", ["name": .string("acme"), "config": hooked("./b.js")]))
+        XCTAssertEqual(rig.confirmer.requests.map(\.code), [
+            ["command   node", "args      server.js", "env       ACME_TOKEN = ••• (set)", "          NODE_OPTIONS = '--require ./a.js'"],
+            ["env", "  − NODE_OPTIONS = '--require ./a.js'", "  + NODE_OPTIONS = '--require ./b.js'"],
+        ])
+        for result in [added, changed] {
+            XCTAssertFalse(result.isError, result.text)
+            for secret in ["a.js", "b.js", "literal-env-secret"] {
                 XCTAssertFalse(result.text.contains(secret), result.text)
                 XCTAssertFalse(result.structured.compactLine().contains(secret), result.structured.compactLine())
             }
