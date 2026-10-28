@@ -287,7 +287,17 @@ public sealed partial class ControlTools
         {
             return;
         }
-        state.NotifyClaudeChange(outcome.Notification ?? outcome.Result.Text);
+        // Caught here, where the Mac has nothing to catch: a C# notifier can throw, and Swift's does
+        // not. The change has applied whatever the notifier does, so its answer stays a success —
+        // a refusal would have Claude ask again for a change that already landed.
+        try
+        {
+            state.NotifyClaudeChange(outcome.Notification ?? outcome.Result.Text);
+        }
+        catch (Exception)
+        {
+            // The announcement is lost; the change and its answer stand.
+        }
     }
 
     /// <summary>Answers the call, unless it already has its answer, and lets the next write start. A call

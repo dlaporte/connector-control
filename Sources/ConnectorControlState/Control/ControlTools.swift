@@ -219,6 +219,8 @@ public final class ControlTools {
     /// user's, and never announced. The tool's own notification says it, or else its answer.
     private func announce(_ call: Call, _ outcome: ControlOutcome, unasked: Bool) {
         guard !outcome.result.isError, call.caller != .cli, unasked || call.delivered else { return }
+        // The Windows mirror catches around this: a C# notifier can throw, and Swift's does not. The
+        // change has applied whatever the notifier does, so its answer stays a success.
         state.notifyClaudeChange(outcome.notification ?? outcome.result.text)
     }
 

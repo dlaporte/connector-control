@@ -60,6 +60,19 @@ final class ControlWriteQueueTests: XCTestCase {
         XCTAssertEqual(performed, [])
     }
 
+    func testAWriteWaitingItsTurnIsDecidedAgainWhenItComes() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        controlWrites(rig)
+        let asking = add(rig, "a")
+        let queued = switchTo(rig, "b")
+        XCTAssertNil(queued.result, "it waits behind the open dialog")
+        XCTAssertNil(rig.state.setClaudeIntegrationEnabled(false))
+        rig.confirmer.answer(false)
+        XCTAssertEqual(asking.result, .refusal(ControlTools.declinedError))
+        XCTAssertEqual(queued.result, .refusal(ControlTools.integrationOffError))
+        XCTAssertEqual(performed, [])
+    }
+
     /// Turning confirmations off loosens the gate rather than closing it: the Allow the user gave
     /// still applies.
     func testAnAllowAfterConfirmationsWereTurnedOffStillApplies() {

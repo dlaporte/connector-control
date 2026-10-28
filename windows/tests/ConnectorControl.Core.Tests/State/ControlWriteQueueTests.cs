@@ -66,6 +66,22 @@ public class ControlWriteQueueTests
         Assert.Empty(performed);
     }
 
+    [Fact]
+    public void AWriteWaitingItsTurnIsDecidedAgainWhenItComes()
+    {
+        using var rig = new ControlRig();
+        ControlWrites(rig);
+        var asking = Add(rig, "a");
+        var queued = SwitchTo(rig, "b");
+        // It waits behind the open dialog.
+        Assert.Null(queued.Result);
+        Assert.Null(rig.State.SetClaudeIntegrationEnabled(false));
+        rig.Confirmer.Answer(false);
+        Assert.Equal(ControlResult.Refusal(ControlTools.DeclinedError), asking.Result);
+        Assert.Equal(ControlResult.Refusal(ControlTools.IntegrationOffError), queued.Result);
+        Assert.Empty(performed);
+    }
+
     /// <summary>Turning confirmations off loosens the gate rather than closing it: the Allow the user gave
     /// still applies.</summary>
     [Fact]
@@ -188,6 +204,21 @@ public class ControlWriteQueueTests
         rig.Confirmer.Scripted = true;
         Assert.Equal("Did b.", Add(rig, "b").Result?.Text);
         Assert.Equal(["b"], performed);
+    }
+
+    [Fact]
+    public void ANotifierThatThrowsLeavesAnAppliedChangeASuccess()
+    {
+        using var rig = new ControlRig(confirm: false);
+        ControlWrites(rig);
+        rig.H.Notifier.Throws = new InvalidOperationException("no toasts");
+        var answers = new List<ControlResult>();
+        rig.Tools.Call("add_connector", JsonValue.Object(("name", JsonValue.String("a")), ("config", JsonValue.Object())),
+            Claude, _ => { }, answers.Add);
+        // The change applied, so Claude hears it did, once, and has no reason to ask again.
+        Assert.Equal([new ControlResult(JsonValue.Object(), "Did a.", false)], answers);
+        Assert.Equal("Did b.", SwitchTo(rig, "b").Result?.Text);
+        Assert.Equal(["a", "b"], performed);
     }
 
     [Fact]
