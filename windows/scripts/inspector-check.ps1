@@ -93,3 +93,7 @@ finally {
     if (-not $testHostProcess.HasExited) { Stop-Process -Id $testHostProcess.Id -Force }
     Remove-Item -Recurse -Force $sandbox -ErrorAction SilentlyContinue
 }
+
+# Reached only when every check passed (a failed one throws, which fails the step). The last native
+# command ran restart_claude, which exits 5 on purpose, and a CI step ends with that code unless told.
+exit 0
