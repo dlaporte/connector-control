@@ -24,6 +24,8 @@ final class LiveServices {
     let controlTools: ControlTools
     let controlServer: ControlServer
     private(set) var controlEndpoint: ControlSocketServer?
+    /// Puts the tool on PATH for terminal use; the Settings group binds it.
+    let commandLineTool: CommandLineTool
     private let controlSettings: SettingsModel
 
     private init() {
@@ -50,6 +52,7 @@ final class LiveServices {
         // be asked about is refused rather than made unasked.
         controlTools = ControlTools(state: state, settings: controlSettings, confirmer: DecliningConfirmer(), host: host)
         controlServer = ControlServer(tools: controlTools)
+        commandLineTool = SymlinkCommandLineTool(toolPath: toolPath, host: host)
         do {
             controlEndpoint = try ControlSocketServer.start(
                 path: ControlEndpoint.socketPath(environment: paths.environment, appSupport: paths.appSupport),

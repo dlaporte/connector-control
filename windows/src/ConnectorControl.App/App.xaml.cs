@@ -30,6 +30,9 @@ public partial class App : Application
     private TrayController? tray;
     private SettingsModel? controlSettings;
     private ControlServer? controlServer;
+
+    /// <summary>Puts the tool on PATH for terminal use; the Settings window binds it.</summary>
+    internal ICommandLineTool? CommandLineTool { get; private set; }
     private ControlPipeServer? controlEndpoint;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -88,7 +91,7 @@ public partial class App : Application
         state.QuitRequested += () => Shutdown();
         updates = new UpdateCoordinator(services.Updater, services.Settings, services.Notifier, dialogs, host);
         updates.Start();   // only arms the delayed first check through host.Delay
-        StartControl(state, services, updates, host, paths);
+        StartControl(state, services, updates, host, paths, dataDir);
         var windows = new WindowRegistry(state, services, updates, dialogs);
         flyoutModel = new FlyoutModel(state, services.Settings);
         flyout = new FlyoutWindow(flyoutModel, windows);
@@ -99,7 +102,7 @@ public partial class App : Application
 
     /// <summary>The control layer: the one ControlTools every connection shares, the server that gives each its
     /// own session, and the pipe it listens on.</summary>
-    private void StartControl(AppState appState, PlatformServices platform, UpdateCoordinator coordinator, AppHost host, PathContext paths)
+    private void StartControl(AppState appState, PlatformServices platform, UpdateCoordinator coordinator, AppHost host, PathContext paths, string dataDir)
     {
         controlSettings = new SettingsModel(appState, platform.Settings, platform.Autostart, platform.ClaudeInstall, platform.Updater, coordinator);
         // Declines every question: until the app can show its confirmation dialog, a change Claude must be
@@ -122,6 +125,7 @@ public partial class App : Application
             Log($"The control pipe is unavailable: {ex.Message}");
             appState.ReportControlEndpointUnavailable();
         }
+        CommandLineTool = new UserPathCommandLineTool(ControlToolCopy.BinDir(dataDir), new RegistryUserEnvironment(), host);
     }
 
     protected override void OnExit(ExitEventArgs e)

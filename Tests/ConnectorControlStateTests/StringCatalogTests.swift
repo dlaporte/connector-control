@@ -102,6 +102,9 @@ final class StringCatalogTests: XCTestCase {
         "CollectionsModel.editLabel": ["X"],
         "CollectionsModel.selectedCount": ["3"],
         "CollectionsModel.stopSyncingMessage": ["X"],
+        "CommandLineToolText.installFailedError": ["X"],
+        "CommandLineToolText.occupiedError": ["X"],
+        "CommandLineToolText.removeFailedError": ["X"],
         "ConfigService.corruptStoreNote": ["X"],
         "ConfigService.corruptStoreRestoredNote": ["X", "Y"],
         "ConfigService.invalidBackupError": ["X", "Y"],
@@ -410,6 +413,13 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.subscribedPill"] = CollectionsModel.subscribedPill
         actual["CollectionsModel.updateAvailableStatus"] = CollectionsModel.updateAvailableStatus
         actual["CollectionsModel.windowTitle"] = CollectionsModel.windowTitle
+
+        // MARK: CommandLineToolText
+
+        actual["CommandLineToolText.adminPrompt"] = CommandLineToolText.adminPrompt
+        actual["CommandLineToolText.installFailedError"] = CommandLineToolText.installFailedError("X")
+        actual["CommandLineToolText.occupiedError"] = CommandLineToolText.occupiedError("X")
+        actual["CommandLineToolText.removeFailedError"] = CommandLineToolText.removeFailedError("X")
 
         // MARK: ControlMasking / ControlText
 

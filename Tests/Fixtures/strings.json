@@ -226,6 +226,16 @@
   "CollectionsModel.subscribedPill": "Subscribed",
   "CollectionsModel.updateAvailableStatus": "update available",
   "CollectionsModel.windowTitle": "Collections",
+  "CommandLineToolText.adminPrompt": "Connector Control needs your password to change the connector-control command in /usr/local/bin.",
+  "CommandLineToolText.installFailedError": {
+    "format": "The command-line tool couldn’t be installed: {0}"
+  },
+  "CommandLineToolText.occupiedError": {
+    "format": "{0} already exists and isn’t a link to Connector Control. Remove it, then try again."
+  },
+  "CommandLineToolText.removeFailedError": {
+    "format": "The command-line tool couldn’t be removed: {0}"
+  },
   "ConfigService.corruptStoreNote": {
     "format": "The MCP list file was unreadable; it was preserved as {0} and rebuilt from Claude’s config."
   },

@@ -108,6 +108,9 @@ public class StringCatalogTests
         ["CollectionsModel.editLabel"] = ["X"],
         ["CollectionsModel.selectedCount"] = ["3"],
         ["CollectionsModel.stopSyncingMessage"] = ["X"],
+        ["CommandLineToolText.installFailedError"] = ["X"],
+        ["CommandLineToolText.occupiedError"] = ["X"],
+        ["CommandLineToolText.removeFailedError"] = ["X"],
         ["ConfigService.corruptStoreNote"] = ["X"],
         ["ConfigService.corruptStoreRestoredNote"] = ["X", "Y"],
         ["ConfigService.invalidBackupError"] = ["X", "Y"],
@@ -419,6 +422,13 @@ public class StringCatalogTests
         actual["CollectionsModel.subscribedPill"] = CollectionsModel.SubscribedPill;
         actual["CollectionsModel.updateAvailableStatus"] = CollectionsModel.UpdateAvailableStatus;
         actual["CollectionsModel.windowTitle"] = CollectionsModel.WindowTitle;
+
+        // MARK: CommandLineToolText
+
+        actual["CommandLineToolText.adminPrompt"] = CommandLineToolText.AdminPrompt;
+        actual["CommandLineToolText.installFailedError"] = CommandLineToolText.InstallFailedError("X");
+        actual["CommandLineToolText.occupiedError"] = CommandLineToolText.OccupiedError("X");
+        actual["CommandLineToolText.removeFailedError"] = CommandLineToolText.RemoveFailedError("X");
 
         // MARK: ControlMasking / ControlText
 
