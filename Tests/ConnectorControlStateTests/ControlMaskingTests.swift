@@ -447,6 +447,16 @@ final class ControlMaskingTests: XCTestCase {
         XCTAssertEqual(ControlMasking.arguments(["--header", "X-Key:\u{301}hunter2"]), ["--header", "X-Key: •••"])
     }
 
+    /// The heuristics read a name unit by unit on both platforms, so a combining mark after it
+    /// does not unmask its value on the Mac only.
+    func testACombiningMarkAfterASecretNameKeepsItsValueMasked() throws {
+        XCTAssertEqual(ControlMasking.argument("--api-key\u{301}=hunter2y"), "--api-key\u{301}=•••")
+        XCTAssertEqual(ControlMasking.arguments(["--api-key\u{301}", "hunter2x"]), ["--api-key\u{301}", "•••"])
+        XCTAssertEqual(ControlMasking.argument("API_TOKEN\u{301}=hunter2z"), "API_TOKEN\u{301}=•••")
+        try assertHidden(["hunter2x", "hunter2y", "hunter2z"],
+                         in: local("node", ["--api-key\u{301}=hunter2y", "--api-key\u{301}", "hunter2x", "API_TOKEN\u{301}=hunter2z"]))
+    }
+
     func testNoSecretSurvivesInArgumentsURLsOrChanges() {
         let shown = (ControlMasking.arguments(["--token", "abc9", "--api-key=sk-123x", token, "--header", "X-Team: blue7"])
             + [ControlMasking.url("https://user:hunter2@example.com/mcp?api_key=abc9&region=us7#top")]

@@ -530,6 +530,18 @@ public class ControlMaskingTests
         Assert.Equal(["--header", "X-Key: •••"], ControlMasking.Arguments(["--header", "X-Key:́hunter2"]));
     }
 
+    /// <summary>The heuristics read a name unit by unit on both platforms, so a combining mark after it
+    /// does not unmask its value on the Mac only.</summary>
+    [Fact]
+    public void ACombiningMarkAfterASecretNameKeepsItsValueMasked()
+    {
+        Assert.Equal("--api-key\u0301=•••", ControlMasking.Argument("--api-key\u0301=hunter2y"));
+        Assert.Equal(["--api-key\u0301", "•••"], ControlMasking.Arguments(["--api-key\u0301", "hunter2x"]));
+        Assert.Equal("API_TOKEN\u0301=•••", ControlMasking.Argument("API_TOKEN\u0301=hunter2z"));
+        AssertHidden(["hunter2x", "hunter2y", "hunter2z"],
+            Local("node", ["--api-key\u0301=hunter2y", "--api-key\u0301", "hunter2x", "API_TOKEN\u0301=hunter2z"]));
+    }
+
     [Fact]
     public void NoSecretSurvivesInArgumentsUrlsOrChanges()
     {

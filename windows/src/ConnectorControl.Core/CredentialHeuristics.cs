@@ -4,6 +4,9 @@ namespace ConnectorControl.Core;
 /// Warnings for the publish preview, never edits: the exporter knows env values and the remote
 /// auth fields are secrets, but a token typed into an argument is indistinguishable from data.
 /// These patterns catch the common shapes; a placeholder marker is by definition not a secret.
+/// Prefixes, names, lengths and characters are read one UTF-16 unit at a time on both platforms,
+/// so the same text reads the same: a combining mark after a prefix or a name does not hide it,
+/// and a character beyond the Basic Plane is two units, neither a letter nor a digit.
 /// </summary>
 public static class CredentialHeuristics
 {
@@ -35,6 +38,8 @@ public static class CredentialHeuristics
     /// </summary>
     public static bool NamesASecret(string name)
     {
+        // Platform idiom: ToLowerInvariant lowers unit by unit here; the Mac mirror lowers each unit
+        // to the first scalar of its lower case to match it.
         var lowered = name.ToLowerInvariant();
         return SecretNames.Any(lowered.Contains);
     }

@@ -1,6 +1,9 @@
 /// Warnings for the publish preview, never edits: the exporter knows env values and the remote
 /// auth fields are secrets, but a token typed into an argument is indistinguishable from data.
 /// These patterns catch the common shapes; a placeholder marker is by definition not a secret.
+/// Prefixes, names, lengths and characters are read one UTF-16 unit at a time on both platforms,
+/// so the same text reads the same: a combining mark after a prefix or a name does not hide it,
+/// and a character beyond the Basic Plane is two units, neither a letter nor a digit.
 public enum CredentialHeuristics {
     static let prefixes = ["sk-", "ghp_", "xox", "Bearer "]
     private static let letterCategories: Set<Unicode.GeneralCategory> = [
@@ -9,12 +12,14 @@ public enum CredentialHeuristics {
 
     public static func looksLikeCredential(_ value: String) -> Bool {
         if Placeholder.containsMarker(value) { return false }
-        if prefixes.contains(where: { value.hasPrefix($0) }) { return true }
-        guard value.count >= 32, !value.contains(" "), !value.contains("/") else { return false }
+        let units = Array(value.utf16)
+        if prefixes.contains(where: { units.starts(with: $0.utf16) }) { return true }
+        guard units.count >= 32, !units.contains(0x20), !units.contains(0x2F) else { return false }
         // By general category, as C#'s char.IsLetter and char.IsDigit read them: a letter is L*, a
         // digit is a decimal digit (Nd) — not "²", "½" or a Roman numeral, which isNumber takes.
-        let letters = value.unicodeScalars.contains { letterCategories.contains($0.properties.generalCategory) }
-        let digits = value.unicodeScalars.contains { $0.properties.generalCategory == .decimalNumber }
+        let scalars = units.compactMap(Unicode.Scalar.init)
+        let letters = scalars.contains { letterCategories.contains($0.properties.generalCategory) }
+        let digits = scalars.contains { $0.properties.generalCategory == .decimalNumber }
         return letters && digits
     }
 
@@ -23,8 +28,25 @@ public enum CredentialHeuristics {
     /// Collections window's target column leaves out whatever follows a flag named so, and the
     /// publish preview flags a header or a URL parameter named so.
     public static func namesASecret(_ name: String) -> Bool {
-        let lowered = name.lowercased()
-        return secretNames.contains { lowered.contains($0) }
+        // Platform idiom: each unit is lowered to the first scalar of its lower case here, to match
+        // the Windows mirror's ToLowerInvariant, which lowers unit by unit.
+        let lowered = loweredUnits(name)
+        return secretNames.contains { contains(lowered, Array($0.utf16)) }
+    }
+
+    /// `text` lowered unit by unit, each to the first scalar of its lower case, as C#'s
+    /// ToLowerInvariant lowers it; half of a surrogate pair stays as it is.
+    static func loweredUnits(_ text: String) -> [UInt16] {
+        text.utf16.map { unit in
+            guard let scalar = Unicode.Scalar(unit), let lower = scalar.properties.lowercaseMapping.unicodeScalars.first,
+                  lower.value <= 0xFFFF else { return unit }
+            return UInt16(lower.value)
+        }
+    }
+
+    static func contains(_ units: [UInt16], _ needle: [UInt16]) -> Bool {
+        guard units.count >= needle.count else { return false }
+        return (0...(units.count - needle.count)).contains { units[$0..<($0 + needle.count)].elementsEqual(needle) }
     }
 
     private static let secretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"]
@@ -82,9 +104,9 @@ public enum CredentialHeuristics {
     /// real path or package name nearly always has a dot, a hyphen or no digits. The Collections
     /// window's target column leaves such a word out, and the publish preview flags one in a URL.
     public static func looksLikeRandomToken(_ text: String) -> Bool {
-        let body = text.unicodeScalars.filter { $0 != "/" && $0 != "\\" }
+        let body = text.utf16.filter { $0 != 0x2F && $0 != 0x5C }
         return body.count >= 20
-            && body.contains { ("A"..."Z").contains($0) } && body.contains { ("a"..."z").contains($0) }
-            && body.contains { ("0"..."9").contains($0) } && !body.contains { $0 == "." || $0 == "-" || $0 == "_" }
+            && body.contains { (0x41...0x5A).contains($0) } && body.contains { (0x61...0x7A).contains($0) }
+            && body.contains { (0x30...0x39).contains($0) } && !body.contains { $0 == 0x2E || $0 == 0x2D || $0 == 0x5F }
     }
 }
