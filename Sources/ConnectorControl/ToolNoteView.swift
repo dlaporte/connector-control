@@ -3,21 +3,15 @@ import ConnectorControlCore
 import ConnectorControlState
 
 /// The tool note: what is wrong, the advice line when there is one
-/// (the shell-only state), then the install line. `showsText`/`textStyle` let
-/// `ToolRowView` embed this for its advice + install line without repeating
-/// them, while keeping its own status text as the row's "what is wrong" line.
+/// (the shell-only state), then the install line.
 struct ToolNoteView: View {
     let note: ToolNote
-    var showsText: Bool = true
-    var textStyle: Color = .orange
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            if showsText {
-                Text(note.text)
-                    .font(.caption)
-                    .foregroundStyle(textStyle)
-            }
+            Text(note.text)
+                .font(.caption)
+                .foregroundStyle(.orange)
             if let advice = note.advice {
                 Text(advice)
                     .font(.caption)
@@ -47,25 +41,50 @@ struct ToolNoteInstallLine: View {
     }
 }
 
-/// One Settings ▸ Claude ▸ Tools row: name, status, and — when
-/// there is something to do — the install line (and, for a tool only the
-/// shell can see, the sentence that says so). Layout only: the facts are the ToolRow's.
+/// One Settings ▸ Claude ▸ Tools row, one line tall: the name, and its version or what is wrong. How to fix
+/// it is in the group's footer. Layout only: the facts are the ToolRow's.
 struct ToolRowView: View {
     let row: ToolRow
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(row.name)
-                    .font(.system(.body, design: .monospaced))
-                Spacer()
-                Text(row.statusText)
-                    .foregroundStyle(row.isProblem ? Color.orange : Color.secondary)
+        HStack {
+            Text(row.name)
+                .font(.system(.body, design: .monospaced))
+            Spacer()
+            Text(row.statusText)
+                .foregroundStyle(row.isProblem ? Color.orange : Color.secondary)
+                .lineLimit(1)
+        }
+    }
+}
+
+/// One line of the Tools footer: the family's tools, its link, "or run" and the command in the code face;
+/// under it, for a tool only the login shell sees, the advice.
+struct ToolFooterLineView: View {
+    let line: ToolFooterLine
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(shown)
+            if let advice = line.advice {
+                Text(advice)
             }
-            if let note = row.note {
-                // Only the shell-only state repeats the note's own text line;
-                // the row's status text above already says "Not found".
-                ToolNoteView(note: note, showsText: row.isShellOnly, textStyle: .secondary)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// One text, so the line wraps as a sentence: the link's title as a link, the command in the code face.
+    private var shown: AttributedString {
+        line.runs.reduce(into: AttributedString()) { text, run in
+            guard run.isSetApart else { return text += AttributedString(run.text) }
+            if run.text == line.linkTitle {
+                var link = AttributedString(run.text)
+                link.link = line.linkURL
+                text += link
+            } else {
+                var command = AttributedString(run.shownText)
+                command.font = .system(.caption, design: .monospaced)
+                text += command
             }
         }
     }
