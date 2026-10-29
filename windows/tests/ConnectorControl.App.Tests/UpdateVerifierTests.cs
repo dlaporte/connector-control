@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using ConnectorControl.App.Services;
+using ConnectorControl.Core;
 using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.App.Tests;
@@ -23,6 +24,9 @@ public class UpdateVerifierTests : IDisposable
     private static string FrameworkVersion => UpdateVerifier.EmbeddedVersion(RunningExe) ?? throw new InvalidOperationException("the framework carries no product version");
 
     private const string Older = "1.0.0";
+
+    /// <summary>A signer subject no real file here carries.</summary>
+    private const string TestPublisher = "CN=Test Publisher, O=Test Publisher, C=US";
 
     /// <summary>The identity every signed-app test pins updates to: the framework's own signer, read once.</summary>
     private static readonly UpdateVerifier.RunningIdentity Identity = UpdateVerifier.ExpectedIdentity(RunningExe);
@@ -52,7 +56,7 @@ public class UpdateVerifierTests : IDisposable
     private static void RequireSignedFramework()
     {
         var signer = AuthenticodeVerifier.SignerSubject(RunningExe);
-        Assert.True(Identity.Organization is not null, $"the shared framework must be Authenticode-signed for these tests: {signer.Problem ?? "no organization in the subject"}");
+        Assert.True(Identity.Subject is not null, $"the shared framework must be Authenticode-signed for these tests: {signer.Problem}");
     }
 
     [Fact]
@@ -179,18 +183,31 @@ public class UpdateVerifierTests : IDisposable
         // Seen from a "running app" with a different publisher, a Microsoft-signed runtime DLL passes as
         // something the app is built from, but the same file under the app's own name does not.
         RequireSignedFramework();
-        Assert.Null(UpdateVerifier.VerifyFile(SignedSibling, "test publisher", "System.Runtime.dll", mustBeOurs: false));
-        var own = UpdateVerifier.VerifyFile(SignedSibling, "test publisher", "ConnectorControl.dll", mustBeOurs: true);
+        Assert.Null(UpdateVerifier.VerifyFile(SignedSibling, TestPublisher, "System.Runtime.dll", mustBeOurs: false));
+        var own = UpdateVerifier.VerifyFile(SignedSibling, TestPublisher, "ConnectorControl.dll", mustBeOurs: true);
         Assert.NotNull(own);
         Assert.Contains("not by this app's publisher", own);
-        Assert.NotNull(UpdateVerifier.VerifyFile(UnsignedBinary, "test publisher", "Markdig.dll", mustBeOurs: false));
+        Assert.NotNull(UpdateVerifier.VerifyFile(UnsignedBinary, TestPublisher, "Markdig.dll", mustBeOurs: false));
+    }
+
+    [Fact]
+    public void AFileOfOursMustCarryTheWholeSubjectNotJustTheOrganization()
+    {
+        // Another certificate naming the same O= — the same organization's other signing identity, or one a CA
+        // issued in error — is not this app's signer. The running app's own subject is the only one accepted.
+        RequireSignedFramework();
+        var sameOrganization = "CN=Someone Else, O=" + SignerIdentity.OrganizationOf(Identity.Subject!) + ", C=US";
+        var problem = UpdateVerifier.VerifyFile(SignedSibling, sameOrganization, "ConnectorControl.dll", mustBeOurs: true);
+        Assert.NotNull(problem);
+        Assert.Contains("not by this app's publisher", problem);
+        Assert.Null(UpdateVerifier.VerifyFile(SignedSibling, Identity.Subject!, "ConnectorControl.dll", mustBeOurs: true));
     }
 
     [Fact]
     public void AMainExecutableFromAnotherPublisherIsRefusedEvenWhenThatPublisherIsTrusted()
     {
         RequireSignedFramework();
-        var foreign = new UpdateVerifier.RunningIdentity("test publisher", false);
+        var foreign = new UpdateVerifier.RunningIdentity(TestPublisher, false);
         var problem = UpdateVerifier.Verify(Package(("lib/app/ConnectorControl.exe", RunningExe)), updateExePath: null, foreign, Older, FrameworkVersion);
         Assert.NotNull(problem);
         Assert.Contains("not by this app's publisher", problem);

@@ -44,6 +44,32 @@ public sealed record SignerIdentity(string Subject, string? Organization)
         return organization;
     }
 
+    /// <summary>
+    /// Whether two subject DNs name the same signer: the same attributes, with the same values, in the same order —
+    /// however each string spells or quotes them. Windows only in use: the update check holds every file that must be
+    /// this app's own to the running app's whole subject, not just its O=, which another certificate could share.
+    /// A subject that is not a distinguished name, or names nothing, matches nothing.
+    /// </summary>
+    public static bool SameSubject(string one, string other) =>
+        Attributes(one) is { Count: > 0 } a && Attributes(other) is { } b && a.SequenceEqual(b);
+
+    /// <summary>Each RDN of <paramref name="subject"/> as (type, value); a multi-valued one by its encoding. Null when unparseable.</summary>
+    private static List<(string Type, string? Value)>? Attributes(string subject)
+    {
+        try
+        {
+            return new X500DistinguishedName(subject).EnumerateRelativeDistinguishedNames()
+                .Select(rdn => rdn.HasMultipleElements
+                    ? ("multi", Convert.ToHexString(rdn.RawData.Span))
+                    : (rdn.GetSingleElementType().Value ?? "", rdn.GetSingleElementValue()))
+                .ToList();
+        }
+        catch (CryptographicException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Lower-case, punctuation dropped, whitespace collapsed: "Anthropic, PBC" and "ANTHROPIC P.B.C." compare equal.</summary>
     public static string NormalizeOrganization(string organization)
     {

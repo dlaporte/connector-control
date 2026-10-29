@@ -13,10 +13,10 @@ namespace ConnectorControl.App.Services;
 /// come from the same GitHub release, so whoever can write release assets could ship anything.
 /// This app's own binaries are Authenticode-signed by its publisher, an identity a release
 /// token does not carry: before an update is staged, the replaced Update.exe and every
-/// executable inside the package (found by content, not by name) must be validly signed —
-/// this app's own files and the updater by the same organization as the running app, the
-/// runtime and libraries it is built from by that organization or one in
-/// <see cref="TrustedOrganizations"/> — and the package's own ConnectorControl.exe must
+/// executable inside the package (found by content, not by name) must be validly signed, with
+/// revocation checked — this app's own files and the updater by the running app's own certificate
+/// subject, every attribute of it, the runtime and libraries it is built from by that subject or an
+/// organization in <see cref="TrustedOrganizations"/> — and the package's own ConnectorControl.exe must
 /// carry the version the feed advertises, prerelease label and all, so an old signed release or
 /// preview cannot be replayed as a newer one.
 /// Sparkle's pinned EdDSA key plays this role on the Mac. Known residual: any library this
@@ -53,8 +53,9 @@ public static class UpdateVerifier
 
     private const string CannotValidateSelf = "This app's own signature could not be validated, so an update cannot be checked against it";
 
-    /// <summary>What the running app's signature says about who may sign an update; read once per download.</summary>
-    public readonly record struct RunningIdentity(string? Organization, bool Unsigned);
+    /// <summary>What the running app's signature says about who may sign an update; read once per download.
+    /// <see cref="Subject"/> is its certificate's full subject DN, null when its signature could not be validated.</summary>
+    public readonly record struct RunningIdentity(string? Subject, bool Unsigned);
 
     /// <summary>
     /// Null when the update may be staged; otherwise a user-facing reason. Only an UNSIGNED running
@@ -68,9 +69,9 @@ public static class UpdateVerifier
         {
             return null;
         }
-        if (!TryExpectedOrganization(identity, out var expected, out var organizationProblem))
+        if (!TryExpectedSubject(identity, out var expected, out var subjectProblem))
         {
-            return organizationProblem;
+            return subjectProblem;
         }
         if (updateExePath is not null && File.Exists(updateExePath)
             && VerifyFile(updateExePath, expected, "Update.exe", mustBeOurs: true) is { } updaterProblem)
@@ -163,7 +164,7 @@ public static class UpdateVerifier
         {
             return null;
         }
-        if (!TryExpectedOrganization(identity, out var expected, out var problem))
+        if (!TryExpectedSubject(identity, out var expected, out var problem))
         {
             return problem;
         }
@@ -171,12 +172,12 @@ public static class UpdateVerifier
     }
 
     /// <summary>
-    /// True when there is an organization to check a file's signer against; <paramref name="expected"/>
+    /// True when there is a subject to check a file's signer against; <paramref name="expected"/>
     /// carries it. False and <paramref name="expected"/> null either because the running app is
     /// unsigned (a dev build: <paramref name="problem"/> is also null, meaning skip every check) or
     /// because its own signature could not be validated (<paramref name="problem"/> carries why).
     /// </summary>
-    private static bool TryExpectedOrganization(RunningIdentity identity, [NotNullWhen(true)] out string? expected, out string? problem)
+    private static bool TryExpectedSubject(RunningIdentity identity, [NotNullWhen(true)] out string? expected, out string? problem)
     {
         if (identity.Unsigned)
         {
@@ -184,35 +185,44 @@ public static class UpdateVerifier
             problem = null;
             return false;
         }
-        if (identity.Organization is not { } organization)
+        if (identity.Subject is not { } subject)
         {
             expected = null;
             problem = CannotValidateSelf + NotInstalledSuffix;
             return false;
         }
-        expected = organization;
+        expected = subject;
         problem = null;
         return true;
     }
 
-    /// <summary>The running app's signer organization, normalized; <c>Unsigned</c> when it carries no signature at all.</summary>
+    /// <summary>
+    /// The running app's signer subject; <c>Unsigned</c> when it carries no signature at all. Read from the app
+    /// itself, never configured, so a build signed by any certificate holds its updates to that same subject. The
+    /// issuer is not pinned: the signing service rotates its intermediates, and a pinned one would strand every
+    /// install at the next rotation. No revocation check here: this is the app judging itself.
+    /// </summary>
     [SupportedOSPlatform("windows")]
     internal static RunningIdentity ExpectedIdentity(string runningExePath)
     {
         var signer = AuthenticodeVerifier.SignerSubject(runningExePath);
-        return new RunningIdentity(signer.Identity?.Organization, signer.Unsigned);
+        return new RunningIdentity(signer.Identity?.Subject, signer.Unsigned);
     }
 
-    /// <summary>Null when <paramref name="path"/> is validly signed by <paramref name="expectedOrganization"/>; else why not.</summary>
+    /// <summary>
+    /// Null when <paramref name="path"/> is validly signed, revocation included, by <paramref name="expectedSubject"/>
+    /// — every attribute of it, not just the O= another certificate could share — or, when it need not be ours, by an
+    /// organization in <see cref="TrustedOrganizations"/>; else why not.
+    /// </summary>
     [SupportedOSPlatform("windows")]
-    internal static string? VerifyFile(string path, string expectedOrganization, string displayName, bool mustBeOurs)
+    internal static string? VerifyFile(string path, string expectedSubject, string displayName, bool mustBeOurs)
     {
-        var signer = AuthenticodeVerifier.SignerSubject(path);
+        var signer = AuthenticodeVerifier.SignerSubject(path, checkRevocation: true);
         if (signer.Identity is not { } identity)
         {
             return $"{displayName} is not validly signed{NotInstalledSuffix}";
         }
-        if (identity.Organization == expectedOrganization)
+        if (SignerIdentity.SameSubject(identity.Subject, expectedSubject))
         {
             return null;
         }

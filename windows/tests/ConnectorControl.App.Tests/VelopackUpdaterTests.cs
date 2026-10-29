@@ -13,7 +13,7 @@ namespace ConnectorControl.App.Tests;
 public class VelopackUpdaterTests
 {
     /// <summary>Stands in for the running app's signer; the verifier seams below only record or compare it.</summary>
-    private static readonly UpdateVerifier.RunningIdentity TestIdentity = new("test publisher", false);
+    private static readonly UpdateVerifier.RunningIdentity TestIdentity = new("CN=Test Publisher, O=Test Publisher, C=US", false);
 
     /// <summary>The framework's own DLL: Authenticode-signed on every official install, so it stands in for a file this app signed.</summary>
     private static string SignedFrameworkFile => typeof(object).Assembly.Location;
@@ -21,7 +21,7 @@ public class VelopackUpdaterTests
     private static readonly UpdateVerifier.RunningIdentity FrameworkIdentity = UpdateVerifier.ExpectedIdentity(SignedFrameworkFile);
 
     private static void RequireSignedFramework() =>
-        Assert.True(FrameworkIdentity.Organization is not null, "the shared framework must be Authenticode-signed for this test");
+        Assert.True(FrameworkIdentity.Subject is not null, "the shared framework must be Authenticode-signed for this test");
 
     /// <summary>The 1.3.2 full package the feed advertises to the 1.3.1 install these tests describe.</summary>
     private static VelopackAsset Asset() =>
