@@ -51,18 +51,19 @@ public static class AuthenticodeVerifier
     /// The identity of <paramref name="exePath"/>'s signer once WinVerifyTrust has accepted the
     /// signature and its chain; otherwise a user-facing problem naming the file. Shared by the
     /// Claude launch check and the update-package check; only the update check asks for
-    /// <paramref name="checkRevocation"/>. There a revoked certificate refuses, and a revocation status that cannot be
-    /// determined (<see cref="Revocation.Classify"/>) is told to <paramref name="revocationUndetermined"/> and the file
-    /// judged again without revocation, exactly as before revocation was checked at all.
+    /// <paramref name="revocation"/>, and checks it only while that session still does. There a revoked certificate
+    /// refuses, and a revocation status that cannot be determined (<see cref="Revocation.Classify"/>) is told to the
+    /// session and the file judged again without revocation, exactly as before revocation was checked at all.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    public static SignerResult SignerSubject(string exePath, bool checkRevocation = false, Action<string>? revocationUndetermined = null)
+    public static SignerResult SignerSubject(string exePath, Revocation.Session? revocation = null)
     {
         var name = Path.GetFileName(exePath);
+        var checkRevocation = revocation is { Check: true };
         var status = VerifyTrust(exePath, checkRevocation);
         if (checkRevocation && Revocation.Classify(status) == Revocation.Outcome.Undetermined)
         {
-            revocationUndetermined?.Invoke($"Whether {name}'s signing certificate is revoked could not be checked (0x{status:X8}); it was judged without that check.");
+            revocation!.Undetermined(name, status);
             status = VerifyTrust(exePath, checkRevocation: false);
         }
         if (status != 0)

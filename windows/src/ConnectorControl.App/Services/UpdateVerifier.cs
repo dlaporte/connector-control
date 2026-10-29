@@ -66,6 +66,8 @@ public static class UpdateVerifier
     public static string? Verify(string packagePath, string? updateExePath, RunningIdentity identity, string runningVersion, string feedVersion,
         Action<string>? log = null)
     {
+        // One revocation session for the whole update: said once, and skipped for the rest once undeterminable.
+        var revocation = new Revocation.Session(log);
         if (!OperatingSystem.IsWindows())
         {
             return null;
@@ -75,7 +77,7 @@ public static class UpdateVerifier
             return subjectProblem;
         }
         if (updateExePath is not null && File.Exists(updateExePath)
-            && VerifyFile(updateExePath, expected, "Update.exe", mustBeOurs: true, log) is { } updaterProblem)
+            && VerifyFile(updateExePath, expected, "Update.exe", mustBeOurs: true, revocation) is { } updaterProblem)
         {
             return updaterProblem;
         }
@@ -127,7 +129,7 @@ public static class UpdateVerifier
                 {
                     return SizeProblem(entry, actual);
                 }
-                if (VerifyFile(extracted, expected, name + " inside the update", MustBeOurs(name), log) is { } problem)
+                if (VerifyFile(extracted, expected, name + " inside the update", MustBeOurs(name), revocation) is { } problem)
                 {
                     return problem;
                 }
@@ -173,7 +175,7 @@ public static class UpdateVerifier
         {
             return problem;
         }
-        return VerifyFile(updateExePath, expected, "The installed Update.exe", mustBeOurs: true, log);
+        return VerifyFile(updateExePath, expected, "The installed Update.exe", mustBeOurs: true, new Revocation.Session(log));
     }
 
     /// <summary>
@@ -218,12 +220,12 @@ public static class UpdateVerifier
     /// Null when <paramref name="path"/> is validly signed, revocation included, by <paramref name="expectedSubject"/>
     /// — every attribute of it, not just the O= another certificate could share — or, when it need not be ours, by an
     /// organization in <see cref="TrustedOrganizations"/>; else why not. A revocation status that could not be
-    /// determined is said to <paramref name="log"/> and does not refuse (<see cref="Revocation"/>).
+    /// determined is said once to <paramref name="revocation"/>'s log and does not refuse (<see cref="Revocation"/>).
     /// </summary>
     [SupportedOSPlatform("windows")]
-    internal static string? VerifyFile(string path, string expectedSubject, string displayName, bool mustBeOurs, Action<string>? log = null)
+    internal static string? VerifyFile(string path, string expectedSubject, string displayName, bool mustBeOurs, Revocation.Session? revocation = null)
     {
-        var signer = AuthenticodeVerifier.SignerSubject(path, checkRevocation: true, log);
+        var signer = AuthenticodeVerifier.SignerSubject(path, revocation ?? new Revocation.Session(null));
         if (signer.Identity is not { } identity)
         {
             return $"{displayName} is not validly signed{NotInstalledSuffix}";

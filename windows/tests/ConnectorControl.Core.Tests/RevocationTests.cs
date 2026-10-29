@@ -18,4 +18,19 @@ public class RevocationTests
     {
         Assert.Equal(expected, Revocation.Classify(status));
     }
+
+    /// <summary>Offline, every file in an update would report the same thing: it is said once, and the rest of the
+    /// update is checked without revocation rather than waiting out the same unreachable servers file after file.</summary>
+    [Fact]
+    public void AnUndeterminedRevocationIsSaidOnceAndTheRestOfTheUpdateSkipsIt()
+    {
+        var logged = new List<string>();
+        var session = new Revocation.Session(logged.Add);
+        Assert.True(session.Check);
+        session.Undetermined("ConnectorControl.exe", Revocation.RevocationOffline);
+        session.Undetermined("Update.exe", Revocation.RevocationOffline);
+        Assert.False(session.Check);
+        Assert.Contains("ConnectorControl.exe", Assert.Single(logged));
+        Assert.Contains("0x80092013", logged[0]);
+    }
 }

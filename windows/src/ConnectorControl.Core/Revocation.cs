@@ -31,6 +31,28 @@ public static class Revocation
     /// checked — the two codes above are what the chain engine reports underneath it.</summary>
     public const int RevocationFailure = unchecked((int)0x800B010E);
 
+    /// <summary>
+    /// One update's revocation checking. Offline, every file reports the same "could not determine": the first is
+    /// said to the log once, and the rest of the update is checked without revocation (<see cref="Check"/> false)
+    /// rather than waiting out the same unreachable servers file after file.
+    /// </summary>
+    public sealed class Session(Action<string>? log)
+    {
+        /// <summary>Whether the next file's revocation is still worth checking.</summary>
+        public bool Check { get; private set; } = true;
+
+        /// <summary>Records that <paramref name="fileName"/>'s revocation could not be determined (<paramref name="status"/>).</summary>
+        public void Undetermined(string fileName, int status)
+        {
+            if (!Check)
+            {
+                return;
+            }
+            Check = false;
+            log?.Invoke($"Whether {fileName}'s signing certificate is revoked could not be checked (0x{status:X8}); this update was judged without revocation checking.");
+        }
+    }
+
     /// <summary>The outcome of WinVerifyTrust's <paramref name="status"/>. Only the three "could not find out" codes are
     /// <see cref="Outcome.Undetermined"/>; CERT_E_REVOKED and CRYPT_E_REVOKED, like every other failure, refuse.</summary>
     public static Outcome Classify(int status) => status switch
