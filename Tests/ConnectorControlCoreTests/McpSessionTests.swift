@@ -208,6 +208,25 @@ final class McpSessionTests: XCTestCase {
         XCTAssertEqual(sent.last, #"{"error":{"code":-32603,"message":"Internal error"},"id":9,"jsonrpc":"2.0"}"#)
     }
 
+    /// An answer nested deeper than any reader of ours goes is refused too, or the client waits on that id for
+    /// good. The whole line counts: the envelope and the result are two levels, so 62 arrays inside make 64.
+    func testAnAnswerNestedPastTheLimitIsAnInternalErrorNotSilence() throws {
+        func nested(_ depth: Int) -> JSONValue {
+            var value: JSONValue = .int(1)
+            for _ in 0..<depth { value = .array([value]) }
+            return value
+        }
+        initialize()
+        session.receive(#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"echo"}}"#)
+        try XCTUnwrap(host.calls.last).completion(.object(["value": nested(McpSession.maxNestingDepth - 2)]))
+        let answer = try XCTUnwrap(sent.last)
+        XCTAssertTrue(answer.hasPrefix(#"{"id":9,"jsonrpc":"2.0","result":{"value":[[[["#), answer)
+        XCTAssertTrue(McpSession.nests(atMost: McpSession.maxNestingDepth, answer), "a line exactly at the limit goes out")
+        session.receive(#"{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"echo"}}"#)
+        try XCTUnwrap(host.calls.last).completion(.object(["value": nested(McpSession.maxNestingDepth - 1)]))
+        XCTAssertEqual(sent.last, #"{"error":{"code":-32603,"message":"Internal error"},"id":10,"jsonrpc":"2.0"}"#)
+    }
+
     func testBytesThatAreNotUTF8AreAParseErrorBeforeAnythingDecodesThem() {
         let invalid: [[UInt8]] = [[0xC3, 0x28], [0xC0, 0xAF], [0xED, 0xA0, 0x80], [0xFF], [0xF4, 0x90, 0x80, 0x80], [0xE2]]
         for bad in invalid {

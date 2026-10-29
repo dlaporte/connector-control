@@ -264,6 +264,31 @@ public class McpSessionTests
         Assert.Throws<ArgumentException>(() => JsonValue.Double(double.PositiveInfinity));
     }
 
+    /// <summary>An answer nested deeper than any reader of ours goes is refused, or the client waits on that id for
+    /// good. The whole line counts: the envelope and the result are two levels, so 62 arrays inside make 64.</summary>
+    [Fact]
+    public void AnAnswerNestedPastTheLimitIsAnInternalErrorNotSilence()
+    {
+        static JsonValue Nested(int depth)
+        {
+            var value = JsonValue.Int(1);
+            for (var i = 0; i < depth; i++)
+            {
+                value = JsonValue.Array([value]);
+            }
+            return value;
+        }
+        Initialize();
+        session.Receive("""{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"echo"}}""");
+        host.Calls[^1].Completion(JsonValue.Object(("value", Nested(McpSession.MaxNestingDepth - 2))));
+        var answer = sent[^1];
+        Assert.StartsWith("""{"id":9,"jsonrpc":"2.0","result":{"value":[[[[""", answer, StringComparison.Ordinal);
+        Assert.True(McpSession.Nests(McpSession.MaxNestingDepth, answer), "a line exactly at the limit goes out");
+        session.Receive("""{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"echo"}}""");
+        host.Calls[^1].Completion(JsonValue.Object(("value", Nested(McpSession.MaxNestingDepth - 1))));
+        Assert.Equal("""{"error":{"code":-32603,"message":"Internal error"},"id":10,"jsonrpc":"2.0"}""", sent[^1]);
+    }
+
     [Fact]
     public void BytesThatAreNotUtf8AreAParseErrorBeforeAnythingDecodesThem()
     {

@@ -238,9 +238,10 @@ public final class McpSession {
 
     private func respond(_ id: JSONValue, _ result: JSONValue) {
         let line = JSONValue.object(["jsonrpc": .string("2.0"), "id": id, "result": result]).compactLine()
-        // compactLine answers "null" for a value JSON cannot hold (NaN, infinity); the client must
-        // still hear about its request, or it waits on that id for good.
-        guard line != "null" else {
+        // An answer no client can read is refused, as the client must still hear about its request or it
+        // waits on that id for good: one nested deeper than maxNestingDepth, which every reader of ours
+        // refuses, and one JSON cannot hold (NaN, infinity), for which compactLine answers "null".
+        guard line != "null", McpSession.nests(atMost: McpSession.maxNestingDepth, line) else {
             reply(error: McpSession.internalErrorCode, McpSession.internalErrorMessage, id: id)
             return
         }
