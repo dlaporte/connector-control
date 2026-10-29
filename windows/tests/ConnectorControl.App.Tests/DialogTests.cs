@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Input;
 using ConnectorControl.App.Services;
 using ConnectorControl.App.Tests.TestSupport;
@@ -95,6 +96,43 @@ public class DialogTests
             Assert.Equal("Install and Relaunch", dialog.InstallButton.Content);
             Assert.Equal("Later", dialog.LaterButton.Content);
         });
+    }
+
+    [Fact]
+    public void UpdateNotesNeverLoadAnImage()
+    {
+        // The notes come from the unsigned release feed and are shown before the package is checked: an
+        // image would be fetched as the dialog opens — an http beacon, or a file:// share that hands
+        // Windows' sign-in to whoever runs it. Images show as their alt text, and nothing is loaded.
+        WpfApp.Invoke(() =>
+        {
+            const string notes = "Fixes.\n\n![beacon](https://example.invalid/b.png) ![share](file://host.invalid/share/x.png)\n\n"
+                + "[![nested](file://host.invalid/share/y.png)](https://example.invalid/)\n\n<img src=\"file://host.invalid/share/z.png\">\n\n"
+                + "![referenced][r]\n\n[r]: file://host.invalid/share/r.png\n";
+            var dialog = new UpdateDialog("1.3.0", "1.2.2", notes);
+            var everything = LogicalDescendants(dialog.Notes.Document).ToList();
+            Assert.DoesNotContain(everything, element => element is InlineUIContainer or BlockUIContainer or Image or Button);
+            var text = new TextRange(dialog.Notes.Document.ContentStart, dialog.Notes.Document.ContentEnd).Text;
+            Assert.Contains("beacon", text);
+            Assert.Contains("share", text);
+            Assert.Contains("nested", text);
+            Assert.Contains("referenced", text);
+        });
+    }
+
+    private static IEnumerable<object> LogicalDescendants(DependencyObject parent)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(parent))
+        {
+            yield return child;
+            if (child is DependencyObject inner)
+            {
+                foreach (var descendant in LogicalDescendants(inner))
+                {
+                    yield return descendant;
+                }
+            }
+        }
     }
 
     [Fact]
