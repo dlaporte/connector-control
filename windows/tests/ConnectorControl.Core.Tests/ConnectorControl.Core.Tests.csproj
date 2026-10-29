@@ -19,5 +19,7 @@
   <ItemGroup>
     <!-- Shared fixtures at the repo root, copied beside the test binary. -->
     <Content Include="../../../Tests/Fixtures/**/*" Link="Fixtures/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The README's command reference is compared with `help` (ReadmeHelpTests). -->
+    <Content Include="../../../README.md" Link="README.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

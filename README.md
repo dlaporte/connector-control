@@ -506,6 +506,51 @@ machines that follow it, including the one that publishes it.
 - The document's name is only a default at import. Renaming a published
   collection never renames a subscriber's.
 
+## Claude integration and command line
+
+### Command reference
+
+<!-- connector-control help: begin -->
+```text
+Usage: connector-control <command> [options]
+Status
+  status                             What Claude is running, and whether it needs a restart
+  doctor                             Whether npx, node, uvx and uv are installed where Claude can find them
+Connectors (the active collection unless --collection names another)
+  connectors [--collection <name>]   List connectors and what each runs
+  show <name> [--reveal]             Show one connector, with its secrets masked
+  enable <name> | disable <name>     Turn a connector on or off
+  add <name> --json <config> | --file <path> [--off]
+                                     Add a connector
+  edit <name> --json <config> | --file <path> [--rename <new>]
+                                     Change a connector's config, its name, or both
+  delete <name>…                     Delete connectors
+Collections
+  collections                        List collections
+  use <collection>                   Make a collection active
+  collection new <name>              Create an empty collection
+  collection rename <old> <new>      Rename a collection
+  collection duplicate <name> <new>  Copy a collection under a new name
+  collection delete <name>           Delete a collection and its connectors
+Sharing
+  import <file> [--into <collection> | --new <name>] [--on-clash replace|keep-both|skip]
+                                     Copy the connectors in a collection file into a collection
+  subscribe <file> [--name <name>]   Subscribe to a collection file someone publishes
+  updates <collection>               Show what an update to a subscribed collection would change
+  apply-update <collection>          Apply the update waiting for a subscribed collection
+  refresh <collection>               Read a subscribed collection's file now
+Settings and backups
+  settings                           List Connector Control's settings and their values
+  settings set <key> <value>         Change a setting
+  backups                            List the backups of Claude's config
+  backups restore <id>               Replace Claude's config with a backup
+Claude
+  restart-claude                     Quit and reopen Claude Desktop
+  mcp                                The relay Claude Desktop runs; not for direct use
+Options: --json  --version  --help
+```
+<!-- connector-control help: end -->
+
 ## Installation
 
 ### macOS

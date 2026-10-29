@@ -1,5 +1,6 @@
 # Runs the Swift suite and an ad-hoc build on every push; release.yml re-runs the suite
 # before signing.
+# README.md is watched because ReadmeHelpTests compares its command reference with `help`.
 #
 # No pull_request trigger: every push in this repository is to a branch of the same repo (no
 # forks), so the push trigger below already runs on every branch, including PR branches.
@@ -14,6 +15,7 @@ on:
       - 'Package.swift'
       - 'Package.resolved'
       - 'scripts/**'
+      - 'README.md'
       - '.github/workflows/mac-ci.yml'
 
 permissions:
