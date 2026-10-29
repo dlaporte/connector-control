@@ -118,11 +118,11 @@ public partial class App : Application
                     appState.ReportControlEndpointUnavailable();
                 });
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex)
         {
-            // Another copy of the app serves the pipe, or another account holds its name: the app runs without
-            // one, and says so.
-            Log($"The control pipe is unavailable: {ex.Message}");
+            // Another copy of the app serves the pipe, another account holds its name, or anything else keeps it
+            // from being served: the app runs without one, and says so, as the Mac does for any failure.
+            Log($"The control pipe is unavailable: {ex.GetType().Name}: {ex.Message}");
             appState.ReportControlEndpointUnavailable();
         }
         CommandLineTool = new UserPathCommandLineTool(ControlToolCopy.BinDir(dataDir), new RegistryUserEnvironment(), host);

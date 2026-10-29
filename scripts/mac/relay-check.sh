@@ -73,6 +73,8 @@ say '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"
 say '{"jsonrpc":"2.0","method":"notifications/initialized"}'
 say '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_status","arguments":{}}}'
 wait_for '"id":1,' "$SANDBOX/claude-out" "the answer before the update"
+grep '"id":1,' "$SANDBOX/claude-out" | grep -q '"isError":false' \
+    || { echo "::error::the request before the update was not answered" >&2; cat "$SANDBOX/claude-out" >&2; exit 1; }
 
 echo "== the update: the bundle is replaced under the running relay, and the app is killed"
 mv "$COPY" "$COPY.old"

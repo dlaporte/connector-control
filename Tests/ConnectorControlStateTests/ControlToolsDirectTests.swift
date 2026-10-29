@@ -326,7 +326,7 @@ final class ControlToolsDirectTests: XCTestCase {
             let block = try WriteBlock(rig.h.claudeConfigURL)
             defer { block.dispose() }
             XCTAssertTrue(block.isEffective)
-            rig.call("set_connector_enabled", ["name": .string("aws-mcp"), "enabled": .bool(false)])
+            _ = rig.call("set_connector_enabled", ["name": .string("aws-mcp"), "enabled": .bool(false)])
         }
         XCTAssertTrue(rig.state.applyRetryNeeded)
         let result = try XCTUnwrap(rig.call("set_setting", ["key": .string("confirm-quit"), "value": .string("off")]))
