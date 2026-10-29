@@ -25,8 +25,8 @@ public static class ControlMasking
     /// <summary>How much a line renderer shows. <c>Masked</c>: what Claude and the command-line tool see.
     /// <c>Dialog</c>: the confirmation dialogs, whose text never goes back to Claude — the command,
     /// arguments, URL and environment values in full, with a variable named for a secret (unless it
-    /// names a program to run), header
-    /// values, the OAuth client secret and every value under a key named for a secret still masked.
+    /// names a program to run), header values, the OAuth client secret and every value under a key
+    /// named for a secret still masked.
     /// <c>Revealed</c>: everything as written, for the command-line tool's <c>show --reveal</c>.</summary>
     public enum Exposure { Masked, Dialog, Revealed }
 
@@ -232,8 +232,9 @@ public static class ControlMasking
             return piece.After.Length == 0 || RefersElsewhere(piece.After) ? pair : piece.Before + "=" + Mask;
         }));
 
-    /// <summary>One argument on its own: JSON through <see cref="JsonArgument"/>, <c>--header=…</c> through <see cref="Header"/>, a shell line word by word through
-    /// <see cref="ShellLine"/> unless it reads as a secret whole, and anything else through <see cref="Word"/>.</summary>
+    /// <summary>One argument on its own: JSON through <see cref="JsonArgument"/>, <c>--header=…</c> through
+    /// <see cref="Header"/>, and anything else through <see cref="Word"/>, or word by word through <see cref="ShellLine"/>
+    /// when that hides what the one word's reading hides.</summary>
     public static string Argument(string arg, bool reveal = false)
     {
         if (reveal)
@@ -249,23 +250,40 @@ public static class ControlMasking
             return assignment.Before + "=" + Header(assignment.After);
         }
         var whole = Word(arg);
-        // The shell line takes the place of the URL's rules, which would pass every word before
-        // the scheme through as written; a line that reads as a secret whole (`Bearer x`) stays
-        // masked whole.
-        if (!Same(whole, Mask) && ShellLine(arg) is { } line)
+        if (ShellLine(arg) is not { } line)
+        {
+            return whole;
+        }
+        // The shell line reading never shows what the one-word reading hid: it stands in when the
+        // one word hid nothing, and when both hid something different, which only a URL's rules
+        // do (`https://u:p@h/x --token t`), the argument is hidden whole. Anything else the one
+        // word hid (`--password=correct horse`, `Bearer x`) it hid whole.
+        if (Same(whole, arg))
         {
             return line;
         }
-        return whole;
+        return IsUrl(arg) ? Mask : whole;
+    }
+
+    /// <summary>Whether <see cref="Word"/> reads <paramref name="arg"/> by the URL's rules: it holds <c>://</c> and is not a
+    /// <c>name=value</c> whose name holds none.</summary>
+    internal static bool IsUrl(string arg)
+    {
+        if (Cut(arg, "://") is null)
+        {
+            return false;
+        }
+        return Cut(arg, "=") is not { } piece || Cut(piece.Before, "://") is not null;
     }
 
     /// <summary>An argument as one word: a URL through <see cref="Url"/>, a value that is wholly a reference as
     /// written, <c>name=value</c> with the value masked when the name is a secret's (<c>--api-key=…</c>,
-    /// Docker's <c>-e API_KEY=…</c>), and "•••" for anything that reads as a credential or a random
+    /// Docker's <c>-e API_KEY=…</c>) — read before a URL in the value, so the URL's rules never pass
+    /// the value's start through — and "•••" for anything that reads as a credential or a random
     /// token — a "name" that does is part of the token, so the whole word is masked.</summary>
     internal static string Word(string arg)
     {
-        if (Cut(arg, "://") is not null)
+        if (IsUrl(arg))
         {
             return Url(arg);
         }
@@ -430,11 +448,12 @@ public static class ControlMasking
     internal static readonly string[] SignInHeaders = ["cookie"];
 
     /// <summary>The indexes of the header values among <paramref name="args"/> given as words of their own: after a header
-    /// flag, a word with no ":", or with nothing after its ":", is the header's name and the next
-    /// word its value (<c>--headers Authorization x</c>, or <c>Authorization: Bearer x</c> as a shell splits
-    /// it), past a scheme word such as <c>Bearer</c>. A value is hidden when its header is named for a
-    /// secret or signs in, and is not empty, a flag or a reference, as <see cref="Header"/> shows those;
-    /// another header's name and value read as any argument does, since <c>-H</c> is also a host.</summary>
+    /// flag, a word with no ":", or with nothing or only a scheme word after its ":", is the
+    /// header's name and the next word its value (<c>--headers Authorization x</c>, <c>Authorization:
+    /// Bearer x</c> as a shell splits it, <c>-H Authorization:Bearer x</c>), past a scheme word such as
+    /// <c>Bearer</c>. A value is hidden when its header is named for a secret or signs in, and is not
+    /// empty, a flag or a reference, as <see cref="Header"/> shows those; another header's name and value
+    /// read as any argument does, since <c>-H</c> is also a host.</summary>
     internal static HashSet<int> HeaderValues(IReadOnlyList<string> args)
     {
         var values = new HashSet<int>();
@@ -444,13 +463,13 @@ public static class ControlMasking
             {
                 continue;
             }
-            if (HeaderName(args[index + 1]) is not { } name
-                || !(CredentialHeuristics.NamesASecret(name) || SignInHeaders.Contains(name.ToLowerInvariant())))
+            if (HeaderName(args[index + 1]) is not { } named
+                || !(CredentialHeuristics.NamesASecret(named.Name) || SignInHeaders.Contains(named.Name.ToLowerInvariant())))
             {
                 continue;
             }
             var value = index + 2;
-            if (CredentialHeuristics.IsSchemeWord(args[value]) && value + 1 < args.Count)
+            if (!named.Scheme && CredentialHeuristics.IsSchemeWord(args[value]) && value + 1 < args.Count)
             {
                 value += 1;
             }
@@ -463,15 +482,21 @@ public static class ControlMasking
         return values;
     }
 
-    /// <summary>A header's name when <paramref name="word"/> gives no value with it: the whole word with no ":", or what is
-    /// before a ":" with nothing after it. Null for a word with a value.</summary>
-    internal static string? HeaderName(string word)
+    /// <summary>A header's name when <paramref name="word"/> gives no value with it — the whole word with no ":", or what is
+    /// before a ":" with nothing after it — and whether a scheme word follows its ":" instead
+    /// (<c>Authorization:Bearer</c>). Null for a word with a value.</summary>
+    internal static (string Name, bool Scheme)? HeaderName(string word)
     {
         if (Cut(word, ":") is not { } piece)
         {
-            return word;
+            return (word, false);
         }
-        return piece.After.TrimSpaces().Length == 0 ? piece.Before : null;
+        var value = piece.After.TrimSpaces();
+        if (value.Length == 0)
+        {
+            return (piece.Before, false);
+        }
+        return CredentialHeuristics.IsSchemeWord(value) ? (piece.Before, true) : null;
     }
 
     /// <summary>"Name: value" with the value masked unless it is empty or a reference.</summary>

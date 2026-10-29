@@ -21,8 +21,8 @@ public enum ControlMasking {
     /// How much a line renderer shows. `masked`: what Claude and the command-line tool see.
     /// `dialog`: the confirmation dialogs, whose text never goes back to Claude — the command,
     /// arguments, URL and environment values in full, with a variable named for a secret (unless it
-    /// names a program to run), header
-    /// values, the OAuth client secret and every value under a key named for a secret still masked.
+    /// names a program to run), header values, the OAuth client secret and every value under a key
+    /// named for a secret still masked.
     /// `revealed`: everything as written, for the command-line tool's `show --reveal`.
     public enum Exposure: Sendable { case masked, dialog, revealed }
 
@@ -215,26 +215,38 @@ public enum ControlMasking {
         }.joined(separator: "&")
     }
 
-    /// One argument on its own: JSON through `jsonArgument(_:)`, `--header=…` through `header(_:)`, a shell line word by word through
-    /// `shellLine(_:)` unless it reads as a secret whole, and anything else through `word(_:)`.
+    /// One argument on its own: JSON through `jsonArgument(_:)`, `--header=…` through
+    /// `header(_:)`, and anything else through `word(_:)`, or word by word through `shellLine(_:)`
+    /// when that hides what the one word's reading hides.
     public static func argument(_ arg: String, reveal: Bool = false) -> String {
         if reveal { return arg }
         if let json = jsonArgument(arg) { return json }
         if let piece = cut(arg, at: "="), headerFlags.contains(piece.before) { return piece.before + "=" + header(piece.after) }
         let whole = word(arg)
-        // The shell line takes the place of the URL's rules, which would pass every word before
-        // the scheme through as written; a line that reads as a secret whole (`Bearer x`) stays
-        // masked whole.
-        if !same(whole, mask), let line = shellLine(arg) { return line }
-        return whole
+        guard let line = shellLine(arg) else { return whole }
+        // The shell line reading never shows what the one-word reading hid: it stands in when the
+        // one word hid nothing, and when both hid something different, which only a URL's rules
+        // do (`https://u:p@h/x --token t`), the argument is hidden whole. Anything else the one
+        // word hid (`--password=correct horse`, `Bearer x`) it hid whole.
+        if same(whole, arg) { return line }
+        return isURL(arg) ? mask : whole
+    }
+
+    /// Whether `word(_:)` reads `arg` by the URL's rules: it holds `://` and is not a
+    /// `name=value` whose name holds none.
+    static func isURL(_ arg: String) -> Bool {
+        guard cut(arg, at: "://") != nil else { return false }
+        guard let piece = cut(arg, at: "=") else { return true }
+        return cut(piece.before, at: "://") != nil
     }
 
     /// An argument as one word: a URL through `url(_:)`, a value that is wholly a reference as
     /// written, `name=value` with the value masked when the name is a secret's (`--api-key=…`,
-    /// Docker's `-e API_KEY=…`), and "•••" for anything that reads as a credential or a random
+    /// Docker's `-e API_KEY=…`) — read before a URL in the value, so the URL's rules never pass
+    /// the value's start through — and "•••" for anything that reads as a credential or a random
     /// token — a "name" that does is part of the token, so the whole word is masked.
     static func word(_ arg: String) -> String {
-        if cut(arg, at: "://") != nil { return url(arg) }
+        if isURL(arg) { return url(arg) }
         if refersElsewhere(arg) { return arg }
         if let piece = cut(arg, at: "="), !looksSecret(piece.before) {
             if CredentialHeuristics.namesASecret(piece.before), !refersElsewhere(piece.after) {
@@ -337,29 +349,34 @@ public enum ControlMasking {
     static let signInHeaders = ["cookie"]
 
     /// The indexes of the header values among `args` given as words of their own: after a header
-    /// flag, a word with no ":", or with nothing after its ":", is the header's name and the next
-    /// word its value (`--headers Authorization x`, or `Authorization: Bearer x` as a shell splits
-    /// it), past a scheme word such as `Bearer`. A value is hidden when its header is named for a
-    /// secret or signs in, and is not empty, a flag or a reference, as `header(_:)` shows those;
-    /// another header's name and value read as any argument does, since `-H` is also a host.
+    /// flag, a word with no ":", or with nothing or only a scheme word after its ":", is the
+    /// header's name and the next word its value (`--headers Authorization x`, `Authorization:
+    /// Bearer x` as a shell splits it, `-H Authorization:Bearer x`), past a scheme word such as
+    /// `Bearer`. A value is hidden when its header is named for a secret or signs in, and is not
+    /// empty, a flag or a reference, as `header(_:)` shows those; another header's name and value
+    /// read as any argument does, since `-H` is also a host.
     static func headerValues(_ args: [String]) -> Set<Int> {
         var values: Set<Int> = []
         for index in args.indices where headerFlags.contains(args[index]) && index + 2 < args.count {
-            guard let name = headerName(args[index + 1]),
-                  CredentialHeuristics.namesASecret(name) || signInHeaders.contains(name.lowercased()) else { continue }
+            guard let named = headerName(args[index + 1]),
+                  CredentialHeuristics.namesASecret(named.name)
+                    || signInHeaders.contains(where: { CredentialHeuristics.loweredUnits(named.name).elementsEqual($0.utf16) }) else { continue }
             var value = index + 2
-            if CredentialHeuristics.isSchemeWord(args[value]), value + 1 < args.count { value += 1 }
+            if !named.scheme, CredentialHeuristics.isSchemeWord(args[value]), value + 1 < args.count { value += 1 }
             let text = args[value]
             if !text.isEmpty, !isFlag(text), !refersElsewhere(text) { values.insert(value) }
         }
         return values
     }
 
-    /// A header's name when `word` gives no value with it: the whole word with no ":", or what is
-    /// before a ":" with nothing after it. Nil for a word with a value.
-    static func headerName(_ word: String) -> String? {
-        guard let piece = cut(word, at: ":") else { return word }
-        return piece.after.trimmingCharacters(in: .whitespaces).isEmpty ? piece.before : nil
+    /// A header's name when `word` gives no value with it — the whole word with no ":", or what is
+    /// before a ":" with nothing after it — and whether a scheme word follows its ":" instead
+    /// (`Authorization:Bearer`). Nil for a word with a value.
+    static func headerName(_ word: String) -> (name: String, scheme: Bool)? {
+        guard let piece = cut(word, at: ":") else { return (word, false) }
+        let value = piece.after.trimmingCharacters(in: .whitespaces)
+        if value.isEmpty { return (piece.before, false) }
+        return CredentialHeuristics.isSchemeWord(value) ? (piece.before, true) : nil
     }
 
     /// "Name: value" with the value masked unless it is empty or a reference.

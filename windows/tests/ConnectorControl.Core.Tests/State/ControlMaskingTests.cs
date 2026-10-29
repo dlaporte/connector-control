@@ -728,8 +728,7 @@ public class ControlMaskingTests
         const string bash = "npx -y mcp-remote https://h/sse --header 'Authorization: Bearer eyJhbGc.eyJzdWI.sig-x_y'";
         Assert.Equal(["-c", "npx -y mcp-remote https://h/sse --header 'Authorization: •••'"],
             ControlMasking.Arguments(["-c", bash]));
-        Assert.Equal("API_KEY=••• npx server https://h.example/mcp",
-            ControlMasking.Argument("API_KEY=sk_live_x npx server https://h.example/mcp"));
+        Assert.Equal("API_KEY=•••", ControlMasking.Argument("API_KEY=sk_live_x npx server https://h.example/mcp"));
         Assert.Equal(["command   npx -y s --token •••"], ControlMasking.CodeLines(Bare("npx -y s --token hunter2abc")));
         AssertHidden(["hunter2abc"], Local("bash", ["-c", "npx -y s --token hunter2abc"]));
         AssertHidden(["eyJhbGc", "sig-x_y"], Local("bash", ["-c", bash]));
@@ -864,5 +863,33 @@ public class ControlMaskingTests
         Assert.Equal(["--password", "•••"], ControlMasking.Arguments(["--password", "${CC_NEEDS:PW}hunter"]));
         Assert.Equal("--password=${CC_NEEDS:PW}", ControlMasking.Argument("--password=${CC_NEEDS:PW}"));
         AssertHidden(["hunter"], Local("node", ["s.js", "--password=${CC_NEEDS:PW}hunter", "--token", "${T}hunter"]));
+    }
+
+    /// <summary>A secret value with spaces is hidden whole: the shell line's reading never shows a character
+    /// the one-word reading hid, and <c>name=value</c> is read before a URL in the value.</summary>
+    [Fact]
+    public void ASecretValueWithSpacesStaysHiddenWhole()
+    {
+        Assert.Equal("--password=•••", ControlMasking.Argument("--password=correct horse battery staple"));
+        Assert.Equal(["-e", "API_KEY=•••"], ControlMasking.Arguments(["-e", "API_KEY=my secret value"]));
+        Assert.Equal("--client-secret=•••", ControlMasking.Argument("--client-secret=abc def ghi"));
+        Assert.Equal("""{"note":"--password=•••"}""", ControlMasking.Argument("""{"note":"--password=a b"}"""));
+        Assert.Equal("--password=•••", ControlMasking.Argument("--password=a b https://x.example"));
+        var postgres = ControlMasking.Argument("postgres://admin:pa ss@db/x?sslkey=abc");
+        Assert.False(postgres.Contains("pa ss", StringComparison.Ordinal) || postgres.Contains("abc", StringComparison.Ordinal), postgres);
+        Assert.DoesNotContain("pa", ControlMasking.Argument("postgres://admin:pa ss@db/x?sslkey=abc --token t1"), StringComparison.Ordinal);
+        AssertHidden(["horse", "battery", "staple", "secret value", "def", "ghi", "pa ss", "sslkey=abc"],
+            Local("node", ["--password=correct horse battery staple", "-e", "API_KEY=my secret value",
+                           "--client-secret=abc def ghi", "--password=a b https://x.example",
+                           "postgres://admin:pa ss@db/x?sslkey=abc"]));
+    }
+
+    /// <summary><c>-H Authorization:Bearer x</c>, the scheme written against the name's colon, hides the value after it.</summary>
+    [Fact]
+    public void ANameAndSchemeWordHidesTheValueAfterIt()
+    {
+        Assert.Equal(["-H", "Authorization: •••", "•••"], ControlMasking.Arguments(["-H", "Authorization:Bearer", "abc123xyz"]));
+        Assert.Equal(["-H", "X-Api-Key: •••", "•••"], ControlMasking.Arguments(["-H", "X-Api-Key: basic", "abc123xyz"]));
+        Assert.Equal(["-H", "X-Team: •••", "abc"], ControlMasking.Arguments(["-H", "X-Team:blue", "abc"]));
     }
 }

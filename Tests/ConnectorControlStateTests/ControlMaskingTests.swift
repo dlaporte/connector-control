@@ -611,8 +611,7 @@ final class ControlMaskingTests: XCTestCase {
         let bash = "npx -y mcp-remote https://h/sse --header 'Authorization: Bearer eyJhbGc.eyJzdWI.sig-x_y'"
         XCTAssertEqual(ControlMasking.arguments(["-c", bash]),
                        ["-c", "npx -y mcp-remote https://h/sse --header 'Authorization: •••'"])
-        XCTAssertEqual(ControlMasking.argument("API_KEY=sk_live_x npx server https://h.example/mcp"),
-                       "API_KEY=••• npx server https://h.example/mcp")
+        XCTAssertEqual(ControlMasking.argument("API_KEY=sk_live_x npx server https://h.example/mcp"), "API_KEY=•••")
         XCTAssertEqual(ControlMasking.codeLines(bare("npx -y s --token hunter2abc")), ["command   npx -y s --token •••"])
         try assertHidden(["hunter2abc"], in: local("bash", ["-c", "npx -y s --token hunter2abc"]))
         try assertHidden(["eyJhbGc", "sig-x_y"], in: local("bash", ["-c", bash]))
@@ -726,5 +725,29 @@ final class ControlMaskingTests: XCTestCase {
         XCTAssertEqual(ControlMasking.arguments(["--password", "${CC_NEEDS:PW}hunter"]), ["--password", "•••"])
         XCTAssertEqual(ControlMasking.argument("--password=${CC_NEEDS:PW}"), "--password=${CC_NEEDS:PW}")
         try assertHidden(["hunter"], in: local("node", ["s.js", "--password=${CC_NEEDS:PW}hunter", "--token", "${T}hunter"]))
+    }
+
+    /// A secret value with spaces is hidden whole: the shell line's reading never shows a character
+    /// the one-word reading hid, and `name=value` is read before a URL in the value.
+    func testASecretValueWithSpacesStaysHiddenWhole() throws {
+        XCTAssertEqual(ControlMasking.argument("--password=correct horse battery staple"), "--password=•••")
+        XCTAssertEqual(ControlMasking.arguments(["-e", "API_KEY=my secret value"]), ["-e", "API_KEY=•••"])
+        XCTAssertEqual(ControlMasking.argument("--client-secret=abc def ghi"), "--client-secret=•••")
+        XCTAssertEqual(ControlMasking.argument(#"{"note":"--password=a b"}"#), #"{"note":"--password=•••"}"#)
+        XCTAssertEqual(ControlMasking.argument("--password=a b https://x.example"), "--password=•••")
+        let postgres = ControlMasking.argument("postgres://admin:pa ss@db/x?sslkey=abc")
+        XCTAssertFalse(postgres.contains("pa ss") || postgres.contains("abc"), postgres)
+        XCTAssertFalse(ControlMasking.argument("postgres://admin:pa ss@db/x?sslkey=abc --token t1").contains("pa"))
+        try assertHidden(["horse", "battery", "staple", "secret value", "def", "ghi", "pa ss", "sslkey=abc"],
+                         in: local("node", ["--password=correct horse battery staple", "-e", "API_KEY=my secret value",
+                                            "--client-secret=abc def ghi", "--password=a b https://x.example",
+                                            "postgres://admin:pa ss@db/x?sslkey=abc"]))
+    }
+
+    /// `-H Authorization:Bearer x`, the scheme written against the name's colon, hides the value after it.
+    func testANameAndSchemeWordHidesTheValueAfterIt() {
+        XCTAssertEqual(ControlMasking.arguments(["-H", "Authorization:Bearer", "abc123xyz"]), ["-H", "Authorization: •••", "•••"])
+        XCTAssertEqual(ControlMasking.arguments(["-H", "X-Api-Key: basic", "abc123xyz"]), ["-H", "X-Api-Key: •••", "•••"])
+        XCTAssertEqual(ControlMasking.arguments(["-H", "X-Team:blue", "abc"]), ["-H", "X-Team: •••", "abc"])
     }
 }
