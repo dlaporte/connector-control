@@ -226,10 +226,22 @@ public class ControlTextTests
         Assert.Equal("Erreur\u00A0: “" + """a\u{00A0}b""" + "”", ControlText.Escaped("Erreur\u00A0: “a\u00A0b”", ["a\u00A0b"]));
     }
 
-    /// <summary>A table shows a cell as a name is shown, one way only: the text <c>\u{202E}</c> and the character differ.</summary>
+    /// <summary>A table's cells are text as it is: a path keeps its backslashes, which are its own. The tools that
+    /// list names put each through <c>EscapedName</c> before it goes in.</summary>
     [Fact]
-    public void ATableShowsACellOneWayOnly()
+    public void ATableKeepsAPathsBackslashes()
     {
-        Assert.Equal(["""a\\u{202E}""", """a\u{202E}"""], ControlText.Table(null, [["""a\u{202E}"""], ["a\u202E"]]));
+        Assert.Equal(["""C:\Program Files\nodejs\npx.cmd   a\u{202E}"""],
+            ControlText.Table(null, [["""C:\Program Files\nodejs\npx.cmd""", "a\u202E"]]));
+        Assert.Equal(["""a\\b"""], ControlText.Table(null, [[ControlText.EscapedName("""a\b""")]]));
+    }
+
+    /// <summary>A key or a value on a labelled line shows a space-like character as its code, as the dialog does,
+    /// and keeps a path's backslashes.</summary>
+    [Fact]
+    public void ALabelledLineEscapesBlankSpacesAndKeepsBackslashes()
+    {
+        Assert.Equal(["""k\u{00A0}x   v\u{202F}w""", """path         C:\x\y"""],
+            ControlText.Labelled([("k\u00A0x", "v\u202Fw"), ("path", """C:\x\y""")]));
     }
 }

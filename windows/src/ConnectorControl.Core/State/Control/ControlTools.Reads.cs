@@ -191,7 +191,7 @@ public sealed partial class ControlTools
                 kind = Detail(kind, UpdateAvailableKind);
             }
             var count = ConnectorCountText(mcps.Count, enabled);
-            rows.Add([name == state.ActiveCollection ? ActiveMark : "", name, kind, count]);
+            rows.Add([name == state.ActiveCollection ? ActiveMark : "", ControlText.EscapedName(name), kind, count]);
             items.Add(JsonValue.Object(
                 ("name", JsonValue.String(name)),
                 ("active", JsonValue.Bool(name == state.ActiveCollection)),
@@ -221,7 +221,7 @@ public sealed partial class ControlTools
         {
             var entry = held.Mcps[name];
             var runs = CollectionsModel.TargetOf(entry.Config);
-            rows.Add([entry.Enabled ? OnWord : OffWord, name, runs]);
+            rows.Add([entry.Enabled ? OnWord : OffWord, ControlText.EscapedName(name), runs]);
             items.Add(JsonValue.Object(
                 ("name", JsonValue.String(name)),
                 ("enabled", JsonValue.Bool(entry.Enabled)),
@@ -335,7 +335,7 @@ public sealed partial class ControlTools
         foreach (var path in paths)
         {
             var collection = BackupCollections.CollectionOf(path, backupsDir);
-            rows.Add([Path.GetFileName(path), collection ?? ""]);
+            rows.Add([ControlText.EscapedName(Path.GetFileName(path)), collection is null ? "" : ControlText.EscapedName(collection)]);
             items.Add(JsonValue.Object(("id", JsonValue.String(Path.GetFileName(path))),
                                        ("collection", collection is not null ? JsonValue.String(collection) : JsonValue.Null)));
         }

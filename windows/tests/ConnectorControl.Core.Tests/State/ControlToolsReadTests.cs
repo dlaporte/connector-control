@@ -283,4 +283,15 @@ public class ControlToolsReadTests
         Assert.NotNull(shown);
         Assert.Equal("""n\u{202E}x\\y · Default · on""", shown.Text.Split('\n')[0]);
     }
+
+    /// <summary>The lists show a name one way only, as every sentence does: a backslash in it is doubled.</summary>
+    [Fact]
+    public void TheListsShowNamesOneWayOnly()
+    {
+        using var rig = new ControlRig();
+        Assert.Null(rig.State.Upsert("""a\b""", Github, null));
+        Assert.Null(rig.State.AddEmptyCollection("""c\d"""));
+        Assert.Contains("""a\\b""", rig.Call("list_connectors")?.Text, StringComparison.Ordinal);
+        Assert.Contains("""c\\d""", rig.Call("list_collections")?.Text, StringComparison.Ordinal);
+    }
 }

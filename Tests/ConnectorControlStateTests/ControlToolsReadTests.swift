@@ -213,4 +213,13 @@ final class ControlToolsReadTests: XCTestCase {
         let shown = try XCTUnwrap(rig.call("get_connector", ["name": .string("n\u{202E}x\\y")]))
         XCTAssertEqual(shown.text.components(separatedBy: "\n").first, #"n\u{202E}x\\y · Default · on"#)
     }
+
+    /// The lists show a name one way only, as every sentence does: a backslash in it is doubled.
+    func testTheListsShowNamesOneWayOnly() throws {
+        let rig = ControlRig(); defer { rig.dispose() }
+        XCTAssertNil(rig.state.upsert(name: #"a\b"#, entry: github, renamedFrom: nil))
+        XCTAssertNil(rig.state.addEmptyCollection(named: #"c\d"#))
+        XCTAssertTrue(try XCTUnwrap(rig.call("list_connectors")?.text).contains(#"a\\b"#))
+        XCTAssertTrue(try XCTUnwrap(rig.call("list_collections")?.text).contains(#"c\\d"#))
+    }
 }

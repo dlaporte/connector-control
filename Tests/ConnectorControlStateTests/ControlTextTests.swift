@@ -180,8 +180,18 @@ final class ControlTextTests: XCTestCase {
                        "only the name is escaped")
     }
 
-    /// A table shows a cell as a name is shown, one way only: the text `\u{202E}` and the character differ.
-    func testATableShowsACellOneWayOnly() {
-        XCTAssertEqual(ControlText.table(header: nil, rows: [[#"a\u{202E}"#], ["a\u{202E}"]]), [#"a\\u{202E}"#, #"a\u{202E}"#])
+    /// A table's cells are text as it is: a path keeps its backslashes, which are its own. The tools that
+    /// list names put each through `escapedName(_:)` before it goes in.
+    func testATableKeepsAPathsBackslashes() {
+        XCTAssertEqual(ControlText.table(header: nil, rows: [[#"C:\Program Files\nodejs\npx.cmd"#, "a\u{202E}"]]),
+                       [#"C:\Program Files\nodejs\npx.cmd   a\u{202E}"#])
+        XCTAssertEqual(ControlText.table(header: nil, rows: [[ControlText.escapedName(#"a\b"#)]]), [#"a\\b"#])
+    }
+
+    /// A key or a value on a labelled line shows a space-like character as its code, as the dialog does,
+    /// and keeps a path's backslashes.
+    func testALabelledLineEscapesBlankSpacesAndKeepsBackslashes() {
+        XCTAssertEqual(ControlText.labelled([("k\u{00A0}x", "v\u{202F}w"), ("path", #"C:\x\y"#)]),
+                       [#"k\u{00A0}x   v\u{202F}w"#, #"path         C:\x\y"#])
     }
 }

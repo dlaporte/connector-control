@@ -170,7 +170,7 @@ extension ControlTools {
             if published { kind = ControlTools.detail(kind, ControlTools.publishedKind) }
             if pending { kind = ControlTools.detail(kind, ControlTools.updateAvailableKind) }
             let count = ControlTools.connectorCountText(mcps.count, enabled)
-            rows.append([name == state.activeCollection ? ControlTools.activeMark : "", name, kind, count])
+            rows.append([name == state.activeCollection ? ControlTools.activeMark : "", ControlText.escapedName(name), kind, count])
             items.append(.object([
                 "name": .string(name),
                 "active": .bool(name == state.activeCollection),
@@ -195,7 +195,7 @@ extension ControlTools {
         for name in held.mcps.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
             guard let entry = held.mcps[name] else { continue }
             let runs = CollectionsModel.target(of: entry.config)
-            rows.append([entry.enabled ? ControlTools.onWord : ControlTools.offWord, name, runs])
+            rows.append([entry.enabled ? ControlTools.onWord : ControlTools.offWord, ControlText.escapedName(name), runs])
             items.append(.object([
                 "name": .string(name),
                 "enabled": .bool(entry.enabled),
@@ -282,7 +282,7 @@ extension ControlTools {
         var items: [JSONValue] = []
         for url in urls {
             let collection = BackupCollections.collection(of: url, in: backupsDir)
-            rows.append([url.lastPathComponent, collection ?? ""])
+            rows.append([ControlText.escapedName(url.lastPathComponent), collection.map(ControlText.escapedName) ?? ""])
             items.append(.object(["id": .string(url.lastPathComponent), "collection": collection.map(JSONValue.string) ?? .null]))
         }
         let text = rows.isEmpty

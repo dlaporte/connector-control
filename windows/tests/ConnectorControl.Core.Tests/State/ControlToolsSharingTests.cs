@@ -1024,6 +1024,7 @@ public class ControlToolsSharingTests
     public void ADocumentDeletedWhileAskedShowsItsFileNameEscaped()
     {
         using var rig = Rig(answer: null);
+        // Platform idiom: Windows forbids \ in a file name, so this name drops the one the Mac test has.
         const string file = "a\u201CDefault\u201D was deleted. x.json", shown = """a\u{201C}Default\u{201D} was deleted. x.json""";
         foreach (var tool in new[] { "import_document", "subscribe" })
         {

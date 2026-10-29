@@ -18,18 +18,18 @@ public enum ControlText {
     }
 
     /// "label   value" lines, every value starting in the same column. A row with an empty label
-    /// continues the one above it. Labels and values go through `escaped(_:)`.
+    /// continues the one above it. Labels and values go through `escapedValue(_:)`.
     public static func labelled(_ rows: [(String, String)]) -> [String] {
-        let rows = rows.map { (escaped($0.0), escaped($0.1)) }
+        let rows = rows.map { (escapedValue($0.0), escapedValue($0.1)) }
         let column = (rows.map { width($0.0) }.max() ?? 0) + gap
         return rows.map { trimmingTrailingSpaces(pad($0.0, to: column) + $0.1) }
     }
 
     /// A table: every column but the last padded to its widest cell plus the gap; the header row,
     /// when there is one, first. No line ends in spaces, whatever its last cells hold. Every cell
-    /// goes through `escapedName(_:)`, so a cell reads one way only.
+    /// goes through `escaped(_:)`; a cell that holds a name comes in through `escapedName(_:)`.
     public static func table(header: [String]?, rows: [[String]]) -> [String] {
-        let all = ((header.map { [$0] } ?? []) + rows).map { $0.map(escapedName) }
+        let all = ((header.map { [$0] } ?? []) + rows).map { $0.map(escaped) }
         let columns = all.map(\.count).max() ?? 0
         let widths = (0..<columns).map { index in
             (all.map { index < $0.count ? width($0[index]) : 0 }.max() ?? 0) + gap
@@ -101,6 +101,14 @@ public enum ControlText {
             }
         }
         return name
+    }
+
+    /// A key or a value on a line: as `escaped(_:)` shows it, and a space-like character as its code, since
+    /// there it could pass for the ordinary space. Backslashes stay as they are: a value may be a path.
+    public static func escapedValue(_ text: String) -> String {
+        var value = ""
+        for scalar in text.unicodeScalars { value += escapeShown(scalar) ?? String(scalar) }
+        return value
     }
 
     /// A path as a dialog's footer quotes it: as `escaped(_:)` shows it, with “ and ” escaped as well so

@@ -23,21 +23,21 @@ public static class ControlText
         text + new string(' ', Math.Max(0, width - Width(text)));
 
     /// <summary>"label   value" lines, every value starting in the same column. A row with an empty label
-    /// continues the one above it. Labels and values go through <see cref="Escaped(string)"/>.</summary>
+    /// continues the one above it. Labels and values go through <see cref="EscapedValue"/>.</summary>
     public static IReadOnlyList<string> Labelled(IReadOnlyList<(string Label, string Value)> rows)
     {
-        var escaped = rows.Select(row => (Label: Escaped(row.Label), Value: Escaped(row.Value))).ToList();
+        var escaped = rows.Select(row => (Label: EscapedValue(row.Label), Value: EscapedValue(row.Value))).ToList();
         var column = (escaped.Count == 0 ? 0 : escaped.Max(row => Width(row.Label))) + Gap;
         return escaped.Select(row => TrimmingTrailingSpaces(Pad(row.Label, column) + row.Value)).ToList();
     }
 
     /// <summary>A table: every column but the last padded to its widest cell plus the gap; the header row,
     /// when there is one, first. No line ends in spaces, whatever its last cells hold. Every cell
-    /// goes through <see cref="EscapedName"/>, so a cell reads one way only.</summary>
+    /// goes through <see cref="Escaped(string)"/>; a cell that holds a name comes in through <see cref="EscapedName"/>.</summary>
     public static IReadOnlyList<string> Table(IReadOnlyList<string>? header, IReadOnlyList<IReadOnlyList<string>> rows)
     {
         var all = (header is null ? [] : new List<IReadOnlyList<string>> { header }).Concat(rows)
-            .Select(cells => (IReadOnlyList<string>)cells.Select(EscapedName).ToList()).ToList();
+            .Select(cells => (IReadOnlyList<string>)cells.Select(Escaped).ToList()).ToList();
         var columns = all.Count == 0 ? 0 : all.Max(cells => cells.Count);
         var widths = Enumerable.Range(0, columns)
             .Select(index => all.Max(cells => index < cells.Count ? Width(cells[index]) : 0) + Gap)
@@ -123,6 +123,18 @@ public static class ControlText
             });
         }
         return name.ToString();
+    }
+
+    /// <summary>A key or a value on a line: as <see cref="Escaped(string)"/> shows it, and a space-like character as its code, since
+    /// there it could pass for the ordinary space. Backslashes stay as they are: a value may be a path.</summary>
+    public static string EscapedValue(string text)
+    {
+        var value = new StringBuilder();
+        foreach (var scalar in Scalars(text))
+        {
+            value.Append(EscapeShown(scalar) ?? Text(scalar));
+        }
+        return value.ToString();
     }
 
     /// <summary>A path as a dialog's footer quotes it: as <see cref="Escaped(string)"/> shows it, with “ and ” escaped as
