@@ -426,7 +426,8 @@ public class ConfirmationDialogTests
                 // The scroll viewer queues the move into view and makes it in a later layout pass, as it would
                 // between two key presses: let the dispatcher run that pass before measuring.
                 Settle(dialog);
-                var top = paged.TranslatePoint(new Point(0, 0), dialog.CodeScroll).Y;
+                // Measured in the lines' own space against the scroll offset: the viewer's padding sits outside its viewport.
+                var top = paged.TranslatePoint(new Point(0, 0), dialog.CodeLines).Y - dialog.CodeScroll.VerticalOffset;
                 Assert.True(top >= 0 && top + paged.ActualHeight <= dialog.CodeScroll.ViewportHeight + 1,
                     $"the line the keyboard moved to is scrolled into view: line {index} at {top}, {paged.ActualHeight} tall, " +
                     $"viewport {dialog.CodeScroll.ViewportHeight} at offset {dialog.CodeScroll.VerticalOffset}");
@@ -436,7 +437,7 @@ public class ConfirmationDialogTests
                 }
                 Assert.Same(lines[^1], FocusManager.GetFocusedElement(dialog)); // the last line stays put
                 Settle(dialog);
-                var last = lines[^1].TranslatePoint(new Point(0, 0), dialog.CodeScroll).Y;
+                var last = lines[^1].TranslatePoint(new Point(0, 0), dialog.CodeLines).Y - dialog.CodeScroll.VerticalOffset;
                 Assert.True(last >= 0 && last + lines[^1].ActualHeight <= dialog.CodeScroll.ViewportHeight + 1,
                     $"the last line is scrolled into view: at {last}, viewport {dialog.CodeScroll.ViewportHeight}");
             }

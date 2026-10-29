@@ -157,8 +157,8 @@ public partial class ConfirmDialog : DialogWindow
     }
 
     /// <summary>Scrolls the block so the whole of <paramref name="line"/>'s box, its room above and below included, is in
-    /// view, by the least it can, as the Mac scrolls a line's box into view. Done from the box's place in the lines
-    /// rather than by BringIntoView, which, raised from a line, left the block where it was.</summary>
+    /// view, by the least it can, as the Mac scrolls a line's box into view. Done from the box's place in the lines,
+    /// so the box's room above and below counts, and so the scroll is made at once rather than in a later layout pass.</summary>
     private void ScrollIntoView(TextBox line)
     {
         var top = line.TranslatePoint(new Point(0, 0), CodeLines).Y;
