@@ -5,9 +5,12 @@
         xmlns:state="clr-namespace:ConnectorControl.Core.State;assembly=ConnectorControl.Core"
         xmlns:views="clr-namespace:ConnectorControl.App.Views"
         Title="Settings"
-        Width="480" Height="560" ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
+        Width="480" Height="820" ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
         Background="{DynamicResource ApplicationBackgroundBrush}">
-  <!-- Every row has one shape, as on the Mac: what it is on the left with an optional note under it, the control on
+  <!-- Platform idiom: the Mac's window is 480 by 660 and this one 480 by 820, tall enough that no tab scrolls
+       (SettingsWindowTests checks it): Fluent's rows, buttons and tab strip are taller than the Mac's grouped form,
+       the Claude App group has three rows here and one there, and a WPF window's height includes its title bar.
+       Every row has one shape, as on the Mac: what it is on the left with an optional note under it, the control on
        the right. Every group has a heading above its box; a note about the whole group is a footer under it. -->
   <Window.Resources>
     <Style x:Key="GroupSection" TargetType="StackPanel">

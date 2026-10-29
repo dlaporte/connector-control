@@ -448,4 +448,55 @@ public class SettingsWindowTests
             Assert.Empty(block.Inlines);
         });
     }
+
+    /// <summary>At the window's own size, no tab scrolls, in the tallest state each shows: the Tools footer with a
+    /// missing family, an installed command-line tool, and the integration on with the name-clash warning under its
+    /// switch and the second switch's note under it. Shown, so the title bar and the tab strip take their real room.</summary>
+    [Fact]
+    public void NoTabScrollsAtTheWindowsOwnSize()
+    {
+        using var h = new AppStateHarness();
+        MasterStoreIO.Save(new MasterStore([new(ClaudeIntegration.EntryName, new McpEntry(true, JsonValue.Object(("command", JsonValue.String("x")))))]),
+            h.MasterStorePath);
+        h.ControlToolPath = @"C:\Users\me\AppData\Local\Connector Control\bin\connector-control.exe";
+        h.Settings.ClaudeIntegrationEnabled = true;
+        h.Tools.Statuses[Tool.Npx] = new ToolStatus(@"C:\Program Files\nodejs\npx.cmd", "11.6.2");
+        h.Tools.Statuses[Tool.Node] = new ToolStatus(@"C:\Program Files\nodejs\node.exe", "v24.11.0");
+        h.Tools.Statuses[Tool.Uvx] = ToolStatus.NotFound;
+        h.Tools.Statuses[Tool.Uv] = ToolStatus.NotFound;
+        using var state = h.Create();
+        var services = h.Services();
+        var tool = new FakeCommandLineTool { IsInstalled = true };
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            var window = new SettingsWindow(state, services, updates, tool) { ShowActivated = false };
+            try
+            {
+                h.Drain();
+                window.Show();
+                // Loaded is below DataBind, so this runs every binding's first update and the layout after it.
+                window.Dispatcher.Invoke(() => { }, DispatcherPriority.Loaded);
+                Assert.Equal(ClaudeIntegration.ClashNote, window.IntegrationCaption.Text);
+                Assert.Equal(Visibility.Visible, window.ConfirmChangesCaption.Visibility);
+                Assert.Single(window.ToolFooter.Items.Cast<ToolFooterLine>());
+                foreach (var item in window.Tabs.Items.Cast<TabItem>())
+                {
+                    window.Tabs.SelectedItem = item;
+                    window.Dispatcher.Invoke(() => { }, DispatcherPriority.Loaded);
+                    window.UpdateLayout();
+                    var scroller = Assert.IsType<ScrollViewer>(item.Content);
+                    var name = ((TextBlock)((StackPanel)item.Header).Children[1]).Text;
+                    var measured = $"{name}: extent {scroller.ExtentHeight}, viewport {scroller.ViewportHeight}, window {window.ActualHeight}";
+                    TestContext.Current.TestOutputHelper?.WriteLine(measured);
+                    Assert.True(scroller.ViewportHeight > 0, measured);
+                    Assert.True(scroller.ExtentHeight <= scroller.ViewportHeight, $"the tab scrolls: {measured}");
+                }
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
 }

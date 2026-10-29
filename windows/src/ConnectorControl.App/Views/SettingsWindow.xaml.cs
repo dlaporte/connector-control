@@ -10,7 +10,7 @@ using ConnectorControl.App.Services;
 
 namespace ConnectorControl.App.Views;
 
-/// <summary>Single instance, 480×560, three tabs (the Claude tab scrolls), every row in one shape as on the Mac;
+/// <summary>Single instance, 480×820, three tabs, none of which scrolls, every row in one shape as on the Mac;
 /// autostart and the command-line tool re-read whenever the window activates.</summary>
 public partial class SettingsWindow : Window
 {

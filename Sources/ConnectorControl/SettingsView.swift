@@ -50,9 +50,12 @@ struct SettingsView: View {
                 }
                 .tag(SettingsTab.claude)
         }
-        // The Windows Settings window uses the same size. The Claude tab, with its integration and
-        // command-line groups, scrolls; the others fit.
-        .frame(width: 480, height: 560)
+        // Tall enough that no tab scrolls: the Claude tab, the tallest, measures 637 with a missing tool
+        // family in the Tools footer and a two-line amber note under the integration switch, and the rest
+        // leaves room for one more wrapped note.
+        // Platform idiom: the Windows window is the same width but taller (820): its Fluent rows, buttons and
+        // tab strip are taller, its Claude App group has three rows, and its height includes the title bar.
+        .frame(width: 480, height: 660)
         .sheet(isPresented: $showRestore) {
             RestoreSheetView(state: state)
         }
