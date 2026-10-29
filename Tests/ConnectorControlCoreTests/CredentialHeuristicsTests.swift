@@ -53,4 +53,9 @@ final class CredentialHeuristicsTests: XCTestCase {
             XCTAssertFalse(CredentialHeuristics.namesAProgramToRun(name), name)
         }
     }
+
+    func testSchemeWords() {
+        for word in ["Bearer", "bearer", "BASIC", "Token"] { XCTAssertTrue(CredentialHeuristics.isSchemeWord(word), word) }
+        for word in ["Bearer ", "Digest", "tokens", "", "Bear"] { XCTAssertFalse(CredentialHeuristics.isSchemeWord(word), word) }
+    }
 }

@@ -830,4 +830,29 @@ public class ControlMaskingTests
         Assert.Equal("Bearer ${TOKEN}", ControlMasking.Argument("Bearer ${TOKEN}"));
         AssertHidden(["abc123"], Local("node", ["s.js", "Bearer abc123"]));
     }
+
+    /// <summary>The header forms other bridges take: a name and its value as two words (mcp-proxy's
+    /// <c>--headers K V</c>, <c>-H K V</c>, or <c>Authorization:</c> then <c>Bearer x</c> as a shell splits them), a
+    /// scheme word before the value, and <c>--header=…</c>. A header not named for a secret, and a
+    /// value that is a reference, read as written.</summary>
+    [Fact]
+    public void OtherHeaderFormsAreMasked()
+    {
+        Assert.Equal(["--headers", "Authorization", "•••"], ControlMasking.Arguments(["--headers", "Authorization", "Bearer abc123"]));
+        Assert.Equal(["-H", "X-Api-Key", "•••"], ControlMasking.Arguments(["-H", "X-Api-Key", "abc123"]));
+        Assert.Equal(["-H", "cookie", "•••"], ControlMasking.Arguments(["-H", "cookie", "sid=abc123"]));
+        Assert.Equal(["--header", "Authorization", "Bearer", "•••"],
+            ControlMasking.Arguments(["--header", "Authorization", "Bearer", "abc123"]));
+        Assert.Equal(["--header", "Authorization:", "basic", "•••"],
+            ControlMasking.Arguments(["--header", "Authorization:", "basic", "abc123"]));
+        Assert.Equal(["--header=Authorization: •••"], ControlMasking.Arguments(["--header=Authorization: Bearer abc123"]));
+        Assert.Equal(["-H=X-Api-Key: •••", "--headers=Cookie: •••"], ControlMasking.Arguments(["-H=X-Api-Key: abc123", "--headers=Cookie: a=b"]));
+        string[] plain = ["-H", "X-Team", "blue", "-H", "Authorization", "${TOKEN}", "-H", "0.0.0.0", "-p", "80", "--header", "Authorization", "Bearer", "$TOKEN"];
+        Assert.Equal(plain, ControlMasking.Arguments(plain));
+        Assert.Equal(["--headers", "X-Api-Key", "•••", "--header=Authorization: •••"],
+            ControlMasking.Arguments(["--headers", "X-Api-Key", "abc123", "--header=Authorization: Bearer abc123"], ControlMasking.Exposure.Dialog));
+        AssertHidden(["abc123"], Local("npx", ["mcp-proxy", "--headers", "Authorization", "Bearer abc123", "-H", "Cookie", "sid=abc123"]));
+        AssertHidden(["abc123"], Local("npx", ["supergateway", "--header=Authorization: Bearer abc123"]));
+        AssertHidden(["abc123"], Local("sh", ["-c", "npx supergateway --header Authorization: Bearer abc123"]));
+    }
 }

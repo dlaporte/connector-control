@@ -47,6 +47,13 @@ public static class CredentialHeuristics
 
     private static readonly string[] SecretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"];
 
+    /// <summary>Whether <paramref name="word"/> is an authentication scheme that comes before a credential in a header's
+    /// value — <c>Bearer</c>, <c>Basic</c> or <c>Token</c> — whatever its case.</summary>
+    public static bool IsSchemeWord(string word) =>
+        SchemeWords.Contains(word.ToLowerInvariant(), StringComparer.Ordinal);
+
+    private static readonly string[] SchemeWords = ["bearer", "basic", "token"];
+
     /// <summary>
     /// Whether an environment variable's value names code to run: a program (<c>GIT_ASKPASS</c>,
     /// <c>GIT_SSH_COMMAND</c>, any <c>*_ASKPASS</c>), git configuration that can name one (<c>GIT_CONFIG_*</c>), a

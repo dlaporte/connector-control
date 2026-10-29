@@ -54,6 +54,15 @@ public enum CredentialHeuristics {
 
     private static let secretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"]
 
+    /// Whether `word` is an authentication scheme that comes before a credential in a header's
+    /// value — `Bearer`, `Basic` or `Token` — whatever its case.
+    public static func isSchemeWord(_ word: String) -> Bool {
+        let lowered = loweredUnits(word)
+        return schemeWords.contains { lowered.elementsEqual($0.utf16) }
+    }
+
+    private static let schemeWords = ["bearer", "basic", "token"]
+
     /// Whether an environment variable's value names code to run: a program (`GIT_ASKPASS`,
     /// `GIT_SSH_COMMAND`, any `*_ASKPASS`), git configuration that can name one (`GIT_CONFIG_*`), a
     /// library or module loaded first (`LD_PRELOAD`, `NODE_OPTIONS`, `JAVA_TOOL_OPTIONS`) or a

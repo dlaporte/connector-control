@@ -64,4 +64,17 @@ public class CredentialHeuristicsTests
             Assert.False(CredentialHeuristics.NamesAProgramToRun(name), name);
         }
     }
+
+    [Fact]
+    public void SchemeWords()
+    {
+        foreach (var word in new[] { "Bearer", "bearer", "BASIC", "Token" })
+        {
+            Assert.True(CredentialHeuristics.IsSchemeWord(word), word);
+        }
+        foreach (var word in new[] { "Bearer ", "Digest", "tokens", "", "Bear" })
+        {
+            Assert.False(CredentialHeuristics.IsSchemeWord(word), word);
+        }
+    }
 }

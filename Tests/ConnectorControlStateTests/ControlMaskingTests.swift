@@ -696,4 +696,27 @@ final class ControlMaskingTests: XCTestCase {
         XCTAssertEqual(ControlMasking.argument("Bearer ${TOKEN}"), "Bearer ${TOKEN}")
         try assertHidden(["abc123"], in: local("node", ["s.js", "Bearer abc123"]))
     }
+
+    /// The header forms other bridges take: a name and its value as two words (mcp-proxy's
+    /// `--headers K V`, `-H K V`, or `Authorization:` then `Bearer x` as a shell splits them), a
+    /// scheme word before the value, and `--header=…`. A header not named for a secret, and a
+    /// value that is a reference, read as written.
+    func testOtherHeaderFormsAreMasked() throws {
+        XCTAssertEqual(ControlMasking.arguments(["--headers", "Authorization", "Bearer abc123"]), ["--headers", "Authorization", "•••"])
+        XCTAssertEqual(ControlMasking.arguments(["-H", "X-Api-Key", "abc123"]), ["-H", "X-Api-Key", "•••"])
+        XCTAssertEqual(ControlMasking.arguments(["-H", "cookie", "sid=abc123"]), ["-H", "cookie", "•••"])
+        XCTAssertEqual(ControlMasking.arguments(["--header", "Authorization", "Bearer", "abc123"]),
+                       ["--header", "Authorization", "Bearer", "•••"])
+        XCTAssertEqual(ControlMasking.arguments(["--header", "Authorization:", "basic", "abc123"]),
+                       ["--header", "Authorization:", "basic", "•••"])
+        XCTAssertEqual(ControlMasking.arguments(["--header=Authorization: Bearer abc123"]), ["--header=Authorization: •••"])
+        XCTAssertEqual(ControlMasking.arguments(["-H=X-Api-Key: abc123", "--headers=Cookie: a=b"]), ["-H=X-Api-Key: •••", "--headers=Cookie: •••"])
+        let plain = ["-H", "X-Team", "blue", "-H", "Authorization", "${TOKEN}", "-H", "0.0.0.0", "-p", "80", "--header", "Authorization", "Bearer", "$TOKEN"]
+        XCTAssertEqual(ControlMasking.arguments(plain), plain)
+        XCTAssertEqual(ControlMasking.arguments(["--headers", "X-Api-Key", "abc123", "--header=Authorization: Bearer abc123"], exposure: .dialog),
+                       ["--headers", "X-Api-Key", "•••", "--header=Authorization: •••"])
+        try assertHidden(["abc123"], in: local("npx", ["mcp-proxy", "--headers", "Authorization", "Bearer abc123", "-H", "Cookie", "sid=abc123"]))
+        try assertHidden(["abc123"], in: local("npx", ["supergateway", "--header=Authorization: Bearer abc123"]))
+        try assertHidden(["abc123"], in: local("sh", ["-c", "npx supergateway --header Authorization: Bearer abc123"]))
+    }
 }

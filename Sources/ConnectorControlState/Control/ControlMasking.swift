@@ -215,11 +215,12 @@ public enum ControlMasking {
         }.joined(separator: "&")
     }
 
-    /// One argument on its own: JSON through `jsonArgument(_:)`, a shell line word by word through
+    /// One argument on its own: JSON through `jsonArgument(_:)`, `--header=…` through `header(_:)`, a shell line word by word through
     /// `shellLine(_:)` unless it reads as a secret whole, and anything else through `word(_:)`.
     public static func argument(_ arg: String, reveal: Bool = false) -> String {
         if reveal { return arg }
         if let json = jsonArgument(arg) { return json }
+        if let piece = cut(arg, at: "="), headerFlags.contains(piece.before) { return piece.before + "=" + header(piece.after) }
         let whole = word(arg)
         // The shell line takes the place of the URL's rules, which would pass every word before
         // the scheme through as written; a line that reads as a secret whole (`Bearer x`) stays
@@ -275,8 +276,9 @@ public enum ControlMasking {
     }
 
     /// An argument list: each through `argument(_:)`, and also the value after a flag named for a
-    /// secret (`--api-key x`, `--static-oauth-client-info {…}`) unless it is itself a flag, and a
-    /// header after `--header` or `-H`.
+    /// secret (`--api-key x`, `--static-oauth-client-info {…}`) unless it is itself a flag, a
+    /// header after `--header`, `--headers` or `-H`, and a header's value given as a word of its own
+    /// (`headerValues(_:)`).
     public static func arguments(_ args: [String], reveal: Bool = false) -> [String] {
         arguments(args, exposure: reveal ? .revealed : .masked)
     }
@@ -285,10 +287,12 @@ public enum ControlMasking {
     /// header's value and the OAuth client secret.
     static func arguments(_ args: [String], exposure: Exposure) -> [String] {
         guard exposure != .revealed else { return args }
+        let values = headerValues(args)
         return args.enumerated().map { index, arg in
+            if values.contains(index) { return mask }
             if index > 0 {
                 let previous = args[index - 1]
-                if previous == "--header" || previous == "-H" { return header(arg) }
+                if headerFlags.contains(previous) { return header(arg) }
                 if hidesNext(previous, exposure), !isFlag(arg), !refersElsewhere(arg) {
                     return exposure == .dialog ? clientInfo(arg) : mask
                 }
@@ -298,9 +302,12 @@ public enum ControlMasking {
     }
 
     /// One argument as the dialog shows it: as written, but for the value of
-    /// `--static-oauth-client-info=…`, which holds the client secret.
+    /// `--static-oauth-client-info=…`, which holds the client secret, and a header's after
+    /// `--header=…`.
     static func dialogArgument(_ arg: String) -> String {
-        guard let piece = cut(arg, at: "="), hidesNext(piece.before, .dialog), !refersElsewhere(piece.after) else { return arg }
+        guard let piece = cut(arg, at: "=") else { return arg }
+        if headerFlags.contains(piece.before) { return piece.before + "=" + header(piece.after) }
+        guard hidesNext(piece.before, .dialog), !refersElsewhere(piece.after) else { return arg }
         return piece.before + "=" + clientInfo(piece.after)
     }
 
@@ -320,6 +327,39 @@ public enum ControlMasking {
     static func hidesNext(_ flag: String, _ exposure: Exposure) -> Bool {
         if exposure == .dialog { return flag == oauthClientInfoFlag }
         return isFlag(flag) && cut(flag, at: "=") == nil && CredentialHeuristics.namesASecret(flag)
+    }
+
+    /// The flags a header follows: mcp-remote's and supergateway's `--header`, mcp-proxy's
+    /// `--headers`, and curl's `-H`.
+    static let headerFlags = ["--header", "--headers", "-H"]
+
+    /// Sign-in headers whose names hold no word `CredentialHeuristics.namesASecret` reads.
+    static let signInHeaders = ["cookie"]
+
+    /// The indexes of the header values among `args` given as words of their own: after a header
+    /// flag, a word with no ":", or with nothing after its ":", is the header's name and the next
+    /// word its value (`--headers Authorization x`, or `Authorization: Bearer x` as a shell splits
+    /// it), past a scheme word such as `Bearer`. A value is hidden when its header is named for a
+    /// secret or signs in, and is not empty, a flag or a reference, as `header(_:)` shows those;
+    /// another header's name and value read as any argument does, since `-H` is also a host.
+    static func headerValues(_ args: [String]) -> Set<Int> {
+        var values: Set<Int> = []
+        for index in args.indices where headerFlags.contains(args[index]) && index + 2 < args.count {
+            guard let name = headerName(args[index + 1]),
+                  CredentialHeuristics.namesASecret(name) || signInHeaders.contains(name.lowercased()) else { continue }
+            var value = index + 2
+            if CredentialHeuristics.isSchemeWord(args[value]), value + 1 < args.count { value += 1 }
+            let text = args[value]
+            if !text.isEmpty, !isFlag(text), !refersElsewhere(text) { values.insert(value) }
+        }
+        return values
+    }
+
+    /// A header's name when `word` gives no value with it: the whole word with no ":", or what is
+    /// before a ":" with nothing after it. Nil for a word with a value.
+    static func headerName(_ word: String) -> String? {
+        guard let piece = cut(word, at: ":") else { return word }
+        return piece.after.trimmingCharacters(in: .whitespaces).isEmpty ? piece.before : nil
     }
 
     /// "Name: value" with the value masked unless it is empty or a reference.

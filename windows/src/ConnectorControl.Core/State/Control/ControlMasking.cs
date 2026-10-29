@@ -232,7 +232,7 @@ public static class ControlMasking
             return piece.After.Length == 0 || RefersElsewhere(piece.After) ? pair : piece.Before + "=" + Mask;
         }));
 
-    /// <summary>One argument on its own: JSON through <see cref="JsonArgument"/>, a shell line word by word through
+    /// <summary>One argument on its own: JSON through <see cref="JsonArgument"/>, <c>--header=…</c> through <see cref="Header"/>, a shell line word by word through
     /// <see cref="ShellLine"/> unless it reads as a secret whole, and anything else through <see cref="Word"/>.</summary>
     public static string Argument(string arg, bool reveal = false)
     {
@@ -243,6 +243,10 @@ public static class ControlMasking
         if (JsonArgument(arg) is { } json)
         {
             return json;
+        }
+        if (Cut(arg, "=") is { } assignment && HeaderFlags.Contains(assignment.Before))
+        {
+            return assignment.Before + "=" + Header(assignment.After);
         }
         var whole = Word(arg);
         // The shell line takes the place of the URL's rules, which would pass every word before
@@ -330,8 +334,9 @@ public static class ControlMasking
     }
 
     /// <summary>An argument list: each through <see cref="Argument"/>, and also the value after a flag named for a
-    /// secret (<c>--api-key x</c>, <c>--static-oauth-client-info {…}</c>) unless it is itself a flag, and a
-    /// header after <c>--header</c> or <c>-H</c>.</summary>
+    /// secret (<c>--api-key x</c>, <c>--static-oauth-client-info {…}</c>) unless it is itself a flag, a
+    /// header after <c>--header</c>, <c>--headers</c> or <c>-H</c>, and a header's value given as a word of its own
+    /// (<see cref="HeaderValues"/>).</summary>
     public static IReadOnlyList<string> Arguments(IReadOnlyList<string> args, bool reveal = false) =>
         Arguments(args, reveal ? Exposure.Revealed : Exposure.Masked);
 
@@ -343,12 +348,17 @@ public static class ControlMasking
         {
             return args;
         }
+        var values = HeaderValues(args);
         return args.Select((arg, index) =>
         {
+            if (values.Contains(index))
+            {
+                return Mask;
+            }
             if (index > 0)
             {
                 var previous = args[index - 1];
-                if (previous == "--header" || previous == "-H")
+                if (HeaderFlags.Contains(previous))
                 {
                     return Header(arg);
                 }
@@ -362,10 +372,19 @@ public static class ControlMasking
     }
 
     /// <summary>One argument as the dialog shows it: as written, but for the value of
-    /// <c>--static-oauth-client-info=…</c>, which holds the client secret.</summary>
+    /// <c>--static-oauth-client-info=…</c>, which holds the client secret, and a header's after
+    /// <c>--header=…</c>.</summary>
     internal static string DialogArgument(string arg)
     {
-        if (Cut(arg, "=") is not { } piece || !HidesNext(piece.Before, Exposure.Dialog) || RefersElsewhere(piece.After))
+        if (Cut(arg, "=") is not { } piece)
+        {
+            return arg;
+        }
+        if (HeaderFlags.Contains(piece.Before))
+        {
+            return piece.Before + "=" + Header(piece.After);
+        }
+        if (!HidesNext(piece.Before, Exposure.Dialog) || RefersElsewhere(piece.After))
         {
             return arg;
         }
@@ -401,6 +420,58 @@ public static class ControlMasking
             return flag == OauthClientInfoFlag;
         }
         return IsFlag(flag) && Cut(flag, "=") is null && CredentialHeuristics.NamesASecret(flag);
+    }
+
+    /// <summary>The flags a header follows: mcp-remote's and supergateway's <c>--header</c>, mcp-proxy's
+    /// <c>--headers</c>, and curl's <c>-H</c>.</summary>
+    internal static readonly string[] HeaderFlags = ["--header", "--headers", "-H"];
+
+    /// <summary>Sign-in headers whose names hold no word <see cref="CredentialHeuristics.NamesASecret"/> reads.</summary>
+    internal static readonly string[] SignInHeaders = ["cookie"];
+
+    /// <summary>The indexes of the header values among <paramref name="args"/> given as words of their own: after a header
+    /// flag, a word with no ":", or with nothing after its ":", is the header's name and the next
+    /// word its value (<c>--headers Authorization x</c>, or <c>Authorization: Bearer x</c> as a shell splits
+    /// it), past a scheme word such as <c>Bearer</c>. A value is hidden when its header is named for a
+    /// secret or signs in, and is not empty, a flag or a reference, as <see cref="Header"/> shows those;
+    /// another header's name and value read as any argument does, since <c>-H</c> is also a host.</summary>
+    internal static HashSet<int> HeaderValues(IReadOnlyList<string> args)
+    {
+        var values = new HashSet<int>();
+        for (var index = 0; index < args.Count; index++)
+        {
+            if (!HeaderFlags.Contains(args[index]) || index + 2 >= args.Count)
+            {
+                continue;
+            }
+            if (HeaderName(args[index + 1]) is not { } name
+                || !(CredentialHeuristics.NamesASecret(name) || SignInHeaders.Contains(name.ToLowerInvariant())))
+            {
+                continue;
+            }
+            var value = index + 2;
+            if (CredentialHeuristics.IsSchemeWord(args[value]) && value + 1 < args.Count)
+            {
+                value += 1;
+            }
+            var text = args[value];
+            if (text.Length > 0 && !IsFlag(text) && !RefersElsewhere(text))
+            {
+                values.Add(value);
+            }
+        }
+        return values;
+    }
+
+    /// <summary>A header's name when <paramref name="word"/> gives no value with it: the whole word with no ":", or what is
+    /// before a ":" with nothing after it. Null for a word with a value.</summary>
+    internal static string? HeaderName(string word)
+    {
+        if (Cut(word, ":") is not { } piece)
+        {
+            return word;
+        }
+        return piece.After.TrimSpaces().Length == 0 ? piece.Before : null;
     }
 
     /// <summary>"Name: value" with the value masked unless it is empty or a reference.</summary>
