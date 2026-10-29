@@ -52,7 +52,7 @@ public class VelopackUpdaterTests
         var stable = new RecordingSource();
         var prerelease = new RecordingSource();
         var locator = new TestVelopackLocator("ConnectorControl", version, packages.Path, appDir: null, rootDir: null, updateExe: null, channel: "win-x64");
-        return (new VelopackUpdater(wantPrerelease => wantPrerelease ? prerelease : stable, locator), stable, prerelease);
+        return (new VelopackUpdater(wantPrerelease => wantPrerelease ? prerelease : stable, locator, log: _ => { }), stable, prerelease);
     }
 
     [Fact]
@@ -307,7 +307,8 @@ public class VelopackUpdaterTests
             _ => new RecordingSource(), locator,
             verify: (_, _, _, _, _) => null,
             verifyInstalled: (_, identity) => { seen = identity; return "The installed Update.exe is not validly signed"; },
-            identify: _ => TestIdentity);
+            identify: _ => TestIdentity,
+            log: _ => { });
         var ex = await Assert.ThrowsAsync<UpdateVerificationException>(() => updater.DownloadAsync(new UpdateCheck("1.3.2", null, new UpdateInfo(Asset(), isDowngrade: false)), cancellationToken: TestContext.Current.CancellationToken));
         Assert.Contains("installed Update.exe", ex.Message);
         Assert.Equal(TestIdentity, seen);   // the identity read once per download is what the installed-updater check sees
