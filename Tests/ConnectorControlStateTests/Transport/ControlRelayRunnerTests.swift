@@ -262,6 +262,22 @@ final class ControlRelayRunnerTests: XCTestCase {
                        [McpSession.errorLine(code: McpSession.internalErrorCode, message: ControlClient.notRunningError, id: .int(1))])
     }
 
+    /// A relay Claude ran elevated starts nothing, or every other relay of the person's could not reach
+    /// the app it started, and tells Claude why in place of its handshake's answer.
+    func testAnElevatedRelayStartsNothingAndTellsClaudeWhy() {
+        let launched = Box<Bool>()
+        let claude = Claude()
+        let (_, exit) = run(claude, ControlClient(connectOnce: { nil }, launch: { launched.set(true); return true },
+                                                  announce: nil, elevated: true))
+        defer { end(claude, exit, nil) }
+        claude.say(initialize)
+        XCTAssertTrue(until(nil) { exit.value != nil && claude.answers()[.int(1)] != nil })
+        XCTAssertEqual(exit.value, ControlOutput.unreachableExit)
+        XCTAssertEqual(claude.answers()[.int(1)],
+                       [McpSession.errorLine(code: McpSession.internalErrorCode, message: ControlClient.elevatedError, id: .int(1))])
+        XCTAssertNil(launched.value, "nothing was started")
+    }
+
     /// The app answers a call and goes; the relay, not yet having read that answer, fails to write the
     /// next call. The answer still reaches Claude as the app gave it — a call that went through is never
     /// told to try again — and only the call that never arrived is.

@@ -61,14 +61,15 @@ internal static class Program
                 }
             case ControlInvocation.Call call:
                 console.UseUtf8();
-                return Emit(console, Run(call, Client(() => console.Error(ControlClient.StartingText)), version, console));
+                return Emit(console, ControlCommandRunner.Run(call.Tool, call.Arguments, call.Json, version,
+                    Client(() => console.Error(ControlClient.StartingText)), () => console.Error(ControlTools.QueuedText)));
             default:
                 throw new System.Diagnostics.UnreachableException();
         }
     }
 
     /// <summary>The way to the running app, worked out only for a command that goes to it: its pipe, and whether
-    /// this tool may start it.</summary>
+    /// this tool may start it. Run elevated, it starts nothing and says why (ControlClient).</summary>
     private static ControlClient Client(Action? announce)
     {
         var environment = PathContext.Live().Environment;
@@ -77,7 +78,7 @@ internal static class Program
         // Starting is allowed only for the tool that came with an app (AppExecutable finds no other), and
         // never while CONNECTOR_CONTROL_STORE_DIR names a store the app it would start does not read.
         Func<bool>? launch = ControlEndpoint.MayStartApp(environment) ? () => Launch(toolPath) : null;
-        return new ControlClient(() => ControlPipe.TryConnect(pipe, ConnectWait), launch, announce);
+        return new ControlClient(() => ControlPipe.TryConnect(pipe, ConnectWait), launch, announce, elevated: ControlEndpoint.IsElevated());
     }
 
     private static int Emit(ConsoleText console, ControlOutput output)
@@ -85,30 +86,6 @@ internal static class Program
         console.UseUtf8();
         console.Write(output);
         return output.ExitCode;
-    }
-
-    private static ControlOutput Run(ControlInvocation.Call call, ControlClient client, string version, ConsoleText console)
-    {
-        IControlStream stream;
-        try
-        {
-            stream = client.Connect();
-        }
-        catch (Exception ex)
-        {
-            // As the Mac's catch: the reason Connect gave, else the sentence for a start that failed.
-            return ControlOutput.Unreachable(ex is ControlClient.UnreachableException unreachable
-                ? ControlClient.Message(unreachable.Reason)
-                : ControlClient.UnreachableError);
-        }
-        try
-        {
-            return ControlCommandRunner.Run(call.Tool, call.Arguments, call.Json, version, stream, () => console.Error(ControlTools.QueuedText));
-        }
-        finally
-        {
-            stream.Close();
-        }
     }
 
     /// <summary>Starts the app in the background: no flyout, and a second instance leaves without a word.</summary>

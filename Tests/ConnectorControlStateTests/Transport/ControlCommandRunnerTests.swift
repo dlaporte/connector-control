@@ -8,10 +8,11 @@ final class ControlCommandRunnerTests: XCTestCase {
     final class ScriptedStream: ControlStream, @unchecked Sendable {
         var written = Data()
         var replies: [String]
+        var closed = false
         init(_ replies: [String]) { self.replies = replies }
         func read(maximum: Int) -> Data { replies.isEmpty ? Data() : Data((replies.removeFirst() + "\n").utf8) }
         func write(_ data: Data) -> Bool { written.append(data); return true }
-        func close() {}
+        func close() { closed = true }
         func closeWrite() {}
     }
 
@@ -95,5 +96,30 @@ final class ControlCommandRunnerTests: XCTestCase {
         XCTAssertEqual(ControlCommandRunner.run(tool: "get_status", arguments: .object([:]), json: false, version: "1.5.0",
                                                 over: ScriptedStream([answered]), notice: {}),
                        ControlOutput.unreachable(ControlClient.droppedError))
+    }
+
+    /// The command runs over the connection the client makes, and closes it once answered.
+    func testACommandRunsOverTheClientsConnection() {
+        let stream = ScriptedStream([answered, answerLine(padded: 1)])
+        let client = ControlClient(connectOnce: { stream }, launch: nil, announce: nil)
+        XCTAssertEqual(ControlCommandRunner.run(tool: "get_status", arguments: .object([:]), json: false, version: "1.5.0",
+                                                client: client, notice: {}),
+                       ControlOutput(stdout: "p", stderr: nil, exitCode: ControlOutput.doneExit))
+        XCTAssertTrue(stream.closed)
+    }
+
+    /// What the command line prints when the tool runs elevated and nothing answers: why it started nothing,
+    /// on stderr as text — under --json too — with exit 3, and no "Starting…" before it.
+    func testAnElevatedToolPrintsWhyItStartedNothingAndExitsThree() {
+        let seen = ControlClientTests.Seen()
+        for json in [false, true] {
+            let client = ControlClient(connectOnce: { nil }, launch: { seen.launches += 1; return true },
+                                       announce: { seen.announced += 1 }, elevated: true)
+            XCTAssertEqual(ControlCommandRunner.run(tool: "get_status", arguments: .object([:]), json: json, version: "1.5.0",
+                                                    client: client, notice: { XCTFail("nothing ran") }),
+                           ControlOutput(stdout: nil, stderr: ControlClient.elevatedError, exitCode: ControlOutput.unreachableExit))
+        }
+        XCTAssertEqual([seen.launches, seen.announced], [0, 0])
+        XCTAssertEqual(ControlOutput.unreachableExit, 3)
     }
 }

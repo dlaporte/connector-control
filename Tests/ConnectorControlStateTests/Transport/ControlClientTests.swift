@@ -60,4 +60,20 @@ final class ControlClientTests: XCTestCase {
         XCTAssertEqual(seen.clock, 0, "no wait for an app that did not start")
         XCTAssertEqual(seen.announced, 0, "nothing was started, so nothing is announced")
     }
+
+    /// An elevated tool starts nothing, whatever `launch` allows: the app would run elevated too, out of
+    /// reach of everything the person runs as themselves. It says why, never that it is starting the app.
+    func testAnElevatedToolStartsNothingAndSaysWhy() {
+        let seen = Seen()
+        let client = ControlClient(connectOnce: { seen.attempts += 1; return nil }, launch: { seen.launches += 1; return true },
+                                   announce: { seen.announced += 1 }, elevated: true)
+        XCTAssertThrowsError(try client.connect()) { XCTAssertEqual($0 as? ControlClient.Failure, .elevated) }
+        XCTAssertEqual([seen.attempts, seen.launches, seen.announced], [1, 0, 0])
+        XCTAssertEqual(ControlClient.Failure.elevated.message, ControlClient.elevatedError)
+    }
+
+    func testAnElevatedToolStillUsesAnAppThatAnswers() throws {
+        let client = ControlClient(connectOnce: { NullStream() }, launch: nil, announce: nil, elevated: true)
+        _ = try client.connect()
+    }
 }

@@ -31,6 +31,17 @@ public class ControlEndpointTests
         Assert.False(ControlEndpoint.MayStartApp(Store(Path.GetTempPath())));
     }
 
+    /// <summary>A token whose owner is not its user is elevated: an administrator's elevated token is owned by
+    /// BUILTIN\Administrators. One Windows cannot name counts as elevated, so the tool starts nothing.</summary>
+    [Fact]
+    public void ATokenOwnedByAnyoneButItsUserIsElevated()
+    {
+        Assert.False(ControlEndpoint.IsElevated(Sid, Sid));
+        Assert.True(ControlEndpoint.IsElevated("S-1-5-32-544", Sid));
+        Assert.True(ControlEndpoint.IsElevated(null, Sid));
+        Assert.True(ControlEndpoint.IsElevated(Sid, null));
+    }
+
     /// <summary>The pipe's rule for who it serves, apart from any pipe: a client on this computer only, which
     /// Windows answers with one failure; a name, or any other answer, is taken as remote.</summary>
     [Fact]

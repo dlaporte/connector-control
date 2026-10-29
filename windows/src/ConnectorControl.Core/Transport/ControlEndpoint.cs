@@ -43,6 +43,22 @@ public static class ControlEndpoint
     public static bool MayStartApp(IReadOnlyDictionary<string, string> environment) =>
         !environment.TryGetValue(AppPaths.StoreDirEnv, out var store) || store.Length == 0;
 
+    /// <summary>Whether a token runs elevated: its owner — who owns what it creates, the pipe among them — is not
+    /// its user, as for an administrator's elevated token, owned by BUILTIN\Administrators. Its pipe check admits
+    /// only a pipe of the same owner, so it cannot reach the person's app, and an app it started would serve a
+    /// pipe out of reach of everything the person runs as themselves. An owner or user Windows cannot name
+    /// counts as elevated: the tool then starts nothing.</summary>
+    public static bool IsElevated(string? ownerSid, string? userSid) =>
+        ownerSid is null || userSid is null || !string.Equals(ownerSid, userSid, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Whether this process runs elevated, as <see cref="IsElevated(string?, string?)"/> reads it.</summary>
+    [SupportedOSPlatform("windows")]
+    public static bool IsElevated()
+    {
+        using var identity = WindowsIdentity.GetCurrent();
+        return IsElevated(identity.Owner?.Value, identity.User?.Value);
+    }
+
     /// <summary>Where the app records its own executable, beside the copy of the tool it keeps.</summary>
     public const string AppPathFileName = "app-path.txt";
 

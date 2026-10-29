@@ -252,6 +252,7 @@
   "ControlCaller.claudeName": "Claude",
   "ControlCaller.unknownClientName": "Another app",
   "ControlClient.droppedError": "Connector Control closed the connection before answering.",
+  "ControlClient.elevatedError": "Run connector-control without administrator rights: Connector Control runs as you, and an elevated copy can’t reach it.",
   "ControlClient.notRunningError": "Connector Control isn’t running.",
   "ControlClient.startingText": "Starting Connector Control…",
   "ControlClient.unreachableError": "Connector Control isn’t running and couldn’t be started.",

@@ -424,6 +424,7 @@ final class StringCatalogTests: XCTestCase {
         // MARK: ControlMasking / ControlText
 
         actual["ControlClient.droppedError"] = ControlClient.droppedError
+        actual["ControlClient.elevatedError"] = ControlClient.elevatedError
         actual["ControlClient.notRunningError"] = ControlClient.notRunningError
         actual["ControlClient.startingText"] = ControlClient.startingText
         actual["ControlClient.unreachableError"] = ControlClient.unreachableError

@@ -433,6 +433,7 @@ public class StringCatalogTests
         // MARK: ControlMasking / ControlText
 
         actual["ControlClient.droppedError"] = ControlClient.DroppedError;
+        actual["ControlClient.elevatedError"] = ControlClient.ElevatedError;
         actual["ControlClient.notRunningError"] = ControlClient.NotRunningError;
         actual["ControlClient.startingText"] = ControlClient.StartingText;
         actual["ControlClient.unreachableError"] = ControlClient.UnreachableError;

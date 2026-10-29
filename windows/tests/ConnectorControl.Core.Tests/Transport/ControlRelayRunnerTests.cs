@@ -471,6 +471,33 @@ public class ControlRelayRunnerTests
         }
     }
 
+    /// <summary>A relay Claude ran elevated starts nothing, or every other relay of the person's could not reach the
+    /// app it started, and tells Claude why in place of its handshake's answer. Scripted, so it runs on every
+    /// platform.</summary>
+    [Fact]
+    public void AnElevatedRelayStartsNothingAndTellsClaudeWhy()
+    {
+        var launches = 0;
+        var claude = new Claude();
+        var (_, exit) = Run(claude, new ControlClient(() => null, () => { Interlocked.Increment(ref launches); return true; },
+            announce: null, elevated: true));
+        var asserted = false;
+        try
+        {
+            claude.Say(Initialize);
+            Assert.True(Until(null, () => exit.Value is not null && claude.AnswersTo(1) is not null));
+            Assert.Equal(ControlOutput.UnreachableExit, exit.Value);
+            Assert.Equal([McpSession.ErrorLine(McpSession.InternalErrorCode, ControlClient.ElevatedError, JsonValue.Int(1))],
+                claude.AnswersTo(1));
+            Assert.Equal(0, Volatile.Read(ref launches));
+            asserted = true;
+        }
+        finally
+        {
+            End(claude, exit, null, asserted);
+        }
+    }
+
     /// <summary>The app answers a call and goes; the relay, not yet having read that answer, fails to write the
     /// next call. The answer still reaches Claude as the app gave it — a call that went through is never told
     /// to try again — and only the call that never arrived is. Scripted, so it runs on every platform.</summary>

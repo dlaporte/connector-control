@@ -24,6 +24,11 @@ final class ControlEndpointTests: XCTestCase {
         XCTAssertFalse(ControlEndpoint.mayStartApp(environment: [AppPaths.storeDirEnv: "/tmp/cc-x/store"]))
     }
 
+    func testOnlyRootIsElevated() {
+        XCTAssertTrue(ControlEndpoint.isElevated(effectiveUserID: 0), "under sudo")
+        XCTAssertFalse(ControlEndpoint.isElevated(effectiveUserID: 501))
+    }
+
     func testTheBundledToolSitsBesideTheAppsExecutable() {
         XCTAssertEqual(ControlEndpoint.bundledToolPath(
             appExecutable: URL(fileURLWithPath: "/Applications/Connector Control.app/Contents/MacOS/Connector Control")),

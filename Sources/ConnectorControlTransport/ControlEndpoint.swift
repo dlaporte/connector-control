@@ -24,6 +24,13 @@ public enum ControlEndpoint {
         (environment[AppPaths.storeDirEnv] ?? "").isEmpty
     }
 
+    /// Whether the tool runs as root — under sudo, say. Its socket check admits only an app of the same
+    /// user, so it cannot reach the person's app, and an app it started would run as root, out of reach
+    /// of everything the person runs as themselves.
+    public static func isElevated(effectiveUserID: uid_t = geteuid()) -> Bool {
+        effectiveUserID == 0
+    }
+
     /// The tool beside the app's own executable: `Contents/MacOS/connector-control` in the bundle, and
     /// beside the binary in a development build's `.build` folder.
     public static func bundledToolPath(appExecutable: URL) -> String {

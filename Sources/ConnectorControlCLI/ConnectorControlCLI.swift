@@ -33,23 +33,18 @@ enum ConnectorControlCLI {
             exit(ControlRelayRunner(client: client(executable: executable, announcing: false), version: version).run())
         case .call(let tool, let arguments, let json):
             // Read on the main actor, where ControlTools' strings live; the notice runs inside the command.
+            // A connection that cannot be had ends in a line, as the runner says: Swift has no unhandled
+            // exception to catch beyond that, and a terminal needs no code page put back after a Ctrl-C,
+            // which is what C#'s catch-all and ConsoleText exist for.
             let queued = ControlTools.queuedText
-            let stream: ControlStream
-            // Anything connect throws ends as the tool's one other failure does, in a line: Swift has no
-            // unhandled exception to catch beyond this, and a terminal needs no code page put back after a
-            // Ctrl-C, which is what C#'s catch-all and ConsoleText exist for.
-            do {
-                stream = try client(executable: executable, announcing: true).connect()
-            } catch {
-                emit(.unreachable((error as? ControlClient.Failure)?.message ?? ControlClient.unreachableError))
-            }
-            emit(ControlCommandRunner.run(tool: tool, arguments: arguments, json: json, version: version, over: stream,
+            emit(ControlCommandRunner.run(tool: tool, arguments: arguments, json: json, version: version,
+                                          client: client(executable: executable, announcing: true),
                                           notice: { printError(queued) }))
         }
     }
 
     /// The way to the running app, worked out only for a command that goes to it: its socket, and whether
-    /// this tool may start it.
+    /// this tool may start it. Run as root, it starts nothing and says why (ControlClient).
     @MainActor
     static func client(executable: String, announcing: Bool) -> ControlClient {
         let context = PathContext.live()
@@ -65,7 +60,8 @@ enum ConnectorControlCLI {
         if announcing {
             announce = { printError(ControlClient.startingText) }
         }
-        return ControlClient(connectOnce: { try? ControlSocketStream.connect(to: socket) }, launch: launch, announce: announce)
+        return ControlClient(connectOnce: { try? ControlSocketStream.connect(to: socket) }, launch: launch, announce: announce,
+                             elevated: ControlEndpoint.isElevated())
     }
 
     static func emit(_ output: ControlOutput) -> Never {

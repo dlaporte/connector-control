@@ -20,9 +20,9 @@ public class ControlCommandRunnerTests
             return true;
         }
 
-        public void Close()
-        {
-        }
+        public bool Closed { get; private set; }
+
+        public void Close() => Closed = true;
 
         public void CloseWrite()
         {
@@ -117,5 +117,33 @@ public class ControlCommandRunnerTests
     {
         Assert.Equal(ControlOutput.Unreachable(ControlClient.DroppedError),
             ControlCommandRunner.Run("get_status", JsonValue.Object(), false, "1.5.0", new ScriptedStream([Answered]), () => { }));
+    }
+
+    /// <summary>The command runs over the connection the client makes, and closes it once answered.</summary>
+    [Fact]
+    public void ACommandRunsOverTheClientsConnection()
+    {
+        var stream = new ScriptedStream([Answered, AnswerLine(1)]);
+        var client = new ControlClient(() => stream, null, null);
+        Assert.Equal(new ControlOutput("p", null, ControlOutput.DoneExit),
+            ControlCommandRunner.Run("get_status", JsonValue.Object(), false, "1.5.0", client, () => { }));
+        Assert.True(stream.Closed);
+    }
+
+    /// <summary>What the command line prints when the tool runs elevated and nothing answers: why it started
+    /// nothing, on stderr as text — under --json too — with exit 3, and no "Starting…" before it.</summary>
+    [Fact]
+    public void AnElevatedToolPrintsWhyItStartedNothingAndExitsThree()
+    {
+        var launches = 0;
+        var announced = 0;
+        foreach (var json in new[] { false, true })
+        {
+            var client = new ControlClient(() => null, () => { launches++; return true; }, () => announced++, elevated: true);
+            Assert.Equal(new ControlOutput(null, ControlClient.ElevatedError, ControlOutput.UnreachableExit),
+                ControlCommandRunner.Run("get_status", JsonValue.Object(), json, "1.5.0", client, () => Assert.Fail("nothing ran")));
+        }
+        Assert.Equal([0, 0], [launches, announced]);
+        Assert.Equal(3, ControlOutput.UnreachableExit);
     }
 }

@@ -33,6 +33,33 @@ public static class ControlCommandRunner
                 ("_meta", JsonValue.Object(("progressToken", JsonValue.String(ProgressToken))))))).CompactLine(),
     ];
 
+    /// <summary>Connects through <paramref name="client"/>, runs the call over that connection and closes it: what
+    /// the command line prints. A connection that cannot be had ends the command as unreachable, with the reason
+    /// the client gave — the app is not running, could not be started, or the tool runs elevated.</summary>
+    public static ControlOutput Run(string tool, JsonValue arguments, bool json, string version, ControlClient client, Action notice)
+    {
+        IControlStream stream;
+        try
+        {
+            stream = client.Connect();
+        }
+        catch (Exception ex)
+        {
+            // As the Mac's catch: the reason Connect gave, else the sentence for a start that failed.
+            return ControlOutput.Unreachable(ex is ControlClient.UnreachableException unreachable
+                ? ControlClient.Message(unreachable.Reason)
+                : ControlClient.UnreachableError);
+        }
+        try
+        {
+            return Run(tool, arguments, json, version, stream, notice);
+        }
+        finally
+        {
+            stream.Close();
+        }
+    }
+
     /// <summary>Runs the call over <paramref name="stream"/> and says what to print. <paramref name="notice"/>
     /// runs once, at the first progress report: the change is waiting its turn. An error answered with no id
     /// — a message too large — can only be the call's, the one request still open. A line past
