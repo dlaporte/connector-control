@@ -26,7 +26,7 @@ public sealed class WindowRegistry
     /// <paramref name="dialogs"/> is what the Collections window's model asks its questions
     /// through — AppState keeps its own copy private, so App hands over the ownerless instance it
     /// built for AppState, and a test hands over its fake. <paramref name="commandLineTool"/> gives the tool
-    /// Settings' Command-line tool group installs and removes, asked for each time Settings opens, so it does
+    /// Settings' Command-Line Tool group installs and removes, asked for each time Settings opens, so it does
     /// not matter whether App made the tool before or after this registry.
     /// </summary>
     public WindowRegistry(AppState state, PlatformServices services, UpdateCoordinator updates, IDialogs dialogs,

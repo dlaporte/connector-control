@@ -124,12 +124,14 @@
               </StackPanel>
             </StackPanel>
           </Border>
-          <!-- Claude integration: the switch and its title, which dim together while a clash or a transient app
+          <!-- Claude Integration: the switch and its title, which dim together while a clash or a transient app
                keeps it off; under them the caption, or the amber note that says why, at full opacity; the
                checkbox kept (dimmed, caption hidden) while the switch is off; the endpoint's problem. -->
           <Border Style="{StaticResource Card}">
             <StackPanel>
               <TextBlock Text="{x:Static state:SettingsModel.ClaudeIntegrationHeader}" Style="{StaticResource SectionTitle}" />
+              <!-- Each control's name is its title alone, so its caption, or the amber note that says why, is its help
+                   text: Narrator reads it after the name, as VoiceOver reads the Mac's switch hint and checkbox label. -->
               <Grid Style="{StaticResource ToggleRow}">
                 <StackPanel Margin="0,0,48,0">
                   <TextBlock x:Name="IntegrationTitle" Text="{x:Static state:SettingsModel.ClaudeIntegrationTitle}" TextWrapping="Wrap"
@@ -148,10 +150,12 @@
                 </StackPanel>
                 <ToggleButton x:Name="IntegrationSwitch" Style="{StaticResource Switch}" HorizontalAlignment="Right" VerticalAlignment="Top"
                               IsChecked="{Binding ClaudeIntegrationEnabled}" IsEnabled="{Binding CanChangeClaudeIntegration}"
-                              AutomationProperties.Name="{x:Static state:SettingsModel.ClaudeIntegrationTitle}" />
+                              AutomationProperties.Name="{x:Static state:SettingsModel.ClaudeIntegrationTitle}"
+                              AutomationProperties.HelpText="{Binding ClaudeIntegrationCaptionText}" />
               </Grid>
               <CheckBox x:Name="ConfirmChangesBox" IsChecked="{Binding ConfirmClaudeChanges}" IsEnabled="{Binding CanChangeConfirmClaudeChanges}"
-                        AutomationProperties.Name="{x:Static state:SettingsModel.ConfirmClaudeChangesTitle}">
+                        AutomationProperties.Name="{x:Static state:SettingsModel.ConfirmClaudeChangesTitle}"
+                        AutomationProperties.HelpText="{Binding ConfirmClaudeChangesCaption}">
                 <StackPanel>
                   <TextBlock Text="{x:Static state:SettingsModel.ConfirmClaudeChangesTitle}" TextWrapping="Wrap" />
                   <TextBlock x:Name="ConfirmChangesCaption" Text="{Binding ConfirmClaudeChangesCaption}"
@@ -174,7 +178,7 @@
                          Visibility="{Binding HasControlEndpointProblem, Converter={StaticResource Vis}}" />
             </StackPanel>
           </Border>
-          <!-- Command-line tool: where it is, or the full path scripts can always use, and Install or Remove. -->
+          <!-- Command-Line Tool: where it is, or the full path scripts can always use, and Install or Remove. -->
           <Border x:Name="CommandLineToolGroup" Style="{StaticResource Card}"
                   Visibility="{Binding HasCommandLineTool, Converter={StaticResource Vis}}">
             <StackPanel>

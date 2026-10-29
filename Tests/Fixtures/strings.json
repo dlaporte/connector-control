@@ -1025,16 +1025,10 @@
     "win": "That program can’t be used as Claude Desktop"
   },
   "SettingsModel.claudeIntegrationCaption": "Adds a connector named connector-control to Claude's config, so Claude can list, switch and edit your connectors. Takes effect when Claude restarts.",
-  "SettingsModel.claudeIntegrationHeader": {
-    "mac": "Claude Integration",
-    "win": "Claude integration"
-  },
+  "SettingsModel.claudeIntegrationHeader": "Claude Integration",
   "SettingsModel.claudeIntegrationTitle": "Let Claude manage Connector Control",
   "SettingsModel.claudeTab": "Claude",
-  "SettingsModel.commandLineToolHeader": {
-    "mac": "Command-Line Tool",
-    "win": "Command-line tool"
-  },
+  "SettingsModel.commandLineToolHeader": "Command-Line Tool",
   "SettingsModel.configPathLabel": {
     "win": "Config file"
   },

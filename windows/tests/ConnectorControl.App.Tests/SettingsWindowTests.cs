@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
@@ -47,6 +48,34 @@ public class SettingsWindowTests
 
     private static string Text(TextBlock block) => string.Concat(block.Inlines.OfType<Run>().Select(run => run.Text));
 
+    // A caption's own colour, and the amber a warning turns it.
+    private const string Secondary = "TextFillColorSecondaryBrush";
+    private const string Caution = "SystemFillColorCautionBrush";
+
+    /// <summary><paramref name="block"/> draws in the theme brush <paramref name="key"/>, looked up from the block itself,
+    /// as its DynamicResource is.</summary>
+    private static void AssertBrush(string key, TextBlock block)
+    {
+        var brush = block.TryFindResource(key);
+        Assert.NotNull(brush);
+        Assert.Same(brush, block.Foreground);
+    }
+
+    /// <summary>Lays <paramref name="window"/> out at its own size, runs <paramref name="body"/>, and closes the window
+    /// however the body ends: WPF lists a window from the moment it is built, shown or not, until it is closed.</summary>
+    private static void Laid(SettingsWindow window, Action body)
+    {
+        try
+        {
+            WindowTestSupport.Layout(window, new Size(480, 560));
+            body();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     [Fact]
     public void TheClaudeTabHasTheIntegrationAndCommandLineToolGroups()
     {
@@ -58,43 +87,59 @@ public class SettingsWindowTests
         WpfApp.Invoke(() =>
         {
             var window = new SettingsWindow(state, services, updates, tool);
-            WindowTestSupport.Layout(window, new Size(480, 560));
-            Assert.Equal(SettingsModel.ClaudeIntegrationCaption, window.IntegrationCaption.Text);
-            Assert.True(window.IntegrationSwitch.IsEnabled);
-            Assert.Equal(1.0, window.IntegrationTitle.Opacity);
-            Assert.False(window.ConfirmChangesBox.IsEnabled);
-            Assert.Equal(Visibility.Collapsed, window.ConfirmChangesCaption.Visibility);
-            Assert.Equal(Visibility.Collapsed, window.EndpointProblem.Visibility);
-            Assert.Equal(Visibility.Visible, window.CommandLineToolGroup.Visibility);
-            Assert.Equal(CommandLineToolText.NotInstalledText, Text(window.CommandLineToolStatus));
-            Assert.Equal("Scripts can always use " + new TextRun(tool.ToolPath, IsSetApart: true).ShownText, Text(window.CommandLineToolCaption));
-            Assert.Equal(Visibility.Visible, window.CommandLineToolCaption.Visibility);
-            Assert.Equal(CommandLineToolText.InstallButton, window.CommandLineToolButton.Content);
+            Laid(window, () =>
+            {
+                Assert.Equal(SettingsModel.ClaudeIntegrationCaption, window.IntegrationCaption.Text);
+                AssertBrush(Secondary, window.IntegrationCaption);
+                Assert.Equal(SettingsModel.ClaudeIntegrationCaption, AutomationProperties.GetHelpText(window.IntegrationSwitch));
+                Assert.True(window.IntegrationSwitch.IsEnabled);
+                Assert.Equal(1.0, window.IntegrationTitle.Opacity);
+                Assert.False(window.ConfirmChangesBox.IsEnabled);
+                Assert.Equal(Visibility.Collapsed, window.ConfirmChangesCaption.Visibility);
+                Assert.Equal(Visibility.Collapsed, window.EndpointProblem.Visibility);
+                Assert.Equal(Visibility.Visible, window.CommandLineToolGroup.Visibility);
+                Assert.Equal(CommandLineToolText.NotInstalledText, Text(window.CommandLineToolStatus));
+                Assert.Equal("Scripts can always use " + new TextRun(tool.ToolPath, IsSetApart: true).ShownText, Text(window.CommandLineToolCaption));
+                Assert.Equal(Visibility.Visible, window.CommandLineToolCaption.Visibility);
+                Assert.Equal(CommandLineToolText.InstallButton, window.CommandLineToolButton.Content);
 
-            window.IntegrationSwitch.IsChecked = true;
-            Assert.True(h.Settings.ClaudeIntegrationEnabled);
-            Assert.True(window.ConfirmChangesBox.IsEnabled);
-            Assert.Equal(SettingsModel.ConfirmClaudeChangesOnCaption, window.ConfirmChangesCaption.Text);
-            window.ConfirmChangesBox.IsChecked = false;
-            Assert.Equal(SettingsModel.ConfirmClaudeChangesOffCaption, window.ConfirmChangesCaption.Text);
+                window.IntegrationSwitch.IsChecked = true;
+                Assert.True(h.Settings.ClaudeIntegrationEnabled);
+                Assert.True(window.ConfirmChangesBox.IsEnabled);
+                Assert.Equal(SettingsModel.ConfirmClaudeChangesOnCaption, window.ConfirmChangesCaption.Text);
+                AssertBrush(Secondary, window.ConfirmChangesCaption);
+                Assert.Equal(SettingsModel.ConfirmClaudeChangesOnCaption, AutomationProperties.GetHelpText(window.ConfirmChangesBox));
+                window.ConfirmChangesBox.IsChecked = false;
+                Assert.Equal(SettingsModel.ConfirmClaudeChangesOffCaption, window.ConfirmChangesCaption.Text);
+                AssertBrush(Caution, window.ConfirmChangesCaption);
+                Assert.Equal(SettingsModel.ConfirmClaudeChangesOffCaption, AutomationProperties.GetHelpText(window.ConfirmChangesBox));
 
-            window.CommandLineToolButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            Assert.Equal(1, tool.Installs);
-            Assert.False(window.CommandLineToolButton.IsEnabled);
-            tool.Finish(installed: false, problem: CommandLineToolText.InstallFailedError("Access is denied."));
-            Assert.Equal(CommandLineToolText.InstallFailedError("Access is denied."), window.CommandLineToolMessage.Text);
-            Assert.Equal(Visibility.Visible, window.CommandLineToolMessage.Visibility);
-            Assert.True(window.CommandLineToolButton.IsEnabled);
+                window.CommandLineToolButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                Assert.Equal(1, tool.Installs);
+                Assert.False(window.CommandLineToolButton.IsEnabled);
+                tool.Finish(installed: false, problem: CommandLineToolText.InstallFailedError("Access is denied."));
+                Assert.Equal(CommandLineToolText.InstallFailedError("Access is denied."), window.CommandLineToolMessage.Text);
+                Assert.Equal(Visibility.Visible, window.CommandLineToolMessage.Visibility);
+                Assert.True(window.CommandLineToolButton.IsEnabled);
 
-            state.ReportControlEndpointUnavailable();
-            Assert.Equal(Visibility.Visible, window.EndpointProblem.Visibility);
-            Assert.Equal(ClaudeIntegration.EndpointUnavailableText, window.EndpointProblem.Text);
-            window.Close();
+                // Installed: in the PATH, with the command to try, and Remove.
+                window.CommandLineToolButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                tool.Finish(installed: true);
+                Assert.Equal(CommandLineToolText.InPathText, Text(window.CommandLineToolStatus));
+                Assert.Equal(string.Concat(TextRun.Runs(CommandLineToolText.RunHelpCaption, [CommandLineToolText.HelpCommand]).Select(run => run.ShownText)),
+                    Text(window.CommandLineToolCaption));
+                Assert.Equal(CommandLineToolText.RemoveButton, window.CommandLineToolButton.Content);
+                Assert.Equal(Visibility.Collapsed, window.CommandLineToolMessage.Visibility);
+
+                state.ReportControlEndpointUnavailable();
+                Assert.Equal(Visibility.Visible, window.EndpointProblem.Visibility);
+                Assert.Equal(ClaudeIntegration.EndpointUnavailableText, window.EndpointProblem.Text);
+            });
         });
     }
 
     /// <summary>A clash dims the switch's row as the mockup does: the switch and its title fade; the note that
-    /// says why keeps full opacity.</summary>
+    /// says why keeps full opacity, in amber. Renamed away, the row comes back.</summary>
     [Fact]
     public void AClashDimsTheSwitchRowButNotItsNote()
     {
@@ -107,12 +152,60 @@ public class SettingsWindowTests
         WpfApp.Invoke(() =>
         {
             var window = new SettingsWindow(state, services, updates);
-            WindowTestSupport.Layout(window, new Size(480, 560));
-            Assert.False(window.IntegrationSwitch.IsEnabled);
-            Assert.Equal(SettingsModel.DimmedOpacity, window.IntegrationTitle.Opacity);
-            Assert.Equal(ClaudeIntegration.ClashNote, window.IntegrationCaption.Text);
-            Assert.Equal(1.0, window.IntegrationCaption.Opacity);
-            window.Close();
+            Laid(window, () =>
+            {
+                Assert.False(window.IntegrationSwitch.IsEnabled);
+                Assert.Equal(SettingsModel.DimmedOpacity, window.IntegrationTitle.Opacity);
+                Assert.Equal(ClaudeIntegration.ClashNote, window.IntegrationCaption.Text);
+                AssertBrush(Caution, window.IntegrationCaption);
+                Assert.Equal(1.0, window.IntegrationCaption.Opacity);
+                Assert.Equal(ClaudeIntegration.ClashNote, AutomationProperties.GetHelpText(window.IntegrationSwitch));
+
+                Assert.Null(state.Upsert("mine", state.Store.Mcps[ClaudeIntegration.EntryName], ClaudeIntegration.EntryName));
+                Assert.True(window.IntegrationSwitch.IsEnabled);
+                Assert.Equal(1.0, window.IntegrationTitle.Opacity);
+                Assert.Equal(SettingsModel.ClaudeIntegrationCaption, window.IntegrationCaption.Text);
+                AssertBrush(Secondary, window.IntegrationCaption);
+            });
+        });
+    }
+
+    /// <summary>An app run from where it will not stay: the switch's row dims, with the note that says why, and the
+    /// command-line row leaves out the path for scripts, which is about to be gone, and says why Install cannot
+    /// work. A link made earlier still shows, with its caption, and can go.</summary>
+    [Fact]
+    public void AnAppRunFromWhereItWillNotStayLeavesTheCaptionOut()
+    {
+        using var h = new AppStateHarness();
+        h.ControlToolPath = "/Volumes/Connector Control/Connector Control.app/Contents/MacOS/connector-control";
+        h.ControlToolIsTransient = true;
+        using var state = h.Create();
+        var services = h.Services();
+        var tool = new FakeCommandLineTool();
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            var window = new SettingsWindow(state, services, updates, tool);
+            Laid(window, () =>
+            {
+                Assert.False(window.IntegrationSwitch.IsEnabled);
+                Assert.Equal(SettingsModel.DimmedOpacity, window.IntegrationTitle.Opacity);
+                Assert.Equal(ClaudeIntegration.MoveToApplicationsError, window.IntegrationCaption.Text);
+                AssertBrush(Caution, window.IntegrationCaption);
+                Assert.Equal(1.0, window.IntegrationCaption.Opacity);
+                Assert.Equal(CommandLineToolText.NotInstalledText, Text(window.CommandLineToolStatus));
+                Assert.Equal(Visibility.Collapsed, window.CommandLineToolCaption.Visibility);
+                Assert.Equal(ClaudeIntegration.MoveToApplicationsError, window.CommandLineToolMessage.Text);
+                Assert.Equal(Visibility.Visible, window.CommandLineToolMessage.Visibility);
+                Assert.False(window.CommandLineToolButton.IsEnabled);
+
+                tool.IsInstalled = true;
+                window.Model.Refresh();   // as the window does each time it activates
+                Assert.Equal(Visibility.Visible, window.CommandLineToolCaption.Visibility);
+                Assert.Equal(Visibility.Collapsed, window.CommandLineToolMessage.Visibility);
+                Assert.True(window.CommandLineToolButton.IsEnabled);
+                Assert.Equal(CommandLineToolText.RemoveButton, window.CommandLineToolButton.Content);
+            });
         });
     }
 
@@ -126,9 +219,7 @@ public class SettingsWindowTests
         WpfApp.Invoke(() =>
         {
             var window = new SettingsWindow(state, services, updates);
-            WindowTestSupport.Layout(window, new Size(480, 560));
-            Assert.Equal(Visibility.Collapsed, window.CommandLineToolGroup.Visibility);
-            window.Close();
+            Laid(window, () => Assert.Equal(Visibility.Collapsed, window.CommandLineToolGroup.Visibility));
         });
     }
 
@@ -175,15 +266,21 @@ public class SettingsWindowTests
         WpfApp.Invoke(() =>
         {
             var window = new SettingsWindow(state, services, updates);
-            var afterConstruction = install.DetectCalls;
-            // The deferred load's Task.Run hop means one Background-priority pump only starts it;
-            // pump repeatedly (a nested message loop, not a blocking wait, so its own continuation
-            // can still reach the dispatcher) until the async work actually completes. The load is
-            // view code on the real pool, not AppHost's Background, so this is a real wait, and
-            // Wait.Eventually's ceiling covers a runner slow to hand it a thread.
-            Assert.True(PumpUntil(window.Dispatcher, () => install.DetectCalls > afterConstruction, Wait.Eventually),
-                "the icon's Detect()+Load() must be deferred, not run inside the constructor");
-            window.Close();
+            try
+            {
+                var afterConstruction = install.DetectCalls;
+                // The deferred load's Task.Run hop means one Background-priority pump only starts it;
+                // pump repeatedly (a nested message loop, not a blocking wait, so its own continuation
+                // can still reach the dispatcher) until the async work actually completes. The load is
+                // view code on the real pool, not AppHost's Background, so this is a real wait, and
+                // Wait.Eventually's ceiling covers a runner slow to hand it a thread.
+                Assert.True(PumpUntil(window.Dispatcher, () => install.DetectCalls > afterConstruction, Wait.Eventually),
+                    "the icon's Detect()+Load() must be deferred, not run inside the constructor");
+            }
+            finally
+            {
+                window.Close();
+            }
         });
     }
 
@@ -239,23 +336,29 @@ public class SettingsWindowTests
         WpfApp.Invoke(() =>
         {
             var window = new SettingsWindow(state, services, updates);   // opening the window starts the probe
-            h.Drain();
-            Assert.Equal(4, state.ToolStatuses.Count);
-            window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
-            window.Measure(new Size(480, 500));
-            window.Arrange(new Rect(0, 0, 480, 500));
-            window.UpdateLayout();
-            var rows = window.ToolList.Items.Cast<ToolRow>().ToArray();
-            Assert.Equal(["npx", "node", "uvx", "uv"], rows.Select(r => r.Name).ToArray());
-            Assert.Equal(["10.9.2", "Found", "Not found", "Not found"], rows.Select(r => r.StatusText).ToArray());
-            Assert.Null(rows[0].Note);
-            Assert.NotNull(rows[2].Note);
-            // `!` is required: Roslyn tracks no null state for an array element, so the
-            // Assert.NotNull above does not narrow it and TreatWarningsAsErrors turns the
-            // dereference warning into an error.
-            Assert.Equal("Install uv", rows[2].Note!.LinkTitle);
-            Assert.Equal("winget install astral-sh.uv", rows[3].Note!.InstallCommand);
-            window.Close();
+            try
+            {
+                h.Drain();
+                Assert.Equal(4, state.ToolStatuses.Count);
+                window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
+                window.Measure(new Size(480, 500));
+                window.Arrange(new Rect(0, 0, 480, 500));
+                window.UpdateLayout();
+                var rows = window.ToolList.Items.Cast<ToolRow>().ToArray();
+                Assert.Equal(["npx", "node", "uvx", "uv"], rows.Select(r => r.Name).ToArray());
+                Assert.Equal(["10.9.2", "Found", "Not found", "Not found"], rows.Select(r => r.StatusText).ToArray());
+                Assert.Null(rows[0].Note);
+                Assert.NotNull(rows[2].Note);
+                // `!` is required: Roslyn tracks no null state for an array element, so the
+                // Assert.NotNull above does not narrow it and TreatWarningsAsErrors turns the
+                // dereference warning into an error.
+                Assert.Equal("Install uv", rows[2].Note!.LinkTitle);
+                Assert.Equal("winget install astral-sh.uv", rows[3].Note!.InstallCommand);
+            }
+            finally
+            {
+                window.Close();
+            }
         });
     }
 }

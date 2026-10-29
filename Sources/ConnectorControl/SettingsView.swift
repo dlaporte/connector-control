@@ -140,10 +140,13 @@ struct SettingsView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
+                    // Its caption, or the note that says why it is dimmed, is read with it, as Windows reads its
+                    // help text; the checkbox below reads its caption as part of its own label.
                     Toggle(SettingsModel.claudeIntegrationTitle, isOn: $model.claudeIntegrationEnabled)
                         .labelsHidden()
                         .toggleStyle(.switch)
                         .disabled(!model.canChangeClaudeIntegration)
+                        .accessibilityHint(model.claudeIntegrationCaptionText)
                 }
                 // The checkbox keeps its value while the switch is off, dimmed, and its caption hides.
                 Toggle(isOn: $model.confirmClaudeChanges) {

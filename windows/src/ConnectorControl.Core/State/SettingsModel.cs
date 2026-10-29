@@ -23,15 +23,13 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public const string BackupsCaption = "Claude’s config, the master list and collections.json are backed up automatically before every change.";
     public const string ShowInExplorerTitle = "Show in Explorer";
     public const string ClaudeAppHeader = "Claude App";
-    // "Claude integration" is the Windows sentence case; the Mac's title case says "Claude Integration".
-    public const string ClaudeIntegrationHeader = "Claude integration";
+    public const string ClaudeIntegrationHeader = "Claude Integration";
     public const string ClaudeIntegrationTitle = "Let Claude manage Connector Control";
     public const string ClaudeIntegrationCaption = "Adds a connector named connector-control to Claude's config, so Claude can list, switch and edit your connectors. Takes effect when Claude restarts.";
     public const string ConfirmClaudeChangesTitle = "Confirm changes Claude makes to connectors";
     public const string ConfirmClaudeChangesOnCaption = "Adding, editing or deleting a connector, deleting a collection, importing, subscribing, applying an update and restoring a backup ask here first.";
     public const string ConfirmClaudeChangesOffCaption = "Claude can then change what it runs without asking here. Text Claude reads, such as a web page, could ask it to.";
-    // "Command-line tool" is Windows' sentence case; the Mac mirror says "Command-Line Tool".
-    public const string CommandLineToolHeader = "Command-line tool";
+    public const string CommandLineToolHeader = "Command-Line Tool";
     /// <summary>How far a row's title fades while its switch cannot change, as the mockup draws it; the note that
     /// says why keeps full opacity.</summary>
     public const double DimmedOpacity = 0.45;
@@ -192,7 +190,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public double ClaudeIntegrationTitleOpacity => CanChangeClaudeIntegration ? 1 : DimmedOpacity;
 
     /// <summary>Why Claude and the command-line tool cannot reach this app, while they cannot; shown in the
-    /// Claude integration group whether the switch is on or off.</summary>
+    /// Claude Integration group whether the switch is on or off.</summary>
     public string? ControlEndpointProblem => state.ControlEndpointProblem;
 
     // Platform idiom: XAML cannot bind a visibility to an optional, so Windows adds a Has… companion for each

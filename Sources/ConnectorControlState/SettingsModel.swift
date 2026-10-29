@@ -27,14 +27,12 @@ public final class SettingsModel: ObservableObject {
     public static let claudeAppRejectedTitle = "That app can’t be used as Claude Desktop"
     public static let toolsHeader = ToolNote.settingsHeader
     public static let toolsCaption = ToolNote.settingsCaption
-    /// "Claude Integration" is the Mac's title case; the Windows mirror says "Claude integration".
     public static let claudeIntegrationHeader = "Claude Integration"
     public static let claudeIntegrationTitle = "Let Claude manage Connector Control"
     public static let claudeIntegrationCaption = "Adds a connector named connector-control to Claude's config, so Claude can list, switch and edit your connectors. Takes effect when Claude restarts."
     public static let confirmClaudeChangesTitle = "Confirm changes Claude makes to connectors"
     public static let confirmClaudeChangesOnCaption = "Adding, editing or deleting a connector, deleting a collection, importing, subscribing, applying an update and restoring a backup ask here first."
     public static let confirmClaudeChangesOffCaption = "Claude can then change what it runs without asking here. Text Claude reads, such as a web page, could ask it to."
-    /// "Command-Line Tool" is the Mac's title case; the Windows mirror says "Command-line tool".
     public static let commandLineToolHeader = "Command-Line Tool"
     /// How far a row's title fades while its switch cannot change, as the mockup draws it; the note that
     /// says why keeps full opacity.
