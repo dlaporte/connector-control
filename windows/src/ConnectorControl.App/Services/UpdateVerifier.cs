@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
 using System.Runtime.Versioning;
 using ConnectorControl.Core;
+using ConnectorControl.Core.State;
 
 namespace ConnectorControl.App.Services;
 
@@ -16,7 +17,8 @@ namespace ConnectorControl.App.Services;
 /// this app's own files and the updater by the same organization as the running app, the
 /// runtime and libraries it is built from by that organization or one in
 /// <see cref="TrustedOrganizations"/> — and the package's own ConnectorControl.exe must
-/// carry the version the feed advertises, so an old signed release cannot be replayed as new.
+/// carry the version the feed advertises, prerelease label and all, so an old signed release or
+/// preview cannot be replayed as a newer one.
 /// Sparkle's pinned EdDSA key plays this role on the Mac. Known residual: any library this
 /// publisher ever signed is interchangeable with any other inside a package; only the main
 /// executable is bound to a version.
@@ -25,7 +27,7 @@ public static class UpdateVerifier
 {
     public const string NotInstalledSuffix = "; the update was not installed.";
 
-    /// <summary>The binary whose embedded file version must match the feed; every package carries it.</summary>
+    /// <summary>The binary whose embedded product version must match the feed; every package carries it.</summary>
     public const string MainExecutable = "ConnectorControl.exe";
 
     /// <summary>
@@ -60,7 +62,7 @@ public static class UpdateVerifier
     /// inert there anyway. A running app whose signature cannot be validated refuses: that is the
     /// machine, not the build, and an unverifiable identity must not become "accept everything".
     /// </summary>
-    public static string? Verify(string packagePath, string? updateExePath, RunningIdentity identity, Version runningVersion, Version feedVersion)
+    public static string? Verify(string packagePath, string? updateExePath, RunningIdentity identity, string runningVersion, string feedVersion)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -137,7 +139,7 @@ public static class UpdateVerifier
                 // "Nothing failed" is not "everything passed": a real package always carries the app.
                 return $"The update package does not contain {MainExecutable}{NotInstalledSuffix}";
             }
-            return VersionProblem(mainExecutable, runningVersion, feedVersion);
+            return VersionProblem(EmbeddedVersion(mainExecutable), runningVersion, feedVersion);
         }
         catch (Exception ex)
         {
@@ -227,31 +229,40 @@ public static class UpdateVerifier
 
     /// <summary>
     /// The version baked into the signed executable is the one the attacker cannot rewrite: it must
-    /// equal what the feed advertises (no relabeling an old release as new) and must not be older
-    /// than what is running (no downgrade to a build without this check). <paramref name="runningVersion"/>
-    /// and <paramref name="feedVersion"/> are already major.minor.patch (<see cref="VelopackUpdater"/>'s
-    /// own NumericVersion normalizes them before this is ever called).
+    /// equal what the feed advertises (no relabeling an old release or preview as a newer one) and must
+    /// not be older than what is running (no downgrade to a build without this check). All three are
+    /// full Semantic Versions, the downgrade judged by SemVer precedence: every 1.5.0 preview and the 1.5.0 release
+    /// share the file version 1.5.0.0, so only the prerelease label tells them apart. Windows only: the
+    /// Mac's Sparkle feed is signed with the app's own key, and its build numbers already order previews.
     /// </summary>
-    internal static string? VersionProblem(string mainExecutablePath, Version runningVersion, Version feedVersion)
+    internal static string? VersionProblem(string? embedded, string runningVersion, string feedVersion)
     {
-        var embedded = EmbeddedVersion(mainExecutablePath);
-        if (embedded != feedVersion)
+        if (embedded is null)
+        {
+            return $"{MainExecutable} inside the update carries no version{NotInstalledSuffix}";
+        }
+        if (!SameVersion(embedded, feedVersion))
         {
             return $"{MainExecutable} inside the update is version {embedded}, but the update feed says {feedVersion}{NotInstalledSuffix}";
         }
-        if (embedded < runningVersion)
+        if (ControlVersion.IsNewer(runningVersion, embedded))
         {
             return $"{MainExecutable} inside the update is version {embedded}, older than the installed {runningVersion}{NotInstalledSuffix}";
         }
         return null;
     }
 
-    /// <summary>The file version baked into a signed executable, major.minor.build.</summary>
-    internal static Version EmbeddedVersion(string path)
-    {
-        var info = FileVersionInfo.GetVersionInfo(path);
-        return new Version(info.FileMajorPart, info.FileMinorPart, info.FileBuildPart);
-    }
+    /// <summary>The same SemVer, build metadata aside, and readable: a version that cannot be read matches nothing.
+    /// Exact text rather than precedence: SemVer forbids the leading zeros that would make two spellings equal.</summary>
+    private static bool SameVersion(string one, string other) =>
+        ControlVersion.Semantic(one) is { } a && string.Equals(a, ControlVersion.Semantic(other), StringComparison.Ordinal);
+
+    /// <summary>
+    /// The product version baked into a signed executable — the build's informational version,
+    /// "1.5.0-preview.3+1a2b3c4" for a preview — as SemVer without its build metadata; null when it carries none.
+    /// </summary>
+    internal static string? EmbeddedVersion(string path) =>
+        FileVersionInfo.GetVersionInfo(path).ProductVersion is { } product ? ControlVersion.Semantic(product) : null;
 
     /// <summary>The refusal for a package the check could not finish reading.</summary>
     internal static string Unreadable(Exception ex) => $"The update package could not be read ({ex.Message}){NotInstalledSuffix}";

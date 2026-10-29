@@ -251,6 +251,20 @@ public class VelopackUpdaterTests
     }
 
     [Fact]
+    public void TheCheckIsGivenTheFullVersionsPrereleaseLabelsIncluded()
+    {
+        // Every 1.5.0 preview and the 1.5.0 release share one numeric version; only the label tells them apart.
+        using var packages = new TempDir("vpk");
+        (string Running, string Feed)? seen = null;
+        var locator = new TestVelopackLocator("ConnectorControl", "1.5.0-preview.2", packages.Path, appDir: null, rootDir: null, updateExe: null, channel: "win-x64");
+        var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (_, _, _, running, feed) => { seen = (running, feed); return null; }, verifyInstalled: (_, _) => null, log: _ => { });
+        var asset = Asset();
+        asset.Version = SemanticVersion.Parse("1.5.0-preview.3");
+        updater.VerifyDownloaded(new UpdateInfo(asset, isDowngrade: false), knownGoodUpdater: null, TestIdentity);
+        Assert.Equal(("1.5.0-preview.2", "1.5.0-preview.3"), seen);
+    }
+
+    [Fact]
     public void ADownloadedPackageIsNeverAppliedAtStartupWithoutTheCheck()
     {
         // Velopack's startup hook would otherwise apply the newest package in packages\ on the next

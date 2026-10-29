@@ -19,10 +19,10 @@ public class UpdateVerifierTests : IDisposable
     private static string SignedSibling => Path.Combine(Path.GetDirectoryName(typeof(object).Assembly.Location)!, "System.Runtime.dll");
     private static string UnsignedBinary => typeof(UpdateVerifierTests).Assembly.Location;
 
-    /// <summary>The numeric file version baked into the framework DLL that stands in for ConnectorControl.exe.</summary>
-    private static Version FrameworkVersion => UpdateVerifier.EmbeddedVersion(RunningExe);
+    /// <summary>The SemVer product version baked into the framework DLL that stands in for ConnectorControl.exe.</summary>
+    private static string FrameworkVersion => UpdateVerifier.EmbeddedVersion(RunningExe) ?? throw new InvalidOperationException("the framework carries no product version");
 
-    private static readonly Version Older = new(1, 0, 0);
+    private const string Older = "1.0.0";
 
     /// <summary>The identity every signed-app test pins updates to: the framework's own signer, read once.</summary>
     private static readonly UpdateVerifier.RunningIdentity Identity = UpdateVerifier.ExpectedIdentity(RunningExe);
@@ -97,7 +97,7 @@ public class UpdateVerifierTests : IDisposable
     {
         // The replay: yesterday's signed release relabeled in the feed as tomorrow's.
         RequireSignedFramework();
-        var problem = UpdateVerifier.Verify(Package(("lib/app/ConnectorControl.exe", RunningExe)), updateExePath: null, Identity, Older, new Version(99, 0, 0));
+        var problem = UpdateVerifier.Verify(Package(("lib/app/ConnectorControl.exe", RunningExe)), updateExePath: null, Identity, Older, "99.0.0");
         Assert.NotNull(problem);
         Assert.Contains("update feed says", problem);
     }
@@ -106,7 +106,7 @@ public class UpdateVerifierTests : IDisposable
     public void ADowngradeIsRefused()
     {
         RequireSignedFramework();
-        var problem = UpdateVerifier.Verify(Package(("lib/app/ConnectorControl.exe", RunningExe)), updateExePath: null, Identity, new Version(999, 0, 0), FrameworkVersion);
+        var problem = UpdateVerifier.Verify(Package(("lib/app/ConnectorControl.exe", RunningExe)), updateExePath: null, Identity, "999.0.0", FrameworkVersion);
         Assert.NotNull(problem);
         Assert.Contains("older than", problem);
     }
@@ -222,6 +222,19 @@ public class UpdateVerifierTests : IDisposable
     public void SuspiciousEntryNamesAreRefused(string entry, bool expected)
     {
         Assert.Equal(expected, UpdateVerifier.IsSuspiciousEntryName(entry));
+    }
+
+    [Theory]
+    [InlineData("1.5.0-preview.3", "1.5.0-preview.2", "1.5.0-preview.3", true)]
+    [InlineData("1.5.0", "1.5.0-preview.9", "1.5.0", true)]                       // a release after its previews
+    [InlineData("1.5.0-preview.9", "1.4.2", "1.5.0", false)]                      // a signed preview relabelled as the release
+    [InlineData("1.5.0-preview.1", "1.4.2", "1.5.0-preview.99", false)]           // an early preview relabelled as a later one
+    [InlineData("1.5.0-preview.9", "1.5.0", "1.5.0-preview.9", false)]            // a preview is older than its release
+    [InlineData("1.5.0-preview.2", "1.5.0-preview.10", "1.5.0-preview.2", false)] // preview numbers compare by value
+    [InlineData(null, "1.4.2", "1.5.0", false)]                                   // no product version at all
+    public void TheEmbeddedVersionIsBoundByItsFullSemVer(string? embedded, string running, string feed, bool accepted)
+    {
+        Assert.Equal(accepted, UpdateVerifier.VersionProblem(embedded, running, feed) is null);
     }
 
     [Theory]

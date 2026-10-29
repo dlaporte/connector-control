@@ -26,7 +26,7 @@ public sealed class VelopackUpdater : IUpdater
 
     private readonly LocatingUpdateManager? manager;
     private readonly Func<string, UpdateVerifier.RunningIdentity> identify;
-    private readonly Func<string, string?, UpdateVerifier.RunningIdentity, Version, Version, string?> verify;
+    private readonly Func<string, string?, UpdateVerifier.RunningIdentity, string, string, string?> verify;
     private readonly Func<string?, UpdateVerifier.RunningIdentity, string?> verifyInstalled;
     private readonly Action<string> log;
 
@@ -51,7 +51,7 @@ public sealed class VelopackUpdater : IUpdater
     internal VelopackUpdater(
         Func<bool, IUpdateSource> source,
         IVelopackLocator? locator,
-        Func<string, string?, UpdateVerifier.RunningIdentity, Version, Version, string?>? verify = null,
+        Func<string, string?, UpdateVerifier.RunningIdentity, string, string, string?>? verify = null,
         Func<string?, UpdateVerifier.RunningIdentity, string?>? verifyInstalled = null,
         Func<string, UpdateVerifier.RunningIdentity>? identify = null,
         Action<string>? log = null)
@@ -162,7 +162,8 @@ public sealed class VelopackUpdater : IUpdater
         string? problem;
         try
         {
-            problem = verify(packagePath, location.UpdateExePath, identity, NumericVersion(manager.CurrentVersion), NumericVersion(info.TargetFullRelease.Version));
+            // Full versions, prerelease labels included: see UpdateVerifier.VersionProblem.
+            problem = verify(packagePath, location.UpdateExePath, identity, manager.CurrentVersion?.ToString() ?? "", info.TargetFullRelease.Version.ToString());
         }
         catch (Exception ex)
         {
@@ -229,8 +230,4 @@ public sealed class VelopackUpdater : IUpdater
             manager.ApplyUpdatesAndRestart(info.TargetFullRelease);
         }
     }
-
-    /// <summary>Major.minor.patch of a Velopack version as a System.Version; a missing version is 0.0.0.</summary>
-    private static Version NumericVersion(SemanticVersion? version) =>
-        new(version?.Major ?? 0, version?.Minor ?? 0, version?.Patch ?? 0);
 }
