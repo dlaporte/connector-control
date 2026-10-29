@@ -148,4 +148,16 @@ public class JsonValueTests
         Assert.Throws<InvalidOperationException>(() => JsonValue.Int(1).StringValue);
         Assert.Throws<InvalidOperationException>(() => JsonValue.String("s").ArrayItems);
     }
+
+    /// <summary>Arrays and objects nest at most 64 deep, as the Mac mirror allows, so a document reads
+    /// the same on both platforms; brackets inside a string do not count.</summary>
+    [Fact]
+    public void NestingDeeperThan64IsRefused()
+    {
+        static string Nested(int depth) => new string('[', depth) + new string(']', depth);
+        JsonValue.Parse(Nested(64));
+        Assert.ThrowsAny<JsonException>(() => JsonValue.Parse(Nested(65)));
+        Assert.ThrowsAny<JsonException>(() => JsonValue.Parse(Nested(70)));
+        JsonValue.Parse("[\"" + new string('[', 70) + "\"]");
+    }
 }

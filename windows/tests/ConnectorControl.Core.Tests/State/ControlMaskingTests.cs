@@ -747,4 +747,30 @@ public class ControlMaskingTests
             Assert.Equal(text, ControlMasking.Argument(text));
         }
     }
+
+    /// <summary>JSON passed as an argument — Smithery's <c>run &lt;server&gt; --config '{"apiKey":"…"}'</c> — is masked
+    /// leaf by leaf, by key, as a config is; JSON with nothing to mask reads as written.</summary>
+    [Fact]
+    public void AJSONArgumentIsMaskedByKey()
+    {
+        string[] smithery = ["-y", "@smithery/cli", "run", "@x/server", "--config", """{"apiKey":"sk_abc123","region":"us"}"""];
+        Assert.Equal(["-y", "@smithery/cli", "run", "@x/server", "--config", """{"apiKey":"set","region":"us"}"""],
+            ControlMasking.Arguments(smithery));
+        Assert.Equal("""[{"token":"set"},"plain"]""", ControlMasking.Argument("""[{"token": "hunter2x"}, "plain"]"""));
+        Assert.Equal("""{"region": "us", "port": 8080}""", ControlMasking.Argument("""{"region": "us", "port": 8080}"""));
+        AssertHidden(["sk_abc123"], Local("npx", smithery));
+        AssertHidden(["sk_abc123"], Bare("""npx -y @smithery/cli run @x/server --config '{"apiKey": "sk_abc123"}'"""));
+    }
+
+    /// <summary>JSON nested deeper than either platform reads is masked whole, alike on both: what it holds
+    /// cannot be read leaf by leaf.</summary>
+    [Fact]
+    public void JSONNestedDeeperThan64IsMaskedWholeAlike()
+    {
+        var deep = string.Concat(Enumerable.Repeat("""{"a":""", 69)) + """{"apiKey":"sk_abc123"}""" + new string('}', 69);
+        Assert.Equal(ControlMasking.Mask, ControlMasking.Argument(deep));
+        Assert.Equal(["--static-oauth-client-info", ControlMasking.Mask],
+            ControlMasking.Arguments(["--static-oauth-client-info", deep], ControlMasking.Exposure.Dialog));
+        AssertHidden(["sk_abc123"], Local("npx", ["--config", deep]));
+    }
 }

@@ -111,4 +111,16 @@ final class JSONValueTests: XCTestCase {
         XCTAssertEqual(try JSONValue.parse(Data(#""hello""#.utf8)), .string("hello"))
         XCTAssertEqual(try JSONValue.parse(Data("true".utf8)), .bool(true))
     }
+
+    /// Arrays and objects nest at most 64 deep, as the Windows reader allows, so a document reads
+    /// the same on both platforms; brackets inside a string do not count.
+    func testNestingDeeperThan64IsRefused() {
+        func nested(_ depth: Int) -> Data {
+            Data((String(repeating: "[", count: depth) + String(repeating: "]", count: depth)).utf8)
+        }
+        XCTAssertNoThrow(try JSONValue.parse(nested(64)))
+        XCTAssertThrowsError(try JSONValue.parse(nested(65)))
+        XCTAssertThrowsError(try JSONValue.parse(nested(70)))
+        XCTAssertNoThrow(try JSONValue.parse(Data(("[\"" + String(repeating: "[", count: 70) + "\"]").utf8)))
+    }
 }

@@ -161,4 +161,16 @@ final class ClaudeConfigIOTests: XCTestCase {
             XCTAssertNoThrow(try ClaudeConfigIO.requireUniqueKeys(in: Data(json.utf8)), json)
         }
     }
+
+    /// A Claude config nested deeper than 64 is refused as malformed, as the Windows reader refuses it.
+    func testAConfigNestedDeeperThan64IsRefusedAsMalformed() throws {
+        func config(_ depth: Int) -> Data {
+            Data(("{\"k\":" + String(repeating: "[", count: depth - 1) + String(repeating: "]", count: depth - 1) + "}").utf8)
+        }
+        XCTAssertNoThrow(try ClaudeConfigIO.parseRoot(config(64)))
+        XCTAssertThrowsError(try ClaudeConfigIO.parseRoot(config(65))) {
+            guard case ClaudeConfigError.malformed = $0 else { return XCTFail("wrong error: \($0)") }
+        }
+        XCTAssertThrowsError(try ClaudeConfigIO.parseRoot(config(70)))
+    }
 }

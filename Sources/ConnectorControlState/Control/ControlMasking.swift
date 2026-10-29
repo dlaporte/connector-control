@@ -209,6 +209,7 @@ public enum ControlMasking {
     /// token, so the whole word is masked.
     public static func argument(_ arg: String, reveal: Bool = false) -> String {
         if reveal { return arg }
+        if let json = jsonArgument(arg) { return json }
         // Before the URL: a shell line holding a URL is more than the URL, and the URL's rules
         // would pass every word before its scheme through as written.
         if let line = shellLine(arg) { return line }
@@ -221,6 +222,23 @@ public enum ControlMasking {
             return piece.before + "=" + argument(piece.after)
         }
         return looksSecret(arg) ? mask : arg
+    }
+
+    /// An argument that is a JSON object or array — Smithery's `--config '{"apiKey":"…"}'` — with
+    /// each leaf masked by its key, as a config's are, on one line; as written when nothing in it
+    /// changed. JSON nested deeper than `JSONValue.parse` reads is "•••", since what it holds cannot
+    /// be read. Nil for anything else. Before the shell line, which would split JSON at its spaces.
+    static func jsonArgument(_ arg: String) -> String? {
+        guard let first = arg.unicodeScalars.first(where: { !$0.properties.isWhitespace }), first == "{" || first == "[" else { return nil }
+        guard McpSession.nests(atMost: McpSession.maxNestingDepth, arg) else { return mask }
+        guard let value = try? JSONValue.parse(Data(arg.utf8)) else { return nil }
+        switch value {
+        case .object, .array:
+            let shown = compactText(leaves(value, .masked, secret: false))
+            return same(shown, compactText(value)) ? arg : shown
+        default:
+            return nil
+        }
     }
 
     /// An argument holding whitespace — a shell line for `sh -c` or `cmd /c`, or a whole command

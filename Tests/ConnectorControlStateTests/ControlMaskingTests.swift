@@ -627,4 +627,26 @@ final class ControlMaskingTests: XCTestCase {
             XCTAssertEqual(ControlMasking.argument(text), text)
         }
     }
+
+    /// JSON passed as an argument — Smithery's `run <server> --config '{"apiKey":"…"}'` — is masked
+    /// leaf by leaf, by key, as a config is; JSON with nothing to mask reads as written.
+    func testAJSONArgumentIsMaskedByKey() throws {
+        let smithery = ["-y", "@smithery/cli", "run", "@x/server", "--config", #"{"apiKey":"sk_abc123","region":"us"}"#]
+        XCTAssertEqual(ControlMasking.arguments(smithery),
+                       ["-y", "@smithery/cli", "run", "@x/server", "--config", #"{"apiKey":"set","region":"us"}"#])
+        XCTAssertEqual(ControlMasking.argument(#"[{"token": "hunter2x"}, "plain"]"#), #"[{"token":"set"},"plain"]"#)
+        XCTAssertEqual(ControlMasking.argument(#"{"region": "us", "port": 8080}"#), #"{"region": "us", "port": 8080}"#)
+        try assertHidden(["sk_abc123"], in: local("npx", smithery))
+        try assertHidden(["sk_abc123"], in: bare(#"npx -y @smithery/cli run @x/server --config '{"apiKey": "sk_abc123"}'"#))
+    }
+
+    /// JSON nested deeper than either platform reads is masked whole, alike on both: what it holds
+    /// cannot be read leaf by leaf.
+    func testJSONNestedDeeperThan64IsMaskedWholeAlike() throws {
+        let deep = String(repeating: #"{"a":"#, count: 69) + #"{"apiKey":"sk_abc123"}"# + String(repeating: "}", count: 69)
+        XCTAssertEqual(ControlMasking.argument(deep), ControlMasking.mask)
+        XCTAssertEqual(ControlMasking.arguments(["--static-oauth-client-info", deep], exposure: .dialog),
+                       ["--static-oauth-client-info", ControlMasking.mask])
+        try assertHidden(["sk_abc123"], in: local("npx", ["--config", deep]))
+    }
 }

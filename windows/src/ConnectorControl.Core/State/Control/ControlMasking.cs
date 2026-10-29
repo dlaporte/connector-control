@@ -228,6 +228,10 @@ public static class ControlMasking
         {
             return arg;
         }
+        if (JsonArgument(arg) is { } json)
+        {
+            return json;
+        }
         // Before the URL: a shell line holding a URL is more than the URL, and the URL's rules
         // would pass every word before its scheme through as written.
         if (ShellLine(arg) is { } line)
@@ -251,6 +255,38 @@ public static class ControlMasking
             return piece.Before + "=" + Argument(piece.After);
         }
         return LooksSecret(arg) ? Mask : arg;
+    }
+
+    /// <summary>An argument that is a JSON object or array — Smithery's <c>--config '{"apiKey":"…"}'</c> — with
+    /// each leaf masked by its key, as a config's are, on one line; as written when nothing in it
+    /// changed. JSON nested deeper than <see cref="JsonValue.Parse(string)"/> reads is "•••", since what it holds cannot
+    /// be read. Null for anything else. Before the shell line, which would split JSON at its spaces.</summary>
+    internal static string? JsonArgument(string arg)
+    {
+        var first = arg.FirstOrDefault(c => !char.IsWhiteSpace(c));
+        if (first is not ('{' or '['))
+        {
+            return null;
+        }
+        if (!McpSession.Nests(McpSession.MaxNestingDepth, arg))
+        {
+            return Mask;
+        }
+        JsonValue value;
+        try
+        {
+            value = JsonValue.Parse(arg);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+        if (value.Kind is not (JsonKind.Object or JsonKind.Array))
+        {
+            return null;
+        }
+        var shown = CompactText(Leaves(value, Exposure.Masked, secret: false));
+        return Same(shown, CompactText(value)) ? arg : shown;
     }
 
     /// <summary>An argument holding whitespace — a shell line for <c>sh -c</c> or <c>cmd /c</c>, or a whole command

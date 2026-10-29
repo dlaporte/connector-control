@@ -191,4 +191,15 @@ public class ClaudeConfigIOTests : IDisposable
             ClaudeConfigIO.RequireUniqueKeys(Encoding.UTF8.GetBytes(json));
         }
     }
+
+    /// <summary>A Claude config nested deeper than 64 is refused as malformed, as the Mac mirror refuses it.</summary>
+    [Fact]
+    public void AConfigNestedDeeperThan64IsRefusedAsMalformed()
+    {
+        static byte[] Config(int depth) =>
+            Encoding.UTF8.GetBytes("{\"k\":" + new string('[', depth - 1) + new string(']', depth - 1) + "}");
+        ClaudeConfigIO.ParseRoot(Config(64));
+        Assert.Throws<ClaudeConfigException>(() => ClaudeConfigIO.ParseRoot(Config(65)));
+        Assert.Throws<ClaudeConfigException>(() => ClaudeConfigIO.ParseRoot(Config(70)));
+    }
 }

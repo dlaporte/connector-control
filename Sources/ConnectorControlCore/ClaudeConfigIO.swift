@@ -134,6 +134,11 @@ public enum ClaudeConfigIO {
         if head.starts(with: [0xFE, 0xFF]) || head.starts(with: [0xFF, 0xFE]) || head.contains(0) {
             throw ClaudeConfigError.malformed(notJSONError)
         }
+        // Platform idiom: the Windows reader refuses arrays and objects nested past 64, where
+        // JSONSerialization reads deeper; refused here alike, as JSONValue.parse refuses them.
+        guard McpSession.nests(atMost: McpSession.maxNestingDepth, String(decoding: data, as: UTF8.self)) else {
+            throw ClaudeConfigError.malformed(notJSONError)
+        }
         let parsed: Any
         do {
             parsed = try JSONSerialization.jsonObject(with: data)
