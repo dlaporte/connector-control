@@ -276,9 +276,12 @@ public sealed class ConfigService
     }
 
     /// <summary>
-    /// Backup the current file, copy the chosen backup over it, then adopt the
+    /// Backup the current file, write the chosen backup over it as parsed, then adopt the
     /// snapshot into the store. The backup is validated BEFORE the live file is
     /// touched. Returns the restored file's servers (the caller's new baseline).
+    /// A backup that names a key twice is refused, and what is written is the backup as this app
+    /// parsed it, not its raw bytes: Claude then reads exactly the servers this app read, whichever
+    /// of two repeated keys either parser would keep.
     /// </summary>
     /// <param name="publishFolder">
     /// The folder <c>${COLLECTION_DIR}</c> stands for in the active collection on this machine — the
@@ -310,6 +313,7 @@ public sealed class ConfigService
         try
         {
             root = ClaudeConfigIO.ParseRoot(data);
+            ClaudeConfigIO.RequireUniqueKeys(data);
         }
         catch (ClaudeConfigException ex)
         {
@@ -321,7 +325,7 @@ public sealed class ConfigService
             throw new ClaudeConfigException($"backup {name} has an invalid mcpServers section");
         }
         RecordBackup(Backups.BackUp(Paths.ClaudeConfigPath, "claude_desktop_config"), backedUpFrom);
-        AtomicFile.Write(data, Paths.ClaudeConfigPath);
+        AtomicFile.Write(ClaudeConfigIO.Serialized(root), Paths.ClaudeConfigPath);
         // The bytes just written are what was already parsed above — reading the servers back off
         // the disk file would just reparse the same bytes a second time.
         IReadOnlyDictionary<string, JsonValue> servers = rawServers is null

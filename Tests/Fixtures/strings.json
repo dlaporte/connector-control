@@ -105,6 +105,7 @@
   },
   "AppVersion.developmentBuild": "development build",
   "ClaudeConfigIO.mcpServersNotObjectError": "mcpServers is not a JSON object",
+  "ClaudeConfigIO.repeatedKeyError": "the same name appears more than once",
   "ClaudeConfigIO.topLevelNotObjectError": "top level is not a JSON object",
   "ClaudeIntegration.clashNote": "A connector named “connector-control” already exists. Rename it to turn this on.",
   "ClaudeIntegration.endpointUnavailableText": "Claude and the command-line tool can’t reach Connector Control. Quit any other copy that is running, then restart this one.",

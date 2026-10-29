@@ -318,6 +318,7 @@ final class StringCatalogTests: XCTestCase {
         // and cross-checked against ClaudeConfigIOTests.swift's real-parse assertions.
 
         actual["ClaudeConfigIO.mcpServersNotObjectError"] = "mcpServers is not a JSON object"
+        actual["ClaudeConfigIO.repeatedKeyError"] = ClaudeConfigIO.repeatedKeyError
         actual["ClaudeConfigIO.topLevelNotObjectError"] = "top level is not a JSON object"
 
         // MARK: ClaudeIntegration

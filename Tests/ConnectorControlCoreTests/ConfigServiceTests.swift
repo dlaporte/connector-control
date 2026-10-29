@@ -475,6 +475,36 @@ final class ConfigServiceTests: XCTestCase {
                        "live config must be untouched after refused restore")
     }
 
+    /// A backup that names a server twice is refused before the live file is touched: what it lists
+    /// and what Claude would run from it could differ.
+    func testRestoreRefusesABackupNamingAServerTwice() throws {
+        _ = try service.loadAndReconcile()
+        let before = try Data(contentsOf: paths.claudeConfigURL)
+        for (name, json) in [("exact.json", #"{"mcpServers": {"a": {"command": "x"}, "a": {"command": "y"}}}"#),
+                             ("equivalent.json", "{\"mcpServers\": {\"caf\u{E9}\": {}, \"cafe\u{301}\": {}}}")] {
+            let backup = dir.appendingPathComponent(name)
+            try Data(json.utf8).write(to: backup)
+            XCTAssertThrowsError(try service.restoreClaudeConfig(from: backup, mergedWith: .empty)) {
+                XCTAssertEqual($0 as? ClaudeConfigError,
+                               .malformed("backup \(name) is not a valid config file (\(ClaudeConfigIO.repeatedKeyError))"))
+            }
+        }
+        XCTAssertEqual(try Data(contentsOf: paths.claudeConfigURL), before, "live config must be untouched")
+    }
+
+    /// The restore writes what it parsed, not the backup's bytes: whatever parser reads the file next
+    /// reads what this app read.
+    func testRestoreWritesWhatItParsed() throws {
+        let store = try service.loadAndReconcile().store
+        let backup = dir.appendingPathComponent("nested.json")
+        try Data(#"{"mcpServers": {"a": {"command": "x", "env": {"K": "first", "K": "second"}}}}"#.utf8).write(to: backup)
+        let servers = try service.restoreClaudeConfig(from: backup, mergedWith: store)
+        XCTAssertEqual(servers["a"]?.value(at: JSONPointer(["env", "K"])), .string("first"))
+        let written = try String(contentsOf: paths.claudeConfigURL, encoding: .utf8)
+        XCTAssertFalse(written.contains("second"), written)
+        XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL), servers)
+    }
+
     /// parseRoot treats zero bytes as an empty root (the same rule
     /// ClaudeConfigIO's own read path already applies), so a zero-byte backup —
     /// the same crash/truncation artifact — restores to an empty config

@@ -883,6 +883,7 @@ public sealed partial class ControlTools
         {
             bytes = File.ReadAllBytes(backup);
             servers = ClaudeConfigIO.McpServers(bytes);
+            ClaudeConfigIO.RequireUniqueKeys(bytes);
         }
         catch (Exception ex) when (ex is ClaudeConfigException or IOException or UnauthorizedAccessException or JsonException)
         {

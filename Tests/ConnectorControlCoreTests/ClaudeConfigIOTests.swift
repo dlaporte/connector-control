@@ -111,4 +111,37 @@ final class ClaudeConfigIOTests: XCTestCase {
         XCTAssertEqual(Set(try ClaudeConfigIO.readMCPServers(at: url).keys),
                        ["scoutbook", "service-now"])
     }
+
+    /// A key the top level or mcpServers names twice — exactly, or in two spellings Unicode counts as
+    /// the same text — is refused: this app's parser keeps one and Claude's may keep the other.
+    func testARepeatedKeyIsRefusedExactlyOrAsAnEquivalentSpelling() {
+        let repeated = [
+            #"{"x": 1, "x": 2}"#,
+            #"{"mcpServers": {"a": {}, "a": {}}}"#,
+            "{\"mcpServers\": {\"caf\u{E9}\": {}, \"cafe\u{301}\": {}}}",
+            #"{"mcpServers": {"caf\u00e9": {}, "cafe\u0301": {}}}"#,
+            #"{"mcpServers": {"\u0061": {}, "a": {}}}"#,
+            "\u{FEFF}{\"mcpServers\": {\"a\": {}, \"a\": {}}}",
+        ]
+        for json in repeated {
+            XCTAssertThrowsError(try ClaudeConfigIO.requireUniqueKeys(in: Data(json.utf8)), json) {
+                XCTAssertEqual($0 as? ClaudeConfigError, .malformed(ClaudeConfigIO.repeatedKeyError))
+            }
+        }
+    }
+
+    /// Below mcpServers' own names, and inside a string, nothing is refused: the file is written as it
+    /// was parsed, so what Claude reads there is what this app read.
+    func testOnlyTheTopLevelAndTheServersNamesAreChecked() {
+        let unique = [
+            #"{"mcpServers": {"a": {"env": {"K": "1", "K": "2"}}}}"#,
+            #"{"mcpServers": {"a": {}, "b": {}}, "other": {"a": 1, "a": 2}}"#,
+            #"{"k": "{\"a\":1,\"a\":2}", "mcpServers": {"a": [{"b": 1}, {"b": 2}]}, "m": ["x", "x"]}"#,
+            #"{"mcpServers": "a", "other": {"mcpServers": {"a": 1, "a": 2}}}"#,
+            "",
+        ]
+        for json in unique {
+            XCTAssertNoThrow(try ClaudeConfigIO.requireUniqueKeys(in: Data(json.utf8)), json)
+        }
+    }
 }

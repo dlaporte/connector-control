@@ -236,11 +236,14 @@ public struct ConfigService: Sendable {
         try file.save(to: paths.collectionsFileURL, staging: paths.stagingDirURL)
     }
 
-    /// Backup the current file, copy the chosen backup over it, then adopt the
+    /// Backup the current file, write the chosen backup over it as parsed, then adopt the
     /// snapshot into the store — a restore is the user deliberately making the
     /// snapshot the truth, and anything less would leave a divergence for the
     /// next reload to regenerate away, silently undoing the restore.
-    /// The backup's content is validated BEFORE the live file is touched.
+    /// The backup's content is validated BEFORE the live file is touched. A backup that names a key
+    /// twice is refused, and what is written is the backup as this app parsed it, not its raw bytes:
+    /// Claude then reads exactly the servers this app read, whichever of two repeated keys either
+    /// parser would keep.
     /// Returns the restored file's servers so the caller can sync its
     /// reconciliation baseline to them.
     /// `publishFolder` is the folder `${COLLECTION_DIR}` stands for in the active collection on this
@@ -270,6 +273,7 @@ public struct ConfigService: Sendable {
         let root: [String: Any]
         do {
             root = try ClaudeConfigIO.parseRoot(data)
+            try ClaudeConfigIO.requireUniqueKeys(in: data)
         } catch ClaudeConfigError.malformed(let detail) {
             throw ClaudeConfigError.malformed(
                 "backup \(backup.lastPathComponent) is not a valid config file (\(detail))")
@@ -282,7 +286,7 @@ public struct ConfigService: Sendable {
                 "backup \(backup.lastPathComponent) has an invalid mcpServers section")
         }
         recordBackup(try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config"), from: collection)
-        try AtomicFile.write(data, to: paths.claudeConfigURL, staging: paths.stagingDirURL)
+        try AtomicFile.write(try ClaudeConfigIO.serialized(root), to: paths.claudeConfigURL, staging: paths.stagingDirURL)
         let servers = (root["mcpServers"] as? [String: Any] ?? [:]).mapValues(JSONValue.init(any:))
         let outcome = Reconciler.adoptSnapshot(store: store, servers: servers, publishFolder: publishFolder,
                                                earlierFolders: earlierFolders)

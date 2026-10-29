@@ -1,3 +1,4 @@
+using System.Text;
 using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests;
@@ -127,5 +128,45 @@ public class ClaudeConfigIOTests : IDisposable
         const string expected =
             "{\n  \"alpha\" : 0.5,\n  \"mcpServers\" : {\n    \"s\" : {\n      \"command\" : \"npx\"\n    }\n  },\n  \"preferences\" : {\n    \"sidebarMode\" : \"x\"\n  },\n  \"Zeta\" : 1\n}";
         Assert.Equal(expected, File.ReadAllText(Url));
+    }
+
+    /// <summary>A key the top level or mcpServers names twice — exactly, or in two spellings Unicode counts as
+    /// the same text — is refused: this app's parser keeps one and Claude's may keep the other.</summary>
+    [Fact]
+    public void ARepeatedKeyIsRefusedExactlyOrAsAnEquivalentSpelling()
+    {
+        string[] repeated =
+        [
+            """{"x": 1, "x": 2}""",
+            """{"mcpServers": {"a": {}, "a": {}}}""",
+            "{\"mcpServers\": {\"caf\u00e9\": {}, \"cafe\u0301\": {}}}",
+            """{"mcpServers": {"caf\u00e9": {}, "cafe\u0301": {}}}""",
+            """{"mcpServers": {"\u0061": {}, "a": {}}}""",
+            "\uFEFF{\"mcpServers\": {\"a\": {}, \"a\": {}}}",
+        ];
+        foreach (var json in repeated)
+        {
+            var refused = Assert.Throws<ClaudeConfigException>(() => ClaudeConfigIO.RequireUniqueKeys(Encoding.UTF8.GetBytes(json)));
+            Assert.Equal(ClaudeConfigIO.RepeatedKeyError, refused.Detail);
+        }
+    }
+
+    /// <summary>Below mcpServers' own names, and inside a string, nothing is refused: the file is written as it
+    /// was parsed, so what Claude reads there is what this app read.</summary>
+    [Fact]
+    public void OnlyTheTopLevelAndTheServersNamesAreChecked()
+    {
+        string[] unique =
+        [
+            """{"mcpServers": {"a": {"env": {"K": "1", "K": "2"}}}}""",
+            """{"mcpServers": {"a": {}, "b": {}}, "other": {"a": 1, "a": 2}}""",
+            """{"k": "{\"a\":1,\"a\":2}", "mcpServers": {"a": [{"b": 1}, {"b": 2}]}, "m": ["x", "x"]}""",
+            """{"mcpServers": "a", "other": {"mcpServers": {"a": 1, "a": 2}}}""",
+            "",
+        ];
+        foreach (var json in unique)
+        {
+            ClaudeConfigIO.RequireUniqueKeys(Encoding.UTF8.GetBytes(json));
+        }
     }
 }

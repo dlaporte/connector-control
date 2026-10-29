@@ -335,6 +335,7 @@ public class StringCatalogTests
         // this project's own JSON-parsing test coverage.
 
         actual["ClaudeConfigIO.mcpServersNotObjectError"] = "mcpServers is not a JSON object";
+        actual["ClaudeConfigIO.repeatedKeyError"] = ClaudeConfigIO.RepeatedKeyError;
         actual["ClaudeConfigIO.topLevelNotObjectError"] = "top level is not a JSON object";
 
         // MARK: ClaudeIntegration

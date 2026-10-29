@@ -563,6 +563,18 @@ final class ControlToolsSharingTests: XCTestCase {
         XCTAssertEqual(rig.state.activeCollection, "Data team")
     }
 
+    /// A backup that names a server twice is refused before anyone is asked: the question could list
+    /// one while Claude ran the other.
+    func testARestoreOfABackupNamingAServerTwiceIsRefusedBeforeAsking() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let id = "claude_desktop_config.zz-twice.json"
+        try Data(#"{"mcpServers": {"a": {"command": "node"}, "a": {"command": "evil"}}}"#.utf8)
+            .write(to: rig.h.backupsDir.appendingPathComponent(id))
+        XCTAssertEqual(rig.call("restore_backup", ["id": .string(id)]),
+                       .refusal(ControlText.escaped(ClaudeConfigIO.repeatedKeyError, naming: [id])))
+        XCTAssertTrue(rig.confirmer.requests.isEmpty)
+    }
+
     /// A backup taken while another collection was active goes back into that one, which becomes
     /// the active collection again; the question says so.
     func testRestoringABackupOfAnotherCollectionMakesThatOneActive() throws {

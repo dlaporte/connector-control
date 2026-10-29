@@ -754,6 +754,19 @@ public class ControlToolsSharingTests
         Assert.Equal("Data team", rig.State.ActiveCollection);
     }
 
+    /// <summary>A backup that names a server twice is refused before anyone is asked: the question could list
+    /// one while Claude ran the other.</summary>
+    [Fact]
+    public void ARestoreOfABackupNamingAServerTwiceIsRefusedBeforeAsking()
+    {
+        using var rig = Rig();
+        const string id = "claude_desktop_config.zz-twice.json";
+        File.WriteAllText(Path.Combine(rig.H.BackupsDir, id), """{"mcpServers": {"a": {"command": "node"}, "a": {"command": "evil"}}}""");
+        Assert.Equal(ControlResult.Refusal(ControlText.Escaped(ClaudeConfigIO.RepeatedKeyError, [id])),
+            rig.Call("restore_backup", Args(("id", Text(id)))));
+        Assert.Empty(rig.Confirmer.Requests);
+    }
+
     /// <summary>A backup taken while another collection was active goes back into that one, which becomes
     /// the active collection again; the question says so.</summary>
     [Fact]

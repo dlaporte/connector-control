@@ -5,6 +5,10 @@ public enum ClaudeConfigError: Error, Equatable {
 }
 
 public enum ClaudeConfigIO {
+    /// Why a config file is refused when it names one key twice; it reads inside the backup refusal's
+    /// parenthesis as well as on its own.
+    public static let repeatedKeyError = "the same name appears more than once"
+
     public static func readMCPServers(at url: URL) throws -> [String: JSONValue] {
         guard FileManager.default.fileExists(atPath: url.path) else { return [:] }
         return try mcpServers(in: Data(contentsOf: url))
@@ -27,9 +31,85 @@ public enum ClaudeConfigIO {
     public static func write(mcpServers: [String: JSONValue], to url: URL, staging: URL? = nil) throws {
         var root = try readRootIfPresent(at: url) ?? [:]
         root["mcpServers"] = mcpServers.mapValues(\.anyValue)
-        let data = try JSONSerialization.data(
-            withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
-        try AtomicFile.write(data, to: url, staging: staging)
+        try AtomicFile.write(try serialized(root), to: url, staging: staging)
+    }
+
+    /// The bytes this app writes for a config's top-level object, whether it changed the servers or
+    /// is putting a backup back: one format, so a written file never depends on which did it.
+    public static func serialized(_ root: [String: Any]) throws -> Data {
+        try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+    }
+
+    /// Refuses a config whose top level, or whose mcpServers object, names one key twice — exactly, or
+    /// in two spellings Unicode counts as the same text, such as an é composed and decomposed. This
+    /// app's parser keeps one of them and Claude's may keep the other, so a file put back as it stands
+    /// could run a server the question never listed. It reads the raw bytes, since a parser has
+    /// already dropped the repeat. A repeat any deeper is written back as it was parsed, so what
+    /// Claude reads there is what this app read. `data` is bytes `parseRoot` has accepted.
+    ///
+    /// Mirror: windows/src/ConnectorControl.Core/ClaudeConfigIO.cs
+    public static func requireUniqueKeys(in data: Data) throws {
+        var bytes = [UInt8](data)
+        // JSONSerialization accepts a byte-order mark, so parseRoot has let one through.
+        if bytes.starts(with: [0xEF, 0xBB, 0xBF]) { bytes.removeFirst(3) }
+        // Platform idiom: JSONSerialization keeps no repeat to look at, so this scans the bytes itself;
+        // the Windows mirror's reader sees every property name.
+        var open: [UInt8] = []            // the containers the scan is inside, by opening byte
+        var expectingKey = false          // inside an object, where the next string is a key
+        var serversNext = false           // the root's mcpServers key was just read; its value comes next
+        var inServers = false             // inside the root's mcpServers object
+        var rootKeys = Set<String>()
+        var serverKeys = Set<String>()
+        var index = 0
+        while index < bytes.count {
+            let byte = bytes[index]
+            switch byte {
+            case UInt8(ascii: "\""):
+                let start = index
+                index += 1
+                while index < bytes.count, bytes[index] != UInt8(ascii: "\"") {
+                    index += bytes[index] == UInt8(ascii: "\\") ? 2 : 1
+                }
+                guard expectingKey, open.last == UInt8(ascii: "{") else {
+                    serversNext = false
+                    break
+                }
+                expectingKey = false
+                guard open.count == 1 || (open.count == 2 && inServers) else { break }
+                // The parser's own decoding, so an escaped spelling is the text it stands for.
+                let raw = Data(bytes[start...min(index, bytes.count - 1)])
+                guard let key = (try? JSONSerialization.jsonObject(with: raw, options: .fragmentsAllowed)) as? String else { break }
+                // Platform idiom: Swift compares strings by canonical equivalence, so a set holds one of
+                // each spelling; the Windows mirror composes each key first.
+                if open.count == 1 {
+                    guard rootKeys.insert(key).inserted else { throw ClaudeConfigError.malformed(repeatedKeyError) }
+                    serversNext = key == "mcpServers"
+                } else {
+                    guard serverKeys.insert(key).inserted else { throw ClaudeConfigError.malformed(repeatedKeyError) }
+                }
+            case UInt8(ascii: "{"):
+                inServers = inServers || (serversNext && open.count == 1)
+                serversNext = false
+                open.append(byte)
+                expectingKey = true
+            case UInt8(ascii: "["):
+                serversNext = false
+                open.append(byte)
+                expectingKey = false
+            case UInt8(ascii: "}"), UInt8(ascii: "]"):
+                open.removeLast()
+                if open.count == 1 { inServers = false }
+                expectingKey = false
+            case UInt8(ascii: ","):
+                expectingKey = open.last == UInt8(ascii: "{")
+            case UInt8(ascii: ":"), UInt8(ascii: " "), UInt8(ascii: "\t"), UInt8(ascii: "\n"), UInt8(ascii: "\r"):
+                break
+            default:
+                // A number, true, false or null: a value, so not the servers' object.
+                serversNext = false
+            }
+            index += 1
+        }
     }
 
     /// A zero-byte payload (crash/truncation artifact) is deliberately treated

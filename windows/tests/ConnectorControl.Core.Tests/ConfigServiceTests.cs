@@ -495,6 +495,42 @@ public class ConfigServiceTests : IDisposable
         Assert.Equal(before, File.ReadAllBytes(paths.ClaudeConfigPath));
     }
 
+    /// <summary>A backup that names a server twice is refused before the live file is touched: what it lists
+    /// and what Claude would run from it could differ.</summary>
+    [Fact]
+    public void RestoreRefusesABackupNamingAServerTwice()
+    {
+        service.LoadAndReconcile();
+        var before = File.ReadAllBytes(paths.ClaudeConfigPath);
+        foreach (var (name, json) in new[]
+                 {
+                     ("exact.json", """{"mcpServers": {"a": {"command": "x"}, "a": {"command": "y"}}}"""),
+                     ("equivalent.json", "{\"mcpServers\": {\"caf\u00e9\": {}, \"cafe\u0301\": {}}}"),
+                 })
+        {
+            var backup = dir.File(name);
+            File.WriteAllText(backup, json);
+            var refused = Assert.Throws<ClaudeConfigException>(() => service.RestoreClaudeConfig(backup, MasterStore.Empty()));
+            Assert.Equal($"backup {name} is not a valid config file ({ClaudeConfigIO.RepeatedKeyError})", refused.Detail);
+        }
+        // Live config must be untouched.
+        Assert.Equal(before, File.ReadAllBytes(paths.ClaudeConfigPath));
+    }
+
+    /// <summary>The restore writes what it parsed, not the backup's bytes: whatever parser reads the file next
+    /// reads what this app read.</summary>
+    [Fact]
+    public void RestoreWritesWhatItParsed()
+    {
+        var store = service.LoadAndReconcile().Store;
+        var backup = dir.File("nested.json");
+        File.WriteAllText(backup, """{"mcpServers": {"a": {"command": "x", "env": {"K": "first", "K": "second"}}}}""");
+        var servers = service.RestoreClaudeConfig(backup, store);
+        Assert.Equal(JsonValue.String("first"), servers["a"].ValueAt(JsonPointer.Parse("/env/K")!));
+        Assert.DoesNotContain("second", File.ReadAllText(paths.ClaudeConfigPath), StringComparison.Ordinal);
+        Assert.Equal(servers, ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath));
+    }
+
     /// <summary>
     /// ParseRoot treats zero bytes as an empty root (the same rule ClaudeConfigIO's own read path
     /// already applies), so a zero-byte backup — the same crash/truncation artifact — restores to

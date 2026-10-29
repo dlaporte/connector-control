@@ -614,6 +614,7 @@ extension ControlTools {
         do {
             bytes = try Data(contentsOf: backup)
             servers = try ClaudeConfigIO.mcpServers(in: bytes)
+            try ClaudeConfigIO.requireUniqueKeys(in: bytes)
         } catch {
             return .refused(ControlText.escaped(error.localizedDescription, naming: [id]))
         }
