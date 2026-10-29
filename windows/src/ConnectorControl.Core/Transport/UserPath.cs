@@ -9,6 +9,19 @@ namespace ConnectorControl.Core.Transport;
 /// </summary>
 public static class UserPath
 {
+    /// <summary>Why the user PATH is left alone when the registry holds it as something other than text.</summary>
+    public const string NotTextError = "Your user PATH in the registry isn’t text, so it was left as it is.";
+
+    /// <summary>The registry's Path value as the text it is; null when there is none. A list or binary data there is
+    /// no PATH this app can change without losing it, so it throws <see cref="IOException"/>, which the tool reports
+    /// and writes nothing over.</summary>
+    public static string? Text(object? value) => value switch
+    {
+        null => null,
+        string text => text,
+        _ => throw new IOException(NotTextError),
+    };
+
     public static bool Contains(string? path, string folder) =>
         (path ?? "").Split(';').Any(entry => Same(entry, folder));
 

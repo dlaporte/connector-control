@@ -45,4 +45,16 @@ public class UserPathTests
             Environment.SetEnvironmentVariable("CC_TEST_LOCAL", null);
         }
     }
+
+    /// <summary>The registry's Path value is read only as text. A list or binary data there is no PATH this app can
+    /// change without losing it, so reading it fails, and nothing is written over it.</summary>
+    [Fact]
+    public void TheRegistryValueIsReadOnlyAsText()
+    {
+        Assert.Null(UserPath.Text(null));
+        Assert.Equal(@"C:\Windows;%USERPROFILE%\bin", UserPath.Text(@"C:\Windows;%USERPROFILE%\bin"));
+        Assert.Equal(UserPath.NotTextError, Assert.Throws<IOException>(() => UserPath.Text(new[] { @"C:\Windows" })).Message);
+        Assert.Equal(UserPath.NotTextError, Assert.Throws<IOException>(() => UserPath.Text(new byte[] { 1, 2 })).Message);
+        Assert.Equal(UserPath.NotTextError, Assert.Throws<IOException>(() => UserPath.Text(7)).Message);
+    }
 }

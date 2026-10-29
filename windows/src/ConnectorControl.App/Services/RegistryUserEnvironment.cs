@@ -25,7 +25,7 @@ internal sealed class RegistryUserEnvironment : IUserEnvironment
     public string? ReadPath()
     {
         using var key = Registry.CurrentUser.OpenSubKey(EnvironmentKey);
-        return key?.GetValue(PathValue, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+        return UserPath.Text(key?.GetValue(PathValue, null, RegistryValueOptions.DoNotExpandEnvironmentNames));
     }
 
     public void WritePath(string value)

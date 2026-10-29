@@ -113,6 +113,19 @@ public class UserPathCommandLineToolTests
         Assert.False(Tool(environment).IsInstalled);
     }
 
+    /// <summary>A user PATH that is not text — the registry's reader refuses it — is not installed, and neither installing
+    /// nor removing writes over it: each says why.</summary>
+    [Fact]
+    public void APathThatIsNotTextIsLeftAlone()
+    {
+        var environment = new FakeEnvironment(@"C:\Windows") { ReadFailure = new IOException(UserPath.NotTextError) };
+        var tool = Tool(environment);
+        Assert.False(tool.IsInstalled);
+        Assert.Equal(CommandLineToolText.InstallFailedError(UserPath.NotTextError), Answer(tool.Install));
+        Assert.Equal(CommandLineToolText.RemoveFailedError(UserPath.NotTextError), Answer(tool.Remove));
+        Assert.Equal(0, environment.Writes);
+    }
+
     [Fact]
     public void AnythingThatGoesWrongStillAnswers()
     {

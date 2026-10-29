@@ -957,6 +957,10 @@ public class StringCatalogTests
         actual["UpdateCoordinator.upToDateDetail"] = UpdateCoordinator.UpToDateDetail("X");
         actual["UpdateCoordinator.upToDateMessage"] = UpdateCoordinator.UpToDateMessage;
 
+        // MARK: UserPath
+
+        actual["UserPath.notTextError"] = UserPath.NotTextError;
+
         // MARK: - Compare every key against the fixture's Windows side
 
         var winKeys = new List<string>();

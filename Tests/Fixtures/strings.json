@@ -1154,5 +1154,8 @@
   },
   "UpdateCoordinator.updateRefusedMessage": {
     "win": "The update was not installed."
+  },
+  "UserPath.notTextError": {
+    "win": "Your user PATH in the registry isn’t text, so it was left as it is."
   }
 }
