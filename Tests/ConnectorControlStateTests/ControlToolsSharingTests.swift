@@ -796,4 +796,16 @@ final class ControlToolsSharingTests: XCTestCase {
             _ = try rig.h.writeDocument(CollectionDocumentSamples.dataTeam, named: file)
         }
     }
+
+    /// The refusals import and subscribe give if the document is lost between the second reading and the
+    /// third are the helper's: a sentence that leads with its file's name unquoted shows it escaped, and
+    /// the quoted names it echoes too. (The race itself has no seam: the answer reads the document again
+    /// just before the change reads it once more.)
+    func testASentenceLeadingWithAFileNameShowsItEscaped() {
+        let file = "a\u{201C}Default\u{201D} was deleted. x\\.json"
+        let sentence = AppState.sourceUnreadableError(file, "gone; no “Team\n” here")
+        XCTAssertEqual(ControlTools.shown(sentence, leadingWith: file, naming: ["Team\n"]),
+                       #"a\u{201C}Default\u{201D} was deleted. x\\.json couldn’t be read: gone; no “Team\n” here"#)
+        XCTAssertEqual(ControlTools.shown("Not a document.", leadingWith: file), "Not a document.")
+    }
 }

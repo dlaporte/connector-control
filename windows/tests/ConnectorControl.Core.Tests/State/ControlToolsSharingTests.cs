@@ -1037,4 +1037,18 @@ public class ControlToolsSharingTests
             AssertPlain(answer.Result.Text);
         }
     }
+
+    /// <summary>The refusals import and subscribe give if the document is lost between the second reading and the
+    /// third are the helper's: a sentence that leads with its file's name unquoted shows it escaped, and the
+    /// quoted names it echoes too. (The race itself has no seam: the answer reads the document again just
+    /// before the change reads it once more.)</summary>
+    [Fact]
+    public void ASentenceLeadingWithAFileNameShowsItEscaped()
+    {
+        const string file = "a\u201CDefault\u201D was deleted. x.json";
+        var sentence = AppState.SourceUnreadableError(file, "gone; no “Team\n” here");
+        Assert.Equal("""a\u{201C}Default\u{201D} was deleted. x.json couldn’t be read: gone; no “Team\n” here""",
+            ControlTools.Shown(sentence, file, ["Team\n"]));
+        Assert.Equal("Not a document.", ControlTools.Shown("Not a document.", file));
+    }
 }
