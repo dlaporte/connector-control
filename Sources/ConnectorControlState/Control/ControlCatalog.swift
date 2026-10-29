@@ -130,8 +130,8 @@ extension ControlTools {
     /// The `tools/list` entries, built once: `tools/call` looks a tool up in them on every call.
     public static let mcpDescriptors: [JSONValue] = catalog.map(\.mcpDescriptor)
 
-    // The Windows mirror declares usage, group and description before the two hints: C# puts
-    // optional parameters last. Every call names them, in this order.
+    // Platform idiom: the Windows mirror declares usage, group and description before the two hints, as C#
+    // puts optional parameters last. Every call names them, in this order.
     static func tool(_ name: String, _ gate: ControlGateClass, destructive: Bool = false, idempotent: Bool = false,
                      usage: String, group: String, description: String,
                      properties: [String: JSONValue] = [:], required: [String] = []) -> ControlToolDefinition {

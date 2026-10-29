@@ -140,7 +140,8 @@ extension ControlTools {
                 word = ToolNote.foundText
                 detail = path
             case .foundInShellOnly(let path, _):
-                // macOS only: the Windows probe has no shell-only state.
+                // Platform idiom: macOS only. A tool found only on the login shell's PATH is one Claude Desktop
+                // cannot see; the Windows probe reads the PATH Claude Desktop starts with, so has no such state.
                 item["status"] = .string("shellOnly")
                 item["path"] = .string(path)
                 word = ToolNote.shellOnlyStatusText
@@ -148,6 +149,7 @@ extension ControlTools {
             case .notFound, nil:
                 item["status"] = .string("notFound")
                 word = ToolNote.notFoundText
+                // Platform idiom: Homebrew's command here, winget's on Windows; each installs where Claude Desktop looks.
                 detail = ControlTools.installHint(tool.family.linkTitle, tool.family.installCommand)
             }
             rows.append([tool.name, word, detail])

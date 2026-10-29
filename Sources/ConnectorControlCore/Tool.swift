@@ -40,9 +40,9 @@ public enum ToolFamily: Equatable, Sendable {
         }
     }
 
-    /// The macOS install command; the Windows port shows winget's command
-    /// instead. Homebrew installs into the PATH floor Claude
+    /// The macOS install command. Homebrew installs into the PATH floor Claude
     /// Desktop adds for itself, so running this clears the note.
+    // Platform idiom: Homebrew here; the Windows port shows winget's command, which installs into the user PATH.
     public var installCommand: String {
         switch self {
         case .nodeJS: return "brew install node"

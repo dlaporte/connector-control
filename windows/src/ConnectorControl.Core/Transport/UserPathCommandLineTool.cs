@@ -8,9 +8,10 @@ namespace ConnectorControl.Core.Transport;
 ///
 /// The command-line tool on PATH as the folder of its copy in the user PATH. No prompt: the user PATH is the
 /// user's own. A new terminal sees the change; one already open keeps the PATH it started with. The change runs
-/// off the UI thread: its broadcast gives every window up to a second to answer. There is no check that the app runs
-/// from where it will stay, as on the Mac: Windows installs into a fixed folder and is never transient.
+/// off the UI thread: its broadcast gives every window up to a second to answer.
 /// </summary>
+// Platform idiom: the Mac refuses to install from an app run from where it will not stay, and reports a file at its
+// link's path that is not a link; Windows installs into a fixed folder and adds a folder to PATH, so it has neither.
 public sealed class UserPathCommandLineTool(string binDir, IUserEnvironment environment, AppHost host, Func<string, bool>? toolExists = null)
     : ICommandLineTool
 {

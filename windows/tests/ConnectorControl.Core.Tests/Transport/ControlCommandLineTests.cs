@@ -7,7 +7,7 @@ namespace ConnectorControl.Core.Tests.Transport;
 /// <summary>Mirror: Tests/ConnectorControlStateTests/Transport/ControlCommandLineTests.swift</summary>
 public class ControlCommandLineTests
 {
-    // Platform-forced differences: a working directory is a different kind of path on each platform, and
+    // Platform idiom: a working directory is a different kind of path on each platform, and
     // the expected paths are built with Path.GetFullPath against it, as the tool builds them; the missing
     // file throws a FileNotFoundException where the Mac mirror throws a CocoaError, each read through
     // AppState.Friendly.

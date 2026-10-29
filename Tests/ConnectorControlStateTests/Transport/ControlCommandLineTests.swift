@@ -6,7 +6,7 @@ import ConnectorControlCore
 /// Mirror: windows/tests/ConnectorControl.Core.Tests/Transport/ControlCommandLineTests.cs
 @MainActor
 final class ControlCommandLineTests: XCTestCase {
-    // Platform-forced differences: the Windows mirror's working directory is a Windows path and its
+    // Platform idiom: the Windows mirror's working directory is a Windows path and its
     // expected paths are built with Path.GetFullPath against it; its missing file throws a
     // FileNotFoundException where this one throws a CocoaError, each read through AppState.friendly.
     private let cwd = "/Users/me/work"

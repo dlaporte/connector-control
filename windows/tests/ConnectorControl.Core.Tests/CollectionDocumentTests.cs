@@ -44,7 +44,7 @@ public class CollectionDocumentTests
         var rendered = Sample.Render();
         Assert.Empty(rendered.Excluded);
         var notion = rendered.Connectors["notion"];
-        // Platform-forced difference: Windows launches the bridge through cmd /c, the Mac runs npx directly.
+        // Platform idiom: Windows launches the bridge through cmd /c, the Mac runs npx directly.
         Assert.Equal(JsonValue.String("cmd"), notion.Config.ValueAt(new JsonPointer(["command"])));
         Assert.Equal(JsonValue.String("/c"), notion.Config.ValueAt(new JsonPointer(["args", "0"])));
         Assert.Equal(JsonValue.String("npx"), notion.Config.ValueAt(new JsonPointer(["args", "1"])));

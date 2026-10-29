@@ -36,6 +36,7 @@ public static class ToolInfo
         family == ToolFamily.NodeJs ? "https://nodejs.org/en/download" : "https://docs.astral.sh/uv/getting-started/installation/";
 
     /// <summary>Winget installs into the user PATH, which is what makes the note go away.</summary>
+    // Platform idiom: winget here; the Mac shows Homebrew's command, which installs into Claude Desktop's PATH floor.
     public static string InstallCommand(ToolFamily family) =>
         family == ToolFamily.NodeJs ? "winget install OpenJS.NodeJS.LTS" : "winget install astral-sh.uv";
 }

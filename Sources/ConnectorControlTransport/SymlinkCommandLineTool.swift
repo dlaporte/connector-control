@@ -84,6 +84,9 @@ public final class SymlinkCommandLineTool: CommandLineTool {
     public func install(completion: @escaping (String?) -> Void) {
         lastProblem = nil
         let completion = finishing(completion)
+        // Platform idiom: only a Mac app can run from where it will not stay, and only a link can find its path
+        // taken by a file that is not one; Windows installs into a fixed folder and adds a folder to PATH, so it
+        // has neither state.
         guard !host.controlToolIsTransient else {
             completion(ClaudeIntegration.moveToApplicationsError)
             return

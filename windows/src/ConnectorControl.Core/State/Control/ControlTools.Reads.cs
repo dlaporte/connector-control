@@ -148,7 +148,8 @@ public sealed partial class ControlTools
             var item = new List<(string Key, JsonValue Value)> { ("name", JsonValue.String(ToolInfo.Name(tool))) };
             string word;
             string detail;
-            // The Windows probe has no shell-only state; the Mac's reads "shellOnly" with its path.
+            // Platform idiom: the Windows probe reads the PATH Claude Desktop starts with, so it has no shell-only
+            // state; the Mac's reads "shellOnly" with its path for a tool only the login shell can see.
             if (status is { Found: true, Path: { } path })
             {
                 item.Add(("status", JsonValue.String("found")));
@@ -161,6 +162,7 @@ public sealed partial class ControlTools
                 item.Add(("status", JsonValue.String("notFound")));
                 word = ToolNote.NotFoundText;
                 var family = ToolInfo.Family(tool);
+                // Platform idiom: winget's command here, Homebrew's on the Mac; each installs where Claude Desktop looks.
                 detail = InstallHint(ToolInfo.LinkTitle(family), ToolInfo.InstallCommand(family));
             }
             rows.Add([ToolInfo.Name(tool), word, detail]);
