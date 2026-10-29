@@ -52,8 +52,8 @@ public enum ControlText {
     /// blank — every Default_Ignorable code point (soft hyphen, joiners, direction marks, variation
     /// selectors, tags…), the blank letters (U+115F, U+1160, U+2800, U+3164, U+FFA0), the interlinear
     /// annotation marks, the object replacement character — as a visible escape, `\n`, `\r`, `\t` or `\u{202E}`, so a value
-    /// can neither break its line, nor hide part of it, nor pass for another. A combining mark with no
-    /// character of its own to sit on shows as its code too (see `Marks`).
+    /// can neither break its line, nor hide part of it, nor pass for another. A combining mark past the
+    /// second on a character, or with no character to sit on, shows as its code too (see `Marks`).
     public static func escaped(_ text: String) -> String {
         var line = ""
         var marks = Marks()
@@ -84,7 +84,7 @@ public enum ControlText {
                 line += "\u{201C}" + escapedName(found.name) + "\u{201D}"
                 index += found.quoted.count
                 // The closing quote is a character a mark after it sits on.
-                marks = Marks(after: "\u{201D}")
+                marks = Marks(atStart: false)
             } else {
                 line += marks.bare(scalars[index]) ? hexEscape(scalars[index]) : escape(scalars[index]) ?? String(scalars[index])
                 index += 1
@@ -162,27 +162,33 @@ public enum ControlText {
         }
     }
 
-    /// The rule for combining marks as a text is read from its start: the first mark on a character is
-    /// drawn, and a mark that follows another mark, or that starts the text, shows as its code. So at
-    /// most one mark is drawn on any character, and none can be stacked high enough to paint over the
-    /// lines around it. Accented letters, composed or not, read as they are.
+    /// The rule for combining marks as a text is read from its start: the first two marks on a character
+    /// are drawn, and a third or later one, or a mark that starts the text, shows as its code. Two, because
+    /// ordinary text needs two — a Thai vowel and its tone, decomposed Vietnamese, a Hebrew dagesh and
+    /// vowel, an Arabic shadda and vowel — and two stay within the line; painting over the lines around
+    /// it takes a deep stack, which no character can now carry.
     struct Marks {
-        /// Whether the scalar read last was a mark, or none has been read: a mark here would have no
-        /// character of its own to sit on.
-        private var afterMark: Bool
+        /// The most marks drawn on one character.
+        static let drawn = 2
+        /// Whether a character has been read yet: until one has, a mark has nothing to sit on.
+        private var started: Bool
+        /// The marks read since the last character that is not one.
+        private var stacked = 0
 
-        /// At a text's start, where a mark has nothing before it.
-        init() { afterMark = true }
+        /// At a text's start, where a mark has nothing before it; or, `atStart` false, just after a
+        /// character that is not a mark.
+        init(atStart: Bool = true) { started = !atStart }
 
-        /// Just after `scalar`, whatever it was shown as.
-        init(after scalar: Unicode.Scalar) { afterMark = ControlText.isCombiningMark(scalar) }
-
-        /// Reads `scalar`, the text's next, and says whether it is a mark with no character of its own,
-        /// which shows as its code.
+        /// Reads `scalar`, the text's next, and says whether it is a mark that is not drawn, which shows
+        /// as its code.
         mutating func bare(_ scalar: Unicode.Scalar) -> Bool {
-            let mark = ControlText.isCombiningMark(scalar)
-            defer { afterMark = mark }
-            return mark && afterMark
+            guard ControlText.isCombiningMark(scalar) else {
+                started = true
+                stacked = 0
+                return false
+            }
+            stacked += 1
+            return !started || stacked > Marks.drawn
         }
     }
 

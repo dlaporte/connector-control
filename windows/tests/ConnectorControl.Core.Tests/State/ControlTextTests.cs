@@ -131,14 +131,14 @@ public class ControlTextTests
         Assert.Equal("""a\u{D800}b""", ControlText.Escaped("a\uD800b"));
     }
 
-    /// <summary>A combining mark is drawn over the character before it, and marks stacked on one character are
-    /// drawn over the lines above and below it: so only the first mark on a character is drawn, and a
-    /// further one, or one with no character before it, shows as its code, wherever text is shown.</summary>
+    /// <summary>A combining mark is drawn over the character before it, and marks stacked deep on one character
+    /// are drawn over the lines above and below it: so only the first two marks on a character are drawn,
+    /// and a third or later one, or one with no character before it, shows as its code, wherever text is shown.</summary>
     [Fact]
-    public void OnlyOneCombiningMarkIsDrawnOnACharacter()
+    public void AtMostTwoCombiningMarksAreDrawnOnACharacter()
     {
         var stack = "_" + string.Concat(Enumerable.Repeat("\u0305\u033F", 9));
-        var one = "_\u0305" + @"\u{033F}" + string.Concat(Enumerable.Repeat(@"\u{0305}\u{033F}", 8));
+        var one = "_\u0305\u033F" + string.Concat(Enumerable.Repeat(@"\u{0305}\u{033F}", 8));
         var attack = string.Concat(Enumerable.Repeat(stack, 46));
         var shown = string.Concat(Enumerable.Repeat(one, 46));
         Assert.Equal(shown, ControlText.Escaped(attack));
@@ -153,7 +153,9 @@ public class ControlTextTests
         Assert.Equal(@"\u{0301}a", ControlText.Escaped("\u0301a"));
         Assert.Equal(@"\u{0301}a", ControlText.EscapedName("\u0301a"));
         Assert.Equal(@"'\u{0301}a'", ControlText.Word("\u0301a"));
-        Assert.Equal("'a\u0301" + @"\u{0301}'", ControlText.Word("a\u0301\u0301")); // a word with a stacked mark is quoted
+        Assert.Equal(@"\u{0301}\u{0301}a", ControlText.Escaped("\u0301\u0301a"));
+        Assert.Equal("a\u0301\u0301", ControlText.Word("a\u0301\u0301")); // two marks on a character are one word
+        Assert.Equal("'a\u0301\u0301" + @"\u{0301}'", ControlText.Word("a\u0301\u0301\u0301")); // a word with a deeper stack is quoted
         // Every range, at both its ends: the same list the Mac mirror holds.
         int[] ends = [0x0300, 0x036F, 0x0483, 0x0489, 0x0591, 0x05BD, 0x0610, 0x061A, 0x064B, 0x065F, 0x0670,
                       0x06D6, 0x06DC, 0x06DF, 0x06E4, 0x06E7, 0x06E8, 0x06EA, 0x06ED, 0x0E31, 0x0E34, 0x0E3A,
@@ -161,17 +163,22 @@ public class ControlTextTests
         foreach (var value in ends)
         {
             var mark = char.ConvertFromUtf32(value);
-            Assert.Equal("a" + mark + ControlText.HexEscape(value), ControlText.Escaped("a" + mark + mark));
+            Assert.Equal("a" + mark + mark + ControlText.HexEscape(value), ControlText.Escaped("a" + mark + mark + mark));
         }
-        Assert.Equal("a\u0E30\u0E30", ControlText.Escaped("a\u0E30\u0E30")); // a letter between the ranges is no mark
+        Assert.Equal("a\u0E30\u0E30\u0E30", ControlText.Escaped("a\u0E30\u0E30\u0E30")); // a letter between the ranges is no mark
     }
 
-    /// <summary>Text with one mark on a character reads as it always has: accented letters composed either way,
-    /// and pointed Hebrew.</summary>
+    /// <summary>Text with one or two marks on a character reads as it always has: accented letters composed either
+    /// way, pointed Hebrew, and the scripts that put two marks on one letter as a matter of course — Thai
+    /// vowel and tone, Vietnamese decomposed, Hebrew dagesh and vowel, Arabic shadda and vowel.</summary>
     [Fact]
-    public void OneMarkOnACharacterReadsAsItIs()
+    public void OneOrTwoMarksOnACharacterReadAsTheyAre()
     {
-        foreach (var text in new[] { "cafe\u0301", "caf\u00E9", "\u05E9\u05B8\u05DC\u05D5\u05B9\u05DD", "x\u20D7" })
+        var thai = "\u0E17\u0E35\u0E48";
+        var vietnamese = "\u0065\u0302\u0300 \u006F\u031B\u0323";
+        var hebrew = "\u05D1\u05BC\u05B8";
+        var arabic = "\u0645\u0651\u064E";
+        foreach (var text in new[] { "cafe\u0301", "caf\u00E9", "\u05E9\u05B8\u05DC\u05D5\u05B9\u05DD", "x\u20D7", thai, hebrew, arabic })
         {
             Assert.Equal(text, ControlText.Escaped(text));
             Assert.Equal(text, ControlText.EscapedName(text));
@@ -179,6 +186,8 @@ public class ControlTextTests
             Assert.Equal(text, ControlText.EscapedPath(text));
             Assert.Equal(text, ControlText.Word(text)); // one word, unquoted
         }
+        Assert.Equal(vietnamese, ControlText.Escaped(vietnamese));
+        Assert.Equal(vietnamese, ControlText.EscapedName(vietnamese));
     }
 
     /// <summary>A name shows one way only: a backslash in it is doubled, so a name holding the text

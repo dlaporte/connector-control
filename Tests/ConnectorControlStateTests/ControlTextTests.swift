@@ -103,12 +103,12 @@ final class ControlTextTests: XCTestCase {
         XCTAssertEqual(ControlText.word("a\u{3164}b"), #"'a\u{3164}b'"#, "a word holding a blank letter is quoted")
     }
 
-    /// A combining mark is drawn over the character before it, and marks stacked on one character are
-    /// drawn over the lines above and below it: so only the first mark on a character is drawn, and a
-    /// further one, or one with no character before it, shows as its code, wherever text is shown.
-    func testOnlyOneCombiningMarkIsDrawnOnACharacter() {
+    /// A combining mark is drawn over the character before it, and marks stacked deep on one character
+    /// are drawn over the lines above and below it: so only the first two marks on a character are drawn,
+    /// and a third or later one, or one with no character before it, shows as its code, wherever text is shown.
+    func testAtMostTwoCombiningMarksAreDrawnOnACharacter() {
         let stack = "_" + String(repeating: "\u{0305}\u{033F}", count: 9)
-        let one = "_\u{0305}" + #"\u{033F}"# + String(repeating: #"\u{0305}\u{033F}"#, count: 8)
+        let one = "_\u{0305}\u{033F}" + String(repeating: #"\u{0305}\u{033F}"#, count: 8)
         let attack = String(repeating: stack, count: 46)
         let shown = String(repeating: one, count: 46)
         XCTAssertEqual(ControlText.escaped(attack), shown)
@@ -123,29 +123,39 @@ final class ControlTextTests: XCTestCase {
         XCTAssertEqual(ControlText.escaped("\u{0301}a"), #"\u{0301}a"#)
         XCTAssertEqual(ControlText.escapedName("\u{0301}a"), #"\u{0301}a"#)
         XCTAssertEqual(ControlText.word("\u{0301}a"), #"'\u{0301}a'"#)
-        XCTAssertEqual(ControlText.word("a\u{0301}\u{0301}"), "'a\u{0301}" + #"\u{0301}'"#, "a word with a stacked mark is quoted")
+        XCTAssertEqual(ControlText.escaped("\u{0301}\u{0301}a"), #"\u{0301}\u{0301}a"#)
+        XCTAssertEqual(ControlText.word("a\u{0301}\u{0301}"), "a\u{0301}\u{0301}", "two marks on a character are one word")
+        XCTAssertEqual(ControlText.word("a\u{0301}\u{0301}\u{0301}"), "'a\u{0301}\u{0301}" + #"\u{0301}'"#,
+                       "a word with a deeper stack is quoted")
         // Every range, at both its ends: the same list the Windows mirror holds.
         let ends: [UInt32] = [0x0300, 0x036F, 0x0483, 0x0489, 0x0591, 0x05BD, 0x0610, 0x061A, 0x064B, 0x065F, 0x0670,
                               0x06D6, 0x06DC, 0x06DF, 0x06E4, 0x06E7, 0x06E8, 0x06EA, 0x06ED, 0x0E31, 0x0E34, 0x0E3A,
                               0x0E47, 0x0E4E, 0x1AB0, 0x1AFF, 0x1DC0, 0x1DFF, 0x20D0, 0x20FF, 0xFE20, 0xFE2F]
         for value in ends {
             let mark = Unicode.Scalar(value)!
-            XCTAssertEqual(ControlText.escaped("a" + String(mark) + String(mark)), "a" + String(mark) + ControlText.hexEscape(mark),
-                           String(value, radix: 16))
+            XCTAssertEqual(ControlText.escaped("a" + String(mark) + String(mark) + String(mark)),
+                           "a" + String(mark) + String(mark) + ControlText.hexEscape(mark), String(value, radix: 16))
         }
-        XCTAssertEqual(ControlText.escaped("a\u{0E30}\u{0E30}"), "a\u{0E30}\u{0E30}", "a letter between the ranges is no mark")
+        XCTAssertEqual(ControlText.escaped("a\u{0E30}\u{0E30}\u{0E30}"), "a\u{0E30}\u{0E30}\u{0E30}", "a letter between the ranges is no mark")
     }
 
-    /// Text with one mark on a character reads as it always has: accented letters composed either way,
-    /// and pointed Hebrew.
-    func testOneMarkOnACharacterReadsAsItIs() {
-        for text in ["cafe\u{0301}", "caf\u{E9}", "\u{05E9}\u{05B8}\u{05DC}\u{05D5}\u{05B9}\u{05DD}", "x\u{20D7}"] {
+    /// Text with one or two marks on a character reads as it always has: accented letters composed either
+    /// way, pointed Hebrew, and the scripts that put two marks on one letter as a matter of course — Thai
+    /// vowel and tone, Vietnamese decomposed, Hebrew dagesh and vowel, Arabic shadda and vowel.
+    func testOneOrTwoMarksOnACharacterReadAsTheyAre() {
+        let thai = "\u{0E17}\u{0E35}\u{0E48}"
+        let vietnamese = "\u{0065}\u{0302}\u{0300} \u{006F}\u{031B}\u{0323}"
+        let hebrew = "\u{05D1}\u{05BC}\u{05B8}"
+        let arabic = "\u{0645}\u{0651}\u{064E}"
+        for text in ["cafe\u{0301}", "caf\u{E9}", "\u{05E9}\u{05B8}\u{05DC}\u{05D5}\u{05B9}\u{05DD}", "x\u{20D7}", thai, hebrew, arabic] {
             XCTAssertEqual(ControlText.escaped(text), text)
             XCTAssertEqual(ControlText.escapedName(text), text)
             XCTAssertEqual(ControlText.escapedValue(text), text)
             XCTAssertEqual(ControlText.escapedPath(text), text)
             XCTAssertEqual(ControlText.word(text), text, "one word, unquoted")
         }
+        XCTAssertEqual(ControlText.escaped(vietnamese), vietnamese)
+        XCTAssertEqual(ControlText.escapedName(vietnamese), vietnamese)
     }
 
     /// A name shows one way only: a backslash in it is doubled, so a name holding the text
