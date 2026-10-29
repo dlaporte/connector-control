@@ -101,7 +101,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                 Stepper(value: $model.backupKeepCount,
                         in: SettingsModel.minKeepCount...SettingsModel.maxKeepCount) {
-                    Text(model.keepCountLabel)
+                    Text(SettingsModel.backupsTitle)
                 }
                 HStack {
                     Button(SettingsModel.revealInFinderTitle) {

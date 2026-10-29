@@ -62,7 +62,7 @@ public static class CommandLineToolText
     // app; on Windows a terminal already open keeps the PATH it started with, so this says "a new terminal".
     public const string RunHelpCaption = "Run connector-control help in a new terminal.";
 
-    public static string InstalledAtText(string path) => $"Installed at {path}";
+    public static string InstalledInText(string folder) => $"Installed in {folder}";
 
     public static string ScriptsCaption(string path) => $"Scripts can always use {path}";
 

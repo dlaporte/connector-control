@@ -33,6 +33,14 @@ public enum ToolFamily: Equatable, Sendable {
         }
     }
 
+    /// The family's tools, as the Settings Tools footer names them: the one it is named after first.
+    public var toolNames: String {
+        switch self {
+        case .nodeJS: return "node and npx"
+        case .uv: return "uv and uvx"
+        }
+    }
+
     public var linkURL: URL {
         switch self {
         case .nodeJS: return URL(string: "https://nodejs.org/en/download")!

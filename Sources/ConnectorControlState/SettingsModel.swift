@@ -10,28 +10,41 @@ public final class SettingsModel: ObservableObject {
     public static let generalTab = "General"
     public static let storageTab = "Storage"
     public static let claudeTab = "Claude"
+    public static let startupHeader = "Startup"
     public static let launchAtLoginTitle = "Launch at login"
+    public static let confirmationsHeader = "Confirmations"
     public static let confirmRestartTitle = "Confirm before restarting Claude"
     public static let confirmQuitTitle = "Confirm before quitting"
+    public static let notificationsHeader = "Notifications"
     public static let notifyTitle = "Notify on external changes"
+    public static let notifyCaption = "When the master list or a subscribed document changes outside the app."
     public static let updatesHeader = "Updates"
     public static let autoUpdateTitle = "Automatically download and install updates"
     public static let checkForUpdatesTitle = "Check for Updates"
+    public static let previewUpdatesCaption = "Previews update to later previews and the final release."
     public static let masterListHeader = "Master List Location"
+    public static let masterListFooter = "Holds mcps.json and collections.json. A synced folder shares them across your Macs."
+    /// The open panel's own button and title, which act at once, so no ellipsis.
     public static let chooseTitle = "Choose"
+    /// The Settings button that opens the panel.
+    public static let chooseButtonTitle = "Choose…"
     public static let useDefaultTitle = "Use Default"
     public static let backupsHeader = "Backups"
-    public static let backupsCaption = "Claude’s config, the master list and collections.json are backed up automatically before every change."
+    public static let backupsTitle = "Backups of each file"
+    public static let backupsCaption = "Claude’s config, the master list and collections.json."
+    public static let backupsFooter = "A backup is made automatically before every change."
     public static let revealInFinderTitle = "Reveal in Finder"
+    /// The Settings button that opens the restore sheet; the sheet's own button is RestoreModel.restoreTitle.
+    public static let restoreButtonTitle = "Restore…"
     public static let claudeAppHeader = "Claude App"
     public static let claudeAppRejectedTitle = "That app can’t be used as Claude Desktop"
     public static let toolsHeader = ToolNote.settingsHeader
     public static let toolsCaption = ToolNote.settingsCaption
     public static let claudeIntegrationHeader = "Claude Integration"
     public static let claudeIntegrationTitle = "Let Claude manage Connector Control"
-    public static let claudeIntegrationCaption = "Adds a connector named connector-control to Claude's config, so Claude can list, switch and edit your connectors. Takes effect when Claude restarts."
-    public static let confirmClaudeChangesTitle = "Confirm changes Claude makes to connectors"
-    public static let confirmClaudeChangesOnCaption = "Adding, editing or deleting a connector, deleting a collection, importing, subscribing, applying an update and restoring a backup ask here first."
+    public static let claudeIntegrationCaption = "Claude can list, switch and edit connectors. Restart Claude to apply."
+    public static let confirmClaudeChangesTitle = "Confirm changes Claude makes"
+    public static let confirmClaudeChangesOnCaption = "Ask before Claude adds, edits, deletes, imports or restores."
     public static let confirmClaudeChangesOffCaption = "Claude can then change what it runs without asking here. Text Claude reads, such as a web page, could ask it to."
     public static let commandLineToolHeader = "Command-Line Tool"
     /// How far a row's title fades while its switch cannot change, as the mockup draws it; the note that
@@ -43,9 +56,16 @@ public final class SettingsModel: ObservableObject {
 
     public static func versionText(_ version: String) -> String { "Version \(version)" }
 
-    public static func keepCountLabel(_ count: Int) -> String { "Keep \(count) backups of each file" }
-
     public static func loginItemFailureNote(_ message: String) -> String { "Couldn't update login item: \(message)" }
+
+    /// A folder's or file's own name, as a path row shows it on its first line.
+    public static func shownName(_ path: String) -> String { (path as NSString).lastPathComponent }
+
+    // Platform idiom: the Mac shortens a path in the home folder to ~, as Finder does; Windows shows it in full.
+    /// The folder a path is in, as a path row's note shows it.
+    public static func shownParent(_ path: String) -> String {
+        ((path as NSString).deletingLastPathComponent as NSString).abbreviatingWithTildeInPath
+    }
 
     private let state: AppState
     private let settings: AppSettings
@@ -102,6 +122,10 @@ public final class SettingsModel: ObservableObject {
     }
 
     @Published public private(set) var loginItemNote: String?
+
+    /// The note is a problem (amber in the view): the login item could not be changed. Waiting for approval
+    /// is an instruction, not a problem.
+    public var loginItemNoteIsWarning: Bool { loginItemNote.map { $0 != SettingsModel.loginItemApprovalNote } ?? false }
 
     private func setLaunchAtLoginSilently(_ value: Bool) {
         settingLaunchAtLoginSilently = true
@@ -162,11 +186,21 @@ public final class SettingsModel: ObservableObject {
 
     public var versionText: String { SettingsModel.versionText(updater.versionDisplay) }
 
+    /// A preview build: its version carries a prerelease label, as 1.5.0-preview.10 does.
+    public var isPreviewBuild: Bool { ControlVersion.parts(updater.versionDisplay)?.prerelease.isEmpty == false }
+
+    /// Under the version, on a preview only: where a preview's updates come from.
+    public var updatesCaption: String? { isPreviewBuild ? SettingsModel.previewUpdatesCaption : nil }
+
     public func checkForUpdates() { updater.checkForUpdates() }
 
     // MARK: - Storage
 
     public var storeDir: URL { state.service.paths.storeDirURL }
+
+    public var storeDirName: String { SettingsModel.shownName(storeDir.path) }
+
+    public var storeDirParent: String { SettingsModel.shownParent(storeDir.path) }
 
     public var canUseDefaultStore: Bool { !(settings.masterStoreDir ?? "").isEmpty }
 
@@ -191,17 +225,24 @@ public final class SettingsModel: ObservableObject {
         }
     }
 
-    public var keepCountLabel: String { SettingsModel.keepCountLabel(settings.backupKeepCount) }
-
     public func incrementKeepCount() { backupKeepCount = settings.backupKeepCount + 1 }
 
     public func decrementKeepCount() { backupKeepCount = settings.backupKeepCount - 1 }
 
     public var backupsDir: URL { state.service.backups.backupsDir }
 
+    public var backupsDirName: String { SettingsModel.shownName(backupsDir.path) }
+
+    public var backupsDirParent: String { SettingsModel.shownParent(backupsDir.path) }
+
     // MARK: - Claude
 
     public var claudeApp: URL { URL(fileURLWithPath: settings.claudeAppPath ?? AppState.defaultClaudeAppPath) }
+
+    /// macOS only: the app's name and folder, as its row shows them. Windows names a launch target instead.
+    public var claudeAppName: String { SettingsModel.shownName(claudeApp.path) }
+
+    public var claudeAppParent: String { SettingsModel.shownParent(claudeApp.path) }
 
     public var canUseDefaultClaudeApp: Bool { claudeApp.path != AppState.defaultClaudeAppPath }
 
@@ -263,17 +304,20 @@ public final class SettingsModel: ObservableObject {
         }
     }
 
-    /// The checkbox keeps its value while the switch is off, dimmed.
+    /// The second switch keeps its value while the first is off, dimmed.
     public var canChangeConfirmClaudeChanges: Bool { settings.claudeIntegrationEnabled }
 
-    /// Under the checkbox: what it guards while ticked, what is at stake while not, and nothing
-    /// while the switch is off.
+    /// The second switch's title, dimmed with it; its note is hidden then.
+    public var confirmClaudeChangesTitleOpacity: Double { canChangeConfirmClaudeChanges ? 1 : SettingsModel.dimmedOpacity }
+
+    /// Under the second switch: what it guards while on, what is at stake while off, and nothing
+    /// while the integration is off.
     public var confirmClaudeChangesCaption: String? {
         guard settings.claudeIntegrationEnabled else { return nil }
         return settings.confirmClaudeChanges ? SettingsModel.confirmClaudeChangesOnCaption : SettingsModel.confirmClaudeChangesOffCaption
     }
 
-    /// The unticked caption is a warning (amber in the view).
+    /// The caption while it is off is a warning (amber in the view).
     public var confirmClaudeChangesCaptionIsWarning: Bool {
         settings.claudeIntegrationEnabled && !settings.confirmClaudeChanges
     }
@@ -286,12 +330,13 @@ public final class SettingsModel: ObservableObject {
     /// Whether the app has a tool to put on PATH; the group is left out when it has none.
     public var hasCommandLineTool: Bool { commandLineTool != nil }
 
-    /// Where the tool is, or that it is not installed; the link set apart.
+    /// Where the tool is, or that it is not installed; the link's folder set apart.
     public var commandLineToolStatus: [TextRun] {
         guard let tool = commandLineTool else { return [] }
         guard tool.isInstalled else { return [TextRun(CommandLineToolText.notInstalledText)] }
         guard let location = tool.installedLocation else { return [TextRun(CommandLineToolText.inPathText)] }
-        return TextRun.runs(CommandLineToolText.installedAtText(location), settingApart: [location])
+        let folder = SettingsModel.shownParent(location)
+        return TextRun.runs(CommandLineToolText.installedInText(folder), settingApart: [folder])
     }
 
     /// What to do with it: run `help` once installed; else the full path scripts can always use — left
@@ -343,6 +388,9 @@ public final class SettingsModel: ObservableObject {
     public var toolRows: [ToolRow] {
         Tool.allCases.map { ToolRow.make(tool: $0, status: state.toolStatuses[$0]) }
     }
+
+    /// The Tools footer: one line for each family with a tool that has a problem, so every row stays one line tall.
+    public var toolFooterLines: [ToolFooterLine] { ToolFooterLine.make(statuses: state.toolStatuses) }
 
     /// The Mac probes all four when the Claude tab appears.
     public func refreshTools() { state.refreshTools() }

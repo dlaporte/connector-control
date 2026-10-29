@@ -9,25 +9,38 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public const string GeneralTab = "General";
     public const string StorageTab = "Storage";
     public const string ClaudeTab = "Claude";
+    public const string StartupHeader = "Startup";
     public const string LaunchAtStartupTitle = "Launch at startup";
+    public const string ConfirmationsHeader = "Confirmations";
     public const string ConfirmRestartTitle = "Confirm before restarting Claude";
     public const string ConfirmQuitTitle = "Confirm before quitting";
+    public const string NotificationsHeader = "Notifications";
     public const string NotifyTitle = "Notify on external changes";
+    public const string NotifyCaption = "When the master list or a subscribed document changes outside the app.";
     public const string UpdatesHeader = "Updates";
     public const string AutoUpdateTitle = "Automatically download and install updates";
     public const string CheckForUpdatesTitle = "Check for Updates";
+    public const string PreviewUpdatesCaption = "Previews update to later previews and the final release.";
     public const string MasterListHeader = "Master List Location";
+    public const string MasterListFooter = "Holds mcps.json and collections.json. A synced folder shares them across your PCs.";
+    /// <summary>The open panel's own button and title, which act at once, so no ellipsis.</summary>
     public const string ChooseTitle = "Choose";
+    /// <summary>The Settings button that opens the panel.</summary>
+    public const string ChooseButtonTitle = "Choose…";
     public const string UseDefaultTitle = "Use Default";
     public const string BackupsHeader = "Backups";
-    public const string BackupsCaption = "Claude’s config, the master list and collections.json are backed up automatically before every change.";
+    public const string BackupsTitle = "Backups of each file";
+    public const string BackupsCaption = "Claude’s config, the master list and collections.json.";
+    public const string BackupsFooter = "A backup is made automatically before every change.";
     public const string ShowInExplorerTitle = "Show in Explorer";
+    /// <summary>The Settings button that opens the restore sheet; the sheet's own button is RestoreModel.RestoreTitle.</summary>
+    public const string RestoreButtonTitle = "Restore…";
     public const string ClaudeAppHeader = "Claude App";
     public const string ClaudeIntegrationHeader = "Claude Integration";
     public const string ClaudeIntegrationTitle = "Let Claude manage Connector Control";
-    public const string ClaudeIntegrationCaption = "Adds a connector named connector-control to Claude's config, so Claude can list, switch and edit your connectors. Takes effect when Claude restarts.";
-    public const string ConfirmClaudeChangesTitle = "Confirm changes Claude makes to connectors";
-    public const string ConfirmClaudeChangesOnCaption = "Adding, editing or deleting a connector, deleting a collection, importing, subscribing, applying an update and restoring a backup ask here first.";
+    public const string ClaudeIntegrationCaption = "Claude can list, switch and edit connectors. Restart Claude to apply.";
+    public const string ConfirmClaudeChangesTitle = "Confirm changes Claude makes";
+    public const string ConfirmClaudeChangesOnCaption = "Ask before Claude adds, edits, deletes, imports or restores.";
     public const string ConfirmClaudeChangesOffCaption = "Claude can then change what it runs without asking here. Text Claude reads, such as a web page, could ask it to.";
     public const string CommandLineToolHeader = "Command-Line Tool";
     /// <summary>How far a row's title fades while its switch cannot change, as the mockup draws it; the note that
@@ -38,6 +51,33 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public const string LaunchTargetRejectedTitle = "That program can’t be used as Claude Desktop";
     public const int MinKeepCount = 5;
     public const int MaxKeepCount = 100;
+
+    /// <summary>A folder's or file's own name, as a path row shows it on its first line.</summary>
+    public static string ShownName(string path)
+    {
+        var trimmed = Trimmed(path);
+        return trimmed[(trimmed.LastIndexOfAny(Separators) + 1)..];
+    }
+
+    // Platform idiom: the Mac shortens a path in the home folder to ~, as Finder does; Windows shows it in full.
+    /// <summary>The folder a path is in, as a path row's note shows it.</summary>
+    public static string ShownParent(string path)
+    {
+        // Cut by hand rather than with Path.GetDirectoryName, which would turn a link's / into \ on Windows.
+        var trimmed = Trimmed(path);
+        var cut = trimmed.LastIndexOfAny(Separators);
+        if (cut < 0)
+        {
+            return "";
+        }
+        // A drive's or the volume's root keeps its separator: C:\ and /, not C: and nothing.
+        return trimmed[..(cut == 0 || trimmed[cut - 1] == ':' ? cut + 1 : cut)];
+    }
+
+    private static readonly char[] Separators = ['/', '\\'];
+
+    /// <summary>The path without a separator at its end, either kind; a root stays as it is.</summary>
+    private static string Trimmed(string path) => path.TrimEnd(Separators) is { Length: > 0 } trimmed ? trimmed : path;
 
     private readonly AppState state;
     private readonly ISettings settings;
@@ -130,11 +170,17 @@ public sealed class SettingsModel : ObservableObject, IDisposable
             if (Set(ref loginItemNote, value))
             {
                 Raise(nameof(HasLoginItemNote));
+                Raise(nameof(LoginItemNoteIsWarning));
             }
         }
     }
 
     public bool HasLoginItemNote => loginItemNote is not null;
+
+    // Platform idiom: Windows has no approval to wait for, so every note it shows is a failure.
+    /// <summary>The note is a problem (amber in the view): the login item could not be changed. Waiting for approval
+    /// is an instruction, not a problem.</summary>
+    public bool LoginItemNoteIsWarning => loginItemNote is not null;
 
     public bool ConfirmBeforeRestart
     {
@@ -205,18 +251,21 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         set { state.SetConfirmClaudeChanges(value); Raise(); }
     }
 
-    /// <summary>The checkbox keeps its value while the switch is off, dimmed.</summary>
+    /// <summary>The second switch keeps its value while the first is off, dimmed.</summary>
     public bool CanChangeConfirmClaudeChanges => settings.ClaudeIntegrationEnabled;
 
+    /// <summary>The second switch's title, dimmed with it; its note is hidden then.</summary>
+    public double ConfirmClaudeChangesTitleOpacity => CanChangeConfirmClaudeChanges ? 1 : DimmedOpacity;
+
     /// <summary>
-    /// Under the checkbox: what it guards while ticked, what is at stake while not, and nothing
-    /// while the switch is off.
+    /// Under the second switch: what it guards while on, what is at stake while off, and nothing
+    /// while the integration is off.
     /// </summary>
     public string? ConfirmClaudeChangesCaption =>
         !settings.ClaudeIntegrationEnabled ? null
         : settings.ConfirmClaudeChanges ? ConfirmClaudeChangesOnCaption : ConfirmClaudeChangesOffCaption;
 
-    /// <summary>The unticked caption is a warning (amber in the view).</summary>
+    /// <summary>The caption while it is off is a warning (amber in the view).</summary>
     public bool ConfirmClaudeChangesCaptionIsWarning => settings.ClaudeIntegrationEnabled && !settings.ConfirmClaudeChanges;
 
     /// <summary>The running app's version, as the Updates section shows it.</summary>
@@ -229,11 +278,23 @@ public sealed class SettingsModel : ObservableObject, IDisposable
 
     public string VersionText => VersionTextFor(updater.VersionDisplay);
 
+    /// <summary>A preview build: its version carries a prerelease label, as 1.5.0-preview.10 does.</summary>
+    public bool IsPreviewBuild => ControlVersion.Parts(updater.VersionDisplay) is { Prerelease.Length: > 0 };
+
+    /// <summary>Under the version, on a preview only: where a preview's updates come from.</summary>
+    public string? UpdatesCaption => IsPreviewBuild ? PreviewUpdatesCaption : null;
+
+    public bool HasUpdatesCaption => UpdatesCaption is not null;
+
     public Task CheckForUpdatesAsync() => updates.CheckAsync(interactive: true);
 
     // MARK: Storage
 
     public string StoreDirPath => state.Service.Paths.StoreDir;
+
+    public string StoreDirName => ShownName(StoreDirPath);
+
+    public string StoreDirParent => ShownParent(StoreDirPath);
 
     public bool CanUseDefaultStore => !string.IsNullOrEmpty(settings.MasterStoreDir);
 
@@ -257,27 +318,24 @@ public sealed class SettingsModel : ObservableObject, IDisposable
             var clamped = Math.Clamp(value, MinKeepCount, MaxKeepCount);
             if (clamped == settings.BackupKeepCount)
             {
-                Raise();                        // the stepper's own binding snaps back to the clamped value
-                Raise(nameof(KeepCountLabel));  // same two raises on both branches, so the label can never drift
+                Raise();   // the stepper's own binding snaps back to the clamped value
                 return;
             }
             settings.BackupKeepCount = clamped;
             state.RefreshServiceSettings();
             Raise();
-            Raise(nameof(KeepCountLabel));
         }
     }
-
-    /// <summary>The Mac's static and an instance property of the same name can coexist there; C# forbids that, so the instance property below calls this.</summary>
-    public static string KeepCountLabelFor(int count) => $"Keep {count} backups of each file";
-
-    public string KeepCountLabel => KeepCountLabelFor(settings.BackupKeepCount);
 
     public void IncrementKeepCount() => BackupKeepCount = settings.BackupKeepCount + 1;
 
     public void DecrementKeepCount() => BackupKeepCount = settings.BackupKeepCount - 1;
 
     public string BackupsDir => state.Service.Backups.BackupsDir;
+
+    public string BackupsDirName => ShownName(BackupsDir);
+
+    public string BackupsDirParent => ShownParent(BackupsDir);
 
     // MARK: Claude
 
@@ -326,7 +384,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     /// <summary>Whether the app has a tool to put on PATH; the group is left out when it has none.</summary>
     public bool HasCommandLineTool => commandLineTool is not null;
 
-    /// <summary>Where the tool is, or that it is not installed; the link set apart.</summary>
+    /// <summary>Where the tool is, or that it is not installed; the link's folder set apart.</summary>
     public IReadOnlyList<TextRun> CommandLineToolStatus
     {
         get
@@ -343,7 +401,8 @@ public sealed class SettingsModel : ObservableObject, IDisposable
             {
                 return [new TextRun(CommandLineToolText.InPathText)];
             }
-            return TextRun.Runs(CommandLineToolText.InstalledAtText(location), [location]);
+            var folder = ShownParent(location);
+            return TextRun.Runs(CommandLineToolText.InstalledInText(folder), [folder]);
         }
     }
 
@@ -428,6 +487,12 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public IReadOnlyList<ToolRow> ToolRows =>
         ToolInfo.All.Select(tool => ToolRow.Make(tool, state.ToolStatuses.TryGetValue(tool, out var status) ? status : null)).ToList();
 
+    /// <summary>The Tools footer: one line for each family with a tool that has a problem, so every row stays one line tall.</summary>
+    public IReadOnlyList<ToolFooterLine> ToolFooterLines => ToolFooterLine.Make(state.ToolStatuses);
+
+    /// <summary>Whether the footer has install lines; the view leaves the space out while it has none.</summary>
+    public bool HasToolFooterLines => ToolFooterLines.Count > 0;
+
     /// <summary>Windows probes all four when the window opens.</summary>
     public void RefreshTools() => _ = state.RefreshToolsAsync();
 
@@ -436,6 +501,8 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         if (Affects(e, nameof(AppState.ToolStatuses)))
         {
             Raise(nameof(ToolRows));
+            Raise(nameof(ToolFooterLines));
+            Raise(nameof(HasToolFooterLines));
         }
         // The Claude group follows a change made anywhere — the command-line tool or MDM turning the
         // integration on, a clash arriving with the store, the endpoint failing — as the Mac relays every
@@ -457,7 +524,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     [
         nameof(ClaudeIntegrationEnabled), nameof(CanChangeClaudeIntegration), nameof(ClaudeIntegrationNote),
         nameof(ClaudeIntegrationCaptionText), nameof(ClaudeIntegrationCaptionIsWarning), nameof(ClaudeIntegrationTitleOpacity),
-        nameof(ConfirmClaudeChanges), nameof(CanChangeConfirmClaudeChanges), nameof(ConfirmClaudeChangesCaption),
+        nameof(ConfirmClaudeChanges), nameof(CanChangeConfirmClaudeChanges), nameof(ConfirmClaudeChangesTitleOpacity), nameof(ConfirmClaudeChangesCaption),
         nameof(HasConfirmClaudeChangesCaption), nameof(ConfirmClaudeChangesCaptionIsWarning), nameof(ControlEndpointProblem),
         nameof(HasControlEndpointProblem),
     ];

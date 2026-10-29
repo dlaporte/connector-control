@@ -56,7 +56,7 @@ public enum ControlCaller: Equatable, Sendable {
 }
 
 /// How a tool is guarded when Claude calls it: reads and direct changes run; a gated change asks
-/// first while "Confirm changes Claude makes to connectors" is on; a restart always asks.
+/// first while "Confirm changes Claude makes" is on; a restart always asks.
 public enum ControlGateClass: Equatable, Sendable {
     case read, direct, gated, alwaysConfirm
 }

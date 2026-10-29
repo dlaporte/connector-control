@@ -109,7 +109,7 @@ public class StringCatalogTests
         ["CollectionsModel.selectedCount"] = ["3"],
         ["CollectionsModel.stopSyncingMessage"] = ["X"],
         ["CommandLineToolText.installFailedError"] = ["X"],
-        ["CommandLineToolText.installedAtText"] = ["X"],
+        ["CommandLineToolText.installedInText"] = ["X"],
         ["CommandLineToolText.missingToolError"] = ["X"],
         ["CommandLineToolText.occupiedError"] = ["X"],
         ["CommandLineToolText.removeFailedError"] = ["X"],
@@ -262,9 +262,9 @@ public class StringCatalogTests
         ["RemotePattern.cmdUnsafeReason"] = ["Server URL"],
         ["RestoreModel.confirmMessage"] = ["X"],
         ["ReviewModel.title"] = ["X"],
-        ["SettingsModel.keepCountLabel"] = ["3"],
         ["SettingsModel.loginItemFailureNote"] = ["X"],
         ["SettingsModel.versionText"] = ["X"],
+        ["ToolFooterLine.installText"] = ["X", "Y", "Z"],
         ["UpdateCoordinator.availableDetail"] = ["X", "Y"],
         ["UpdateCoordinator.upToDateDetail"] = ["X"],
     };
@@ -440,7 +440,7 @@ public class StringCatalogTests
         actual["CommandLineToolText.inPathText"] = CommandLineToolText.InPathText;
         actual["CommandLineToolText.installButton"] = CommandLineToolText.InstallButton;
         actual["CommandLineToolText.installFailedError"] = CommandLineToolText.InstallFailedError("X");
-        actual["CommandLineToolText.installedAtText"] = CommandLineToolText.InstalledAtText("X");
+        actual["CommandLineToolText.installedInText"] = CommandLineToolText.InstalledInText("X");
         actual["CommandLineToolText.missingToolError"] = CommandLineToolText.MissingToolError("X");
         actual["CommandLineToolText.notInstalledText"] = CommandLineToolText.NotInstalledText;
         actual["CommandLineToolText.occupiedError"] = CommandLineToolText.OccupiedError("X");
@@ -896,8 +896,11 @@ public class StringCatalogTests
 
         actual["SettingsModel.autoUpdateTitle"] = SettingsModel.AutoUpdateTitle;
         actual["SettingsModel.backupsCaption"] = SettingsModel.BackupsCaption;
+        actual["SettingsModel.backupsFooter"] = SettingsModel.BackupsFooter;
         actual["SettingsModel.backupsHeader"] = SettingsModel.BackupsHeader;
+        actual["SettingsModel.backupsTitle"] = SettingsModel.BackupsTitle;
         actual["SettingsModel.checkForUpdatesTitle"] = SettingsModel.CheckForUpdatesTitle;
+        actual["SettingsModel.chooseButtonTitle"] = SettingsModel.ChooseButtonTitle;
         actual["SettingsModel.chooseTitle"] = SettingsModel.ChooseTitle;
         actual["SettingsModel.claudeAppHeader"] = SettingsModel.ClaudeAppHeader;
         actual["SettingsModel.claudeAppRejectedTitle"] = SettingsModel.LaunchTargetRejectedTitle;
@@ -911,31 +914,40 @@ public class StringCatalogTests
         actual["SettingsModel.confirmClaudeChangesTitle"] = SettingsModel.ConfirmClaudeChangesTitle;
         actual["SettingsModel.confirmQuitTitle"] = SettingsModel.ConfirmQuitTitle;
         actual["SettingsModel.confirmRestartTitle"] = SettingsModel.ConfirmRestartTitle;
+        actual["SettingsModel.confirmationsHeader"] = SettingsModel.ConfirmationsHeader;
         actual["SettingsModel.configPathLabel"] = SettingsModel.ConfigPathLabel;
         actual["SettingsModel.generalTab"] = SettingsModel.GeneralTab;
         // Inline literals inside InstallKindText's switch expression — not named constants.
         actual["SettingsModel.installKindLegacyText"] = "Legacy installer";
         actual["SettingsModel.installKindMsixText"] = "MSIX package";
-        actual["SettingsModel.keepCountLabel"] = SettingsModel.KeepCountLabelFor(3);
         actual["SettingsModel.launchAtLoginTitle"] = SettingsModel.LaunchAtStartupTitle;
         actual["SettingsModel.launchTargetLabel"] = SettingsModel.LaunchTargetLabel;
         actual["SettingsModel.loginItemFailureNote"] = SettingsModel.StartupEntryFailureNote("X");
+        actual["SettingsModel.masterListFooter"] = SettingsModel.MasterListFooter;
         actual["SettingsModel.masterListHeader"] = SettingsModel.MasterListHeader;
+        actual["SettingsModel.notificationsHeader"] = SettingsModel.NotificationsHeader;
+        actual["SettingsModel.notifyCaption"] = SettingsModel.NotifyCaption;
         actual["SettingsModel.notifyTitle"] = SettingsModel.NotifyTitle;
+        actual["SettingsModel.previewUpdatesCaption"] = SettingsModel.PreviewUpdatesCaption;
+        actual["SettingsModel.restoreButtonTitle"] = SettingsModel.RestoreButtonTitle;
         actual["SettingsModel.revealInFinderTitle"] = SettingsModel.ShowInExplorerTitle;
+        actual["SettingsModel.startupHeader"] = SettingsModel.StartupHeader;
         actual["SettingsModel.storageTab"] = SettingsModel.StorageTab;
         actual["SettingsModel.updatesHeader"] = SettingsModel.UpdatesHeader;
         actual["SettingsModel.useDefaultTitle"] = SettingsModel.UseDefaultTitle;
         actual["SettingsModel.versionText"] = SettingsModel.VersionTextFor("X");
 
-        // MARK: ToolFamily / ToolInfo / ToolNote
+        // MARK: ToolFamily / ToolInfo / ToolFooterLine / ToolNote
 
         actual["ToolFamily.nodeJS.installCommand"] = ToolInfo.InstallCommand(ToolFamily.NodeJs);
         actual["ToolFamily.nodeJS.linkTitle"] = ToolInfo.LinkTitle(ToolFamily.NodeJs);
         actual["ToolFamily.nodeJS.linkURL"] = ToolInfo.LinkUrl(ToolFamily.NodeJs);
+        actual["ToolFamily.nodeJS.toolNames"] = ToolInfo.ToolNames(ToolFamily.NodeJs);
         actual["ToolFamily.uv.installCommand"] = ToolInfo.InstallCommand(ToolFamily.Uv);
         actual["ToolFamily.uv.linkTitle"] = ToolInfo.LinkTitle(ToolFamily.Uv);
         actual["ToolFamily.uv.linkURL"] = ToolInfo.LinkUrl(ToolFamily.Uv);
+        actual["ToolFamily.uv.toolNames"] = ToolInfo.ToolNames(ToolFamily.Uv);
+        actual["ToolFooterLine.installText"] = ToolFooterLine.InstallText("X", "Y", "Z");
         actual["ToolNote.checkingText"] = ToolNote.CheckingText;
         actual["ToolNote.foundText"] = ToolNote.FoundText;
         actual["ToolNote.missingText"] = ToolNote.MissingText(Tool.Npx);

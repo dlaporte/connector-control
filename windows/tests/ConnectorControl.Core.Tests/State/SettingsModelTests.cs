@@ -70,11 +70,14 @@ public class SettingsModelTests
         Assert.False(rig.Model.LaunchAtStartup);
         Assert.Equal("Couldn't update startup entry: Access is denied.", rig.Model.LoginItemNote);
         Assert.True(rig.Model.HasLoginItemNote);
+        Assert.True(rig.Model.LoginItemNoteIsWarning);   // a failure is amber
         Assert.Contains(nameof(SettingsModel.HasLoginItemNote), raised);
+        Assert.Contains(nameof(SettingsModel.LoginItemNoteIsWarning), raised);
         rig.Autostart.FailWith = null;
         rig.Model.LaunchAtStartup = true;
         Assert.Null(rig.Model.LoginItemNote);
         Assert.False(rig.Model.HasLoginItemNote);
+        Assert.False(rig.Model.LoginItemNoteIsWarning);
     }
 
     [Fact]
@@ -100,6 +103,25 @@ public class SettingsModelTests
         rig.Model.Refresh();
         Assert.False(rig.Model.UpdatesEnabled);
         Assert.Equal("Version development build", rig.Model.VersionText);
+        Assert.False(rig.Model.IsPreviewBuild);
+        Assert.Null(rig.Model.UpdatesCaption);
+        Assert.False(rig.Model.HasUpdatesCaption);
+    }
+
+    /// <summary>Only a preview says where its updates come from; a release and a development build say nothing.</summary>
+    [Fact]
+    public void OnlyAPreviewSaysWhereItsUpdatesComeFrom()
+    {
+        using var rig = new Rig();
+        rig.Updater.VersionDisplay = "1.5.0-preview.10+1a2b3c4";
+        Assert.True(rig.Model.IsPreviewBuild);
+        Assert.Equal(SettingsModel.PreviewUpdatesCaption, rig.Model.UpdatesCaption);
+        Assert.True(rig.Model.HasUpdatesCaption);
+        rig.Updater.VersionDisplay = "1.5.0+1a2b3c4";
+        Assert.False(rig.Model.IsPreviewBuild);
+        Assert.Null(rig.Model.UpdatesCaption);
+        rig.Updater.VersionDisplay = "1.5.0";
+        Assert.False(rig.Model.IsPreviewBuild);
     }
 
     [Fact]
@@ -117,7 +139,7 @@ public class SettingsModelTests
     public void BackupKeepCountClampsAndRebuildsTheService()
     {
         using var rig = new Rig();
-        Assert.Equal("Keep 20 backups of each file", rig.Model.KeepCountLabel);
+        Assert.Equal(20, rig.Model.BackupKeepCount);
         rig.Model.BackupKeepCount = 500;
         Assert.Equal(100, rig.Model.BackupKeepCount);
         Assert.Equal(100, rig.H.Settings.BackupKeepCount);
@@ -128,7 +150,6 @@ public class SettingsModelTests
         Assert.Equal(5, rig.Model.BackupKeepCount);
         rig.Model.IncrementKeepCount();
         Assert.Equal(6, rig.Model.BackupKeepCount);
-        Assert.Equal("Keep 6 backups of each file", rig.Model.KeepCountLabel);
     }
 
     [Fact]
@@ -136,15 +157,32 @@ public class SettingsModelTests
     {
         using var rig = new Rig();
         Assert.Equal(rig.H.StoreDir, rig.Model.StoreDirPath);
+        Assert.Equal("Connector Control", rig.Model.StoreDirName);
+        Assert.Equal(SettingsModel.ShownParent(rig.H.StoreDir), rig.Model.StoreDirParent);
+        Assert.Equal("backups", rig.Model.BackupsDirName);
+        Assert.Equal(SettingsModel.ShownParent(rig.H.BackupsDir), rig.Model.BackupsDirParent);
         Assert.False(rig.Model.CanUseDefaultStore);
         var synced = rig.H.Dir.File("synced");
         rig.Model.ChooseStoreDir(synced);
         Assert.Equal(synced, rig.Model.StoreDirPath);
+        Assert.Equal("synced", rig.Model.StoreDirName);
         Assert.True(rig.Model.CanUseDefaultStore);
         Assert.Equal(rig.H.BackupsDir, rig.Model.BackupsDir);
         rig.Model.UseDefaultStoreDir();
         Assert.Equal(rig.H.StoreDir, rig.Model.StoreDirPath);
         Assert.False(rig.Model.CanUseDefaultStore);
+    }
+
+    /// <summary>A path row shows the name, and under it the folder it is in; Windows shows the folder in full.</summary>
+    [Fact]
+    public void APathRowShowsTheNameAndTheFolderItIsIn()
+    {
+        Assert.Equal("Connector Control", SettingsModel.ShownName(@"C:\Users\me\AppData\Roaming\Connector Control"));
+        Assert.Equal(@"C:\Users\me\AppData\Roaming", SettingsModel.ShownParent(@"C:\Users\me\AppData\Roaming\Connector Control"));
+        Assert.Equal("bin", SettingsModel.ShownName(@"C:\Users\me\bin\"));
+        Assert.Equal(@"C:\", SettingsModel.ShownParent(@"C:\Users"));
+        Assert.Equal("/usr/local/bin", SettingsModel.ShownParent("/usr/local/bin/connector-control"));
+        Assert.Equal("/", SettingsModel.ShownParent("/Applications"));
     }
 
     [Theory]
@@ -232,6 +270,26 @@ public class SettingsModelTests
         Assert.Null(rows[1].Note);
         Assert.Equal("Install uv", rows[2].Note!.LinkTitle);
         Assert.Equal("winget install astral-sh.uv", rows[3].Note!.InstallCommand);
+        Assert.Equal(["uv and uvx: Install uv or run winget install astral-sh.uv."], rig.Model.ToolFooterLines.Select(l => l.Text).ToArray());   // one line for the family, not one a tool
+        Assert.True(rig.Model.HasToolFooterLines);
+    }
+
+    /// <summary>The footer has a line for each family with a problem, Node.js before uv as the rows run, the link and the
+    /// command set apart; nothing while every tool is found or still being checked.</summary>
+    [Fact]
+    public void TheToolsFooterHasALineForEachFamilyWithAProblem()
+    {
+        Assert.Empty(ToolFooterLine.Make(new Dictionary<Tool, ToolStatus>()));
+        Assert.Empty(ToolFooterLine.Make(new Dictionary<Tool, ToolStatus> { [Tool.Npx] = new ToolStatus(@"C:\Program Files\nodejs\npx.cmd", "10.9.2") }));
+        var lines = ToolFooterLine.Make(new Dictionary<Tool, ToolStatus> { [Tool.Uv] = ToolStatus.NotFound, [Tool.Npx] = ToolStatus.NotFound, [Tool.Node] = ToolStatus.NotFound });
+        Assert.Equal(["node and npx: Install Node.js or run winget install OpenJS.NodeJS.LTS.", "uv and uvx: Install uv or run winget install astral-sh.uv."],
+            lines.Select(l => l.Text).ToArray());
+        var uv = lines[^1];
+        Assert.Equal("Install uv", uv.LinkTitle);
+        Assert.Equal(ToolInfo.LinkUrl(ToolFamily.Uv), uv.LinkUrl);
+        Assert.Equal("winget install astral-sh.uv", uv.InstallCommand);
+        Assert.Equal([new TextRun("uv and uvx: "), new TextRun("Install uv", IsSetApart: true), new TextRun(" or run "),
+            new TextRun("winget install astral-sh.uv", IsSetApart: true), new TextRun(".")], uv.Runs);
     }
 
     [Fact]
@@ -244,6 +302,8 @@ public class SettingsModelTests
         rig.H.Drain();
         Assert.Equal(4, rig.State.ToolStatuses.Count);
         Assert.Contains(nameof(SettingsModel.ToolRows), raised);
+        Assert.Contains(nameof(SettingsModel.ToolFooterLines), raised);
+        Assert.Contains(nameof(SettingsModel.HasToolFooterLines), raised);
         Assert.Equal(1, rig.H.Tools.Batches);
     }
 
@@ -286,17 +346,19 @@ public class SettingsModelTests
     // MARK: Claude integration
 
     [Fact]
-    public void TheIntegrationSwitchAndTheConfirmCheckbox()
+    public void TheIntegrationSwitchAndTheConfirmSwitch()
     {
         using var rig = new Rig();
         Assert.False(rig.Model.ClaudeIntegrationEnabled);
         Assert.True(rig.Model.CanChangeClaudeIntegration);
         Assert.Null(rig.Model.ClaudeIntegrationNote);
-        Assert.False(rig.Model.CanChangeConfirmClaudeChanges);   // the checkbox works only while the switch is on
-        Assert.Null(rig.Model.ConfirmClaudeChangesCaption);      // its caption hides while the switch is off
+        Assert.False(rig.Model.CanChangeConfirmClaudeChanges);   // the second switch works only while the first is on
+        Assert.Equal(SettingsModel.DimmedOpacity, rig.Model.ConfirmClaudeChangesTitleOpacity);   // its title fades with it
+        Assert.Null(rig.Model.ConfirmClaudeChangesCaption);      // its caption hides while the integration is off
         rig.Model.ClaudeIntegrationEnabled = true;
         Assert.True(rig.H.Settings.ClaudeIntegrationEnabled);
         Assert.True(rig.Model.CanChangeConfirmClaudeChanges);
+        Assert.Equal(1.0, rig.Model.ConfirmClaudeChangesTitleOpacity);
         Assert.Equal(SettingsModel.ConfirmClaudeChangesOnCaption, rig.Model.ConfirmClaudeChangesCaption);
         Assert.False(rig.Model.ConfirmClaudeChangesCaptionIsWarning);
         rig.Model.ConfirmClaudeChanges = false;
@@ -304,7 +366,7 @@ public class SettingsModelTests
         Assert.Equal(SettingsModel.ConfirmClaudeChangesOffCaption, rig.Model.ConfirmClaudeChangesCaption);
         Assert.True(rig.Model.ConfirmClaudeChangesCaptionIsWarning);
         rig.Model.ClaudeIntegrationEnabled = false;
-        Assert.False(rig.Model.ConfirmClaudeChanges);   // the checkbox keeps its value while dimmed
+        Assert.False(rig.Model.ConfirmClaudeChanges);   // the second switch keeps its value while dimmed
         Assert.Equal(rig.Updater.VersionDisplay, rig.Model.Version);
     }
 
@@ -440,8 +502,8 @@ public class SettingsModelTests
             rig.Model.CommandLineToolCaption);
         Assert.Equal(CommandLineToolText.RemoveButton, rig.Model.CommandLineToolButton);
         tool.InstalledLocation = "/usr/local/bin/connector-control";
-        // At the link, as the Mac puts it there.
-        Assert.Equal([new TextRun("Installed at "), new TextRun("/usr/local/bin/connector-control", IsSetApart: true)], rig.Model.CommandLineToolStatus);
+        // In the link's folder, as the Mac puts it there.
+        Assert.Equal([new TextRun("Installed in "), new TextRun("/usr/local/bin", IsSetApart: true)], rig.Model.CommandLineToolStatus);
 
         rig.Model.CommandLineToolAction();
         Assert.Equal(1, tool.Removals);

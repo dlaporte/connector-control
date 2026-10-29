@@ -51,7 +51,7 @@ public enum CommandLineToolText {
     // app; on Windows a terminal already open keeps the PATH it started with, so the mirror says "a new terminal".
     public static let runHelpCaption = "Run connector-control help in Terminal."
 
-    public static func installedAtText(_ path: String) -> String { "Installed at \(path)" }
+    public static func installedInText(_ folder: String) -> String { "Installed in \(folder)" }
 
     public static func scriptsCaption(_ path: String) -> String { "Scripts can always use \(path)" }
 

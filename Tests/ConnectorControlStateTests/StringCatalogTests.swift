@@ -103,7 +103,7 @@ final class StringCatalogTests: XCTestCase {
         "CollectionsModel.selectedCount": ["3"],
         "CollectionsModel.stopSyncingMessage": ["X"],
         "CommandLineToolText.installFailedError": ["X"],
-        "CommandLineToolText.installedAtText": ["X"],
+        "CommandLineToolText.installedInText": ["X"],
         "CommandLineToolText.missingToolError": ["X"],
         "CommandLineToolText.occupiedError": ["X"],
         "CommandLineToolText.removeFailedError": ["X"],
@@ -251,9 +251,9 @@ final class StringCatalogTests: XCTestCase {
         "PublishModel.warningLine": ["X", "Y"],
         "RestoreModel.confirmMessage": ["X"],
         "ReviewModel.title": ["X"],
-        "SettingsModel.keepCountLabel": ["3"],
         "SettingsModel.loginItemFailureNote": ["X"],
         "SettingsModel.versionText": ["X"],
+        "ToolFooterLine.installText": ["X", "Y", "Z"],
         "ToolNote.shellOnlyText": ["X"],
     ]
 
@@ -431,7 +431,7 @@ final class StringCatalogTests: XCTestCase {
         actual["CommandLineToolText.inPathText"] = CommandLineToolText.inPathText
         actual["CommandLineToolText.installButton"] = CommandLineToolText.installButton
         actual["CommandLineToolText.installFailedError"] = CommandLineToolText.installFailedError("X")
-        actual["CommandLineToolText.installedAtText"] = CommandLineToolText.installedAtText("X")
+        actual["CommandLineToolText.installedInText"] = CommandLineToolText.installedInText("X")
         actual["CommandLineToolText.missingToolError"] = CommandLineToolText.missingToolError("X")
         actual["CommandLineToolText.notInstalledText"] = CommandLineToolText.notInstalledText
         actual["CommandLineToolText.occupiedError"] = CommandLineToolText.occupiedError("X")
@@ -858,8 +858,11 @@ final class StringCatalogTests: XCTestCase {
 
         actual["SettingsModel.autoUpdateTitle"] = SettingsModel.autoUpdateTitle
         actual["SettingsModel.backupsCaption"] = SettingsModel.backupsCaption
+        actual["SettingsModel.backupsFooter"] = SettingsModel.backupsFooter
         actual["SettingsModel.backupsHeader"] = SettingsModel.backupsHeader
+        actual["SettingsModel.backupsTitle"] = SettingsModel.backupsTitle
         actual["SettingsModel.checkForUpdatesTitle"] = SettingsModel.checkForUpdatesTitle
+        actual["SettingsModel.chooseButtonTitle"] = SettingsModel.chooseButtonTitle
         actual["SettingsModel.chooseTitle"] = SettingsModel.chooseTitle
         actual["SettingsModel.claudeAppHeader"] = SettingsModel.claudeAppHeader
         actual["SettingsModel.claudeAppRejectedTitle"] = SettingsModel.claudeAppRejectedTitle
@@ -873,14 +876,20 @@ final class StringCatalogTests: XCTestCase {
         actual["SettingsModel.confirmClaudeChangesTitle"] = SettingsModel.confirmClaudeChangesTitle
         actual["SettingsModel.confirmQuitTitle"] = SettingsModel.confirmQuitTitle
         actual["SettingsModel.confirmRestartTitle"] = SettingsModel.confirmRestartTitle
+        actual["SettingsModel.confirmationsHeader"] = SettingsModel.confirmationsHeader
         actual["SettingsModel.generalTab"] = SettingsModel.generalTab
-        actual["SettingsModel.keepCountLabel"] = SettingsModel.keepCountLabel(3)
         actual["SettingsModel.launchAtLoginTitle"] = SettingsModel.launchAtLoginTitle
         actual["SettingsModel.loginItemApprovalNote"] = SettingsModel.loginItemApprovalNote
         actual["SettingsModel.loginItemFailureNote"] = SettingsModel.loginItemFailureNote("X")
+        actual["SettingsModel.masterListFooter"] = SettingsModel.masterListFooter
         actual["SettingsModel.masterListHeader"] = SettingsModel.masterListHeader
+        actual["SettingsModel.notificationsHeader"] = SettingsModel.notificationsHeader
+        actual["SettingsModel.notifyCaption"] = SettingsModel.notifyCaption
         actual["SettingsModel.notifyTitle"] = SettingsModel.notifyTitle
+        actual["SettingsModel.previewUpdatesCaption"] = SettingsModel.previewUpdatesCaption
+        actual["SettingsModel.restoreButtonTitle"] = SettingsModel.restoreButtonTitle
         actual["SettingsModel.revealInFinderTitle"] = SettingsModel.revealInFinderTitle
+        actual["SettingsModel.startupHeader"] = SettingsModel.startupHeader
         actual["SettingsModel.storageTab"] = SettingsModel.storageTab
         actual["SettingsModel.toolsCaption"] = SettingsModel.toolsCaption
         actual["SettingsModel.toolsHeader"] = SettingsModel.toolsHeader
@@ -888,14 +897,17 @@ final class StringCatalogTests: XCTestCase {
         actual["SettingsModel.useDefaultTitle"] = SettingsModel.useDefaultTitle
         actual["SettingsModel.versionText"] = SettingsModel.versionText("X")
 
-        // MARK: ToolFamily / ToolNote
+        // MARK: ToolFamily / ToolFooterLine / ToolNote
 
         actual["ToolFamily.nodeJS.installCommand"] = ToolFamily.nodeJS.installCommand
         actual["ToolFamily.nodeJS.linkTitle"] = ToolFamily.nodeJS.linkTitle
         actual["ToolFamily.nodeJS.linkURL"] = ToolFamily.nodeJS.linkURL.absoluteString
+        actual["ToolFamily.nodeJS.toolNames"] = ToolFamily.nodeJS.toolNames
         actual["ToolFamily.uv.installCommand"] = ToolFamily.uv.installCommand
         actual["ToolFamily.uv.linkTitle"] = ToolFamily.uv.linkTitle
         actual["ToolFamily.uv.linkURL"] = ToolFamily.uv.linkURL.absoluteString
+        actual["ToolFamily.uv.toolNames"] = ToolFamily.uv.toolNames
+        actual["ToolFooterLine.installText"] = ToolFooterLine.installText("X", "Y", "Z")
         actual["ToolNote.checkingText"] = ToolNote.checkingText
         actual["ToolNote.foundText"] = ToolNote.foundText
         // ToolNote.missingText(_:) itself is internal (an implementation detail of

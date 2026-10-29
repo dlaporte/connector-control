@@ -236,8 +236,8 @@
   "CommandLineToolText.installFailedError": {
     "format": "The command-line tool couldn’t be installed: {0}"
   },
-  "CommandLineToolText.installedAtText": {
-    "format": "Installed at {0}"
+  "CommandLineToolText.installedInText": {
+    "format": "Installed in {0}"
   },
   "CommandLineToolText.missingToolError": {
     "format": "{0} is missing. Quit and reopen Connector Control, then try again."
@@ -1021,16 +1021,19 @@
     "format": "Update to {0}"
   },
   "SettingsModel.autoUpdateTitle": "Automatically download and install updates",
-  "SettingsModel.backupsCaption": "Claude’s config, the master list and collections.json are backed up automatically before every change.",
+  "SettingsModel.backupsCaption": "Claude’s config, the master list and collections.json.",
+  "SettingsModel.backupsFooter": "A backup is made automatically before every change.",
   "SettingsModel.backupsHeader": "Backups",
+  "SettingsModel.backupsTitle": "Backups of each file",
   "SettingsModel.checkForUpdatesTitle": "Check for Updates",
+  "SettingsModel.chooseButtonTitle": "Choose…",
   "SettingsModel.chooseTitle": "Choose",
   "SettingsModel.claudeAppHeader": "Claude App",
   "SettingsModel.claudeAppRejectedTitle": {
     "mac": "That app can’t be used as Claude Desktop",
     "win": "That program can’t be used as Claude Desktop"
   },
-  "SettingsModel.claudeIntegrationCaption": "Adds a connector named connector-control to Claude's config, so Claude can list, switch and edit your connectors. Takes effect when Claude restarts.",
+  "SettingsModel.claudeIntegrationCaption": "Claude can list, switch and edit connectors. Restart Claude to apply.",
   "SettingsModel.claudeIntegrationHeader": "Claude Integration",
   "SettingsModel.claudeIntegrationTitle": "Let Claude manage Connector Control",
   "SettingsModel.claudeTab": "Claude",
@@ -1039,19 +1042,17 @@
     "win": "Config file"
   },
   "SettingsModel.confirmClaudeChangesOffCaption": "Claude can then change what it runs without asking here. Text Claude reads, such as a web page, could ask it to.",
-  "SettingsModel.confirmClaudeChangesOnCaption": "Adding, editing or deleting a connector, deleting a collection, importing, subscribing, applying an update and restoring a backup ask here first.",
-  "SettingsModel.confirmClaudeChangesTitle": "Confirm changes Claude makes to connectors",
+  "SettingsModel.confirmClaudeChangesOnCaption": "Ask before Claude adds, edits, deletes, imports or restores.",
+  "SettingsModel.confirmClaudeChangesTitle": "Confirm changes Claude makes",
   "SettingsModel.confirmQuitTitle": "Confirm before quitting",
   "SettingsModel.confirmRestartTitle": "Confirm before restarting Claude",
+  "SettingsModel.confirmationsHeader": "Confirmations",
   "SettingsModel.generalTab": "General",
   "SettingsModel.installKindLegacyText": {
     "win": "Legacy installer"
   },
   "SettingsModel.installKindMsixText": {
     "win": "MSIX package"
-  },
-  "SettingsModel.keepCountLabel": {
-    "format": "Keep {0} backups of each file"
   },
   "SettingsModel.launchAtLoginTitle": {
     "mac": "Launch at login",
@@ -1071,15 +1072,24 @@
       "format": "Couldn't update startup entry: {0}"
     }
   },
+  "SettingsModel.masterListFooter": {
+    "mac": "Holds mcps.json and collections.json. A synced folder shares them across your Macs.",
+    "win": "Holds mcps.json and collections.json. A synced folder shares them across your PCs."
+  },
   "SettingsModel.masterListHeader": "Master List Location",
+  "SettingsModel.notificationsHeader": "Notifications",
+  "SettingsModel.notifyCaption": "When the master list or a subscribed document changes outside the app.",
   "SettingsModel.notifyTitle": "Notify on external changes",
+  "SettingsModel.previewUpdatesCaption": "Previews update to later previews and the final release.",
+  "SettingsModel.restoreButtonTitle": "Restore…",
   "SettingsModel.revealInFinderTitle": {
     "mac": "Reveal in Finder",
     "win": "Show in Explorer"
   },
+  "SettingsModel.startupHeader": "Startup",
   "SettingsModel.storageTab": "Storage",
   "SettingsModel.toolsCaption": {
-    "mac": "Connectors that run through npx, node, uvx or uv need them installed where Claude Desktop can find them."
+    "mac": "Needed by connectors that run through them, where Claude can find them."
   },
   "SettingsModel.toolsHeader": {
     "mac": "Tools"
@@ -1096,12 +1106,17 @@
   },
   "ToolFamily.nodeJS.linkTitle": "Install Node.js",
   "ToolFamily.nodeJS.linkURL": "https://nodejs.org/en/download",
+  "ToolFamily.nodeJS.toolNames": "node and npx",
   "ToolFamily.uv.installCommand": {
     "mac": "brew install uv",
     "win": "winget install astral-sh.uv"
   },
   "ToolFamily.uv.linkTitle": "Install uv",
   "ToolFamily.uv.linkURL": "https://docs.astral.sh/uv/getting-started/installation/",
+  "ToolFamily.uv.toolNames": "uv and uvx",
+  "ToolFooterLine.installText": {
+    "format": "{0}: {1} or run {2}."
+  },
   "ToolNote.checkingText": "Checking…",
   "ToolNote.foundText": "Found",
   "ToolNote.missingText": "npx wasn’t found, so Claude Desktop won’t be able to start this connector.",
@@ -1111,7 +1126,7 @@
   "ToolNote.rowShellOnlyText": {
     "mac": "Needs npx, which Claude Desktop may not see. Edit to see how to fix it."
   },
-  "ToolNote.settingsCaption": "Connectors that run through npx, node, uvx or uv need them installed where Claude Desktop can find them.",
+  "ToolNote.settingsCaption": "Needed by connectors that run through them, where Claude can find them.",
   "ToolNote.settingsHeader": "Tools",
   "ToolNote.shellOnlyAdvice": {
     "mac": "Install it with Homebrew or the official installer, which put it where Claude Desktop looks; version managers such as nvm install elsewhere."
