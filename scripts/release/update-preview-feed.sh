@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# Point the Mac preview feed at one published build: copy that release's appcast.xml onto the
+# permanent preview-feed prerelease, which Mac preview builds read as SUFeedURL
+# (releases/download/preview-feed/appcast.xml; build-app.sh gives every X.Y.Z-preview.N that
+# URL). preview.yml calls this after publishing preview-<n>, release.yml after publishing vX.Y.Z,
+# so a preview install is offered every later preview and then the final release.
+#
+#   update-preview-feed.sh <source-tag>
+#
+#   <source-tag>  the release just published (preview-<n> or vX.Y.Z). Its appcast.xml asset is
+#                 the one copied, not the run's build artifact: on a re-run, ensure-release.sh
+#                 keeps the DMG and appcast first published under the tag and the run's rebuilt
+#                 pair is discarded, so only the published appcast is guaranteed to carry the
+#                 EdDSA signature and length of the DMG testers actually download.
+#
+# The feed only ever moves forward. The served feed's sparkle:version (CFBundleVersion, as
+# build-app.sh derives it: 10499.10 for 1.5.0-preview.10, 10500 for 1.5.0) is compared with the
+# source's, numerically component by component, and a feed already holding a NEWER build is left
+# alone with a notice — a re-run of an old preview, or a stable release of an older line, must
+# never move preview installs backwards. An equal build is replaced: the source is the published
+# appcast of that same build, so this refreshes it idempotently. The compare and the replace are
+# not atomic; both callers run this in the job-level concurrency group "preview-feed", which
+# serialises a preview and a release that publish at the same moment.
+#
+# preview-feed itself. Created here, on the first run that finds it missing, as a PRERELEASE
+# (never releases/latest, so the stable feed at releases/latest/download/appcast.xml cannot
+# resolve to it), with appcast.xml attached at creation so it is never live without its feed.
+# Its tag is created on master as it stands then and never moves: the commit means nothing (the
+# release exists for its one asset), and a commit on the default branch, unlike a preview's
+# commit on some branch, is one the tag never keeps alive on its own. An existing preview-feed
+# that is not a prerelease is a fault this refuses to write to — and, since a full release could
+# have become releases/latest and served this feed to every stable install, it is turned back
+# into a prerelease at once before failing. Deleting the release only makes preview installs'
+# checks fail until the next preview or release recreates it.
+#
+# After writing, the feed is fetched the way Sparkle fetches it (curl -L of the preview URL) and
+# must be byte-for-byte the appcast written, announcing this version and build, enclosing the
+# source release's DMG and carrying an EdDSA signature; releases/latest must still be a stable
+# v* release. Writes a step summary.
+#
+# Needs GH_TOKEN and GITHUB_REPOSITORY in the environment and gh, curl and cmp on PATH.
+set -euo pipefail
+
+SOURCE=${1:?usage: update-preview-feed.sh <source-tag>}
+: "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
+
+FEED_TAG=preview-feed
+REPO_URL="${GITHUB_SERVER_URL:-https://github.com}/$GITHUB_REPOSITORY"
+FEED_URL="$REPO_URL/releases/download/$FEED_TAG/appcast.xml"
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+
+# The one <sparkle:version> in an appcast (generate_appcast is given one DMG, so writes one item).
+# Empty when there is not exactly one.
+build_of() {
+  local found
+  found=$(sed -n 's:.*<sparkle\:version>\([^<]*\)</sparkle\:version>.*:\1:p' "$1")
+  [ "$(grep -c . <<< "$found")" = 1 ] && printf '%s' "$found"
+}
+
+# -1, 0 or 1 as build $1 is older than, equal to or newer than build $2: dot-separated numbers
+# compared numerically, a missing component counting as 0 — a string compare would put 10499.10
+# below 10499.9.
+compare_builds() {
+  local IFS=. i x y
+  local -a a b
+  read -r -a a <<< "$1"
+  read -r -a b <<< "$2"
+  for (( i = 0; i < ${#a[@]} || i < ${#b[@]}; i++ )); do
+    x=$(( 10#${a[i]:-0} )); y=$(( 10#${b[i]:-0} ))
+    if (( x < y )); then echo -1; return; fi
+    if (( x > y )); then echo 1; return; fi
+  done
+  echo 0
+}
+
+is_build() { [[ "$1" =~ ^[0-9]+(\.[0-9]+)*$ ]]; }
+
+# The source: its published appcast, its version and its build.
+mkdir -p "$WORK/source"
+gh release download "$SOURCE" --pattern appcast.xml --dir "$WORK/source"
+NEW="$WORK/source/appcast.xml"
+NEW_BUILD=$(build_of "$NEW") || true
+is_build "$NEW_BUILD" || { echo "::error::$SOURCE's appcast.xml does not carry exactly one numeric sparkle:version ('$NEW_BUILD')"; exit 1; }
+NEW_VERSION=$(sed -n 's:.*<sparkle\:shortVersionString>\([^<]*\)</sparkle\:shortVersionString>.*:\1:p' "$NEW" | head -1)
+[ -n "$NEW_VERSION" ] || { echo "::error::$SOURCE's appcast.xml carries no sparkle:shortVersionString"; exit 1; }
+grep -q "url=\"$REPO_URL/releases/download/$SOURCE/ConnectorControl_$NEW_VERSION.dmg\"" "$NEW" \
+  || { echo "::error::$SOURCE's appcast.xml does not enclose $SOURCE's own DMG"; exit 1; }
+echo "$SOURCE announces $NEW_VERSION (build $NEW_BUILD)"
+
+# The feed as preview installs see it now. 404 (no release yet, or no asset) is an empty feed;
+# any other failure stops here rather than guessing.
+STATUS=$(curl -sL --retry 3 --retry-delay 5 -o "$WORK/served.xml" -w '%{http_code}' "$FEED_URL" || true)
+CURRENT_BUILD=""
+case "$STATUS" in
+  200)
+    CURRENT_BUILD=$(build_of "$WORK/served.xml") || true
+    if ! is_build "$CURRENT_BUILD"; then
+      echo "::warning::the served preview feed has no single numeric sparkle:version ('$CURRENT_BUILD'); replacing it."
+      CURRENT_BUILD=""
+    fi ;;
+  404) echo "The preview feed is not served yet ($FEED_URL: 404)." ;;
+  *) echo "::error::fetching $FEED_URL answered HTTP '$STATUS'"; exit 1 ;;
+esac
+
+if [ -n "$CURRENT_BUILD" ] && [ "$(compare_builds "$CURRENT_BUILD" "$NEW_BUILD")" = 1 ]; then
+  echo "::notice::The preview feed already announces build $CURRENT_BUILD, newer than $SOURCE's $NEW_BUILD; left unchanged."
+  {
+    echo "## Preview feed"
+    echo
+    echo "- Left unchanged: it already announces build $CURRENT_BUILD, newer than $SOURCE ($NEW_VERSION, build $NEW_BUILD)."
+  } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+  exit 0
+fi
+
+if STATE=$(gh release view "$FEED_TAG" --json isPrerelease,isDraft --jq '"\(.isPrerelease) \(.isDraft)"' 2>/dev/null); then
+  case "$STATE" in
+    "true false") ;;
+    "false "*)
+      gh release edit "$FEED_TAG" --prerelease
+      echo "::error::$FEED_TAG was not a prerelease (so it could have been releases/latest); it has been made a prerelease again. Check releases/latest and the stable feed, then re-run."
+      exit 1 ;;
+    *) echo "::error::$FEED_TAG is a draft; delete it ('gh release delete $FEED_TAG --yes') and re-run to recreate it."; exit 1 ;;
+  esac
+  gh release upload "$FEED_TAG" "$NEW" --clobber
+  echo "Replaced $FEED_TAG's appcast.xml (was build ${CURRENT_BUILD:-none}, now $NEW_BUILD)"
+else
+  cat > "$WORK/body.md" <<BODY
+**Not a download.** This prerelease holds \`appcast.xml\`, the update feed that Connector Control's Mac preview builds check for new versions. Every preview and every stable release replaces it. For a preview, see the numbered \`preview-<n>\` releases; for the app itself, the [latest release]($REPO_URL/releases/latest). The source archives GitHub lists here are not a build of anything.
+BODY
+  # --prerelease is the whole point (see the header); --latest is never passed, in any form.
+  gh release create "$FEED_TAG" --prerelease --title "Preview update feed" \
+    --notes-file "$WORK/body.md" --target master "$NEW"
+  echo "Created $FEED_TAG with build $NEW_BUILD"
+fi
+
+# Verify what Sparkle will read. The download redirect can lag the upload by a few seconds, hence
+# the retry; `|| true` keeps `bash -e` from ending the loop on the first failed probe.
+for i in $(seq 1 12); do
+  curl -sfL "$FEED_URL" -o "$WORK/served.xml" || true
+  cmp -s "$NEW" "$WORK/served.xml" && break
+  echo "waiting for $FEED_URL to serve build $NEW_BUILD ($i/12)"
+  sleep 10
+done
+cmp -s "$NEW" "$WORK/served.xml" || { echo "::error::$FEED_URL does not serve the appcast just written"; exit 1; }
+SERVED="$WORK/served.xml"
+grep -q "<sparkle:shortVersionString>$NEW_VERSION</sparkle:shortVersionString>" "$SERVED" || { echo "::error::the served preview feed does not announce $NEW_VERSION"; exit 1; }
+grep -q "<sparkle:version>$NEW_BUILD</sparkle:version>" "$SERVED" || { echo "::error::the served preview feed's build is not $NEW_BUILD"; exit 1; }
+grep -q 'sparkle:edSignature="[^"][^"]*"' "$SERVED" || { echo "::error::the served preview feed's item carries no EdDSA signature"; exit 1; }
+
+[ "$(gh release view "$FEED_TAG" --json isPrerelease --jq .isPrerelease)" = true ] \
+  || { echo "::error::$FEED_TAG is not a prerelease"; exit 1; }
+LATEST=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+case "$LATEST" in
+  v[0-9]*) echo "releases/latest is still $LATEST (a stable release)" ;;
+  *) echo "::error::releases/latest is '$LATEST', which is not a stable v* release"; exit 1 ;;
+esac
+
+{
+  echo "## Preview feed"
+  echo
+  echo "- $FEED_URL now announces $NEW_VERSION (build $NEW_BUILD, from $SOURCE; was ${CURRENT_BUILD:-empty})"
+  echo "- releases/latest unchanged: $LATEST"
+} >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
