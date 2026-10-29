@@ -127,16 +127,52 @@ final class ControlTextTests: XCTestCase {
         XCTAssertEqual(ControlText.word("a\u{0301}\u{0301}"), "a\u{0301}\u{0301}", "two marks on a character are one word")
         XCTAssertEqual(ControlText.word("a\u{0301}\u{0301}\u{0301}"), "'a\u{0301}\u{0301}" + #"\u{0301}'"#,
                        "a word with a deeper stack is quoted")
-        // Every range, at both its ends: the same list the Windows mirror holds.
-        let ends: [UInt32] = [0x0300, 0x036F, 0x0483, 0x0489, 0x0591, 0x05BD, 0x0610, 0x061A, 0x064B, 0x065F, 0x0670,
-                              0x06D6, 0x06DC, 0x06DF, 0x06E4, 0x06E7, 0x06E8, 0x06EA, 0x06ED, 0x0E31, 0x0E34, 0x0E3A,
-                              0x0E47, 0x0E4E, 0x1AB0, 0x1AFF, 0x1DC0, 0x1DFF, 0x20D0, 0x20FF, 0xFE20, 0xFE2F]
-        for value in ends {
+        // Marks of every kind count, the less common as much as the accents: a mark the table missed would
+        // reset the count and let the stack grow, as U+0346 U+0346 U+1CD0 over and over once did.
+        let marks: [UInt32] = [0x0300, 0x0346, 0x0483, 0x0489, 0x05BF, 0x05C1, 0x05C2, 0x05C4, 0x05C5, 0x05C7, 0x0816,
+                               0x08F0, 0x0951, 0x0E31, 0x1AB0, 0x1CD0, 0x1DD8, 0x20DD, 0x302A, 0xA670, 0xFE20, 0x1E000]
+        for value in marks {
             let mark = Unicode.Scalar(value)!
             XCTAssertEqual(ControlText.escaped("a" + String(mark) + String(mark) + String(mark)),
                            "a" + String(mark) + String(mark) + ControlText.hexEscape(mark), String(value, radix: 16))
         }
-        XCTAssertEqual(ControlText.escaped("a\u{0E30}\u{0E30}\u{0E30}"), "a\u{0E30}\u{0E30}\u{0E30}", "a letter between the ranges is no mark")
+        let mixed = "a" + String(repeating: "\u{0346}\u{0346}\u{1CD0}", count: 20)
+        XCTAssertEqual(ControlText.escaped(mixed), "a\u{0346}\u{0346}" + #"\u{1CD0}"#
+                       + String(repeating: #"\u{0346}\u{0346}\u{1CD0}"#, count: 19))
+        for value: UInt32 in [0x1CD0, 0x302A] {
+            let mark = String(Unicode.Scalar(value)!)
+            XCTAssertEqual(ControlText.escaped("a" + String(repeating: mark, count: 30)),
+                           "a" + mark + mark + String(repeating: ControlText.hexEscape(Unicode.Scalar(value)!), count: 28))
+        }
+        XCTAssertEqual(ControlText.escaped("a\u{0E30}\u{0E30}\u{0E30}"), "a\u{0E30}\u{0E30}\u{0E30}", "a letter is no mark")
+        XCTAssertEqual(ControlText.escaped("a\u{0903}\u{0903}\u{0903}"), "a\u{0903}\u{0903}\u{0903}",
+                       "a spacing mark takes room of its own, as a letter does")
+    }
+
+    /// The table of marks is in order, its ranges apart, so the search through it finds every mark.
+    func testTheTableOfMarksIsInOrder() {
+        let table = ControlText.combiningMarks
+        XCTAssertGreaterThan(table.count, 300)
+        for (one, next) in zip(table, table.dropFirst()) {
+            XCTAssertLessThan(one.upperBound + 1, next.lowerBound, "\(one) and \(next)")
+        }
+        for range in table {
+            XCTAssertTrue(ControlText.isCombiningMark(Unicode.Scalar(range.lowerBound)!))
+            XCTAssertTrue(ControlText.isCombiningMark(Unicode.Scalar(range.upperBound)!))
+            if let before = Unicode.Scalar(range.lowerBound - 1) { XCTAssertFalse(ControlText.isCombiningMark(before)) }
+            if let after = Unicode.Scalar(range.upperBound + 1) { XCTAssertFalse(ControlText.isCombiningMark(after)) }
+        }
+    }
+
+    /// Every code point the table lists is a nonspacing or enclosing mark by this platform's own Unicode
+    /// tables too, unless those tables are older than the table's and do not know it yet.
+    func testEveryListedMarkIsAMarkHere() {
+        for range in ControlText.combiningMarks {
+            for value in range {
+                let category = Unicode.Scalar(value)!.properties.generalCategory
+                XCTAssertTrue([Unicode.GeneralCategory.nonspacingMark, .enclosingMark, .unassigned].contains(category), "\(String(value, radix: 16)): \(category)")
+            }
+        }
     }
 
     /// Text with one or two marks on a character reads as it always has: accented letters composed either

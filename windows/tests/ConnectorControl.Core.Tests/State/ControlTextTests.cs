@@ -1,3 +1,4 @@
+using System.Globalization;
 using ConnectorControl.Core.State;
 
 namespace ConnectorControl.Core.Tests.State;
@@ -156,16 +157,63 @@ public class ControlTextTests
         Assert.Equal(@"\u{0301}\u{0301}a", ControlText.Escaped("\u0301\u0301a"));
         Assert.Equal("a\u0301\u0301", ControlText.Word("a\u0301\u0301")); // two marks on a character are one word
         Assert.Equal("'a\u0301\u0301" + @"\u{0301}'", ControlText.Word("a\u0301\u0301\u0301")); // a word with a deeper stack is quoted
-        // Every range, at both its ends: the same list the Mac mirror holds.
-        int[] ends = [0x0300, 0x036F, 0x0483, 0x0489, 0x0591, 0x05BD, 0x0610, 0x061A, 0x064B, 0x065F, 0x0670,
-                      0x06D6, 0x06DC, 0x06DF, 0x06E4, 0x06E7, 0x06E8, 0x06EA, 0x06ED, 0x0E31, 0x0E34, 0x0E3A,
-                      0x0E47, 0x0E4E, 0x1AB0, 0x1AFF, 0x1DC0, 0x1DFF, 0x20D0, 0x20FF, 0xFE20, 0xFE2F];
-        foreach (var value in ends)
+        // Marks of every kind count, the less common as much as the accents: a mark the table missed would
+        // reset the count and let the stack grow, as \u0346 \u0346 \u1CD0 over and over once did.
+        int[] marks = [0x0300, 0x0346, 0x0483, 0x0489, 0x05BF, 0x05C1, 0x05C2, 0x05C4, 0x05C5, 0x05C7, 0x0816,
+                       0x08F0, 0x0951, 0x0E31, 0x1AB0, 0x1CD0, 0x1DD8, 0x20DD, 0x302A, 0xA670, 0xFE20, 0x1E000];
+        foreach (var value in marks)
         {
             var mark = char.ConvertFromUtf32(value);
             Assert.Equal("a" + mark + mark + ControlText.HexEscape(value), ControlText.Escaped("a" + mark + mark + mark));
         }
-        Assert.Equal("a\u0E30\u0E30\u0E30", ControlText.Escaped("a\u0E30\u0E30\u0E30")); // a letter between the ranges is no mark
+        var mixed = "a" + string.Concat(Enumerable.Repeat("\u0346\u0346\u1CD0", 20));
+        Assert.Equal("a\u0346\u0346" + @"\u{1CD0}" + string.Concat(Enumerable.Repeat(@"\u{0346}\u{0346}\u{1CD0}", 19)),
+            ControlText.Escaped(mixed));
+        foreach (var value in new[] { 0x1CD0, 0x302A })
+        {
+            var mark = char.ConvertFromUtf32(value);
+            Assert.Equal("a" + mark + mark + string.Concat(Enumerable.Repeat(ControlText.HexEscape(value), 28)),
+                ControlText.Escaped("a" + string.Concat(Enumerable.Repeat(mark, 30))));
+        }
+        Assert.Equal("a\u0E30\u0E30\u0E30", ControlText.Escaped("a\u0E30\u0E30\u0E30")); // a letter is no mark
+        // A spacing mark takes room of its own, as a letter does.
+        Assert.Equal("a\u0903\u0903\u0903", ControlText.Escaped("a\u0903\u0903\u0903"));
+    }
+
+    /// <summary>The table of marks is in order, its ranges apart, so the search through it finds every mark.</summary>
+    [Fact]
+    public void TheTableOfMarksIsInOrder()
+    {
+        var table = ControlText.CombiningMarks;
+        Assert.True(table.Length > 300);
+        for (var index = 1; index < table.Length; index++)
+        {
+            Assert.True(table[index - 1].Last + 1 < table[index].First, $"{table[index - 1]} and {table[index]}");
+        }
+        foreach (var (first, last) in table)
+        {
+            Assert.True(first <= last);
+            Assert.True(ControlText.IsCombiningMark(first));
+            Assert.True(ControlText.IsCombiningMark(last));
+            Assert.False(ControlText.IsCombiningMark(first - 1));
+            Assert.False(ControlText.IsCombiningMark(last + 1));
+        }
+    }
+
+    /// <summary>Every code point the table lists is a nonspacing or enclosing mark by this platform's own Unicode
+    /// tables too, unless those tables are older than the table's and do not know it yet.</summary>
+    [Fact]
+    public void EveryListedMarkIsAMarkHere()
+    {
+        foreach (var (first, last) in ControlText.CombiningMarks)
+        {
+            for (var value = first; value <= last; value++)
+            {
+                var category = CharUnicodeInfo.GetUnicodeCategory(value);
+                Assert.True(category is UnicodeCategory.NonSpacingMark or UnicodeCategory.EnclosingMark or UnicodeCategory.OtherNotAssigned,
+                    $"{value:X4}: {category}");
+            }
+        }
     }
 
     /// <summary>Text with one or two marks on a character reads as it always has: accented letters composed either
