@@ -132,6 +132,21 @@ final class ConfirmationDialogTests: XCTestCase {
         XCTAssertEqual(ConfirmationDialog(question("t", code: ControlTools.indented(added))).codeKinds, [.plain, .plain, .plain])
     }
 
+    /// Each code line is drawn with every character left to right in the order it is stored, so letters
+    /// that run right to left cannot carry the numbers and arguments beside them into another order; what
+    /// the question holds, and what Allow compares, stays the line itself.
+    func testACodeLineIsDrawnInTheOrderItIsStored() {
+        let line = "--ports \u{0627} 80 443 22"
+        let request = question("t", code: [line, "plain"])
+        let dialog = ConfirmationDialog(request)
+        XCTAssertEqual(dialog.shownCode, ["\u{202D}" + line + "\u{202C}", "\u{202D}plain\u{202C}"])
+        XCTAssertEqual(dialog.code, [line, "plain"])
+        XCTAssertTrue(TextRun.same(dialog.code[0], line))
+        XCTAssertEqual(request, question("t", code: [line, "plain"]))
+        XCTAssertEqual(dialog, ConfirmationDialog(question("t", code: [line, "plain"])))
+        XCTAssertEqual(ControlText.escaped("\u{202D}x\u{202C}"), #"\u{202D}x\u{202C}"#, "a line can hold neither, so none can end the wrapper early")
+    }
+
     /// Text is compared scalar by scalar, as the Windows mirror compares it ordinally: a name composed
     /// another way is another name.
     func testRunsAndDialogsCompareTextScalarByScalar() {

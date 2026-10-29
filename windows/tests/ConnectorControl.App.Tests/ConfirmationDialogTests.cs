@@ -69,7 +69,8 @@ public class ConfirmationDialogTests
             Assert.NotEqual(mono, dialog.MessageText.Inlines.OfType<Run>().First().FontFamily.Source);
             Assert.Equal($"In “{new TextRun("Harvard", IsSetApart: true).ShownText}”, the collection Claude is running:",
                 Text(dialog.InformativeText.Inlines));
-            Assert.Equal("url\n  − https://a.example/mcp\n  + https://b.example/mcp", Code(dialog.CodeText));
+            // Each line drawn in the order it is stored, between a left-to-right override and its pop.
+            Assert.Equal("\u202Durl\u202C\n\u202D  − https://a.example/mcp\u202C\n\u202D  + https://b.example/mcp\u202C", Code(dialog.CodeText));
             // A paragraph a line, as the Mac lays them out, each its own left-to-right paragraph and none spaced
             // from the next.
             Assert.All(Lines(dialog.CodeText), line => Assert.Equal(new Thickness(0), line.Margin));

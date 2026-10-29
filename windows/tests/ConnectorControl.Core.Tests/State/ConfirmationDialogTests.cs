@@ -152,6 +152,23 @@ public class ConfirmationDialogTests
             new ConfirmationDialog(Question("t", code: ControlTools.Indented(added).ToList())).CodeKinds);
     }
 
+    /// <summary>Each code line is drawn with every character left to right in the order it is stored, so letters
+    /// that run right to left cannot carry the numbers and arguments beside them into another order; what
+    /// the question holds, and what Allow compares, stays the line itself.</summary>
+    [Fact]
+    public void ACodeLineIsDrawnInTheOrderItIsStored()
+    {
+        var line = "--ports \u0627 80 443 22";
+        var request = Question("t", code: [line, "plain"]);
+        var dialog = new ConfirmationDialog(request);
+        Assert.Equal(["\u202D" + line + "\u202C", "\u202Dplain\u202C"], dialog.ShownCode);
+        Assert.Equal([line, "plain"], dialog.Code);
+        Assert.Equal(request, Question("t", code: [line, "plain"]));
+        Assert.Equal(dialog, new ConfirmationDialog(Question("t", code: [line, "plain"])));
+        // A line can hold neither, so none can end the wrapper early.
+        Assert.Equal(@"\u{202D}x\u{202C}", ControlText.Escaped("\u202Dx\u202C"));
+    }
+
     /// <summary>Text is compared ordinally, as the Mac mirror compares it scalar by scalar: a name composed
     /// another way is another name.</summary>
     [Fact]

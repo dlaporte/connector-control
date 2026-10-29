@@ -6,7 +6,8 @@ import ConnectorControlState
 /// What the alert for a change Claude asks for draws: the title as the alert's own message, and in its
 /// accessory view the message with every name in the monospaced face, what would run in a block that
 /// scrolls rather than wrap a line, and the closing line. Every set-apart piece is isolated where it is
-/// drawn (`TextRun.shownText`), and every paragraph is laid out left to right.
+/// drawn (`TextRun.shownText`), every code line is drawn in the order it is stored
+/// (`ConfirmationDialog.shownCode`), and every paragraph is laid out left to right.
 @MainActor
 enum ConfirmationAccessory {
     static let width: CGFloat = 380
@@ -76,7 +77,7 @@ enum ConfirmationAccessory {
         paragraph.baseWritingDirection = .leftToRight
         paragraph.lineBreakMode = .byClipping
         let text = NSMutableAttributedString()
-        for (index, line) in dialog.code.enumerated() {
+        for (index, line) in dialog.shownCode.enumerated() {
             let color: NSColor
             switch dialog.codeKinds[index] {
             case .removed: color = .systemRed

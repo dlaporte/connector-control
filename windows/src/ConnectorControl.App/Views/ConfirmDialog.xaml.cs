@@ -73,16 +73,18 @@ public partial class ConfirmDialog : DialogWindow
     }
 
     /// <summary>What would run, a paragraph a line, as the Mac lays it out: each line is its own left-to-right
-    /// paragraph, whatever the one before it holds, and none is spaced from the next. Removed lines take the
+    /// paragraph, whatever the one before it holds, drawn in the order it is stored
+    /// (<see cref="ConfirmationDialog.ShownCode"/>), and none is spaced from the next. Removed lines take the
     /// theme's critical colour and added ones its success colour; a theme without one leaves the line in the
     /// box's own, and its "−" or "+" still says what it does. The page is as wide as the widest line and some,
     /// so no line wraps, and only a line wider than the box gives it something to scroll to.</summary>
     private FlowDocument CodeDocument(ConfirmationDialog question)
     {
         var document = new FlowDocument { PagePadding = new Thickness(0), FontFamily = CodeText.FontFamily, FontSize = CodeText.FontSize };
-        for (var index = 0; index < question.Code.Count; index++)
+        var shown = question.ShownCode;
+        for (var index = 0; index < shown.Count; index++)
         {
-            var line = new Run(question.Code[index]);
+            var line = new Run(shown[index]);
             switch (question.CodeKinds[index])
             {
                 case ConfirmationDialog.LineKind.Removed:
@@ -99,7 +101,7 @@ public partial class ConfirmDialog : DialogWindow
         // whatever the page's width, and FormattedText measures each whole. The page stays below the million
         // pixels a FlowDocument page may be, even at the widest glyphs; past them, setting it would throw and
         // the confirmer would answer Don’t Allow.
-        document.PageWidth = WidestLine(question.Code) + PageSlackEms * CodeText.FontSize;
+        document.PageWidth = WidestLine(shown) + PageSlackEms * CodeText.FontSize;
         return document;
     }
 

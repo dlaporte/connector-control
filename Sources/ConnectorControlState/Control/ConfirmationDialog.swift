@@ -25,6 +25,14 @@ public struct ConfirmationDialog: Equatable, Sendable {
     /// The closing line; a path in it is set apart whole.
     public let footer: [TextRun]?
 
+    /// The code lines as the views draw them: each between a left-to-right override and the pop that
+    /// ends it (U+202D … U+202C). Inside an override every character is laid out left to right, so the
+    /// order a line is drawn in is the order it is stored in: letters that run right to left cannot carry
+    /// the numbers and arguments beside them into another order, as a bidi run otherwise would. A line
+    /// holds neither character raw, since both are escaped before it gets here, so nothing in it can end
+    /// the override early. Drawing only: `code`, and the request Allow compares, keep the lines as they are.
+    public var shownCode: [String] { code.map { "\u{202D}" + $0 + "\u{202C}" } }
+
     @MainActor
     public init(_ request: ConfirmationRequest) {
         title = TextRun.names(in: request.title, limit: ConfirmationDialog.nameLimit)
