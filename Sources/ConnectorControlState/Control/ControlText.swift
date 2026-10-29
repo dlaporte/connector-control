@@ -51,7 +51,7 @@ public enum ControlText {
     /// Text as a line shows it: a control character, and a character that shows as nothing or as a
     /// blank — every Default_Ignorable code point (soft hyphen, joiners, direction marks, variation
     /// selectors, tags…), the blank letters (U+115F, U+1160, U+2800, U+3164, U+FFA0), the interlinear
-    /// annotation marks — as a visible escape, `\n`, `\r`, `\t` or `\u{202E}`, so a value
+    /// annotation marks, the object replacement character — as a visible escape, `\n`, `\r`, `\t` or `\u{202E}`, so a value
     /// can neither break its line, nor hide part of it, nor pass for another. A combining mark with no
     /// character of its own to sit on shows as its code too (see `Marks`).
     public static func escaped(_ text: String) -> String {
@@ -142,7 +142,7 @@ public enum ControlText {
         case 0x09: return "\\t"
         case 0x00...0x1F, 0x7F...0x9F, 0xAD, 0x034F, 0x061C, 0x115F, 0x1160, 0x17B4, 0x17B5, 0x180B...0x180F,
              0x200B...0x200F, 0x2028...0x202E, 0x2060...0x206F, 0x2800, 0x3164, 0xFE00...0xFE0F, 0xFEFF, 0xFFA0,
-             0xFFF0...0xFFFB, 0x1BCA0...0x1BCA3, 0x1D173...0x1D17A, 0xE0000...0xE0FFF:
+             0xFFF0...0xFFFC, 0x1BCA0...0x1BCA3, 0x1D173...0x1D17A, 0xE0000...0xE0FFF:
             return hexEscape(scalar)
         default: return nil
         }

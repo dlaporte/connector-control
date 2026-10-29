@@ -75,6 +75,25 @@ public class ConfirmationDialogTests
         Assert.Equal([new TextRun("Not installed")], TextRun.Runs("Not installed", ["", "/x"]));
     }
 
+    /// <summary>The object replacement character is drawn as nothing, so it shows as its code: a rename that only
+    /// adds one, or a variable whose name only gains one, reads as the change it is.</summary>
+    [Fact]
+    public void AnObjectReplacementCharacterShowsAsItsCode()
+    {
+        Assert.Equal(@"Renamed “github” to “github\u{FFFC}”.",
+            ControlTools.RenamedText(ControlText.EscapedName("github"), ControlText.EscapedName("github\uFFFC")));
+        var rename = new ConfirmationDialog(Question(ControlTools.ChangeTitle("Claude", ControlText.EscapedName("github")),
+            code: [ControlMasking.RemovedPrefix + ControlText.EscapedName("github"), ControlMasking.AddedPrefix + ControlText.EscapedName("github\uFFFC")]));
+        Assert.Equal(ControlMasking.AddedPrefix + @"github\u{FFFC}", rename.Code[^1]);
+        var lines = ControlMasking.ChangeLines(
+            JsonValue.Object(("command", JsonValue.String("npx")), ("env", JsonValue.Object(("READ_ONLY", JsonValue.String("1"))))),
+            JsonValue.Object(("command", JsonValue.String("npx")), ("env", JsonValue.Object(("READ_ONLY\uFFFC", JsonValue.String("1"))))),
+            ControlMasking.Exposure.Dialog);
+        Assert.Contains(lines, line => line.Contains(@"READ_ONLY\u{FFFC}", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, line => line.Contains('\uFFFC'));
+        Assert.Equal("a\uFFFD", ControlText.Escaped("a\uFFFD")); // the replacement character shows, so it stays
+    }
+
     // MARK: What would run
 
     [Fact]

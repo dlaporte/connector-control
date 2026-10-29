@@ -65,6 +65,23 @@ final class ConfirmationDialogTests: XCTestCase {
         XCTAssertEqual(TextRun.runs("Not installed", settingApart: ["", "/x"]), [TextRun("Not installed")])
     }
 
+    /// The object replacement character is drawn as nothing, so it shows as its code: a rename that only
+    /// adds one, or a variable whose name only gains one, reads as the change it is.
+    func testAnObjectReplacementCharacterShowsAsItsCode() {
+        XCTAssertEqual(ControlTools.renamedText(ControlText.escapedName("github"), ControlText.escapedName("github\u{FFFC}")),
+                       #"Renamed “github” to “github\u{FFFC}”."#)
+        let rename = ConfirmationDialog(question(ControlTools.changeTitle("Claude", ControlText.escapedName("github")),
+                                                 code: [ControlMasking.removedPrefix + ControlText.escapedName("github"),
+                                                        ControlMasking.addedPrefix + ControlText.escapedName("github\u{FFFC}")]))
+        XCTAssertEqual(rename.code.last, ControlMasking.addedPrefix + #"github\u{FFFC}"#)
+        let lines = ControlMasking.changeLines(from: .object(["command": .string("npx"), "env": .object(["READ_ONLY": .string("1")])]),
+                                               to: .object(["command": .string("npx"), "env": .object(["READ_ONLY\u{FFFC}": .string("1")])]),
+                                               exposure: .dialog)
+        XCTAssertTrue(lines.contains { $0.contains(#"READ_ONLY\u{FFFC}"#) }, "\(lines)")
+        XCTAssertFalse(lines.contains { $0.unicodeScalars.contains("\u{FFFC}") }, "\(lines)")
+        XCTAssertEqual(ControlText.escaped("a\u{FFFD}"), "a\u{FFFD}", "the replacement character shows, so it stays")
+    }
+
     // MARK: What would run
 
     func testCodeLinesKeepTheirTextAndSayWhatAChangeRemovesAndAdds() {
