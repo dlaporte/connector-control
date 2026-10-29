@@ -374,12 +374,14 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertFalse(model.canUseCommandLineToolButton)
         XCTAssertEqual(model.commandLineToolMessage, ClaudeIntegration.moveToApplicationsError)
         XCTAssertEqual(model.commandLineToolCaption, [], "no path for scripts that is about to be gone")
+        XCTAssertFalse(model.hasCommandLineToolCaption, "the row leaves the empty line out")
         model.commandLineToolAction()
         XCTAssertEqual(tool.installs, 0)
         tool.isInstalled = true
         XCTAssertTrue(model.canUseCommandLineToolButton, "a link made earlier can still go")
         XCTAssertNil(model.commandLineToolMessage)
         XCTAssertEqual(model.commandLineToolCaption, TextRun.runs(CommandLineToolText.runHelpCaption, settingApart: [CommandLineToolText.helpCommand]))
+        XCTAssertTrue(model.hasCommandLineToolCaption)
     }
 
     // MARK: Command-line tool
@@ -394,6 +396,7 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertTrue(model.hasCommandLineTool)
         XCTAssertEqual(model.commandLineToolStatus, [TextRun(CommandLineToolText.notInstalledText)])
         XCTAssertEqual(model.commandLineToolCaption, [TextRun("Scripts can always use "), TextRun(tool.toolPath, isSetApart: true)])
+        XCTAssertTrue(model.hasCommandLineToolCaption)
         XCTAssertEqual(model.commandLineToolButton, CommandLineToolText.installButton)
         XCTAssertNil(model.commandLineToolMessage)
 

@@ -174,10 +174,12 @@ struct SettingsView: View {
                     HStack(alignment: .firstTextBaseline) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(runs: model.commandLineToolStatus)
-                            Text(runs: model.commandLineToolCaption)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            if model.hasCommandLineToolCaption {
+                                Text(runs: model.commandLineToolCaption)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                             if let message = model.commandLineToolMessage {
                                 Text(message)
                                     .font(.caption)

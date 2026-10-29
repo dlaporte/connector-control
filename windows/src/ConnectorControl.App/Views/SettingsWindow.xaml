@@ -182,7 +182,8 @@
               <Grid>
                 <StackPanel Margin="0,0,96,0">
                   <TextBlock x:Name="CommandLineToolStatus" TextWrapping="Wrap" views:TextRuns.Runs="{Binding CommandLineToolStatus}" />
-                  <TextBlock x:Name="CommandLineToolCaption" Style="{StaticResource CaptionText}" views:TextRuns.Runs="{Binding CommandLineToolCaption}" />
+                  <TextBlock x:Name="CommandLineToolCaption" Style="{StaticResource CaptionText}" views:TextRuns.Runs="{Binding CommandLineToolCaption}"
+                             Visibility="{Binding HasCommandLineToolCaption, Converter={StaticResource Vis}}" />
                   <TextBlock x:Name="CommandLineToolMessage" Text="{Binding CommandLineToolMessage}" Style="{StaticResource ErrorText}"
                              Visibility="{Binding HasCommandLineToolMessage, Converter={StaticResource Vis}}" />
                 </StackPanel>

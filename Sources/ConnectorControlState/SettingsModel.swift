@@ -306,6 +306,10 @@ public final class SettingsModel: ObservableObject {
         return TextRun.runs(CommandLineToolText.scriptsCaption(tool.toolPath), settingApart: [tool.toolPath])
     }
 
+    /// Whether the row has a caption: none while Install is refused, so the view leaves the line out rather
+    /// than draw it empty.
+    public var hasCommandLineToolCaption: Bool { !commandLineToolCaption.isEmpty }
+
     public var commandLineToolButton: String {
         commandLineTool?.isInstalled == true ? CommandLineToolText.removeButton : CommandLineToolText.installButton
     }

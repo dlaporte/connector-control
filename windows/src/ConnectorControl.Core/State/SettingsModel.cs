@@ -367,6 +367,10 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>Whether the row has a caption: none while Install is refused, so the view leaves the line out rather
+    /// than draw it empty.</summary>
+    public bool HasCommandLineToolCaption => CommandLineToolCaption.Count > 0;
+
     public string CommandLineToolButton =>
         commandLineTool?.IsInstalled == true ? CommandLineToolText.RemoveButton : CommandLineToolText.InstallButton;
 
@@ -417,8 +421,8 @@ public sealed class SettingsModel : ObservableObject, IDisposable
 
     private static readonly string[] CommandLineToolProperties =
     [
-        nameof(CommandLineToolStatus), nameof(CommandLineToolCaption), nameof(CommandLineToolButton), nameof(CommandLineToolBusy),
-        nameof(CommandLineToolMessage), nameof(HasCommandLineToolMessage), nameof(CanUseCommandLineToolButton),
+        nameof(CommandLineToolStatus), nameof(CommandLineToolCaption), nameof(HasCommandLineToolCaption), nameof(CommandLineToolButton),
+        nameof(CommandLineToolBusy), nameof(CommandLineToolMessage), nameof(HasCommandLineToolMessage), nameof(CanUseCommandLineToolButton),
     ];
 
     // MARK: Tools

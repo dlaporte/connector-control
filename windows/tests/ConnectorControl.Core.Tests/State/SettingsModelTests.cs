@@ -398,6 +398,7 @@ public class SettingsModelTests
         Assert.Equal(ClaudeIntegration.MoveToApplicationsError, rig.Model.CommandLineToolMessage);
         Assert.True(rig.Model.HasCommandLineToolMessage);
         Assert.Empty(rig.Model.CommandLineToolCaption);   // no path for scripts that is about to be gone
+        Assert.False(rig.Model.HasCommandLineToolCaption);   // the row leaves the empty line out
         rig.Model.CommandLineToolAction();
         Assert.Equal(0, tool.Installs);
         tool.IsInstalled = true;
@@ -405,6 +406,7 @@ public class SettingsModelTests
         Assert.Null(rig.Model.CommandLineToolMessage);
         Assert.False(rig.Model.HasCommandLineToolMessage);
         Assert.Equal(TextRun.Runs(CommandLineToolText.RunHelpCaption, [CommandLineToolText.HelpCommand]), rig.Model.CommandLineToolCaption);
+        Assert.True(rig.Model.HasCommandLineToolCaption);
     }
 
     // MARK: Command-line tool
@@ -417,6 +419,7 @@ public class SettingsModelTests
         Assert.True(rig.Model.HasCommandLineTool);
         Assert.Equal([new TextRun(CommandLineToolText.NotInstalledText)], rig.Model.CommandLineToolStatus);
         Assert.Equal([new TextRun("Scripts can always use "), new TextRun(tool.ToolPath, IsSetApart: true)], rig.Model.CommandLineToolCaption);
+        Assert.True(rig.Model.HasCommandLineToolCaption);
         Assert.Equal(CommandLineToolText.InstallButton, rig.Model.CommandLineToolButton);
         Assert.Null(rig.Model.CommandLineToolMessage);
 
@@ -469,6 +472,9 @@ public class SettingsModelTests
         Assert.Contains(nameof(SettingsModel.CommandLineToolMessage), names);
         Assert.Contains(nameof(SettingsModel.HasCommandLineToolMessage), names);
         Assert.Contains(nameof(SettingsModel.CommandLineToolBusy), names);
+        // The caption and whether it is drawn at all, raised together.
+        Assert.Contains(nameof(SettingsModel.CommandLineToolCaption), names);
+        Assert.Contains(nameof(SettingsModel.HasCommandLineToolCaption), names);
     }
 
     /// <summary>A Settings window closed and opened again while Install or Remove runs hears its end, not only the

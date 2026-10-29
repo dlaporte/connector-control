@@ -24,15 +24,24 @@ public class SettingsWindowTests
         WpfApp.Invoke(() =>
         {
             var window = new SettingsWindow(state, services, updates);
-            window.Measure(new Size(480, 500));
-            window.Arrange(new Rect(0, 0, 480, 500));
-            window.UpdateLayout();
-            Assert.Equal(3, window.Tabs.Items.Count);
-            var headers = window.Tabs.Items.Cast<TabItem>().Select(t => ((TextBlock)((StackPanel)t.Header).Children[1]).Text).ToArray();
-            Assert.Equal(["General", "Storage", "Claude"], headers);
-            Assert.Equal("Version 1.2.2", window.Model.VersionText);
-            Assert.Equal(h.StoreDir, window.Model.StoreDirPath);
-            Assert.Equal("MSIX package", window.Model.InstallKindText);
+            try
+            {
+                window.Measure(new Size(480, 500));
+                window.Arrange(new Rect(0, 0, 480, 500));
+                window.UpdateLayout();
+                Assert.Equal(3, window.Tabs.Items.Count);
+                var headers = window.Tabs.Items.Cast<TabItem>().Select(t => ((TextBlock)((StackPanel)t.Header).Children[1]).Text).ToArray();
+                Assert.Equal(["General", "Storage", "Claude"], headers);
+                Assert.Equal("Version 1.2.2", window.Model.VersionText);
+                Assert.Equal(h.StoreDir, window.Model.StoreDirPath);
+                Assert.Equal("MSIX package", window.Model.InstallKindText);
+            }
+            finally
+            {
+                // WPF lists a window from the moment it is built, shown or not; closed, it leaves the list, so a
+                // later test that looks for the Settings window it opened finds only that one.
+                window.Close();
+            }
         });
     }
 
@@ -59,6 +68,7 @@ public class SettingsWindowTests
             Assert.Equal(Visibility.Visible, window.CommandLineToolGroup.Visibility);
             Assert.Equal(CommandLineToolText.NotInstalledText, Text(window.CommandLineToolStatus));
             Assert.Equal("Scripts can always use " + new TextRun(tool.ToolPath, IsSetApart: true).ShownText, Text(window.CommandLineToolCaption));
+            Assert.Equal(Visibility.Visible, window.CommandLineToolCaption.Visibility);
             Assert.Equal(CommandLineToolText.InstallButton, window.CommandLineToolButton.Content);
 
             window.IntegrationSwitch.IsChecked = true;
@@ -137,7 +147,7 @@ public class SettingsWindowTests
             var registry = new WindowRegistry(state, services, updates, h.Dialogs, () => made);
             made = new FakeCommandLineTool();
             registry.OpenSettings();
-            // The one the registry showed: a Settings window another test built and never showed is listed too.
+            // The one the registry showed, whatever a test that failed before closing its own left behind.
             var window = Application.Current.Windows.OfType<SettingsWindow>().Single(shown => shown.IsVisible);
             try
             {
