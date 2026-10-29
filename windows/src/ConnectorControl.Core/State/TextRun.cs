@@ -14,14 +14,19 @@ public readonly record struct TextRun(string Text, bool IsSetApart = false)
 {
     /// <summary>What a name cut to the limit ends with.</summary>
     public const string CutMark = "…";
-    private const int OpeningQuote = '“';
-    private const int ClosingQuote = '”';
+    private const int OpeningQuote = '\u201C';
+    private const int ClosingQuote = '\u201D';
 
     // Platform idiom: WPF's text engine predates the isolates the Mac uses (U+2068 … U+2069); embedding the piece
     // left to right (U+202A … U+202C) keeps the neutral text between two pieces on the paragraph's side as well.
+    // U+2068 takes the direction of the piece's first strong letter where U+202A sets left to right, so a name that
+    // mixes directions reads in a different order inside its piece on each platform.
     /// <summary>The text as a view draws it: a set-apart piece embedded left to right, so a name that runs right to
     /// left cannot pull the quotes or the names beside it into its own order; words as they are.</summary>
-    public string ShownText => IsSetApart ? "‪" + Text + "‬" : Text;
+    public string ShownText => IsSetApart ? "\u202A" + Text + "\u202C" : Text;
+
+    // Platform idiom: a record struct compares its text ordinally by itself, as the Mac mirror's == compares it
+    // scalar by scalar; Swift's own == would hold canonically equivalent text equal.
 
     /// <summary><paramref name="sentence"/> with every occurrence of each of <paramref name="settingApart"/> set apart — at each
     /// place, the first of them found there — and the rest as words. An empty piece sets nothing apart.</summary>
@@ -97,6 +102,8 @@ public readonly record struct TextRun(string Text, bool IsSetApart = false)
     internal static List<int> Cut(List<int> name, int limit) =>
         name.Count <= limit ? name : [.. name.Take(limit - 1), .. ControlText.Scalars(CutMark)];
 
+    // Platform idiom: Join, where the Mac mirror says text(_:), since here Text is the record's own property.
+    /// <summary>The scalars as text.</summary>
     internal static string Join(IEnumerable<int> scalars)
     {
         var text = new StringBuilder();

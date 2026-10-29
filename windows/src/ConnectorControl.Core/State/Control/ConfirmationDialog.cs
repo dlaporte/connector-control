@@ -26,6 +26,7 @@ public sealed class ConfirmationDialog : IEquatable<ConfirmationDialog>
         Title = TextRun.Names(request.Title, NameLimit);
         Message = TextRun.Names(request.Message, NameLimit);
         Code = request.Code;
+        // Platform idiom: the method itself; the Mac mirror passes a closure, which keeps its main-actor isolation.
         CodeKinds = request.Code.Select(Kind).ToList();
         Footer = request.Footer is { } footer ? TextRun.Names(footer, int.MaxValue) : null;
     }
@@ -37,13 +38,23 @@ public sealed class ConfirmationDialog : IEquatable<ConfirmationDialog>
     /// <summary>The closing line; a path in it is set apart whole.</summary>
     public IReadOnlyList<TextRun>? Footer { get; }
 
-    /// <summary>A line a change removes or adds, by the prefix the change lines give it; any other is plain.</summary>
+    /// <summary>A line a change removes or adds, by the prefix the change lines give it — at the line's start,
+    /// or after the one indent an update's lines take under their heading; any other is plain. Only a
+    /// change line starts so: a line that continues a field is padded past the widest label, deeper
+    /// than either. A key that itself reads as a change line is coloured as one, which says nothing its
+    /// own "−" or "+" does not.</summary>
     internal static LineKind Kind(string line) =>
-        line.StartsWith(ControlMasking.RemovedPrefix, StringComparison.Ordinal) ? LineKind.Removed
-        : line.StartsWith(ControlMasking.AddedPrefix, StringComparison.Ordinal) ? LineKind.Added
+        Starts(line, ControlMasking.RemovedPrefix) ? LineKind.Removed
+        : Starts(line, ControlMasking.AddedPrefix) ? LineKind.Added
         : LineKind.Plain;
 
-    // Platform idiom: the Mac's struct compares its arrays element by element by itself; a C# class says so here.
+    /// <summary>Whether <paramref name="line"/> starts with <paramref name="prefix"/>, or with one indent and then
+    /// <paramref name="prefix"/>, ordinally.</summary>
+    internal static bool Starts(string line, string prefix) =>
+        line.StartsWith(prefix, StringComparison.Ordinal) || line.StartsWith(ControlTools.Indent + prefix, StringComparison.Ordinal);
+
+    // Platform idiom: text is compared ordinally, as the Mac mirror compares it scalar by scalar, and the lists
+    // element by element, which a class would otherwise compare by reference.
     public bool Equals(ConfirmationDialog? other) =>
         other is not null && Title.SequenceEqual(other.Title) && Message.SequenceEqual(other.Message)
         && Code.SequenceEqual(other.Code, StringComparer.Ordinal) && CodeKinds.SequenceEqual(other.CodeKinds)

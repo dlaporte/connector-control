@@ -86,6 +86,28 @@ public class ConfirmationDialogTests
         Assert.Equal(lines, dialog.Code);
         Assert.Equal([ConfirmationDialog.LineKind.Plain, ConfirmationDialog.LineKind.Removed, ConfirmationDialog.LineKind.Added], dialog.CodeKinds);
         Assert.Equal([new TextRun(ControlTools.TakesEffectFooter)], dialog.Footer);
+        // An update lists each connector under its heading, its lines indented once.
+        var update = ControlTools.Indented(lines).Prepend(ControlTools.ConnectorHeading("splunk", ReviewModel.ChangedLabel)).ToList();
+        Assert.Equal([ConfirmationDialog.LineKind.Plain, ConfirmationDialog.LineKind.Plain, ConfirmationDialog.LineKind.Removed,
+                      ConfirmationDialog.LineKind.Added], new ConfirmationDialog(Question("t", code: update)).CodeKinds);
+        // A line that continues a field is padded past its label, so a variable named "−" stays plain.
+        var added = ControlMasking.CodeLines(JsonValue.Object(("command", JsonValue.String("npx")),
+            ("env", JsonValue.Object(("A", JsonValue.String("1")), ("\u2212", JsonValue.String("2"))))), ControlMasking.Exposure.Dialog);
+        Assert.Equal([ConfirmationDialog.LineKind.Plain, ConfirmationDialog.LineKind.Plain, ConfirmationDialog.LineKind.Plain],
+            new ConfirmationDialog(Question("t", code: added)).CodeKinds);
+        Assert.Equal([ConfirmationDialog.LineKind.Plain, ConfirmationDialog.LineKind.Plain, ConfirmationDialog.LineKind.Plain],
+            new ConfirmationDialog(Question("t", code: ControlTools.Indented(added).ToList())).CodeKinds);
+    }
+
+    /// <summary>Text is compared ordinally, as the Mac mirror compares it scalar by scalar: a name composed
+    /// another way is another name.</summary>
+    [Fact]
+    public void RunsAndDialogsCompareTextScalarByScalar()
+    {
+        Assert.NotEqual(new TextRun("caf\u00E9", IsSetApart: true), new TextRun("cafe\u0301", IsSetApart: true));
+        Assert.NotEqual(new TextRun("x", IsSetApart: true), new TextRun("x"));
+        Assert.NotEqual(new ConfirmationDialog(Question("t", code: ["caf\u00E9"])), new ConfirmationDialog(Question("t", code: ["cafe\u0301"])));
+        Assert.Equal(new ConfirmationDialog(Restart), new ConfirmationDialog(Restart));
     }
 
     /// <summary>The file a subscription reads is set apart in the footer, whole: which file it is is the question.</summary>
@@ -103,7 +125,7 @@ public class ConfirmationDialogTests
     public void ASetApartPieceIsIsolatedWhereItIsDrawn()
     {
         // Platform idiom: Windows embeds where the Mac isolates, since WPF's text engine predates isolates.
-        Assert.Equal("‪אבג‬", new TextRun("אבג", IsSetApart: true).ShownText);
+        Assert.Equal("\u202Aאבג\u202C", new TextRun("אבג", IsSetApart: true).ShownText);
         Assert.Equal("words", new TextRun("words").ShownText);
     }
 
@@ -133,9 +155,9 @@ public class ConfirmationDialogTests
         Assert.Equal([true, false], answers);
     }
 
-    /// <summary>The confirmer the app uses, end to end over the tools: the caller hears it is waiting at 50 s,
-    /// and the Allow given after that applies and is announced once, whatever "Notify on external
-    /// changes" says.</summary>
+    /// <summary>The confirmer the app uses, end to end over the tools: while the dialog is up, the caller hears
+    /// it is waiting at 50 s, and the Allow given after that applies and is announced once, whatever
+    /// "Notify on external changes" says.</summary>
     [Fact]
     public void ALateAllowThroughTheDialogAppliesAndIsAnnouncedOnce()
     {
@@ -152,14 +174,27 @@ public class ConfirmationDialogTests
                 answer.Completions++;
             });
         rig.H.Drain();
-        for (var tick = 0; tick < 10; tick++)
+        Assert.Null(answer.Result);
+        ControlResult? heardWhileAsking = null;
+        var appliedWhileAsking = true;
+        // The ticks run while the question is up, as the modal dialog's own loop runs them.
+        rig.H.Dialogs.DuringChange = () =>
         {
-            rig.H.Delays.RunNext();
-        }
-        Assert.Equal(ControlTools.WaitingResult, answer.Result);
+            for (var tick = 0; tick < 10; tick++)
+            {
+                rig.H.Delays.RunNext();
+            }
+            heardWhileAsking = answer.Result;
+            appliedWhileAsking = rig.State.Store.Mcps.ContainsKey("x");
+        };
         rig.H.Dialogs.NextChangeAnswer = true;
         TakeFirst(turns)();
         rig.H.Drain();
+        Assert.Equal(ControlTools.WaitingResult, heardWhileAsking);
+        // Nothing is applied before the answer.
+        Assert.False(appliedWhileAsking);
+        // The caller hears once.
+        Assert.Equal(ControlTools.WaitingResult, answer.Result);
         Assert.Equal(new TextRun("Claude wants to add “"), rig.H.Dialogs.ChangeQuestions[0].Title[0]);
         Assert.True(rig.State.Store.Mcps.ContainsKey("x"));
         Assert.Equal(1, answer.Completions);

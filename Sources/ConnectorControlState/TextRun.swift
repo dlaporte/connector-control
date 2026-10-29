@@ -22,10 +22,24 @@ public struct TextRun: Equatable, Sendable {
 
     // Platform idiom: the Mac isolates a set-apart piece (U+2068 … U+2069); WPF's text engine predates
     // isolates, so the Windows mirror embeds it left to right (U+202A … U+202C), which keeps the neutral
-    // text between two pieces on the paragraph's side as well.
+    // text between two pieces on the paragraph's side as well. U+2068 takes the direction of the piece's
+    // first strong letter where U+202A sets left to right, so a name that mixes directions reads in a
+    // different order inside its piece on each platform.
     /// The text as a view draws it: a set-apart piece isolated, so a name that runs right to left cannot
     /// pull the quotes or the names beside it into its own order; words as they are.
     public var shownText: String { isSetApart ? "\u{2068}" + text + "\u{2069}" : text }
+
+    // Platform idiom: text is compared scalar by scalar, as the Windows mirror's record compares it
+    // ordinally by itself; Swift's == would hold canonically equivalent text equal, and a name composed
+    // another way is another name.
+    public static func == (one: TextRun, other: TextRun) -> Bool {
+        one.isSetApart == other.isSetApart && same(one.text, other.text)
+    }
+
+    /// The same text, scalar for scalar.
+    static func same(_ one: String, _ other: String) -> Bool {
+        one.unicodeScalars.elementsEqual(other.unicodeScalars)
+    }
 
     /// `sentence` with every occurrence of each of `pieces` set apart — at each place, the first of
     /// `pieces` found there — and the rest as words. An empty piece sets nothing apart.
@@ -86,6 +100,8 @@ public struct TextRun: Equatable, Sendable {
         name.count <= limit ? name : Array(name.prefix(limit - 1)) + Array(cutMark.unicodeScalars)
     }
 
+    // Platform idiom: the Windows mirror calls this Join, since there Text is the record's own property.
+    /// The scalars as text.
     static func text(_ scalars: [Unicode.Scalar]) -> String {
         var view = String.UnicodeScalarView()
         view.append(contentsOf: scalars)

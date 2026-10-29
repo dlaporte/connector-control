@@ -36,12 +36,32 @@ public struct ConfirmationDialog: Equatable, Sendable {
         footer = request.footer.map { TextRun.names(in: $0, limit: .max) }
     }
 
-    /// A line a change removes or adds, by the prefix the change lines give it; any other is plain.
+    // Platform idiom: text is compared scalar by scalar, as the Windows mirror compares it ordinally, and
+    // the lists element by element, which a C# class must say itself; Swift's == would hold canonically
+    // equivalent text equal, and a name composed another way is another name.
+    public static func == (one: ConfirmationDialog, other: ConfirmationDialog) -> Bool {
+        one.title == other.title && one.message == other.message
+            && one.code.count == other.code.count && zip(one.code, other.code).allSatisfy { TextRun.same($0, $1) }
+            && one.codeKinds == other.codeKinds && one.footer == other.footer
+    }
+
+    /// A line a change removes or adds, by the prefix the change lines give it — at the line's start,
+    /// or after the one indent an update's lines take under their heading; any other is plain. Only a
+    /// change line starts so: a line that continues a field is padded past the widest label, deeper
+    /// than either. A key that itself reads as a change line is coloured as one, which says nothing its
+    /// own "−" or "+" does not.
     @MainActor
     static func kind(_ line: String) -> LineKind {
-        if line.unicodeScalars.starts(with: ControlMasking.removedPrefix.unicodeScalars) { return .removed }
-        if line.unicodeScalars.starts(with: ControlMasking.addedPrefix.unicodeScalars) { return .added }
+        if starts(line, ControlMasking.removedPrefix) { return .removed }
+        if starts(line, ControlMasking.addedPrefix) { return .added }
         return .plain
+    }
+
+    /// Whether `line` starts with `prefix`, or with one indent and then `prefix`, scalar by scalar.
+    @MainActor
+    static func starts(_ line: String, _ prefix: String) -> Bool {
+        line.unicodeScalars.starts(with: prefix.unicodeScalars)
+            || line.unicodeScalars.starts(with: (ControlTools.indent + prefix).unicodeScalars)
     }
 }
 
@@ -65,8 +85,8 @@ public final class DialogConfirmer: ControlConfirmer {
     public func confirm(_ request: ConfirmationRequest, completion: @escaping (Bool) -> Void) {
         let dialog = ConfirmationDialog(request)
         let dialogs = self.dialogs
-        // The Windows mirror catches around the dialog, which can throw once it may be showing; a Swift
-        // dialog cannot throw, so its one answer is all there is.
+        // Platform idiom: the Windows mirror catches around the dialog, which can throw once it may be
+        // showing; a Swift dialog cannot throw, so its one answer is all there is.
         present { completion(dialogs.confirmChange(dialog)) }
     }
 }

@@ -322,9 +322,12 @@ extension ControlTools {
         return detail.map { ControlTools.detail(quoted, ControlText.escaped($0)) } ?? quoted
     }
 
+    /// What a line under a connector's heading starts with.
+    static let indent = "  "
+
     /// Lines under a connector's heading, indented so they read as its own.
     static func indented(_ lines: [String]) -> [String] {
-        lines.map { "  " + $0 }
+        lines.map { indent + $0 }
     }
 
     /// A document's connectors as the import and subscribe questions list them, in the Import

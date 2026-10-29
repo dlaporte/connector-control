@@ -399,8 +399,11 @@ public sealed partial class ControlTools
         return detail is null ? quoted : Detail(quoted, ControlText.Escaped(detail));
     }
 
+    /// <summary>What a line under a connector's heading starts with.</summary>
+    internal const string Indent = "  ";
+
     /// <summary>Lines under a connector's heading, indented so they read as its own.</summary>
-    internal static IEnumerable<string> Indented(IEnumerable<string> lines) => lines.Select(line => "  " + line);
+    internal static IEnumerable<string> Indented(IEnumerable<string> lines) => lines.Select(line => Indent + line);
 
     /// <summary>A document's connectors as the import and subscribe questions list them, in the Import
     /// sheet's order and words: each by name with what it would run, as the dialog shows a config

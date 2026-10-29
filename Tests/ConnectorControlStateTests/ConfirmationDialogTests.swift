@@ -74,6 +74,23 @@ final class ConfirmationDialogTests: XCTestCase {
         XCTAssertEqual(dialog.code, lines)
         XCTAssertEqual(dialog.codeKinds, [.plain, .removed, .added])
         XCTAssertEqual(dialog.footer, [TextRun(ControlTools.takesEffectFooter)])
+        // An update lists each connector under its heading, its lines indented once.
+        let update = [ControlTools.connectorHeading("splunk", ReviewModel.changedLabel)] + ControlTools.indented(lines)
+        XCTAssertEqual(ConfirmationDialog(question("t", code: update)).codeKinds, [.plain, .plain, .removed, .added])
+        // A line that continues a field is padded past its label, so a variable named "−" stays plain.
+        let added = ControlMasking.codeLines(.object(["command": .string("npx"), "env": .object(["A": .string("1"), "−": .string("2")])]),
+                                             exposure: .dialog)
+        XCTAssertEqual(ConfirmationDialog(question("t", code: added)).codeKinds, [.plain, .plain, .plain])
+        XCTAssertEqual(ConfirmationDialog(question("t", code: ControlTools.indented(added))).codeKinds, [.plain, .plain, .plain])
+    }
+
+    /// Text is compared scalar by scalar, as the Windows mirror compares it ordinally: a name composed
+    /// another way is another name.
+    func testRunsAndDialogsCompareTextScalarByScalar() {
+        XCTAssertNotEqual(TextRun("caf\u{E9}", isSetApart: true), TextRun("cafe\u{301}", isSetApart: true))
+        XCTAssertNotEqual(TextRun("x", isSetApart: true), TextRun("x"))
+        XCTAssertNotEqual(ConfirmationDialog(question("t", code: ["caf\u{E9}"])), ConfirmationDialog(question("t", code: ["cafe\u{301}"])))
+        XCTAssertEqual(ConfirmationDialog(restart), ConfirmationDialog(restart))
     }
 
     /// The file a subscription reads is set apart in the footer, whole: which file it is is the question.
@@ -112,9 +129,9 @@ final class ConfirmationDialogTests: XCTestCase {
         XCTAssertEqual(answers, [true, false], "Don’t Allow, or the window closed, answers false, once")
     }
 
-    /// The confirmer the app uses, end to end over the tools: the caller hears it is waiting at 50 s,
-    /// and the Allow given after that applies and is announced once, whatever "Notify on external
-    /// changes" says.
+    /// The confirmer the app uses, end to end over the tools: while the dialog is up, the caller hears
+    /// it is waiting at 50 s, and the Allow given after that applies and is announced once, whatever
+    /// "Notify on external changes" says.
     func testALateAllowThroughTheDialogAppliesAndIsAnnouncedOnce() {
         let rig = ControlRig(); defer { rig.dispose() }
         rig.h.settings.notifyExternalChanges = false
@@ -126,11 +143,19 @@ final class ConfirmationDialogTests: XCTestCase {
                    caller: .relay(clientName: "claude-ai"), progress: { answer.progress.append($0) },
                    completion: { answer.result = $0; answer.completions += 1 })
         rig.h.drain()
-        for _ in 0..<10 { rig.h.delays.runNext() }
-        XCTAssertEqual(answer.result, ControlTools.waitingResult)
+        XCTAssertNil(answer.result)
+        var heardWhileAsking: ControlResult?
+        // The ticks run while the question is up, as the modal dialog's run loop runs them.
+        rig.h.dialogs.duringChange = {
+            for _ in 0..<10 { rig.h.delays.runNext() }
+            heardWhileAsking = answer.result
+            XCTAssertNil(rig.state.store.mcps["x"], "nothing is applied before the answer")
+        }
         rig.h.dialogs.nextChangeAnswer = true
         turns.removeFirst()()
         rig.h.drain()
+        XCTAssertEqual(heardWhileAsking, ControlTools.waitingResult)
+        XCTAssertEqual(answer.result, ControlTools.waitingResult, "the caller hears once")
         XCTAssertEqual(rig.h.dialogs.changeQuestions.first?.title.first, TextRun("Claude wants to add “"))
         XCTAssertNotNil(rig.state.store.mcps["x"])
         XCTAssertEqual(answer.completions, 1)
