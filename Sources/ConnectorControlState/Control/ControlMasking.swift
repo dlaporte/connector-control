@@ -156,7 +156,19 @@ public enum ControlMasking {
     /// a reference.
     public static func url(_ text: String, reveal: Bool = false) -> String {
         guard !reveal, let scheme = cut(text, at: "://") else { return text }
-        var rest = scheme.after
+        // A user name or password may hold an unencoded `#`, `?` or `/` (`postgres://u:P#ss@db`),
+        // which would end the authority below before its `@` and show the rest of it as a path,
+        // a query or a fragment. Where such a user info ends cannot be told from where a path
+        // holding an `@` starts, so everything up to the last `@` is masked: never more shown.
+        if let user = cutLast(scheme.after, at: "@"), ["#", "?", "/"].contains(where: { cut(user.before, at: $0) != nil }) {
+            return scheme.before + "://" + mask + "@" + location(user.after)
+        }
+        return scheme.before + "://" + location(scheme.after)
+    }
+
+    /// A URL past its `scheme://`, as `url(_:)` shows it.
+    static func location(_ text: String) -> String {
+        var rest = text
         var fragment: String?
         if let piece = cut(rest, at: "#") {
             rest = piece.before
@@ -176,7 +188,7 @@ public enum ControlMasking {
         if let piece = cutLast(authority, at: "@") {
             authority = userInfo(piece.before) + "@" + piece.after
         }
-        var result = scheme.before + "://" + authority
+        var result = authority
         if let path {
             result += "/" + pieces(path, by: "/").map { secretShaped($0) ? mask : $0 }.joined(separator: "/")
         }

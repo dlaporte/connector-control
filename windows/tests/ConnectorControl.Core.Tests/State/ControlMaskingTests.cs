@@ -773,4 +773,19 @@ public class ControlMaskingTests
             ControlMasking.Arguments(["--static-oauth-client-info", deep], ControlMasking.Exposure.Dialog));
         AssertHidden(["sk_abc123"], Local("npx", ["--config", deep]));
     }
+
+    /// <summary>A user name or password holding an unencoded <c>#</c>, <c>?</c> or <c>/</c> hides everything from the
+    /// scheme to the last <c>@</c>, since where it ends cannot be told from where the host's path
+    /// starts; an <c>@</c> in a path is hidden with it, which shows less and never more.</summary>
+    [Fact]
+    public void UserInfoHoldingAURLDelimiterIsMaskedToTheLastAt()
+    {
+        Assert.Equal("postgres://•••@db/x", ControlMasking.Url("postgres://admin:P#ssw0rd@db/x"));
+        Assert.Equal("https://•••@host/x", ControlMasking.Url("https://user:pa/ss@host/x"));
+        Assert.Equal("https://•••@host/x?token=•••#f", ControlMasking.Url("https://user:pa?ss@host/x?token=abc#f"));
+        Assert.Equal("https://•••@scope/pkg", ControlMasking.Url("https://unpkg.com/@scope/pkg"));
+        Assert.Equal("https://user:•••@host/x", ControlMasking.Url("https://user:hunter2@host/x"));
+        AssertHidden(["P#ssw0rd", "ssw0rd"], Local("psql", ["postgres://admin:P#ssw0rd@db/x"]));
+        AssertHidden(["pa/ss"], JsonValue.Object(("url", S("https://user:pa/ss@host/x"))));
+    }
 }

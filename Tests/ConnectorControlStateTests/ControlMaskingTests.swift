@@ -649,4 +649,17 @@ final class ControlMaskingTests: XCTestCase {
                        ["--static-oauth-client-info", ControlMasking.mask])
         try assertHidden(["sk_abc123"], in: local("npx", ["--config", deep]))
     }
+
+    /// A user name or password holding an unencoded `#`, `?` or `/` hides everything from the
+    /// scheme to the last `@`, since where it ends cannot be told from where the host's path
+    /// starts; an `@` in a path is hidden with it, which shows less and never more.
+    func testUserInfoHoldingAURLDelimiterIsMaskedToTheLastAt() throws {
+        XCTAssertEqual(ControlMasking.url("postgres://admin:P#ssw0rd@db/x"), "postgres://•••@db/x")
+        XCTAssertEqual(ControlMasking.url("https://user:pa/ss@host/x"), "https://•••@host/x")
+        XCTAssertEqual(ControlMasking.url("https://user:pa?ss@host/x?token=abc#f"), "https://•••@host/x?token=•••#f")
+        XCTAssertEqual(ControlMasking.url("https://unpkg.com/@scope/pkg"), "https://•••@scope/pkg")
+        XCTAssertEqual(ControlMasking.url("https://user:hunter2@host/x"), "https://user:•••@host/x")
+        try assertHidden(["P#ssw0rd", "ssw0rd"], in: local("psql", ["postgres://admin:P#ssw0rd@db/x"]))
+        try assertHidden(["pa/ss"], in: .object(["url": .string("https://user:pa/ss@host/x")]))
+    }
 }

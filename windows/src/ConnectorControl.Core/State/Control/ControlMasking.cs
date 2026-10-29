@@ -153,7 +153,21 @@ public static class ControlMasking
         {
             return text;
         }
-        var rest = scheme.After;
+        // A user name or password may hold an unencoded `#`, `?` or `/` (`postgres://u:P#ss@db`),
+        // which would end the authority below before its `@` and show the rest of it as a path,
+        // a query or a fragment. Where such a user info ends cannot be told from where a path
+        // holding an `@` starts, so everything up to the last `@` is masked: never more shown.
+        if (CutLast(scheme.After, '@') is { } user && new[] { "#", "?", "/" }.Any(delimiter => Cut(user.Before, delimiter) is not null))
+        {
+            return scheme.Before + "://" + Mask + "@" + Location(user.After);
+        }
+        return scheme.Before + "://" + Location(scheme.After);
+    }
+
+    /// <summary>A URL past its <c>scheme://</c>, as <see cref="Url"/> shows it.</summary>
+    internal static string Location(string text)
+    {
+        var rest = text;
         string? fragment = null;
         if (Cut(rest, "#") is { } fragmentPiece)
         {
@@ -177,7 +191,7 @@ public static class ControlMasking
         {
             authority = UserInfo(userPiece.Before) + "@" + userPiece.After;
         }
-        var result = scheme.Before + "://" + authority;
+        var result = authority;
         if (path is not null)
         {
             result += "/" + string.Join("/", Pieces(path, '/').Select(segment => SecretShaped(segment) ? Mask : segment));
