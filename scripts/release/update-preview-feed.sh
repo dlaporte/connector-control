@@ -13,14 +13,26 @@
 #                 pair is discarded, so only the published appcast is guaranteed to carry the
 #                 EdDSA signature and length of the DMG testers actually download.
 #
-# The feed only ever moves forward. The served feed's sparkle:version (CFBundleVersion, as
-# build-app.sh derives it: 10499.10 for 1.5.0-preview.10, 10500 for 1.5.0) is compared with the
-# source's, numerically component by component, and a feed already holding a NEWER build is left
-# alone with a notice — a re-run of an old preview, or a stable release of an older line, must
-# never move preview installs backwards. An equal build is replaced: the source is the published
-# appcast of that same build, so this refreshes it idempotently. The compare and the replace are
-# not atomic; both callers run this in the job-level concurrency group "preview-feed", which
-# serialises a preview and a release that publish at the same moment.
+# The feed only ever moves forward, judged against the published releases, not against the feed
+# itself. Builds are sparkle:version (CFBundleVersion, as build-app.sh derives it: 10499.10 for
+# 1.5.0-preview.10, 10500 for 1.5.0), compared numerically component by component. The newest
+# published build is the highest sparkle:version among the appcast.xml assets of every non-draft
+# preview-<n> and vX.Y.Z release, read through the API. A source older than that is left out with
+# a notice — a re-run of an old preview, or a stable release of an older line, must never move
+# preview installs backwards. A served feed announcing a build newer than every published release
+# did not come from this pipeline (a hand upload, or an appcast planted to wedge preview delivery
+# behind a build that never comes): that fails the job rather than passing with a notice. An equal
+# build is replaced: the source is the published appcast of that same build, so this refreshes it
+# idempotently. The compare and the replace are not atomic; both callers run this in the job-level
+# concurrency group "preview-feed", which serialises a preview and a release that publish at the
+# same moment.
+#
+# The feed's EdDSA signature is checked for presence only, not verified against SUPublicEDKey:
+# both callers run this on ubuntu-24.04, and Sparkle's sign_update, the one tool that verifies its
+# signatures, ships only as a macOS binary (make-appcast.sh fetches it on the macOS build runner).
+# Every installed preview verifies the whole feed against its own key (SURequireSignedFeed) and
+# refuses one that does not match, so a forged feed can only stop updates, which the ordering check
+# above catches when it claims a newer build.
 #
 # preview-feed itself. Created here, on the first run that finds it missing, as a PRERELEASE
 # (never releases/latest, so the stable feed at releases/latest/download/appcast.xml cannot
@@ -50,7 +62,8 @@
 # still be a stable
 # v* release. Writes a step summary.
 #
-# Needs GH_TOKEN and GITHUB_REPOSITORY in the environment and gh, curl and cmp on PATH.
+# Needs GH_TOKEN and GITHUB_REPOSITORY in the environment and gh, jq, curl and cmp on PATH.
+# scripts/tests/update-preview-feed-order.sh runs it against a fake gh and curl.
 set -euo pipefail
 
 SOURCE=${1:?usage: update-preview-feed.sh <source-tag>}
@@ -88,6 +101,33 @@ compare_builds() {
 
 is_build() { [[ "$1" =~ ^[0-9]+(\.[0-9]+)*$ ]]; }
 
+# The newest build any published release announces: the highest sparkle:version among the
+# appcast.xml assets of the non-draft preview-<n> and vX.Y.Z releases. Empty when there is none.
+# A release that lists an appcast it cannot then give fails the run, so a flaky download can never
+# make the newest release look older than it is. Every failure returns explicitly: errexit does not
+# reach into the command substitution this runs in.
+newest_published_build() {
+  local tag build newest=""
+  gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$WORK/releases.json" \
+    || { echo "::error::could not list the releases" >&2; return 1; }
+  jq -r '.[] | select(.draft | not) | select(any(.assets[]; .name == "appcast.xml")) | .tag_name' \
+    "$WORK/releases.json" > "$WORK/listed-tags" || { echo "::error::could not read the release list" >&2; return 1; }
+  grep -E '^(preview-[0-9]+|v[0-9]+\.[0-9]+\.[0-9]+)$' "$WORK/listed-tags" > "$WORK/published-tags" || true
+  while IFS= read -r tag; do
+    rm -rf "$WORK/published"
+    mkdir -p "$WORK/published"
+    gh release download "$tag" --pattern appcast.xml --dir "$WORK/published" >&2 \
+      || { echo "::error::could not download $tag's appcast.xml" >&2; return 1; }
+    build=$(build_of "$WORK/published/appcast.xml") || true
+    if ! is_build "$build"; then
+      echo "::warning::$tag's appcast.xml has no single numeric sparkle:version ('$build'); not counted." >&2
+      continue
+    fi
+    if [ -z "$newest" ] || [ "$(compare_builds "$build" "$newest")" = 1 ]; then newest=$build; fi
+  done < "$WORK/published-tags"
+  printf '%s' "$newest"
+}
+
 # The source: its published appcast, its version and its build.
 mkdir -p "$WORK/source"
 gh release download "$SOURCE" --pattern appcast.xml --dir "$WORK/source"
@@ -115,6 +155,31 @@ case "$STATUS" in
   *) echo "::error::fetching $FEED_URL answered HTTP '$STATUS'"; exit 1 ;;
 esac
 
+PUBLISHED_BUILD=$(newest_published_build) || exit 1
+# The source was just published, so it is among them: none at all means the listing failed.
+is_build "$PUBLISHED_BUILD" || { echo "::error::no published preview-<n> or vX.Y.Z release carries an appcast.xml with a numeric sparkle:version, not even $SOURCE"; exit 1; }
+echo "The newest published release announces build $PUBLISHED_BUILD"
+
+if [ -n "$CURRENT_BUILD" ] && [ "$(compare_builds "$CURRENT_BUILD" "$PUBLISHED_BUILD")" = 1 ]; then
+  echo "::error::The preview feed announces build $CURRENT_BUILD, newer than every published release (newest: $PUBLISHED_BUILD), so this pipeline did not write it. Preview installs are offered nothing until it is replaced. Find out who uploaded it, delete it ('gh release delete-asset $FEED_TAG appcast.xml --yes'), then re-run the newest release's preview-feed job."
+  exit 1
+fi
+
+if [ "$(compare_builds "$NEW_BUILD" "$PUBLISHED_BUILD")" = -1 ]; then
+  echo "::notice::A newer release announcing build $PUBLISHED_BUILD is published; $SOURCE's $NEW_BUILD leaves the preview feed unchanged."
+  if [ "$CURRENT_BUILD" != "$PUBLISHED_BUILD" ]; then
+    echo "::warning::The preview feed announces build ${CURRENT_BUILD:-none}, not the newest published $PUBLISHED_BUILD: re-run the preview-feed job of the release that published it."
+  fi
+  {
+    echo "## Preview feed"
+    echo
+    echo "- Left unchanged (build ${CURRENT_BUILD:-none}): a release announcing build $PUBLISHED_BUILD, newer than $SOURCE ($NEW_VERSION, build $NEW_BUILD), is published."
+  } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+  exit 0
+fi
+
+# Unreachable while the source is the newest published build and the feed is no newer than that;
+# kept so a feed newer than the source is never replaced, whatever the listing said.
 if [ -n "$CURRENT_BUILD" ] && [ "$(compare_builds "$CURRENT_BUILD" "$NEW_BUILD")" = 1 ]; then
   echo "::notice::The preview feed already announces build $CURRENT_BUILD, newer than $SOURCE's $NEW_BUILD; left unchanged."
   {

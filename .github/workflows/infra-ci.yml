@@ -53,6 +53,11 @@ jobs:
           # ships a different one than a developer machine.
           shellcheck --severity=warning "${files[@]}"
 
+      # The preview feed moves only forward, judged against the published releases, and a feed newer
+      # than all of them fails the job: proved with a fake gh and curl, on the image the feed jobs use.
+      - name: update-preview-feed.sh orders builds against the published releases
+        run: ./scripts/tests/update-preview-feed-order.sh
+
       - name: PSScriptAnalyzer
         shell: pwsh
         run: |
