@@ -38,13 +38,25 @@ public sealed class ConfirmationDialog : IEquatable<ConfirmationDialog>
     /// <summary>The closing line; a path in it is set apart whole.</summary>
     public IReadOnlyList<TextRun>? Footer { get; }
 
-    /// <summary>The code lines as the views draw them: each between a left-to-right override and the pop that
-    /// ends it (U+202D … U+202C). Inside an override every character is laid out left to right, so the
-    /// order a line is drawn in is the order it is stored in: letters that run right to left cannot carry
-    /// the numbers and arguments beside them into another order, as a bidi run otherwise would. A line
+    /// <summary>The code lines as the views draw them: a line that holds a right-to-left letter between a
+    /// left-to-right override and the pop that ends it (U+202D … U+202C), and any other as it is. Inside
+    /// an override every character is laid out left to right, so the order a line is drawn in is the
+    /// order it is stored in: letters that run right to left cannot carry the numbers and arguments
+    /// beside them into another order, as a bidi run otherwise would. A line with no such letter is
+    /// already drawn in its stored order, so it is left alone and copies from the dialog as it is. A line
     /// holds neither character raw, since both are escaped before it gets here, so nothing in it can end
     /// the override early. Drawing only: <see cref="Code"/>, and the request Allow compares, keep the lines as they are.</summary>
-    public IReadOnlyList<string> ShownCode => Code.Select(line => "\u202D" + line + "\u202C").ToList();
+    public IReadOnlyList<string> ShownCode =>
+        Code.Select(line => HasRightToLeft(line) ? "\u202D" + line + "\u202C" : line).ToList();
+
+    /// <summary>Whether <paramref name="line"/> holds a character of the blocks where the strong right-to-left letters
+    /// are — Hebrew, Arabic, Syriac, Thaana, NKo and the rest to U+08FF, their presentation forms, and their
+    /// ranges beyond the Basic Plane. Explicit ranges, the same as the Mac mirror's, so neither platform leans
+    /// on its own Unicode tables; a mark or digit inside them only wraps a line that needed no wrapper, which
+    /// changes nothing it shows.</summary>
+    internal static bool HasRightToLeft(string line) => ControlText.Scalars(line).Any(scalar =>
+        scalar is (>= 0x0590 and <= 0x08FF) or (>= 0xFB1D and <= 0xFDFF) or (>= 0xFE70 and <= 0xFEFF)
+            or (>= 0x10800 and <= 0x10FFF) or (>= 0x1E800 and <= 0x1EFFF));
 
     /// <summary>A line a change removes or adds, by the prefix the change lines give it — at the line's start,
     /// or after the one indent an update's lines take under their heading; any other is plain. Only a

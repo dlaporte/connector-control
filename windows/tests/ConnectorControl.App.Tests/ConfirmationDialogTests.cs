@@ -69,8 +69,7 @@ public class ConfirmationDialogTests
             Assert.NotEqual(mono, dialog.MessageText.Inlines.OfType<Run>().First().FontFamily.Source);
             Assert.Equal($"In “{new TextRun("Harvard", IsSetApart: true).ShownText}”, the collection Claude is running:",
                 Text(dialog.InformativeText.Inlines));
-            // Each line drawn in the order it is stored, between a left-to-right override and its pop.
-            Assert.Equal("\u202Durl\u202C\n\u202D  − https://a.example/mcp\u202C\n\u202D  + https://b.example/mcp\u202C", Code(dialog.CodeText));
+            Assert.Equal("url\n  − https://a.example/mcp\n  + https://b.example/mcp", Code(dialog.CodeText));
             // A paragraph a line, as the Mac lays them out, each its own left-to-right paragraph and none spaced
             // from the next.
             Assert.All(Lines(dialog.CodeText), line => Assert.Equal(new Thickness(0), line.Margin));
@@ -105,6 +104,21 @@ public class ConfirmationDialogTests
             Assert.Equal(Visibility.Collapsed, dialog.CodeText.Visibility);
             Assert.Equal(Visibility.Collapsed, dialog.FooterText.Visibility);
             Assert.Equal(ControlTools.RestartMessage, Text(dialog.InformativeText.Inlines));
+            dialog.Close();
+        });
+    }
+
+    /// <summary>A line that holds a right-to-left letter is drawn between a left-to-right override and its pop, so it
+    /// is drawn in the order it is stored; a line with none is drawn as it is.</summary>
+    [Fact]
+    public void ARightToLeftLineIsDrawnInTheOrderItIsStored()
+    {
+        var line = "--ports \u0627 80 443 22";
+        WpfApp.Invoke(() =>
+        {
+            var dialog = new ConfirmDialog(new ConfirmationDialog(new ConfirmationRequest(ControlTools.ChangeTitle("Claude", "splunk"),
+                ControlTools.ChangeActiveMessage("Harvard"), ["url", line], null)));
+            Assert.Equal("url\n\u202D" + line + "\u202C", Code(dialog.CodeText));
             dialog.Close();
         });
     }

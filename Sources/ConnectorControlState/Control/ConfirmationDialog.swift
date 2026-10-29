@@ -25,13 +25,31 @@ public struct ConfirmationDialog: Equatable, Sendable {
     /// The closing line; a path in it is set apart whole.
     public let footer: [TextRun]?
 
-    /// The code lines as the views draw them: each between a left-to-right override and the pop that
-    /// ends it (U+202D … U+202C). Inside an override every character is laid out left to right, so the
-    /// order a line is drawn in is the order it is stored in: letters that run right to left cannot carry
-    /// the numbers and arguments beside them into another order, as a bidi run otherwise would. A line
+    /// The code lines as the views draw them: a line that holds a right-to-left letter between a
+    /// left-to-right override and the pop that ends it (U+202D … U+202C), and any other as it is. Inside
+    /// an override every character is laid out left to right, so the order a line is drawn in is the
+    /// order it is stored in: letters that run right to left cannot carry the numbers and arguments
+    /// beside them into another order, as a bidi run otherwise would. A line with no such letter is
+    /// already drawn in its stored order, so it is left alone and copies from the dialog as it is. A line
     /// holds neither character raw, since both are escaped before it gets here, so nothing in it can end
     /// the override early. Drawing only: `code`, and the request Allow compares, keep the lines as they are.
-    public var shownCode: [String] { code.map { "\u{202D}" + $0 + "\u{202C}" } }
+    public var shownCode: [String] {
+        code.map { ConfirmationDialog.hasRightToLeft($0) ? "\u{202D}" + $0 + "\u{202C}" : $0 }
+    }
+
+    /// Whether `line` holds a character of the blocks where the strong right-to-left letters are —
+    /// Hebrew, Arabic, Syriac, Thaana, NKo and the rest to U+08FF, their presentation forms, and their
+    /// ranges beyond the Basic Plane. Explicit ranges, the same as the Windows mirror's, so neither
+    /// platform leans on its own Unicode tables; a mark or digit inside them only wraps a line that
+    /// needed no wrapper, which changes nothing it shows.
+    static func hasRightToLeft(_ line: String) -> Bool {
+        line.unicodeScalars.contains { scalar in
+            switch scalar.value {
+            case 0x0590...0x08FF, 0xFB1D...0xFDFF, 0xFE70...0xFEFF, 0x10800...0x10FFF, 0x1E800...0x1EFFF: return true
+            default: return false
+            }
+        }
+    }
 
     @MainActor
     public init(_ request: ConfirmationRequest) {

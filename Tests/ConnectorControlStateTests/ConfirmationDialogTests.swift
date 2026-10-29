@@ -147,14 +147,24 @@ final class ConfirmationDialogTests: XCTestCase {
         XCTAssertEqual(ConfirmationDialog(question("t", code: ControlTools.indented(added))).codeKinds, [.plain, .plain, .plain])
     }
 
-    /// Each code line is drawn with every character left to right in the order it is stored, so letters
-    /// that run right to left cannot carry the numbers and arguments beside them into another order; what
-    /// the question holds, and what Allow compares, stays the line itself.
+    /// A code line that holds a right-to-left letter is drawn with every character left to right in the
+    /// order it is stored, so the letter cannot carry the numbers and arguments beside it into another
+    /// order; a line with none is drawn, and copied, as it is. What the question holds, and what Allow
+    /// compares, stays the line itself.
     func testACodeLineIsDrawnInTheOrderItIsStored() {
         let line = "--ports \u{0627} 80 443 22"
         let request = question("t", code: [line, "plain"])
         let dialog = ConfirmationDialog(request)
-        XCTAssertEqual(dialog.shownCode, ["\u{202D}" + line + "\u{202C}", "\u{202D}plain\u{202C}"])
+        XCTAssertEqual(dialog.shownCode, ["\u{202D}" + line + "\u{202C}", "plain"])
+        // Each range, at both its ends: the same list the Windows mirror holds.
+        let ends: [UInt32] = [0x0590, 0x08FF, 0xFB1D, 0xFDFF, 0xFE70, 0xFEFF, 0x10800, 0x10FFF, 0x1E800, 0x1EFFF]
+        for value in ends {
+            XCTAssertTrue(ConfirmationDialog.hasRightToLeft("a" + String(Unicode.Scalar(value)!)), String(value, radix: 16))
+        }
+        for plain in ["url  https://a.example/mcp", "caf\u{E9} \u{0E17}\u{0E35}\u{0E48}", "\u{058F}", "\u{0900}", "\u{FB1C}", "\u{1F600}", ""] {
+            XCTAssertFalse(ConfirmationDialog.hasRightToLeft(plain), plain)
+            XCTAssertEqual(ConfirmationDialog(question("t", code: [plain])).shownCode, [plain])
+        }
         XCTAssertEqual(dialog.code, [line, "plain"])
         XCTAssertTrue(TextRun.same(dialog.code[0], line))
         XCTAssertEqual(request, question("t", code: [line, "plain"]))

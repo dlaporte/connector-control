@@ -170,16 +170,28 @@ public class ConfirmationDialogTests
             new ConfirmationDialog(Question("t", code: ControlTools.Indented(added).ToList())).CodeKinds);
     }
 
-    /// <summary>Each code line is drawn with every character left to right in the order it is stored, so letters
-    /// that run right to left cannot carry the numbers and arguments beside them into another order; what
-    /// the question holds, and what Allow compares, stays the line itself.</summary>
+    /// <summary>A code line that holds a right-to-left letter is drawn with every character left to right in the
+    /// order it is stored, so the letter cannot carry the numbers and arguments beside it into another
+    /// order; a line with none is drawn, and copied, as it is. What the question holds, and what Allow
+    /// compares, stays the line itself.</summary>
     [Fact]
     public void ACodeLineIsDrawnInTheOrderItIsStored()
     {
         var line = "--ports \u0627 80 443 22";
         var request = Question("t", code: [line, "plain"]);
         var dialog = new ConfirmationDialog(request);
-        Assert.Equal(["\u202D" + line + "\u202C", "\u202Dplain\u202C"], dialog.ShownCode);
+        Assert.Equal(["\u202D" + line + "\u202C", "plain"], dialog.ShownCode);
+        // Each range, at both its ends: the same list the Mac mirror holds.
+        int[] ends = [0x0590, 0x08FF, 0xFB1D, 0xFDFF, 0xFE70, 0xFEFF, 0x10800, 0x10FFF, 0x1E800, 0x1EFFF];
+        foreach (var value in ends)
+        {
+            Assert.True(ConfirmationDialog.HasRightToLeft("a" + char.ConvertFromUtf32(value)), value.ToString("X"));
+        }
+        foreach (var plain in new[] { "url  https://a.example/mcp", "caf\u00E9 \u0E17\u0E35\u0E48", "\u058F", "\u0900", "\uFB1C", "\U0001F600", "" })
+        {
+            Assert.False(ConfirmationDialog.HasRightToLeft(plain), plain);
+            Assert.Equal([plain], new ConfirmationDialog(Question("t", code: [plain])).ShownCode);
+        }
         Assert.Equal([line, "plain"], dialog.Code);
         Assert.Equal(request, Question("t", code: [line, "plain"]));
         Assert.Equal(dialog, new ConfirmationDialog(Question("t", code: [line, "plain"])));
