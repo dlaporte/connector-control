@@ -382,11 +382,14 @@ public class ControlToolsSharingTests
         foreach (var caller in new ControlCaller[] { relay, cli })
         {
             Assert.Equal(ControlTools.NotAFileError(@"\\.\pipe\x.json"), ControlTools.PathRefusal(@"\\.\pipe\x.json", caller));
+            // A curly quote in a device path cannot close the app's quote and start another sentence.
+            Assert.Equal("""“\\.\pipe\a\u{201D} isn’t a file. \u{201C}b” isn’t a file.""",
+                ControlTools.PathRefusal("""\\.\pipe\a” isn’t a file. “b""", caller));
             Assert.Null(ControlTools.PathRefusal(@"C:\Users\me\x.json", caller));
             Assert.Null(ControlTools.PathRefusal("/Users/me/x.json", caller));
             foreach (var device in new[] { @"\\?\GLOBALROOT\Device\HarddiskVolume1\x.json", @"\\?\Volume{0b6c1b57-0000-0000-0000-100000000000}\x.json", @"\\?\pipe\x", @"\??\GLOBALROOT\Device\HarddiskVolume1\x.json", @"\??\Volume{0b6c1b57-0000-0000-0000-100000000000}\x.json", @"\??\pipe\x" })
             {
-                Assert.Equal(ControlTools.NotAFileError(ControlText.Escaped(device)), ControlTools.PathRefusal(device, caller));
+                Assert.Equal($"“{device}” isn’t a file.", ControlTools.PathRefusal(device, caller));
             }
         }
         // A drive in the long-path form is a file path to the command line; the relay is refused anything that

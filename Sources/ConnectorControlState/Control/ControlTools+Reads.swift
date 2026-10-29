@@ -188,7 +188,8 @@ extension ControlTools {
 
     func listConnectors(_ requested: String?) -> ControlResult {
         let collection = requested ?? state.activeCollection
-        guard let held = state.store.collections[collection] else { return .refusal(MasterStore.noCollectionError(collection)) }
+        let shown = ControlText.escapedName(collection)
+        guard let held = state.store.collections[collection] else { return .refusal(MasterStore.noCollectionError(shown)) }
         var rows: [[String]] = []
         var items: [JSONValue] = []
         for name in held.mcps.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
@@ -203,7 +204,7 @@ extension ControlTools {
             ]))
         }
         let text = rows.isEmpty
-            ? ControlTools.emptyCollectionText(collection)
+            ? ControlTools.emptyCollectionText(shown)
             : ControlText.table(header: ["", ControlTools.nameHeader, ControlTools.runsHeader], rows: rows).joined(separator: "\n")
         return ControlResult(structured: .object(["collection": .string(collection), "connectors": .array(items)]),
                              text: text, isError: false)
@@ -211,8 +212,9 @@ extension ControlTools {
 
     func connector(_ name: String, in requested: String?, reveal: Bool) -> ControlResult {
         let collection = requested ?? state.activeCollection
-        guard let held = state.store.collections[collection] else { return .refusal(MasterStore.noCollectionError(collection)) }
-        guard let entry = held.mcps[name] else { return .refusal(ControlTools.noConnectorError(name, collection)) }
+        let shownName = ControlText.escapedName(name), shownCollection = ControlText.escapedName(collection)
+        guard let held = state.store.collections[collection] else { return .refusal(MasterStore.noCollectionError(shownCollection)) }
+        guard let entry = held.mcps[name] else { return .refusal(ControlTools.noConnectorError(shownName, shownCollection)) }
         let heading = ControlTools.detail(ControlTools.detail(name, collection),
                                           entry.enabled ? ControlTools.onWord : ControlTools.offWord)
         let structured: JSONValue = .object([

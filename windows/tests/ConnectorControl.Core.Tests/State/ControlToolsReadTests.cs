@@ -252,4 +252,24 @@ public class ControlToolsReadTests
         Assert.Equal(backupsBefore, rig.State.Service.Backups.Backups(RestoreModel.Series));
         Assert.Equal(sentBefore, rig.H.Notifier.Sent.Count);
     }
+
+    /// <summary>The names a read tool echoes in a sentence reach the command line's terminal, so they show as every
+    /// other sentence shows a name: no control character goes out as itself, and a backslash is doubled.</summary>
+    [Fact]
+    public void TheReadToolsShowTheNamesTheyEchoOneWayOnly()
+    {
+        using var rig = new ControlRig();
+        var name = "e\e[31m\\x";
+        var shown = """e\u{001B}[31m\\x""";
+        Assert.Equal(ControlResult.Refusal($"No collection named “{shown}”."),
+            rig.Call("list_connectors", Args(("collection", JsonValue.String(name)))));
+        Assert.Equal(ControlResult.Refusal($"No collection named “{shown}”."),
+            rig.Call("get_connector", Args(("name", JsonValue.String("x")), ("collection", JsonValue.String(name)))));
+        Assert.Equal(ControlResult.Refusal($"There’s no connector named “{shown}” in “Default”."),
+            rig.Call("get_connector", Args(("name", JsonValue.String(name)))));
+        Assert.Null(rig.State.AddEmptyCollection(name));
+        Assert.Equal($"“{shown}” has no connectors.", rig.Call("list_connectors", Args(("collection", JsonValue.String(name))))?.Text);
+        Assert.Equal(ControlResult.Refusal($"There’s no connector named “{shown}” in “{shown}”."),
+            rig.Call("get_connector", Args(("name", JsonValue.String(name)), ("collection", JsonValue.String(name)))));
+    }
 }

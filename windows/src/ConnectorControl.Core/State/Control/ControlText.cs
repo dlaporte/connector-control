@@ -58,8 +58,9 @@ public static class ControlText
 
     /// <summary>Text as a line shows it: a control character, and a character that shows as nothing or as a
     /// blank — every Default_Ignorable code point (soft hyphen, joiners, direction marks, variation
-    /// selectors, tags…), the blank letters (U+115F, U+1160, U+2800, U+3164, U+FFA0) and the
-    /// interlinear annotation marks — as a visible escape, <c>\n</c>, <c>\r</c>, <c>\t</c> or <c>\u{202E}</c>, so a value
+    /// selectors, tags…), the blank letters (U+115F, U+1160, U+2800, U+3164, U+FFA0), the interlinear
+    /// annotation marks and every space but the ordinary one (U+00A0, U+1680, U+2000–U+200A, U+202F,
+    /// U+205F, U+3000) — as a visible escape, <c>\n</c>, <c>\r</c>, <c>\t</c> or <c>\u{202E}</c>, so a value
     /// can neither break its line, nor hide part of it, nor pass for another.</summary>
     public static string Escaped(string text)
     {
@@ -72,16 +73,18 @@ public static class ControlText
     }
 
     /// <summary>One of the app's own sentences that quotes names someone else chose, read once from the left: at
-    /// each place, the longest of <paramref name="names"/> that starts there is shown as <see cref="EscapedName"/> shows it,
-    /// and anything else — the sentence's own quotes included — as <see cref="Escaped(string)"/> does. One pass, so no
-    /// name's escape is ever read again as part of another name. Names are matched ordinally, as the Mac mirror
-    /// matches them scalar by scalar; equal lengths in ordinal order, so both platforms pick the same name.</summary>
+    /// each place, the longest of <paramref name="names"/> whose quoted form — “, the name, ” — starts there is shown as
+    /// “ + <see cref="EscapedName"/> + ”, and anything else — the sentence's own quotes included — as
+    /// <see cref="Escaped(string)"/> does. A name is found only between the app's own quotes, so a name that begins with “ can never
+    /// match at another name's opening quote, and no name's escape is ever read again as part of another
+    /// name. Names are matched ordinally, as the Mac mirror matches them scalar by scalar; equal lengths in
+    /// ordinal order, so both platforms pick the same name.</summary>
     public static string Escaped(string text, IReadOnlyList<string> names)
     {
         var ordered = names.Where(name => name.Length > 0)
             .OrderByDescending(name => Scalars(name).Count())
             .ThenBy(name => name, StringComparer.Ordinal)
-            .Select(name => Scalars(name).ToList())
+            .Select(name => (Name: name, Quoted: Scalars(name).Prepend(OpeningQuote).Append(ClosingQuote).ToList()))
             .ToList();
         var scalars = Scalars(text).ToList();
         var line = new StringBuilder();
@@ -89,12 +92,12 @@ public static class ControlText
         while (index < scalars.Count)
         {
             var at = index;
-            var name = ordered.FirstOrDefault(candidate => at + candidate.Count <= scalars.Count
-                && scalars.Skip(at).Take(candidate.Count).SequenceEqual(candidate));
-            if (name is not null)
+            var found = ordered.FirstOrDefault(candidate => at + candidate.Quoted.Count <= scalars.Count
+                && scalars.Skip(at).Take(candidate.Quoted.Count).SequenceEqual(candidate.Quoted));
+            if (found.Name is not null)
             {
-                line.Append(EscapedName(string.Concat(name.Select(Text))));
-                index += name.Count;
+                line.Append('\u201C').Append(EscapedName(found.Name)).Append('\u201D');
+                index += found.Quoted.Count;
             }
             else
             {
@@ -170,9 +173,9 @@ public static class ControlText
         '\n' => "\\n",
         '\r' => "\\r",
         '\t' => "\\t",
-        <= 0x1F or (>= 0x7F and <= 0x9F) or 0xAD or 0x034F or 0x061C or 0x115F or 0x1160 or 0x17B4 or 0x17B5
-            or (>= 0x180B and <= 0x180F) or (>= 0x200B and <= 0x200F) or (>= 0x2028 and <= 0x202E)
-            or (>= 0x2060 and <= 0x206F) or 0x2800 or 0x3164 or (>= 0xFE00 and <= 0xFE0F) or 0xFEFF or 0xFFA0
+        <= 0x1F or (>= 0x7F and <= 0x9F) or 0xA0 or 0xAD or 0x034F or 0x061C or 0x115F or 0x1160 or 0x1680 or 0x17B4 or 0x17B5
+            or (>= 0x180B and <= 0x180F) or (>= 0x2000 and <= 0x200F) or (>= 0x2028 and <= 0x202F)
+            or (>= 0x205F and <= 0x206F) or 0x2800 or 0x3000 or 0x3164 or (>= 0xFE00 and <= 0xFE0F) or 0xFEFF or 0xFFA0
             or (>= 0xFFF0 and <= 0xFFFB) or (>= 0x1BCA0 and <= 0x1BCA3) or (>= 0x1D173 and <= 0x1D17A)
             or (>= 0xE0000 and <= 0xE0FFF) => HexEscape(scalar),
         // Platform idiom: a lone surrogate, which a Swift string cannot hold, shows as its code.

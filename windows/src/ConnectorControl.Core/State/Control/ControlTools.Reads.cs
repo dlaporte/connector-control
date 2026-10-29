@@ -210,9 +210,10 @@ public sealed partial class ControlTools
     internal ControlResult ListConnectors(string? requested)
     {
         var collection = requested ?? state.ActiveCollection;
+        var shown = ControlText.EscapedName(collection);
         if (!state.Store.Collections.TryGetValue(collection, out var held))
         {
-            return ControlResult.Refusal(MasterStore.NoCollectionError(collection));
+            return ControlResult.Refusal(MasterStore.NoCollectionError(shown));
         }
         var rows = new List<IReadOnlyList<string>>();
         var items = new List<JsonValue>();
@@ -228,7 +229,7 @@ public sealed partial class ControlTools
                 ("caution", state.ConnectorCaution(name, collection) is { } caution ? JsonValue.String(caution) : JsonValue.Null)));
         }
         var text = rows.Count == 0
-            ? EmptyCollectionText(collection)
+            ? EmptyCollectionText(shown)
             : string.Join("\n", ControlText.Table(["", NameHeader, RunsHeader], rows));
         return new ControlResult(JsonValue.Object(("collection", JsonValue.String(collection)), ("connectors", JsonValue.Array(items))),
             text, false);
@@ -237,13 +238,15 @@ public sealed partial class ControlTools
     internal ControlResult Connector(string name, string? requested, bool reveal)
     {
         var collection = requested ?? state.ActiveCollection;
+        var shownName = ControlText.EscapedName(name);
+        var shownCollection = ControlText.EscapedName(collection);
         if (!state.Store.Collections.TryGetValue(collection, out var held))
         {
-            return ControlResult.Refusal(MasterStore.NoCollectionError(collection));
+            return ControlResult.Refusal(MasterStore.NoCollectionError(shownCollection));
         }
         if (!held.Mcps.TryGetValue(name, out var entry))
         {
-            return ControlResult.Refusal(NoConnectorError(name, collection));
+            return ControlResult.Refusal(NoConnectorError(shownName, shownCollection));
         }
         var heading = Detail(Detail(name, collection), entry.Enabled ? OnWord : OffWord);
         var structured = JsonValue.Object(

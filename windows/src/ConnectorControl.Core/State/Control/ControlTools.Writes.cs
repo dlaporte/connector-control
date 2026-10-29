@@ -89,6 +89,21 @@ public sealed partial class ControlTools
     internal static ControlOutcome Refused(string text, IReadOnlyList<string>? names = null) =>
         new(ControlResult.Refusal(ControlText.Escaped(text, names ?? [])), null);
 
+    /// <summary>A sentence about a file that leads with the file's name unquoted, as <c>AppState.SourceUnreadableError</c>
+    /// words it: the name as <see cref="ControlText.EscapedName"/> shows it, then the rest through
+    /// <see cref="ControlText.Escaped(string, IReadOnlyList{string})"/>, for the quoted names it may echo. A name found
+    /// only between the app's quotes would pass here as itself.</summary>
+    internal static string Shown(string text, string file)
+    {
+        var lead = ControlText.Scalars(file).ToList();
+        var scalars = ControlText.Scalars(text).ToList();
+        if (lead.Count == 0 || !scalars.Take(lead.Count).SequenceEqual(lead))
+        {
+            return ControlText.Escaped(text, [file]);
+        }
+        return ControlText.EscapedName(file) + ControlText.Escaped(string.Concat(scalars.Skip(lead.Count).Select(ControlText.Text)), [file]);
+    }
+
     /// <summary>A write's answer: what happened, then what follows for the collection Claude runs. A write
     /// that changed what Claude's config holds (<c>AppliedServers</c> moved off <paramref name="mark"/>, taken
     /// before the write) while Claude runs an older config says to restart; one that could not write it says

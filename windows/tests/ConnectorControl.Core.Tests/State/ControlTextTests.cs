@@ -97,7 +97,7 @@ public class ControlTextTests
         Assert.Equal("a '' b", ControlText.Words(["a", "", "b"]));
         Assert.Equal("""'it\'s' C:\x {"a":1} 'C:\\Program Files\\x' 'x\ny'""",
             ControlText.Words(["it's", """C:\x""", """{"a":1}""", """C:\Program Files\x""", "x\ny"]));
-        Assert.Equal("'a\u00A0b'", ControlText.Word("a\u00A0b"));   // a no-break space is a space
+        Assert.Equal("""'a\u{00A0}b'""", ControlText.Word("a\u00A0b"));   // a no-break space is a space, and shows as its code
     }
 
     [Fact]
@@ -154,5 +154,67 @@ public class ControlTextTests
         Assert.Equal("""C:\Users\me\team \u{201C}x\u{201D}.json""", ControlText.EscapedPath("""C:\Users\me\team “x”.json"""));
         Assert.Equal("""/tmp/a\nb.json""", ControlText.EscapedPath("/tmp/a\nb.json"));
         Assert.Equal("From “/Users/me/team.json”", ControlTools.FromFooter(ControlText.EscapedPath("/Users/me/team.json")));
+    }
+
+    /// <summary>A name is found only between the app's own quotes, so two different names can never show alike:
+    /// a name that begins with “ cannot match at another name's opening quote and swallow its start.</summary>
+    [Fact]
+    public void ANameIsFoundOnlyBetweenTheAppsQuotes()
+    {
+        var one = ControlText.Escaped("Moved “aa\u202E” to “\u201Ca”.", ["aa\u202E", "\u201Ca"]);
+        var other = ControlText.Escaped("""Moved “aa\u{202E}” to “""" + "\u201Ca”.", ["""aa\u{202E}""", "\u201Ca"]);
+        Assert.Equal("""Moved “aa\u{202E}” to “\u{201C}a”.""", one);
+        Assert.Equal("""Moved “aa\\u{202E}” to “\u{201C}a”.""", other);
+        Assert.NotEqual(one, other);
+        var character = ControlText.Escaped("No “x\u202E” in “\\”.", ["x\u202E", "\\"]);
+        var literal = ControlText.Escaped("""No “x\u{202E}” in “\”.""", ["""x\u{202E}""", "\\"]);
+        Assert.Equal("""No “x\u{202E}” in “\\”.""", character);
+        Assert.Equal("""No “x\\u{202E}” in “\\”.""", literal);
+        Assert.NotEqual(character, literal);
+        // Outside a name's quotes nothing is doubled.
+        Assert.Equal("a \\ b “c”", ControlText.Escaped("a \\ b “c”", ["c"]));
+    }
+
+    /// <summary>Over thousands of pairs of names, drawn by a fixed generator, two different pairs never read
+    /// alike. The Mac mirror runs the same generator and expects the same count.</summary>
+    [Fact]
+    public void DifferentNamesNeverShowAlike()
+    {
+        string[] tokens = ["\u201C", "\u201D", "\\", "\u202E", "a", "\\u202E", "\\\\"];
+        ulong state = 20261028;
+        int Next()
+        {
+            state = (unchecked(state * 1103515245UL + 12345UL)) % 2147483648UL;
+            return (int)(state >> 16);
+        }
+        string Name() => string.Concat(Enumerable.Range(0, 1 + Next() % 3).Select(_ => tokens[Next() % tokens.Length]));
+        var seen = new Dictionary<string, string>(StringComparer.Ordinal);
+        var inputs = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < 4000; i++)
+        {
+            var a = Name();
+            var b = Name();
+            var input = a + "\0" + b;
+            if (!inputs.Add(input))
+            {
+                continue;
+            }
+            var shown = ControlText.Escaped($"Moved “{a}” to “{b}”.", [a, b]);
+            Assert.False(seen.TryGetValue(shown, out var earlier), $"{earlier} and {input} both show {shown}");
+            seen[shown] = input;
+        }
+        // The generator's own count, the same on both platforms.
+        Assert.Equal(3021, inputs.Count);
+    }
+
+    /// <summary>A character that shows as a blank is escaped too: the no-break and other spaces beside the
+    /// ordinary one.</summary>
+    [Fact]
+    public void EveryBlankSpaceIsEscaped()
+    {
+        Assert.Equal("""a\u{00A0}b\u{1680}c\u{2000}d\u{200A}e\u{202F}f\u{205F}g\u{3000}h""",
+            ControlText.Escaped("a\u00A0b\u1680c\u2000d\u200Ae\u202Ff\u205Fg\u3000h"));
+        Assert.Equal("a b", ControlText.Escaped("a b"));
+        Assert.Equal("""'a\u{00A0}b'""", ControlText.Word("a\u00A0b"));
     }
 }

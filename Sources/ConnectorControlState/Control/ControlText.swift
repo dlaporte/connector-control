@@ -50,8 +50,9 @@ public enum ControlText {
 
     /// Text as a line shows it: a control character, and a character that shows as nothing or as a
     /// blank — every Default_Ignorable code point (soft hyphen, joiners, direction marks, variation
-    /// selectors, tags…), the blank letters (U+115F, U+1160, U+2800, U+3164, U+FFA0) and the
-    /// interlinear annotation marks — as a visible escape, `\n`, `\r`, `\t` or `\u{202E}`, so a value
+    /// selectors, tags…), the blank letters (U+115F, U+1160, U+2800, U+3164, U+FFA0), the interlinear
+    /// annotation marks and every space but the ordinary one (U+00A0, U+1680, U+2000–U+200A, U+202F,
+    /// U+205F, U+3000) — as a visible escape, `\n`, `\r`, `\t` or `\u{202E}`, so a value
     /// can neither break its line, nor hide part of it, nor pass for another.
     public static func escaped(_ text: String) -> String {
         var line = ""
@@ -60,25 +61,26 @@ public enum ControlText {
     }
 
     /// One of the app's own sentences that quotes names someone else chose, read once from the left: at
-    /// each place, the longest of `names` that starts there is shown as `escapedName(_:)` shows it, and
-    /// anything else — the sentence's own quotes included — as `escaped(_:)` does. One pass, so no
-    /// name's escape is ever read again as part of another name. Names are matched scalar by scalar, as
-    /// the Windows mirror matches them ordinally; equal lengths in ordinal order, so both platforms pick
-    /// the same name.
+    /// each place, the longest of `names` whose quoted form — “, the name, ” — starts there is shown as
+    /// “ + `escapedName(_:)` + ”, and anything else — the sentence's own quotes included — as `escaped(_:)`
+    /// does. A name is found only between the app's own quotes, so a name that begins with “ can never
+    /// match at another name's opening quote, and no name's escape is ever read again as part of another
+    /// name. Names are matched scalar by scalar, as the Windows mirror matches them ordinally; equal
+    /// lengths in ordinal order, so both platforms pick the same name.
     public static func escaped(_ text: String, naming names: [String]) -> String {
         let ordered = names.filter { !$0.isEmpty }.sorted { one, other in
             let a = one.unicodeScalars.count, b = other.unicodeScalars.count
             return a != b ? a > b : one.ordinallyPrecedes(other)
-        }.map { Array($0.unicodeScalars) }
+        }.map { name -> (name: String, quoted: [Unicode.Scalar]) in
+            (name, ["\u{201C}"] + Array(name.unicodeScalars) + ["\u{201D}"])
+        }
         let scalars = Array(text.unicodeScalars)
         var line = ""
         var index = 0
         while index < scalars.count {
-            if let name = ordered.first(where: { index + $0.count <= scalars.count && scalars[index..<index + $0.count].elementsEqual($0) }) {
-                var view = String.UnicodeScalarView()
-                view.append(contentsOf: name)
-                line += escapedName(String(view))
-                index += name.count
+            if let found = ordered.first(where: { index + $0.quoted.count <= scalars.count && scalars[index..<index + $0.quoted.count].elementsEqual($0.quoted) }) {
+                line += "\u{201C}" + escapedName(found.name) + "\u{201D}"
+                index += found.quoted.count
             } else {
                 line += escape(scalars[index]) ?? String(scalars[index])
                 index += 1
@@ -121,8 +123,8 @@ public enum ControlText {
         case 0x0A: return "\\n"
         case 0x0D: return "\\r"
         case 0x09: return "\\t"
-        case 0x00...0x1F, 0x7F...0x9F, 0xAD, 0x034F, 0x061C, 0x115F, 0x1160, 0x17B4, 0x17B5, 0x180B...0x180F,
-             0x200B...0x200F, 0x2028...0x202E, 0x2060...0x206F, 0x2800, 0x3164, 0xFE00...0xFE0F, 0xFEFF, 0xFFA0,
+        case 0x00...0x1F, 0x7F...0x9F, 0xA0, 0xAD, 0x034F, 0x061C, 0x115F, 0x1160, 0x1680, 0x17B4, 0x17B5, 0x180B...0x180F,
+             0x2000...0x200F, 0x2028...0x202F, 0x205F...0x206F, 0x2800, 0x3000, 0x3164, 0xFE00...0xFE0F, 0xFEFF, 0xFFA0,
              0xFFF0...0xFFFB, 0x1BCA0...0x1BCA3, 0x1D173...0x1D17A, 0xE0000...0xE0FFF:
             return hexEscape(scalar)
         default: return nil

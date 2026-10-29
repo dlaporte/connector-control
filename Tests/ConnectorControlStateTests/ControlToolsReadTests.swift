@@ -190,4 +190,19 @@ final class ControlToolsReadTests: XCTestCase {
         XCTAssertEqual(try rig.state.service.backups.backups(series: RestoreModel.series), backupsBefore)
         XCTAssertEqual(rig.h.notifier.sent.count, sentBefore)
     }
+
+    /// The names a read tool echoes in a sentence reach the command line's terminal, so they show as every
+    /// other sentence shows a name: no control character goes out as itself, and a backslash is doubled.
+    func testTheReadToolsShowTheNamesTheyEchoOneWayOnly() throws {
+        let rig = ControlRig(); defer { rig.dispose() }
+        let name = "e\u{1B}[31m\\x"
+        let shown = #"e\u{001B}[31m\\x"#
+        XCTAssertEqual(rig.call("list_connectors", ["collection": .string(name)]), .refusal("No collection named “\(shown)”."))
+        XCTAssertEqual(rig.call("get_connector", ["name": .string("x"), "collection": .string(name)]), .refusal("No collection named “\(shown)”."))
+        XCTAssertEqual(rig.call("get_connector", ["name": .string(name)]), .refusal("There’s no connector named “\(shown)” in “Default”."))
+        XCTAssertNil(rig.state.addEmptyCollection(named: name))
+        XCTAssertEqual(rig.call("list_connectors", ["collection": .string(name)])?.text, "“\(shown)” has no connectors.")
+        XCTAssertEqual(rig.call("get_connector", ["name": .string(name), "collection": .string(name)]),
+                       .refusal("There’s no connector named “\(shown)” in “\(shown)”."))
+    }
 }

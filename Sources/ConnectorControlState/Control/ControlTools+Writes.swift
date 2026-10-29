@@ -80,6 +80,17 @@ extension ControlTools {
         ControlOutcome(result: .refusal(ControlText.escaped(text, naming: names)), notification: nil)
     }
 
+    /// A sentence about a file that leads with the file's name unquoted, as `AppState.sourceUnreadableError`
+    /// words it: the name as `escapedName(_:)` shows it, then the rest through `ControlText.escaped(_:naming:)`,
+    /// for the quoted names it may echo. A name found only between the app's quotes would pass here as itself.
+    static func shown(_ text: String, leadingWith file: String) -> String {
+        let lead = Array(file.unicodeScalars), scalars = Array(text.unicodeScalars)
+        guard !lead.isEmpty, scalars.starts(with: lead) else { return ControlText.escaped(text, naming: [file]) }
+        var rest = String.UnicodeScalarView()
+        rest.append(contentsOf: scalars[lead.count...])
+        return ControlText.escapedName(file) + ControlText.escaped(String(rest), naming: [file])
+    }
+
     /// A write's answer: what happened, then what follows for the collection Claude runs. A write
     /// that changed what Claude's config holds (`appliedServers` moved off `mark`, taken before the
     /// write) while Claude runs an older config says to restart; one that could not write it says

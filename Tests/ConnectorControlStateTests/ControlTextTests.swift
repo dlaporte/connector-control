@@ -76,7 +76,7 @@ final class ControlTextTests: XCTestCase {
         XCTAssertEqual(ControlText.words(["a", "", "b"]), "a '' b")
         XCTAssertEqual(ControlText.words(["it's", #"C:\x"#, #"{"a":1}"#, #"C:\Program Files\x"#, "x\ny"]),
                        #"'it\'s' C:\x {"a":1} 'C:\\Program Files\\x' 'x\ny'"#)
-        XCTAssertEqual(ControlText.word("a\u{A0}b"), "'a\u{A0}b'", "a no-break space is a space")
+        XCTAssertEqual(ControlText.word("a\u{A0}b"), #"'a\u{00A0}b'"#, "a no-break space is a space, and shows as its code")
     }
 
     func testNamesAreListedTheWayTheAppsSentencesListThem() {
@@ -123,5 +123,53 @@ final class ControlTextTests: XCTestCase {
         XCTAssertEqual(ControlText.escapedPath(#"C:\Users\me\team “x”.json"#), #"C:\Users\me\team \u{201C}x\u{201D}.json"#)
         XCTAssertEqual(ControlText.escapedPath("/tmp/a\nb.json"), #"/tmp/a\nb.json"#)
         XCTAssertEqual(ControlTools.fromFooter(ControlText.escapedPath("/Users/me/team.json")), "From “/Users/me/team.json”")
+    }
+
+    /// A name is found only between the app's own quotes, so two different names can never show alike:
+    /// a name that begins with “ cannot match at another name's opening quote and swallow its start.
+    func testANameIsFoundOnlyBetweenTheAppsQuotes() {
+        let one = ControlText.escaped("Moved “aa\u{202E}” to “\u{201C}a”.", naming: ["aa\u{202E}", "\u{201C}a"])
+        let other = ControlText.escaped("Moved “aa\\u{202E}” to “\u{201C}a”.", naming: ["aa\\u{202E}", "\u{201C}a"])
+        XCTAssertEqual(one, #"Moved “aa\u{202E}” to “\u{201C}a”."#)
+        XCTAssertEqual(other, #"Moved “aa\\u{202E}” to “\u{201C}a”."#)
+        XCTAssertNotEqual(one, other)
+        let character = ControlText.escaped("No “x\u{202E}” in “\\”.", naming: ["x\u{202E}", "\\"])
+        let literal = ControlText.escaped(#"No “x\u{202E}” in “\”."#, naming: [#"x\u{202E}"#, "\\"])
+        XCTAssertEqual(character, #"No “x\u{202E}” in “\\”."#)
+        XCTAssertEqual(literal, #"No “x\\u{202E}” in “\\”."#)
+        XCTAssertNotEqual(character, literal)
+        XCTAssertEqual(ControlText.escaped("a \\ b “c”", naming: ["c"]), "a \\ b “c”", "outside a name's quotes nothing is doubled")
+    }
+
+    /// Over thousands of pairs of names, drawn by a fixed generator, two different pairs never read
+    /// alike. The Windows mirror runs the same generator and expects the same count.
+    func testDifferentNamesNeverShowAlike() {
+        let tokens = ["\u{201C}", "\u{201D}", "\\", "\u{202E}", "a", "\\u{202E}", "\\\\"]
+        var state: UInt64 = 20261028
+        func next() -> Int {
+            state = (state &* 1103515245 &+ 12345) % 2147483648
+            return Int(state >> 16)
+        }
+        func name() -> String { (0..<(1 + next() % 3)).map { _ in tokens[next() % tokens.count] }.joined() }
+        var seen: [String: String] = [:]
+        var inputs = Set<String>()
+        for _ in 0..<4000 {
+            let a = name(), b = name()
+            let input = a + "\u{0}" + b
+            guard inputs.insert(input).inserted else { continue }
+            let shown = ControlText.escaped("Moved “\(a)” to “\(b)”.", naming: [a, b])
+            if let earlier = seen[shown] { XCTFail("\(earlier.debugDescription) and \(input.debugDescription) both show \(shown)") }
+            seen[shown] = input
+        }
+        XCTAssertEqual(inputs.count, 3021, "the generator's own count, the same on both platforms")
+    }
+
+    /// A character that shows as a blank is escaped too: the no-break and other spaces beside the
+    /// ordinary one.
+    func testEveryBlankSpaceIsEscaped() {
+        XCTAssertEqual(ControlText.escaped("a\u{00A0}b\u{1680}c\u{2000}d\u{200A}e\u{202F}f\u{205F}g\u{3000}h"),
+                       #"a\u{00A0}b\u{1680}c\u{2000}d\u{200A}e\u{202F}f\u{205F}g\u{3000}h"#)
+        XCTAssertEqual(ControlText.escaped("a b"), "a b", "the ordinary space shows as itself")
+        XCTAssertEqual(ControlText.word("a\u{00A0}b"), #"'a\u{00A0}b'"#)
     }
 }

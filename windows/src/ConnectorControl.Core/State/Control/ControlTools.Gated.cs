@@ -535,8 +535,9 @@ public sealed partial class ControlTools
     {
         if (full.StartsWith(@"\\.\", StringComparison.Ordinal) || IsDeviceNamespace(full))
         {
-            // A path, not a name: its backslashes are its own, so it shows as Escaped shows it, never doubled.
-            return NotAFileError(ControlText.Escaped(full));
+            // A path, not a name: its backslashes are its own, never doubled, but its curly quotes cannot
+            // close the app's quotes around it.
+            return NotAFileError(ControlText.EscapedPath(full));
         }
         return caller is ControlCaller.Relay && (full.StartsWith(@"\\", StringComparison.Ordinal) || HasNtPrefix(full))
             ? NetworkPathError : null;
@@ -617,7 +618,7 @@ public sealed partial class ControlTools
         var (full, unusable) = DocumentPath(path);
         if (full is null)
         {
-            return new ControlStep.Refused(ControlText.Escaped(unusable ?? EditorModel.NotValidJson, [Path.GetFileName(path)]));
+            return new ControlStep.Refused(Shown(unusable ?? EditorModel.NotValidJson, Path.GetFileName(path)));
         }
         if ((PathRefusal(full, caller) ?? DocumentFileRefusal(full)) is { } refusal)
         {
@@ -627,7 +628,7 @@ public sealed partial class ControlTools
         var (document, bytes, failure) = AppState.ReadDocument(full);
         if (document is null || bytes is null)
         {
-            return new ControlStep.Refused(ControlText.Escaped(failure ?? EditorModel.NotValidJson, [Path.GetFileName(full)]));
+            return new ControlStep.Refused(Shown(failure ?? EditorModel.NotValidJson, Path.GetFileName(full)));
         }
         var newCollection = arguments.String("newCollection") is { } requested ? MasterStore.CollectionName(requested) : null;
         string target;
@@ -720,7 +721,7 @@ public sealed partial class ControlTools
         var (full, unusable) = DocumentPath(path);
         if (full is null)
         {
-            return new ControlStep.Refused(ControlText.Escaped(unusable ?? EditorModel.NotValidJson, [Path.GetFileName(path)]));
+            return new ControlStep.Refused(Shown(unusable ?? EditorModel.NotValidJson, Path.GetFileName(path)));
         }
         // As import_document checks it.
         if ((PathRefusal(full, caller) ?? DocumentFileRefusal(full)) is { } refusal)
@@ -732,7 +733,7 @@ public sealed partial class ControlTools
         var (document, bytes, failure) = AppState.ReadDocument(full);
         if (document is null || bytes is null)
         {
-            return new ControlStep.Refused(ControlText.Escaped(failure ?? EditorModel.NotValidJson, [Path.GetFileName(full)]));
+            return new ControlStep.Refused(Shown(failure ?? EditorModel.NotValidJson, Path.GetFileName(full)));
         }
         // AppState's own rules, asked here as well, so the refusal comes before the question.
         if (document.Origin is { } origin && state.CollectionsFile.Collections.Values.Any(entry => entry.Publish?.Origin == origin))
@@ -785,7 +786,7 @@ public sealed partial class ControlTools
         {
             // The problem names the document's file.
             var file = state.SourceBinding(collection)?.Path is { } source ? Path.GetFileName(source) : null;
-            return new ControlStep.Refused(ControlText.Escaped(problem, file is null ? [] : [file]));
+            return new ControlStep.Refused(file is null ? ControlText.Escaped(problem) : Shown(problem, file));
         }
         if (state.PendingUpdates.GetValueOrDefault(collection) is not { } diff)
         {

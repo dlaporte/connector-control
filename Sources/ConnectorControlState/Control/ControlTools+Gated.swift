@@ -431,7 +431,7 @@ extension ControlTools {
         let file = ControlText.escapedName(url.lastPathComponent)
         let (read, bytes, failure) = AppState.readDocument(at: url)
         guard let document = read, let bytes else {
-            return .refused(ControlText.escaped(failure ?? EditorModel.notValidJSON, naming: [url.lastPathComponent]))
+            return .refused(ControlTools.shown(failure ?? EditorModel.notValidJSON, leadingWith: url.lastPathComponent))
         }
         let newCollection = arguments.string("newCollection").map(MasterStore.collectionName)
         let target: String
@@ -503,7 +503,7 @@ extension ControlTools {
         let file = ControlText.escapedName(url.lastPathComponent)
         let (read, bytes, failure) = AppState.readDocument(at: url)
         guard let document = read, let bytes else {
-            return .refused(ControlText.escaped(failure ?? EditorModel.notValidJSON, naming: [url.lastPathComponent]))
+            return .refused(ControlTools.shown(failure ?? EditorModel.notValidJSON, leadingWith: url.lastPathComponent))
         }
         // AppState's own rules, asked here as well, so the refusal comes before the question.
         if let origin = document.origin, state.collectionsFile.collections.values.contains(where: { $0.publish?.origin == origin }) {
@@ -543,7 +543,7 @@ extension ControlTools {
         if let problem = state.sourceErrors[collection] {
             // The problem names the document's file.
             let file = state.sourceBinding(of: collection)?.path.map { URL(fileURLWithPath: $0).lastPathComponent }
-            return .refused(ControlText.escaped(problem, naming: file.map { [$0] } ?? []))
+            return .refused(file.map { ControlTools.shown(problem, leadingWith: $0) } ?? ControlText.escaped(problem))
         }
         guard let diff = state.pendingUpdates[collection] else { return .refused(ControlTools.noUpdateError(shown)) }
         // Connector by connector, as the Review sheet shows an update: every entry is a command
