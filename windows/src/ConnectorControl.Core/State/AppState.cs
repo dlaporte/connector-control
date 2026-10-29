@@ -627,8 +627,12 @@ public sealed class AppState : ObservableObject, IDisposable
     /// record — older than the record, the first-run original, a file from elsewhere — goes into the
     /// active collection, and publishing still keeps back any path or folder it carries. While that
     /// collection is subscribed, it is refused (<see cref="RestoreRefusal"/>).
+    /// <para>
+    /// <paramref name="data"/>, when given, is the backup's content as the caller read it, so what is
+    /// restored is what the caller checked.
+    /// </para>
     /// </summary>
-    public void RestoreClaudeConfig(string backupPath)
+    public void RestoreClaudeConfig(string backupPath, byte[]? data = null)
     {
         if (RestoreRefusal(backupPath) is { } refusal)
         {
@@ -649,7 +653,8 @@ public sealed class AppState : ObservableObject, IDisposable
         var earlier = binding is null ? [] : binding.PublishedFolders.Where(f => f != binding.Folder).Order(StringComparer.Ordinal).ToList();
         var servers = Service.RestoreClaudeConfig(backupPath, target, CollectionDirectory(collection), earlier,
             backedUpFrom: CollectionsCache.LastAppliedCollection,
-            activating: !string.Equals(collection, Store.ActiveCollection, StringComparison.Ordinal));
+            activating: !string.Equals(collection, Store.ActiveCollection, StringComparison.Ordinal),
+            data: data);
         RecordApplied(collection, servers.Keys);
         AppliedServers = servers;
         hasLoadedOnce = true;
@@ -1832,10 +1837,22 @@ public sealed class AppState : ObservableObject, IDisposable
     {
         var full = Path.GetFullPath(path);
         var (document, data, failure) = ReadDocument(full);
-        if (document is null)
+        if (document is null || data is null)
         {
             return failure;
         }
+        return Subscribe(document, data, full, requestedName);
+    }
+
+    /// <summary>
+    /// <see cref="Subscribe(string, string?)"/> for a document already read: <paramref name="document"/>
+    /// decoded from <paramref name="data"/>, the bytes read from <paramref name="path"/>. The binding
+    /// records their hash, so what lands is what the caller decided on, and a file that has moved since
+    /// shows as an update.
+    /// </summary>
+    public string? Subscribe(CollectionDocument document, byte[] data, string path, string? requestedName)
+    {
+        var full = Path.GetFullPath(path);
         // Subscribing to what this machine publishes would make the app its own author: every
         // local edit would come straight back as a pending update to itself.
         if (document.Origin is { } origin && CollectionsFile.Collections.Values.Any(e => e.Publish?.Origin == origin))
@@ -1853,7 +1870,7 @@ public sealed class AppState : ObservableObject, IDisposable
         Store.Collections[name] = new Collection(result.Entries);
         SetSidecarEntry(name, new CollectionsFile.Entry(
             CollectionKind.Synced, Path.GetFileName(full), RelativeToStore(full), document.Origin, result.Needs));
-        var hash = ContentHash.Sha256(data!);
+        var hash = ContentHash.Sha256(data);
         SetBinding(name, new CollectionsLocalCache.SyncedBinding(full, hash, rendered.Excluded));
         pendingRendered[name] = new RenderedSource(rendered, hash, document.Origin);
         notifiedSourceHashes[name] = hash;
@@ -2226,6 +2243,26 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return failure;
         }
+        return ImportCopies(document, full, collection, choices);
+    }
+
+    /// <summary>
+    /// <see cref="ImportCopies(string, string, IReadOnlyDictionary{string, ImportChoice})"/> for a document
+    /// already read from <paramref name="path"/>, so what lands is what the caller decided on, not the
+    /// file as it is by then.
+    /// </summary>
+    public string? ImportCopies(CollectionDocument document, string path, string collection, IReadOnlyDictionary<string, ImportChoice> choices)
+    {
+        // As ImportCopies(path, collection, choices) guards it.
+        if (!Store.Collections.TryGetValue(collection, out var target))
+        {
+            return null;
+        }
+        if (KindOf(collection) != CollectionKind.Local)
+        {
+            return TargetMustBeLocalError;
+        }
+        var full = Path.GetFullPath(path);
         var directory = Path.GetDirectoryName(full) ?? full;
         var rendered = document.Render();
         var date = Today;

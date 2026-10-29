@@ -699,7 +699,7 @@ public sealed partial class ControlTools
             {
                 return Refused(created, [newCollection]);
             }
-            if (state.ImportCopies(full, target, choices) is { } error)
+            if (state.ImportCopies(document, full, target, choices) is { } error)
             {
                 return new ControlOutcome(ControlResult.Refusal(Shown(error, Path.GetFileName(full), [target])), null);
             }
@@ -759,7 +759,7 @@ public sealed partial class ControlTools
         return new ControlStep.Ready(request, Fingerprint: ContentHash.Sha256(bytes), Perform: () =>
         {
             var mark = state.AppliedServers;
-            if (state.Subscribe(full, arguments.String("name")) is { } refusal)
+            if (state.Subscribe(document, bytes, full, arguments.String("name")) is { } refusal)
             {
                 return new ControlOutcome(ControlResult.Refusal(Shown(refusal, Path.GetFileName(full), [name])), null);
             }
@@ -874,17 +874,19 @@ public sealed partial class ControlTools
         // A backup that is not a config file is refused now rather than after the question, in the
         // reader's own words, as the Restore sheet shows a failed restore's. Its bytes stand for what the
         // question, which lists only names, cannot show.
+        // Read once: the question, the fingerprint and the restore all come from these bytes.
         IReadOnlyDictionary<string, JsonValue> servers;
-        string fingerprint;
+        byte[] bytes;
         try
         {
-            fingerprint = ContentHash.Sha256(File.ReadAllBytes(backup));
-            servers = ClaudeConfigIO.ReadMcpServers(backup);
+            bytes = File.ReadAllBytes(backup);
+            servers = ClaudeConfigIO.McpServers(bytes);
         }
         catch (Exception ex) when (ex is ClaudeConfigException or IOException or UnauthorizedAccessException or JsonException)
         {
             return new ControlStep.Refused(ControlText.Escaped(ex.Message, [id]));
         }
+        var fingerprint = ContentHash.Sha256(bytes);
         // AppState's rule: back into the collection the backup was taken from, else the active one.
         var target = BackupCollections.CollectionOf(backup, state.Service.Paths.BackupsDir) ?? state.ActiveCollection;
         var shownTarget = ControlText.EscapedName(target);
@@ -898,7 +900,7 @@ public sealed partial class ControlTools
             var mark = state.AppliedServers;
             try
             {
-                state.RestoreClaudeConfig(backup);
+                state.RestoreClaudeConfig(backup, bytes);
             }
             catch (Exception ex) when (ex is RestoreCollectionGoneException or RestoreSubscribedException)
             {

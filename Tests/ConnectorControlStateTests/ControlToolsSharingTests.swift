@@ -456,6 +456,8 @@ final class ControlToolsSharingTests: XCTestCase {
         rig.h.drain()
         XCTAssertEqual(answer.result, .refusal(ControlTools.changedWhileAskingError))
         XCTAssertNil(rig.state.store.collections["Acme"], "nothing applied")
+        _ = rig.start("subscribe", ["path": .string(url.path)])
+        XCTAssertEqual(rig.confirmer.requests[0], rig.confirmer.requests[1], "the question itself reads the same")
     }
 
     func testAnUpdateWhoseDocumentChangedOnlyWhereTheDialogMasksLandsNothing() throws {
@@ -471,6 +473,8 @@ final class ControlToolsSharingTests: XCTestCase {
         rig.h.drain()
         XCTAssertEqual(answer.result, .refusal(ControlTools.changedWhileAskingError))
         XCTAssertEqual(rig.state.store.collections["Acme"]?.mcps["acme"], original, "nothing applied")
+        _ = rig.start("apply_update", ["collection": .string("Acme")])
+        XCTAssertEqual(rig.confirmer.requests[0], rig.confirmer.requests[1], "the question itself reads the same")
     }
 
     func testARestoreWhoseBackupChangedWhileAskingLandsNothing() throws {
@@ -486,6 +490,8 @@ final class ControlToolsSharingTests: XCTestCase {
         rig.h.drain()
         XCTAssertEqual(answer.result, .refusal(ControlTools.changedWhileAskingError))
         XCTAssertEqual(try rig.h.claudeServers(), before, "nothing applied")
+        _ = rig.start("restore_backup", ["id": .string(id)])
+        XCTAssertEqual(rig.confirmer.requests[0], rig.confirmer.requests[1], "the question itself reads the same")
     }
 
     /// Don't Allow, for every one of these, leaves everything as it was.

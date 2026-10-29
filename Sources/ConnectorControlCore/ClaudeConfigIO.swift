@@ -6,7 +6,14 @@ public enum ClaudeConfigError: Error, Equatable {
 
 public enum ClaudeConfigIO {
     public static func readMCPServers(at url: URL) throws -> [String: JSONValue] {
-        guard let root = try readRootIfPresent(at: url) else { return [:] }
+        guard FileManager.default.fileExists(atPath: url.path) else { return [:] }
+        return try mcpServers(in: Data(contentsOf: url))
+    }
+
+    /// The servers a config file's bytes hold, parsed as `readMCPServers(at:)` parses the file, for a
+    /// caller that has already read them and must use exactly what it read.
+    public static func mcpServers(in data: Data) throws -> [String: JSONValue] {
+        let root = try parseRoot(data)
         guard let raw = root["mcpServers"] else { return [:] }
         guard let dict = raw as? [String: Any] else {
             throw ClaudeConfigError.malformed("mcpServers is not a JSON object")

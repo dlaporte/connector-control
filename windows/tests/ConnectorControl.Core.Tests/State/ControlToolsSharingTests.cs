@@ -625,6 +625,9 @@ public class ControlToolsSharingTests
         Assert.Equal(ControlResult.Refusal(ControlTools.ChangedWhileAskingError), answer.Result);
         // Nothing applied.
         Assert.False(rig.State.Store.Collections.ContainsKey("Acme"));
+        rig.Start("subscribe", Args(("path", Text(path))));
+        // The question itself reads the same.
+        Assert.Equal(rig.Confirmer.Requests[0], rig.Confirmer.Requests[1]);
     }
 
     [Fact]
@@ -643,6 +646,9 @@ public class ControlToolsSharingTests
         Assert.Equal(ControlResult.Refusal(ControlTools.ChangedWhileAskingError), answer.Result);
         // Nothing applied.
         Assert.Equal(original, rig.State.Store.Collections["Acme"].Mcps["acme"]);
+        rig.Start("apply_update", Args(("collection", Text("Acme"))));
+        // The question itself reads the same.
+        Assert.Equal(rig.Confirmer.Requests[0], rig.Confirmer.Requests[1]);
     }
 
     [Fact]
@@ -661,6 +667,9 @@ public class ControlToolsSharingTests
         Assert.Equal(ControlResult.Refusal(ControlTools.ChangedWhileAskingError), answer.Result);
         // Nothing applied.
         Assert.Equal(before, rig.H.ClaudeServers());
+        rig.Start("restore_backup", Args(("id", Text(id))));
+        // The question itself reads the same.
+        Assert.Equal(rig.Confirmer.Requests[0], rig.Confirmer.Requests[1]);
     }
 
     /// <summary>Don't Allow, for every one of these, leaves everything as it was.</summary>

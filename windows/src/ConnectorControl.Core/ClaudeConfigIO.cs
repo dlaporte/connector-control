@@ -9,11 +9,18 @@ public static class ClaudeConfigIO
 
     public static IReadOnlyDictionary<string, JsonValue> ReadMcpServers(string path)
     {
-        var root = ReadRootIfPresent(path);
-        if (root is null)
+        if (!File.Exists(path))
         {
             return Empty;
         }
+        return McpServers(File.ReadAllBytes(path));
+    }
+
+    /// <summary>The servers a config file's bytes hold, parsed as <see cref="ReadMcpServers"/> parses the file,
+    /// for a caller that has already read them and must use exactly what it read.</summary>
+    public static IReadOnlyDictionary<string, JsonValue> McpServers(byte[] data)
+    {
+        var root = ParseRoot(data);
         var raw = root["mcpServers"];
         if (raw is null)
         {

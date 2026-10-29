@@ -455,7 +455,10 @@ public final class AppState: ObservableObject {
     /// original, a file from elsewhere — goes into the active collection, and publishing still
     /// keeps back any path or folder it carries. While that collection is subscribed, it is refused
     /// (`restoreRefusal(for:)`).
-    public func restoreClaudeConfig(from backup: URL) throws {
+    ///
+    /// `data`, when given, is the backup's content as the caller read it, so what is restored is what
+    /// the caller checked.
+    public func restoreClaudeConfig(from backup: URL, data: Data? = nil) throws {
         if let refusal = restoreRefusal(for: backup) { throw refusal }
         var target = store
         if let recorded = BackupCollections.collection(of: backup, in: service.paths.backupsDirURL) {
@@ -469,7 +472,7 @@ public final class AppState: ObservableObject {
         let collection = target.activeCollection
         let binding = isPublished(collection) ? collectionsCache.published[collection] : nil
         let earlier = (binding?.publishedFolders ?? []).subtracting([binding?.folder ?? ""]).sorted { $0.ordinallyPrecedes($1) }
-        let servers = try service.restoreClaudeConfig(from: backup, mergedWith: target,
+        let servers = try service.restoreClaudeConfig(from: backup, data: data, mergedWith: target,
                                                       publishFolder: collectionDirectory(of: collection),
                                                       earlierFolders: earlier,
                                                       backedUpFrom: collectionsCache.lastAppliedCollection,
@@ -1183,6 +1186,13 @@ public final class AppState: ObservableObject {
         let url = URL(fileURLWithPath: path).standardizedFileURL
         let (decoded, bytes, failure) = AppState.readDocument(at: url)
         guard let document = decoded, let data = bytes else { return failure }
+        return subscribe(document: document, data: data, at: url, as: requestedName)
+    }
+
+    /// `subscribe(documentAt:as:)` for a document already read: `document` decoded from `data`, the
+    /// bytes read from `url`. The binding records their hash, so what lands is what the caller decided
+    /// on, and a file that has moved since shows as an update.
+    public func subscribe(document: CollectionDocument, data: Data, at url: URL, as requestedName: String?) -> String? {
         // Subscribing to what this machine publishes would make the app its own author: every
         // local edit would come straight back as a pending update to itself.
         if let origin = document.origin,
@@ -1469,6 +1479,16 @@ public final class AppState: ObservableObject {
         let url = URL(fileURLWithPath: path).standardizedFileURL
         let (decoded, _, failure) = AppState.readDocument(at: url)
         guard let document = decoded else { return failure }
+        return importCopies(document: document, at: url, into: collection, choices: choices)
+    }
+
+    /// `importCopies(documentAt:into:choices:)` for a document already read from `url`, so what lands
+    /// is what the caller decided on, not the file as it is by then.
+    public func importCopies(document: CollectionDocument, at url: URL, into collection: String,
+                             choices: [String: ImportChoice]) -> String? {
+        // As `importCopies(documentAt:into:choices:)` guards it.
+        guard store.collections[collection] != nil else { return nil }
+        guard kind(of: collection) == .local else { return AppState.targetMustBeLocalError }
         let directory = url.deletingLastPathComponent().path
         let rendered = document.render()
         let date = today

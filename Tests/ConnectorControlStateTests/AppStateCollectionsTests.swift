@@ -604,6 +604,31 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.watchedSourceCollections, ["Data team"])
     }
 
+    /// What was decided on is what lands: the decoded document is used, not the file as it is now.
+    func testImportingADecodedDocumentUsesItNotTheFileOnDisk() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try h.writeDocument(oneLocalConnector("asked", command: "echo", args: []), named: "tools.json")
+        let (decided, _, _) = AppState.readDocument(at: url)
+        try h.writeDocument(oneLocalConnector("swapped", command: "evil", args: []), at: url)
+        XCTAssertNil(state.importCopies(document: try XCTUnwrap(decided), at: url,
+                                        into: state.activeCollection, choices: ["asked": .add]))
+        let held = state.store.collections[state.activeCollection]?.mcps ?? [:]
+        XCTAssertNotNil(held["asked"])
+        XCTAssertNil(held["swapped"])
+    }
+
+    func testSubscribingToADecodedDocumentUsesItAndHashesItsBytes() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try h.writeDocument(oneLocalConnector("asked", command: "echo", args: []), named: "tools.json")
+        let (decided, bytes, _) = AppState.readDocument(at: url)
+        try h.writeDocument(oneLocalConnector("swapped", command: "evil", args: []), at: url)
+        XCTAssertNil(state.subscribe(document: try XCTUnwrap(decided), data: try XCTUnwrap(bytes), at: url, as: nil))
+        XCTAssertEqual(state.store.collections["Tools"]?.mcps.keys.sorted(), ["asked"])
+        XCTAssertEqual(state.collectionsCache.synced["Tools"]?.lastHash, ContentHash.sha256(try XCTUnwrap(bytes)))
+    }
+
     func testSubscribeNamesTheCollectionAndRefusesWhatItCannotRead() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

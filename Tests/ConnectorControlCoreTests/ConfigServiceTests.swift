@@ -302,6 +302,21 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL).count, 3)
     }
 
+    /// The restore applies the bytes it is handed — the ones its caller checked — not the file as it
+    /// is by then.
+    func testRestoreUsesTheBytesItIsGivenNotTheFileNow() throws {
+        var store = try service.loadAndReconcile().store
+        store.mcps["aws-mcp"]?.enabled = false
+        try service.apply(servers: store.enabledServers)  // backs up the 3-server file
+        let backup = try XCTUnwrap(try service.backups.backups(series: "claude_desktop_config").first)
+        let checked = try Data(contentsOf: backup)
+        try Data(#"{"mcpServers":{"swapped":{"command":"evil"}}}"#.utf8).write(to: backup)
+        try service.restoreClaudeConfig(from: backup, data: checked, mergedWith: store)
+        let restored = try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL)
+        XCTAssertEqual(restored.count, 3)
+        XCTAssertNil(restored["swapped"])
+    }
+
     func testRestoreClaudeConfigAdoptsSnapshotIntoStore() throws {
         var store = try service.loadAndReconcile().store
         store.mcps["aws-mcp"]?.enabled = false

@@ -481,7 +481,7 @@ extension ControlTools {
             if let newCollection, let error = state.addEmptyCollection(named: newCollection) {
                 return ControlTools.refused(error, naming: [newCollection])
             }
-            if let error = state.importCopies(documentAt: url.path, into: target, choices: choices) {
+            if let error = state.importCopies(document: document, at: url, into: target, choices: choices) {
                 return ControlOutcome(result: .refusal(ControlTools.shown(error, leadingWith: url.lastPathComponent, naming: [target])), notification: nil)
             }
             let answer = replacesOn ? ControlTools.importedReplacingText(count, shownTarget)
@@ -525,7 +525,7 @@ extension ControlTools {
         // As import_document's: the bytes stand for what the question cannot show.
         return .ready(request, fingerprint: ContentHash.sha256(bytes), perform: { [self] in
             let mark = state.appliedServers
-            if let error = state.subscribe(documentAt: url.path, as: arguments.string("name")) {
+            if let error = state.subscribe(document: document, data: bytes, at: url, as: arguments.string("name")) {
                 return ControlOutcome(result: .refusal(ControlTools.shown(error, leadingWith: url.lastPathComponent, naming: [name])), notification: nil)
             }
             return done([ControlTools.subscribedText(shownName, file), ControlTools.arrivedOffText(count)],
@@ -606,14 +606,16 @@ extension ControlTools {
         // A backup that is not a config file is refused now rather than after the question, in the
         // reader's own words, as the Restore sheet shows a failed restore's. Its bytes stand for what
         // the question, which lists only names, cannot show.
+        // Read once: the question, the fingerprint and the restore all come from these bytes.
         let servers: [String: JSONValue]
-        let fingerprint: String
+        let bytes: Data
         do {
-            fingerprint = ContentHash.sha256(try Data(contentsOf: backup))
-            servers = try ClaudeConfigIO.readMCPServers(at: backup)
+            bytes = try Data(contentsOf: backup)
+            servers = try ClaudeConfigIO.mcpServers(in: bytes)
         } catch {
             return .refused(ControlText.escaped(error.localizedDescription, naming: [id]))
         }
+        let fingerprint = ContentHash.sha256(bytes)
         // AppState's rule: back into the collection the backup was taken from, else the active one.
         let target = BackupCollections.collection(of: backup, in: state.service.paths.backupsDirURL) ?? state.activeCollection
         let shownTarget = ControlText.escapedName(target)
@@ -627,7 +629,7 @@ extension ControlTools {
         return .ready(request, fingerprint: fingerprint, perform: { [self] in
             let mark = state.appliedServers
             do {
-                try state.restoreClaudeConfig(from: backup)
+                try state.restoreClaudeConfig(from: backup, data: bytes)
             } catch let refusal as RestoreError {
                 return ControlOutcome(result: .refusal(ControlTools.restoreRefusalText(refusal)), notification: nil)
             } catch {

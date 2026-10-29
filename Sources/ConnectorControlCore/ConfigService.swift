@@ -253,15 +253,20 @@ public struct ConfigService: Sendable {
     /// collection the backup was taken from, and says `activating` when that is not the collection
     /// the saved store has active. `backedUpFrom`, as `apply` takes it, records the file this
     /// restore overwrites.
+    ///
+    /// `data`, when given, is the backup's content as the caller read it, so what is restored is what
+    /// the caller checked. Platform idiom: it follows `backup` here, where a label reads it as the
+    /// backup's; the Windows mirror takes it last, after the optional parameters already there.
     @discardableResult
     public func restoreClaudeConfig(from backup: URL,
+                                    data: Data? = nil,
                                     mergedWith store: MasterStore,
                                     publishFolder: String? = nil,
                                     earlierFolders: [String] = [],
                                     backedUpFrom collection: String? = nil,
                                     activating: Bool = false) throws
         -> [String: JSONValue] {
-        let data = try Data(contentsOf: backup)
+        let data = try data ?? Data(contentsOf: backup)
         let root: [String: Any]
         do {
             root = try ClaudeConfigIO.parseRoot(data)

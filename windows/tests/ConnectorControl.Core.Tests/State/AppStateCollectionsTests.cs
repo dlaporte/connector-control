@@ -695,6 +695,35 @@ public class AppStateCollectionsTests
         Assert.Equal(["Data team"], state.WatchedSourceCollections);
     }
 
+    /// <summary>What was decided on is what lands: the decoded document is used, not the file as it is now.</summary>
+    [Fact]
+    public void ImportingADecodedDocumentUsesItNotTheFileOnDisk()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.WriteDocument(OneLocalConnector("asked", "echo", []), "tools.json");
+        var (decided, _, _) = AppState.ReadDocument(path);
+        AppStateHarness.WriteDocumentAt(OneLocalConnector("swapped", "evil", []), path);
+        Assert.Null(state.ImportCopies(decided!, path, state.ActiveCollection,
+            new Dictionary<string, ImportChoice>(StringComparer.Ordinal) { ["asked"] = ImportChoice.Add }));
+        var held = state.Store.Collections[state.ActiveCollection].Mcps;
+        Assert.True(held.ContainsKey("asked"));
+        Assert.False(held.ContainsKey("swapped"));
+    }
+
+    [Fact]
+    public void SubscribingToADecodedDocumentUsesItAndHashesItsBytes()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.WriteDocument(OneLocalConnector("asked", "echo", []), "tools.json");
+        var (decided, bytes, _) = AppState.ReadDocument(path);
+        AppStateHarness.WriteDocumentAt(OneLocalConnector("swapped", "evil", []), path);
+        Assert.Null(state.Subscribe(decided!, bytes!, path, null));
+        Assert.Equal(["asked"], state.Store.Collections["Tools"].Mcps.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(ContentHash.Sha256(bytes!), state.CollectionsCache.Synced["Tools"].LastHash);
+    }
+
     [Fact]
     public void SubscribeNamesTheCollectionAndRefusesWhatItCannotRead()
     {

@@ -292,13 +292,19 @@ public sealed class ConfigService
     /// saved store has active.
     /// </param>
     /// <param name="earlierFolders">The folders it published into before, which <see cref="Reconciler.AdoptSnapshot"/> counts the same way.</param>
+    /// <param name="data">
+    /// When given, the backup's content as the caller read it, so what is restored is what the caller
+    /// checked. Platform idiom: it comes last here, after the optional parameters already there; the
+    /// Mac mirror takes it after <c>backup</c>, where a label reads it as the backup's.
+    /// </param>
     public IReadOnlyDictionary<string, JsonValue> RestoreClaudeConfig(string backupPath, MasterStore store,
                                                                      string? publishFolder = null,
                                                                      IReadOnlyList<string>? earlierFolders = null,
                                                                      string? backedUpFrom = null,
-                                                                     bool activating = false)
+                                                                     bool activating = false,
+                                                                     byte[]? data = null)
     {
-        var data = File.ReadAllBytes(backupPath);
+        data ??= File.ReadAllBytes(backupPath);
         var name = Path.GetFileName(backupPath);
         JsonValue root;
         try

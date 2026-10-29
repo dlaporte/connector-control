@@ -344,6 +344,23 @@ public class ConfigServiceTests : IDisposable
         Assert.Equal(3, ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath).Count);
     }
 
+    /// <summary>The restore applies the bytes it is handed — the ones its caller checked — not the file as it
+    /// is by then.</summary>
+    [Fact]
+    public void RestoreUsesTheBytesItIsGivenNotTheFileNow()
+    {
+        var store = service.LoadAndReconcile().Store;
+        store.Mcps["aws-mcp"] = store.Mcps["aws-mcp"] with { Enabled = false };
+        service.Apply(store.EnabledServers);   // backs up the 3-server file
+        var backup = service.Backups.Backups("claude_desktop_config")[0];
+        var checkedBytes = File.ReadAllBytes(backup);
+        File.WriteAllText(backup, """{"mcpServers":{"swapped":{"command":"evil"}}}""");
+        service.RestoreClaudeConfig(backup, store, data: checkedBytes);
+        var restored = ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath);
+        Assert.Equal(3, restored.Count);
+        Assert.False(restored.ContainsKey("swapped"));
+    }
+
     [Fact]
     public void RestoreClaudeConfigAdoptsSnapshotIntoStore()
     {
