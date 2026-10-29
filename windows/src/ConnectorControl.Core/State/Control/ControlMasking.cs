@@ -15,7 +15,7 @@ namespace ConnectorControl.Core.State;
 /// parser, so both platforms mask the same text the same way. Structured output is masked or, for
 /// the command-line tool's <c>show --reveal</c> (never Claude's), revealed; the line renderers take an
 /// <see cref="Exposure"/>, which adds the confirmation dialog's, where an environment value shows unless its
-/// variable is named for a secret.
+/// variable is named for a secret and names no program to run.
 /// The Mac mirror is main-actor only; C# has no isolation to declare.
 ///
 /// Mirror: Sources/ConnectorControlState/Control/ControlMasking.swift

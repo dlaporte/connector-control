@@ -141,6 +141,8 @@ public sealed class JsonValue : IEquatable<JsonValue>
     public static JsonValue Parse(ReadOnlySpan<byte> utf8Json)
     {
         if (utf8Json.StartsWith(Utf8Bom)) { utf8Json = utf8Json[3..]; }   // Apple Foundation accepts a BOM; so do we
+        // Platform idiom: the reader's default MaxDepth refuses nesting past 64; the Mac mirror, whose
+        // JSONDecoder reads to 512, checks the same limit itself, so a document reads alike on both.
         var reader = new Utf8JsonReader(utf8Json, new JsonReaderOptions
         {
             CommentHandling = JsonCommentHandling.Disallow,

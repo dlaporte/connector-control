@@ -14,7 +14,7 @@ import Foundation
 /// parser, so both platforms mask the same text the same way. Structured output is masked or, for
 /// the command-line tool's `show --reveal` (never Claude's), revealed; the line renderers take an
 /// `Exposure`, which adds the confirmation dialog's, where an environment value shows unless its
-/// variable is named for a secret.
+/// variable is named for a secret and names no program to run.
 /// Main-actor only: it reads `EditorModel.needsValue` and `CollectionsModel.remoteType`, which are.
 @MainActor
 public enum ControlMasking {

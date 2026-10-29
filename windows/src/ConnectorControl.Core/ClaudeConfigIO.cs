@@ -168,7 +168,8 @@ public static class ClaudeConfigIO
             return JsonValue.Object();
         }
         // Platform idiom: the reader is UTF-8 only, so UTF-16 and UTF-32 fail to parse here; the Mac mirror,
-        // whose JSONSerialization reads them too, refuses them alike before it parses.
+        // whose JSONSerialization reads them too, refuses them alike before it parses. So too nesting past
+        // 64, which JsonValue.Parse refuses and JSONSerialization would read.
         JsonValue parsed;
         try
         {
