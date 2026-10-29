@@ -159,12 +159,27 @@ public sealed class VelopackUpdater : IUpdater
             return;
         }
         var location = manager.Location;
-        var packagePath = LocalPackagePath(location.PackagesDir, info.TargetFullRelease.FileName);
+        // Everything the check reads from the locator is read inside the try: a locator that throws (Velopack's own
+        // test locator does for any path it was not given) makes this a refusal like any other failure, never an
+        // exception that skips the clean-up below.
+        string? packagePath = null;
+        string? updateExe = null;
+        Exception? updaterUnknown = null;
         string? problem;
         try
         {
+            packagePath = LocalPackagePath(location.PackagesDir, info.TargetFullRelease.FileName);
+            try
+            {
+                updateExe = location.UpdateExePath;
+            }
+            catch (Exception ex)
+            {
+                updaterUnknown = ex;
+                throw;
+            }
             // Full versions, prerelease labels included: see UpdateVerifier.VersionProblem.
-            problem = verify(packagePath, location.UpdateExePath, identity, manager.CurrentVersion?.ToString() ?? "", info.TargetFullRelease.Version.ToString());
+            problem = verify(packagePath, updateExe, identity, manager.CurrentVersion?.ToString() ?? "", info.TargetFullRelease.Version.ToString());
         }
         catch (Exception ex)
         {
@@ -174,13 +189,24 @@ public sealed class VelopackUpdater : IUpdater
         {
             return;
         }
-        FileSystemErrors.TryDelete(packagePath);
-        if (File.Exists(packagePath))
+        if (packagePath is null)
         {
-            // Velopack no longer applies it at launch, but it must not wait in packages\ unnoticed.
-            log($"The refused update package could not be deleted: {packagePath}");
+            log("The refused update package could not be located, so it was not deleted.");
         }
-        if (location.UpdateExePath is { } updateExe)
+        else
+        {
+            FileSystemErrors.TryDelete(packagePath);
+            if (File.Exists(packagePath))
+            {
+                // Velopack no longer applies it at launch, but it must not wait in packages\ unnoticed.
+                log($"The refused update package could not be deleted: {packagePath}");
+            }
+        }
+        if (updaterUnknown is not null)
+        {
+            log($"The updater could not be put back after a refused update: its location is unknown ({updaterUnknown.GetType().Name}: {updaterUnknown.Message})");
+        }
+        else if (updateExe is not null)
         {
             // Put back the updater that was there before the download; when there was none,
             // the one there now came from the refused package and goes too. A failure is logged, never

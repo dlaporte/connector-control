@@ -238,7 +238,8 @@ public class VelopackUpdaterTests
         // download; the check must read, and a refusal delete, that same file.
         using var packages = new TempDir("vpk");
         string? seen = null;
-        var locator = new TestVelopackLocator("ConnectorControl", "1.3.1", packages.Path, appDir: null, rootDir: null, updateExe: null, channel: "win-x64");
+        // Velopack's test locator throws for an Update.exe path it was not given; this one names a file that is not there.
+        var locator = new TestVelopackLocator("ConnectorControl", "1.3.1", packages.Path, appDir: null, rootDir: null, updateExe: packages.File("Update.exe"), channel: "win-x64");
         var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (p, _, _, _, _) => { seen = p; return "refused"; }, verifyInstalled: (_, _) => null, log: _ => { });
         var asset = Asset();
         asset.FileName = "ConnectorControl-1.3.2\0-win-x64-full.nupkg";
@@ -256,12 +257,31 @@ public class VelopackUpdaterTests
         // Every 1.5.0 preview and the 1.5.0 release share one numeric version; only the label tells them apart.
         using var packages = new TempDir("vpk");
         (string Running, string Feed)? seen = null;
-        var locator = new TestVelopackLocator("ConnectorControl", "1.5.0-preview.2", packages.Path, appDir: null, rootDir: null, updateExe: null, channel: "win-x64");
+        var locator = new TestVelopackLocator("ConnectorControl", "1.5.0-preview.2", packages.Path, appDir: null, rootDir: null, updateExe: packages.File("Update.exe"), channel: "win-x64");
         var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (_, _, _, running, feed) => { seen = (running, feed); return null; }, verifyInstalled: (_, _) => null, log: _ => { });
         var asset = Asset();
         asset.Version = SemanticVersion.Parse("1.5.0-preview.3");
         updater.VerifyDownloaded(new UpdateInfo(asset, isDowngrade: false), knownGoodUpdater: null, TestIdentity);
         Assert.Equal(("1.5.0-preview.2", "1.5.0-preview.3"), seen);
+    }
+
+    [Fact]
+    public void ALocatorThatCannotNameTheUpdaterIsARefusal()
+    {
+        // Velopack's test locator, given no Update.exe, throws NotSupportedException for its path, as a broken real
+        // one might. Even with a check that would pass, the package is refused and deleted, and the updater that
+        // could not be put back is logged.
+        using var packages = new TempDir("vpk");
+        var logged = new List<string>();
+        var locator = new TestVelopackLocator("ConnectorControl", "1.3.1", packages.Path, appDir: null, rootDir: null, updateExe: null, channel: "win-x64");
+        var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (_, _, _, _, _) => null, verifyInstalled: (_, _) => null, log: logged.Add);
+        var asset = Asset();
+        File.WriteAllText(packages.File(asset.FileName), "package");
+
+        var ex = Assert.Throws<UpdateVerificationException>(() => updater.VerifyDownloaded(new UpdateInfo(asset, isDowngrade: false), knownGoodUpdater: null, TestIdentity));
+        Assert.Contains("UpdateExePath", ex.Message);
+        Assert.False(File.Exists(packages.File(asset.FileName)));
+        Assert.Contains(logged, line => line.Contains("location is unknown", StringComparison.Ordinal));
     }
 
     [Fact]
