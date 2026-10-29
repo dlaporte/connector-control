@@ -97,17 +97,18 @@ internal static class DetachedProcess
 
     /// <summary>
     /// What the app is started with: <see cref="ControlEndpoint.AppEnvironment"/> over this process's environment
-    /// and the machine's and the user's PATH settings, expanded as Explorer expands them.
+    /// and the machine's and the user's PATH settings.
     /// </summary>
     public static string AppEnvironmentBlock(IReadOnlyDictionary<string, string> current) =>
         ControlEndpoint.EnvironmentBlock(ControlEndpoint.AppEnvironment(current, SettingPath(EnvironmentVariableTarget.Machine), SettingPath(EnvironmentVariableTarget.User)));
 
-    /// <summary>The PATH saved for <paramref name="target"/>, expanded; null when it cannot be read.</summary>
+    /// <summary>The PATH saved for <paramref name="target"/>; null when it cannot be read. .NET reads the registry value
+    /// already expanded, as Explorer does; expanding it again would use this tool's environment, a terminal's.</summary>
     private static string? SettingPath(EnvironmentVariableTarget target)
     {
         try
         {
-            return Environment.GetEnvironmentVariable("Path", target) is { } path ? Environment.ExpandEnvironmentVariables(path) : null;
+            return Environment.GetEnvironmentVariable("Path", target);
         }
         catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
         {
