@@ -485,6 +485,11 @@ final class CollectionDocumentTests: XCTestCase {
         XCTAssertEqual(warnings(header("Authorization", "Bearer ${A} extra")), ["headers.Authorization looks like a credential"],
                        "a reference beside more than a scheme word")
         XCTAssertEqual(warnings(header("X-Team", "${TEAM}")), [])
+        for scheme in ["SSWS", "Bot", "ApiKey"] {
+            XCTAssertEqual(warnings(header("Authorization", "\(scheme) ${T}")), ["headers.Authorization refers to a credential"], scheme)
+        }
+        XCTAssertEqual(warnings(header("Authorization", "${A}hunter")), ["headers.Authorization looks like a credential"],
+                       "text after a reference can be the secret")
         XCTAssertEqual(warnings(url("https://reader@db.example.com/mcp")), ["url.userinfo names a user"])
         XCTAssertEqual(warnings(url("https://reader:@db.example.com/mcp")), ["url.userinfo names a user"])
         XCTAssertEqual(warnings(url("https://reader:${DB_PASSWORD}@db.example.com/mcp")), ["url.userinfo refers to a credential"])

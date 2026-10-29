@@ -649,6 +649,12 @@ public class CollectionDocumentTests
         // A reference beside more than a scheme word.
         Assert.Equal(["headers.Authorization looks like a credential"], Header("Authorization", "Bearer ${A} extra"));
         Assert.Empty(Header("X-Team", "${TEAM}"));
+        foreach (var scheme in new[] { "SSWS", "Bot", "ApiKey" })
+        {
+            Assert.Equal(["headers.Authorization refers to a credential"], Header("Authorization", $"{scheme} ${{T}}"));
+        }
+        // Text after a reference can be the secret.
+        Assert.Equal(["headers.Authorization looks like a credential"], Header("Authorization", "${A}hunter"));
         Assert.Equal(["url.userinfo names a user"], Url("https://reader@db.example.com/mcp"));
         Assert.Equal(["url.userinfo names a user"], Url("https://reader:@db.example.com/mcp"));
         Assert.Equal(["url.userinfo refers to a credential"], Url("https://reader:${DB_PASSWORD}@db.example.com/mcp"));

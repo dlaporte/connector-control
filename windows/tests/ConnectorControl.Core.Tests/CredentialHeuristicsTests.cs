@@ -51,15 +51,16 @@ public class CredentialHeuristicsTests
     [Fact]
     public void NamesAProgramToRun()
     {
-        foreach (var name in new[] { "GIT_ASKPASS", "SSH_ASKPASS", "SSH_ASKPASS_REQUIRE", "SUDO_ASKPASS", "MY_TOOL_ASKPASS", "git_askpass",
+        foreach (var name in new[] { "ASKPASS", "GIT_ASKPASS_HELPER", "my_askpass_tool", "CARGO_REGISTRY_CREDENTIAL_PROVIDER",
+                     "CARGO_REGISTRIES_MY_REG_CREDENTIAL_PROVIDER", "NUGET_CREDENTIAL_PROVIDER", "GIT_ASKPASS", "SSH_ASKPASS", "SSH_ASKPASS_REQUIRE", "SUDO_ASKPASS", "MY_TOOL_ASKPASS", "git_askpass",
                      "GIT_SSH", "GIT_SSH_COMMAND", "GIT_EXEC_PATH", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0",
                      "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "NODE_OPTIONS", "Node_Options", "LD_PRELOAD", "DYLD_INSERT_LIBRARIES",
                      "PYTHONSTARTUP", "BASH_ENV", "ENV", "env", "PERL5OPT", "RUBYOPT", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS" })
         {
             Assert.True(CredentialHeuristics.NamesAProgramToRun(name), name);
         }
-        foreach (var name in new[] { "GITHUB_TOKEN", "API_KEY", "PASSWORD", "ASKPASS_HINT", "GIT_CONFIG", "ENVIRONMENT", "MY_ENV", "PATH", "NODE_ENV",
-                     "LD_PRELOAD_X", "GIT_SSH_X" })
+        foreach (var name in new[] { "GITHUB_TOKEN", "API_KEY", "PASSWORD", "GIT_CONFIG", "ENVIRONMENT", "MY_ENV", "PATH", "NODE_ENV",
+                     "LD_PRELOAD_X", "GIT_SSH_X", "CREDENTIAL_PROVIDER_HINT", "ASKPAS" })
         {
             Assert.False(CredentialHeuristics.NamesAProgramToRun(name), name);
         }
@@ -78,16 +79,17 @@ public class CredentialHeuristicsTests
         }
     }
 
-    /// <summary>Beside its references a value may hold only a scheme word, before them: any other word, or
-    /// one after a reference, can be the secret itself.</summary>
+    /// <summary>Beside its references a value may hold one word of letters, a scheme (<c>Bearer</c>, <c>SSWS</c>,
+    /// <c>Bot</c>), before them: text after a reference can be the secret itself.</summary>
     [Fact]
-    public void AReferenceTakesOnlyASchemeWordBeforeIt()
+    public void AReferenceTakesOnlyOneWordBeforeIt()
     {
-        foreach (var value in new[] { "${API_TOKEN}", "$API_TOKEN", "Bearer ${API_TOKEN}", "basic $CRED", "Token ${CC_NEEDS:T}", "${A} ${B}", "Bearer${A}" })
+        foreach (var value in new[] { "${API_TOKEN}", "$API_TOKEN", "Bearer ${API_TOKEN}", "basic $CRED", "Token ${CC_NEEDS:T}", "${A} ${B}", "Bearer${A}",
+                     "SSWS ${T}", "Bot ${T}", "ApiKey ${T}", "Digest ${A}" })
         {
             Assert.True(CredentialHeuristics.IsReference(value), value);
         }
-        foreach (var value in new[] { "${CC_NEEDS:PW}hunter", "${A} hunter", "hunter ${A}", "${A} Bearer", "Bearer ${A} extra", "Digest ${A}", "Bearer" })
+        foreach (var value in new[] { "${CC_NEEDS:PW}hunter", "${A} hunter", "${A} Bearer", "Bearer ${A} extra", "Bearer", "two words ${A}", "hunter2 ${A}" })
         {
             Assert.False(CredentialHeuristics.IsReference(value), value);
         }

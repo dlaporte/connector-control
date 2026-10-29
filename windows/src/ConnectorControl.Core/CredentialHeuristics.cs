@@ -56,7 +56,8 @@ public static class CredentialHeuristics
 
     /// <summary>
     /// Whether an environment variable's value names code to run: a program (<c>GIT_ASKPASS</c>,
-    /// <c>GIT_SSH_COMMAND</c>, any <c>*_ASKPASS</c>), git configuration that can name one (<c>GIT_CONFIG_*</c>), a
+    /// <c>GIT_SSH_COMMAND</c>, any name holding <c>ASKPASS</c>, a <c>*_CREDENTIAL_PROVIDER</c> such as Cargo's
+    /// <c>CARGO_REGISTRY_CREDENTIAL_PROVIDER</c>), git configuration that can name one (<c>GIT_CONFIG_*</c>), a
     /// library or module loaded first (<c>LD_PRELOAD</c>, <c>NODE_OPTIONS</c>, <c>JAVA_TOOL_OPTIONS</c>) or a
     /// script a shell or interpreter runs first (<c>BASH_ENV</c>, <c>PYTHONSTARTUP</c>). Whatever its case,
     /// since Windows reads names so. The confirmation dialog shows such a value in full even when
@@ -68,12 +69,13 @@ public static class CredentialHeuristics
         var lowered = name.ToLowerInvariant();
         return ProgramNames.Contains(lowered, StringComparer.Ordinal)
             || lowered.StartsWith("git_config_", StringComparison.Ordinal)
-            || lowered.EndsWith("_askpass", StringComparison.Ordinal);
+            || lowered.Contains("askpass", StringComparison.Ordinal)
+            || lowered.EndsWith("_credential_provider", StringComparison.Ordinal);
     }
 
     private static readonly string[] ProgramNames =
     [
-        "ssh_askpass_require", "git_ssh", "git_ssh_command", "git_exec_path", "node_options", "ld_preload",
+        "git_ssh", "git_ssh_command", "git_exec_path", "node_options", "ld_preload",
         "dyld_insert_libraries", "pythonstartup", "bash_env", "env", "perl5opt", "rubyopt", "java_tool_options",
         "_java_options",
     ];
@@ -81,9 +83,9 @@ public static class CredentialHeuristics
     /// <summary>
     /// Whether <paramref name="value"/> takes its secret from somewhere else rather than holding it: one
     /// or more <c>${NAME}</c> or <c>$NAME</c> references — an environment variable, a
-    /// <c>${CC_NEEDS:NAME}</c> placeholder — with, beside them, at most an authentication scheme before
-    /// them (<see cref="IsSchemeWord"/>: <c>Bearer</c>, <c>Basic</c>, <c>Token</c>). Any other word, or one after a
-    /// reference (<c>${CC_NEEDS:PW}hunter</c>), can be the secret itself. A <c>$NAME</c> without braces counts only as
+    /// <c>${CC_NEEDS:NAME}</c> placeholder — with, beside them, at most one word of letters before them, an
+    /// authentication scheme such as <c>Bearer</c>, <c>SSWS</c> or <c>Bot</c>. Text after a reference
+    /// (<c>${CC_NEEDS:PW}hunter</c>) can be the secret itself. A <c>$NAME</c> without braces counts only as
     /// <see cref="ShellVariableEnd"/> reads one. Walked one UTF-16 unit at a time, as the Mac walks
     /// Unicode scalars.
     /// </summary>
@@ -119,7 +121,7 @@ public static class CredentialHeuristics
             }
         }
         var words = rest.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return references > 0 && !textAfterReference && words.Length <= 1 && words.All(IsSchemeWord);
+        return references > 0 && !textAfterReference && words.Length <= 1 && words.All(word => word.All(char.IsAsciiLetter));
     }
 
     /// <summary>

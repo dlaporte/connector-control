@@ -38,7 +38,7 @@ public enum CredentialHeuristics {
     /// one scalar in the Basic Plane becomes it, and any other stays as it is — half of a surrogate
     /// pair, and İ (U+0130), whose lower case is two scalars, i and a combining dot, and which
     /// ToLowerInvariant leaves unchanged.
-    static func loweredUnits(_ text: String) -> [UInt16] {
+    public static func loweredUnits(_ text: String) -> [UInt16] {
         text.utf16.map { unit in
             guard let scalar = Unicode.Scalar(unit) else { return unit }
             let lower = Array(scalar.properties.lowercaseMapping.unicodeScalars)
@@ -64,7 +64,8 @@ public enum CredentialHeuristics {
     private static let schemeWords = ["bearer", "basic", "token"]
 
     /// Whether an environment variable's value names code to run: a program (`GIT_ASKPASS`,
-    /// `GIT_SSH_COMMAND`, any `*_ASKPASS`), git configuration that can name one (`GIT_CONFIG_*`), a
+    /// `GIT_SSH_COMMAND`, any name holding `ASKPASS`, a `*_CREDENTIAL_PROVIDER` such as Cargo's
+    /// `CARGO_REGISTRY_CREDENTIAL_PROVIDER`), git configuration that can name one (`GIT_CONFIG_*`), a
     /// library or module loaded first (`LD_PRELOAD`, `NODE_OPTIONS`, `JAVA_TOOL_OPTIONS`) or a
     /// script a shell or interpreter runs first (`BASH_ENV`, `PYTHONSTARTUP`). Whatever its case,
     /// since Windows reads names so. The confirmation dialog shows such a value in full even when
@@ -74,20 +75,21 @@ public enum CredentialHeuristics {
         let lowered = loweredUnits(name)
         return programNames.contains { lowered.elementsEqual($0.utf16) }
             || lowered.starts(with: "git_config_".utf16)
-            || lowered.reversed().starts(with: "_askpass".utf16.reversed())
+            || contains(lowered, Array("askpass".utf16))
+            || lowered.reversed().starts(with: "_credential_provider".utf16.reversed())
     }
 
     private static let programNames = [
-        "ssh_askpass_require", "git_ssh", "git_ssh_command", "git_exec_path", "node_options", "ld_preload",
+        "git_ssh", "git_ssh_command", "git_exec_path", "node_options", "ld_preload",
         "dyld_insert_libraries", "pythonstartup", "bash_env", "env", "perl5opt", "rubyopt", "java_tool_options",
         "_java_options",
     ]
 
     /// Whether `value` takes its secret from somewhere else rather than holding it: one or more
     /// `${NAME}` or `$NAME` references — an environment variable, a `${CC_NEEDS:NAME}` placeholder —
-    /// with, beside them, at most an authentication scheme before them (`isSchemeWord`: `Bearer`,
-    /// `Basic`, `Token`). Any other word, or one after a reference (`${CC_NEEDS:PW}hunter`), can be
-    /// the secret itself. A `$NAME` without braces counts only as `shellVariableEnd` reads one.
+    /// with, beside them, at most one word of letters before them, an authentication scheme such as
+    /// `Bearer`, `SSWS` or `Bot`. Text after a reference (`${CC_NEEDS:PW}hunter`) can be the secret
+    /// itself. A `$NAME` without braces counts only as `shellVariableEnd` reads one.
     /// Walked one Unicode scalar at a time, as the Windows mirror walks UTF-16 units.
     public static func isReference(_ value: String) -> Bool {
         let scalars = Array(value.unicodeScalars)
@@ -112,7 +114,7 @@ public enum CredentialHeuristics {
         }
         let words = rest.split(separator: " ")
         return references > 0 && !textAfterReference && words.count <= 1
-            && words.allSatisfy { isSchemeWord(String(String.UnicodeScalarView($0))) }
+            && words.allSatisfy { $0.allSatisfy { ("A"..."Z").contains($0) || ("a"..."z").contains($0) } }
     }
 
     /// Where the `$NAME` whose name starts at `start` ends, or nil where the text there is no such
