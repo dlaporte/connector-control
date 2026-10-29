@@ -18,9 +18,7 @@ public struct ToolFooterLine: Equatable, Sendable {
     /// that state; nil otherwise.
     public let advice: String?
 
-    public static func installText(_ tools: String, _ linkTitle: String, _ command: String) -> String {
-        "\(tools): \(linkTitle) \(ToolNote.orRun) \(command)."
-    }
+    public static func installText(_ tools: String, _ linkTitle: String, _ command: String) -> String { "\(tools): \(linkTitle) \(ToolNote.orRun) \(command)." }
 
     /// A line for each family with a tool that has a problem, in the rows' order; none while every tool is
     /// found or still being checked.
