@@ -17,7 +17,50 @@ bullet once the section is about to ship.
 
 ### macOS
 
+- The command-line tool is inside the app, at `Contents/MacOS/connector-control`, and updates
+  with it. Remove, beside Install, takes the /usr/local/bin link away again. A folder Install has
+  to make there is one only an administrator can write to, whatever the machine's umask.
+- Before you delete the app, turn off "Let Claude manage Connector Control" and Remove the
+  command-line tool. Otherwise Claude keeps a connector-control connector whose tool is gone and
+  shows it as failed; the README's Uninstalling says how to take it out by hand. The Windows
+  uninstaller does both for you.
+- A preview install updates itself to each later preview and then to the final release, as on
+  Windows; see Release pipeline for the one step to take by hand.
+- Claude's config, or a backup of it, is read as Claude Desktop and Windows read it: one with a
+  trailing comma, saved as UTF-16 or UTF-32, or nested more than 64 levels deep is reported as
+  not valid JSON. Before, the Mac read it as if it were valid.
+
 ### Windows
+
+- The command-line tool is copied to `%LOCALAPPDATA%\Connector Control\bin\` each time the app
+  starts, and Claude's entry and your PATH use that copy, so an update never stops a relay Claude
+  is running. Install adds that folder to the end of your user PATH and leaves every other entry
+  exactly as written. It refuses while the copy is missing, and a PATH the registry holds as
+  anything but text is left as it is.
+- Uninstalling takes Connector Control's entry out of Claude's config, after a backup, deletes
+  `bin\` and takes that folder out of your user PATH. It holds the app's single-instance lock
+  meanwhile, so an app Claude starts during the uninstall can't put the entry back.
+- An app the command-line tool or Claude's relay starts gets the PATH you get at sign-in, not the
+  terminal's or Claude's, and none of their CONNECTOR_CONTROL_ variables, so it finds the same
+  npx and uvx however it was started.
+- The tool connects to the app's pipe at identification level: a program that took the pipe's
+  name first, under another account, learns who connected and can't act as you.
+- An update is installed only when the programs that must be Connector Control's own are signed
+  by a certificate with the running app's whole subject, not merely its organization, and a
+  certificate known to be revoked is refused. When the revocation servers can't be reached the
+  update still installs, and crash.log says so once.
+- An update package is accepted only as exactly the version the update feed names, preview label
+  included, so a signed earlier preview can't be passed off as a later one or as the release.
+- An update package the check can't finish, or one holding a file name Windows can't hold, is
+  refused and deleted, and nothing the check didn't pass is applied when the app next starts.
+  Before, such a package could be applied at the next launch. An update check cut short by
+  quitting the app no longer leaves every later update refused: the next check puts the installed
+  updater back first.
+- The update dialog shows an image in the release notes as its text and loads nothing. Before, it
+  fetched the image, from a network share too.
+- The command interpreter and File Explorer are started by full path, from System32 and the
+  Windows folder, so a cmd.exe or explorer.exe placed beside the app never runs in their place.
+- The installer and the updater are Velopack 1.2.161, up from 1.2.158.
 
 ### Both platforms
 
@@ -34,6 +77,44 @@ bullet once the section is about to ship.
   MDM; `connector-control help` lists its commands. Settings ▸ Claude ▸ Command-Line Tool puts it in
   your PATH: on a Mac a link in /usr/local/bin, with an administrator prompt when that folder isn't
   yours; on Windows the tool's folder in your user PATH, which terminals opened afterwards see.
+- If the active collection already holds a connector named connector-control, it keeps working,
+  and the integration's switch is dimmed with "A connector named “connector-control” already
+  exists. Rename it to turn this on." No other connector can take that name.
+- Run the command-line tool as yourself. Under sudo, or in an elevated terminal on Windows, it
+  starts nothing and says "Run connector-control without administrator rights: Connector Control
+  runs as you, and an elevated copy can’t reach it." On Windows with the built-in Administrator
+  account or UAC turned off, open Connector Control first, and the tool reaches it.
+- A change Claude asked about is applied from exactly the file you were shown, even if the file
+  changes in the moment after you click Allow; if it changed while the question was open, nothing
+  is done and Claude is told to ask again.
+- The Import and Restore sheets land the file you reviewed. Before, Import read the document again
+  when you clicked it, and Restore read the backup only once you had confirmed, so a file
+  rewritten in between landed unseen.
+- A restore writes the backup as Connector Control read it, in the format every apply writes, and
+  refuses a backup that names a connector twice, which Connector Control and Claude would read
+  differently. Before, it copied the backup byte for byte.
+- A collection file over 1 MB, a backup over 16 MB, or anything that isn't a regular file is
+  refused as it is read, so a file swapped for a huge one can't stall the app.
+- In the confirmation dialog each line of what would run is drawn on its own, clipped to its own
+  height, so nothing in one line can draw over another, and it is selected and copied one line at a
+  time. Up to two accent marks per letter are drawn, so Thai, Vietnamese, pointed Hebrew and
+  Arabic read as written; a third or later one, or one with no letter, shows as its code.
+- A character that draws nothing shows as its code, so a name or variable that only gained one
+  doesn't read as unchanged, and right-to-left letters in a line can't reorder the arguments
+  around them.
+- A name too long for a dialog keeps its start and its end around the "…", so long names that
+  share a start still read apart. The name an MCP client gives itself is cut the same way, so it
+  can't push what the client did out of a notification.
+- Environment variables that name a program to run, such as GIT_ASKPASS, GIT_SSH_COMMAND,
+  NODE_OPTIONS and LD_PRELOAD, always show in full in the dialog, though their names may look like
+  a secret's, so you see what would run before you allow it. Claude still reads only that they are
+  set.
+- Claude never reads a secret packed into one argument: a whole shell line (`bash -c`, `cmd /c`),
+  JSON passed as an argument, a URL password holding # ? or /, a header in any bridge's form, the
+  token after Bearer, and text written against a `${CC_NEEDS:…}` placeholder all read as •••. A
+  whole command line in one argument that holds a URL with a query reads as ••• in full.
+- Claude's connection keeps working after Connector Control restarts, and its relay always ends
+  once Claude closes it, whatever calls Claude cancelled on the way.
 
 ### Release pipeline
 
@@ -42,6 +123,18 @@ bullet once the section is about to ship.
   release replaces, never with an older build, so a preview install is offered each later
   preview and then the final release. Previews up to `preview-9` still read the stable feed;
   install the first preview after `preview-9` once by hand.
+- The preview feed moves only to a build newer than every published preview and release, read
+  from their own appcasts, and a served feed newer than all of them fails the run, so a planted
+  feed can't stop preview updates while CI stays green.
+- A preview's update dialog shows only that preview's changes; its release page adds how to
+  install it, how to go back and the commits it holds.
+- make-dmg.sh retries `hdiutil` when it reports the disk image "Resource busy".
+- Every PowerShell script is parsed in CI, so one that doesn't parse fails there rather than on a
+  Windows runner.
+- The Windows install smoke test checks the command-line tool, the relay and the uninstall hook,
+  uninstalling with the app still running.
+- The MCP Inspector checks the relay against a headless test host on both platforms.
+- The README's command list is tested against `connector-control help`'s own output.
 
 ## v1.4.0
 
