@@ -124,6 +124,73 @@
               </StackPanel>
             </StackPanel>
           </Border>
+          <!-- Claude integration: the switch and its title, which dim together while a clash or a transient app
+               keeps it off; under them the caption, or the amber note that says why, at full opacity; the
+               checkbox kept (dimmed, caption hidden) while the switch is off; the endpoint's problem. -->
+          <Border Style="{StaticResource Card}">
+            <StackPanel>
+              <TextBlock Text="{x:Static state:SettingsModel.ClaudeIntegrationHeader}" Style="{StaticResource SectionTitle}" />
+              <Grid Style="{StaticResource ToggleRow}">
+                <StackPanel Margin="0,0,48,0">
+                  <TextBlock x:Name="IntegrationTitle" Text="{x:Static state:SettingsModel.ClaudeIntegrationTitle}" TextWrapping="Wrap"
+                             Opacity="{Binding ClaudeIntegrationTitleOpacity}" />
+                  <TextBlock x:Name="IntegrationCaption" Text="{Binding ClaudeIntegrationCaptionText}">
+                    <TextBlock.Style>
+                      <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding ClaudeIntegrationCaptionIsWarning}" Value="True">
+                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </TextBlock.Style>
+                  </TextBlock>
+                </StackPanel>
+                <ToggleButton x:Name="IntegrationSwitch" Style="{StaticResource Switch}" HorizontalAlignment="Right" VerticalAlignment="Top"
+                              IsChecked="{Binding ClaudeIntegrationEnabled}" IsEnabled="{Binding CanChangeClaudeIntegration}"
+                              AutomationProperties.Name="{x:Static state:SettingsModel.ClaudeIntegrationTitle}" />
+              </Grid>
+              <CheckBox x:Name="ConfirmChangesBox" IsChecked="{Binding ConfirmClaudeChanges}" IsEnabled="{Binding CanChangeConfirmClaudeChanges}"
+                        AutomationProperties.Name="{x:Static state:SettingsModel.ConfirmClaudeChangesTitle}">
+                <StackPanel>
+                  <TextBlock Text="{x:Static state:SettingsModel.ConfirmClaudeChangesTitle}" TextWrapping="Wrap" />
+                  <TextBlock x:Name="ConfirmChangesCaption" Text="{Binding ConfirmClaudeChangesCaption}"
+                             Visibility="{Binding HasConfirmClaudeChangesCaption, Converter={StaticResource Vis}}">
+                    <TextBlock.Style>
+                      <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding ConfirmClaudeChangesCaptionIsWarning}" Value="True">
+                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </TextBlock.Style>
+                  </TextBlock>
+                </StackPanel>
+              </CheckBox>
+              <!-- Plain amber text with no glyph, unlike a tool note's caution mark, and like every caption in these
+                   two groups not selectable: the Mac draws them the same way, so both read alike. -->
+              <TextBlock x:Name="EndpointProblem" Text="{Binding ControlEndpointProblem}" Style="{StaticResource CautionText}" Margin="0,8,0,0"
+                         Visibility="{Binding HasControlEndpointProblem, Converter={StaticResource Vis}}" />
+            </StackPanel>
+          </Border>
+          <!-- Command-line tool: where it is, or the full path scripts can always use, and Install or Remove. -->
+          <Border x:Name="CommandLineToolGroup" Style="{StaticResource Card}"
+                  Visibility="{Binding HasCommandLineTool, Converter={StaticResource Vis}}">
+            <StackPanel>
+              <TextBlock Text="{x:Static state:SettingsModel.CommandLineToolHeader}" Style="{StaticResource SectionTitle}" />
+              <Grid>
+                <StackPanel Margin="0,0,96,0">
+                  <TextBlock x:Name="CommandLineToolStatus" TextWrapping="Wrap" views:TextRuns.Runs="{Binding CommandLineToolStatus}" />
+                  <TextBlock x:Name="CommandLineToolCaption" Style="{StaticResource CaptionText}" views:TextRuns.Runs="{Binding CommandLineToolCaption}" />
+                  <TextBlock x:Name="CommandLineToolMessage" Text="{Binding CommandLineToolMessage}" Style="{StaticResource ErrorText}"
+                             Visibility="{Binding HasCommandLineToolMessage, Converter={StaticResource Vis}}" />
+                </StackPanel>
+                <Button x:Name="CommandLineToolButton" Content="{Binding CommandLineToolButton}" IsEnabled="{Binding CanUseCommandLineToolButton}"
+                        HorizontalAlignment="Right" VerticalAlignment="Top" Click="OnCommandLineTool" />
+              </Grid>
+            </StackPanel>
+          </Border>
           <Border Style="{StaticResource Card}">
             <StackPanel>
               <TextBlock Text="{x:Static core:ToolNote.SettingsHeader}" Style="{StaticResource SectionTitle}" />

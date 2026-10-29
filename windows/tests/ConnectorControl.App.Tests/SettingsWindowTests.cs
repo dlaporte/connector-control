@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Threading;
 using ConnectorControl.App.Services;
 using ConnectorControl.App.Tests.TestSupport;
@@ -31,6 +33,122 @@ public class SettingsWindowTests
             Assert.Equal("Version 1.2.2", window.Model.VersionText);
             Assert.Equal(h.StoreDir, window.Model.StoreDirPath);
             Assert.Equal("MSIX package", window.Model.InstallKindText);
+        });
+    }
+
+    private static string Text(TextBlock block) => string.Concat(block.Inlines.OfType<Run>().Select(run => run.Text));
+
+    [Fact]
+    public void TheClaudeTabHasTheIntegrationAndCommandLineToolGroups()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var services = h.Services();
+        var tool = new FakeCommandLineTool();
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            var window = new SettingsWindow(state, services, updates, tool);
+            WindowTestSupport.Layout(window, new Size(480, 560));
+            Assert.Equal(SettingsModel.ClaudeIntegrationCaption, window.IntegrationCaption.Text);
+            Assert.True(window.IntegrationSwitch.IsEnabled);
+            Assert.Equal(1.0, window.IntegrationTitle.Opacity);
+            Assert.False(window.ConfirmChangesBox.IsEnabled);
+            Assert.Equal(Visibility.Collapsed, window.ConfirmChangesCaption.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.EndpointProblem.Visibility);
+            Assert.Equal(Visibility.Visible, window.CommandLineToolGroup.Visibility);
+            Assert.Equal(CommandLineToolText.NotInstalledText, Text(window.CommandLineToolStatus));
+            Assert.Equal("Scripts can always use " + new TextRun(tool.ToolPath, IsSetApart: true).ShownText, Text(window.CommandLineToolCaption));
+            Assert.Equal(CommandLineToolText.InstallButton, window.CommandLineToolButton.Content);
+
+            window.IntegrationSwitch.IsChecked = true;
+            Assert.True(h.Settings.ClaudeIntegrationEnabled);
+            Assert.True(window.ConfirmChangesBox.IsEnabled);
+            Assert.Equal(SettingsModel.ConfirmClaudeChangesOnCaption, window.ConfirmChangesCaption.Text);
+            window.ConfirmChangesBox.IsChecked = false;
+            Assert.Equal(SettingsModel.ConfirmClaudeChangesOffCaption, window.ConfirmChangesCaption.Text);
+
+            window.CommandLineToolButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Assert.Equal(1, tool.Installs);
+            Assert.False(window.CommandLineToolButton.IsEnabled);
+            tool.Finish(installed: false, problem: CommandLineToolText.InstallFailedError("Access is denied."));
+            Assert.Equal(CommandLineToolText.InstallFailedError("Access is denied."), window.CommandLineToolMessage.Text);
+            Assert.Equal(Visibility.Visible, window.CommandLineToolMessage.Visibility);
+            Assert.True(window.CommandLineToolButton.IsEnabled);
+
+            state.ReportControlEndpointUnavailable();
+            Assert.Equal(Visibility.Visible, window.EndpointProblem.Visibility);
+            Assert.Equal(ClaudeIntegration.EndpointUnavailableText, window.EndpointProblem.Text);
+            window.Close();
+        });
+    }
+
+    /// <summary>A clash dims the switch's row as the mockup does: the switch and its title fade; the note that
+    /// says why keeps full opacity.</summary>
+    [Fact]
+    public void AClashDimsTheSwitchRowButNotItsNote()
+    {
+        using var h = new AppStateHarness();
+        MasterStoreIO.Save(new MasterStore([new(ClaudeIntegration.EntryName, new McpEntry(true, JsonValue.Object(("command", JsonValue.String("x")))))]),
+            h.MasterStorePath);
+        using var state = h.Create();
+        var services = h.Services();
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            var window = new SettingsWindow(state, services, updates);
+            WindowTestSupport.Layout(window, new Size(480, 560));
+            Assert.False(window.IntegrationSwitch.IsEnabled);
+            Assert.Equal(SettingsModel.DimmedOpacity, window.IntegrationTitle.Opacity);
+            Assert.Equal(ClaudeIntegration.ClashNote, window.IntegrationCaption.Text);
+            Assert.Equal(1.0, window.IntegrationCaption.Opacity);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public void WithNoToolTheCommandLineToolGroupIsLeftOut()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var services = h.Services();
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            var window = new SettingsWindow(state, services, updates);
+            WindowTestSupport.Layout(window, new Size(480, 560));
+            Assert.Equal(Visibility.Collapsed, window.CommandLineToolGroup.Visibility);
+            window.Close();
+        });
+    }
+
+    /// <summary>The registry asks for the tool when it opens Settings, so a tool the app made after the registry
+    /// still reaches the window.</summary>
+    [Fact]
+    public void SettingsOpenedByTheRegistryGetsTheToolMadeAfterIt()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var services = h.Services();
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            ICommandLineTool? made = null;
+            var registry = new WindowRegistry(state, services, updates, h.Dialogs, () => made);
+            made = new FakeCommandLineTool();
+            registry.OpenSettings();
+            // The one the registry showed: a Settings window another test built and never showed is listed too.
+            var window = Application.Current.Windows.OfType<SettingsWindow>().Single(shown => shown.IsVisible);
+            try
+            {
+                WindowTestSupport.Layout(window, new Size(480, 560));
+                Assert.Equal(Visibility.Visible, window.CommandLineToolGroup.Visibility);
+            }
+            finally
+            {
+                // Closed however the body ends: a window left on screen would be the owner later dialogs find.
+                window.Close();
+            }
         });
     }
 

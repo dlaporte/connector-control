@@ -9,16 +9,17 @@ using ConnectorControl.App.Services;
 
 namespace ConnectorControl.App.Views;
 
-/// <summary>Single instance, 480×560, three tabs; autostart re-read whenever the window activates.</summary>
+/// <summary>Single instance, 480×560, three tabs (the Claude tab scrolls); autostart and the command-line tool
+/// re-read whenever the window activates.</summary>
 public partial class SettingsWindow : Window
 {
     private readonly AppState state;
 
-    public SettingsWindow(AppState state, PlatformServices services, UpdateCoordinator updates)
+    public SettingsWindow(AppState state, PlatformServices services, UpdateCoordinator updates, ICommandLineTool? commandLineTool = null)
     {
         InitializeComponent();
         this.state = state;
-        Model = new SettingsModel(state, services.Settings, services.Autostart, services.ClaudeInstall, services.Updater, updates);
+        Model = new SettingsModel(state, services.Settings, services.Autostart, services.ClaudeInstall, services.Updater, updates, commandLineTool);
         DataContext = Model;
         GeneralTabItem.Header = TabHeader("", null, SettingsModel.GeneralTab);
         StorageTabItem.Header = TabHeader("", null, SettingsModel.StorageTab);
@@ -132,4 +133,6 @@ public partial class SettingsWindow : Window
     }
 
     private void OnUseDefaultLaunchTarget(object sender, RoutedEventArgs e) => Model.UseDefaultLaunchTarget();
+
+    private void OnCommandLineTool(object sender, RoutedEventArgs e) => Model.CommandLineToolAction();
 }

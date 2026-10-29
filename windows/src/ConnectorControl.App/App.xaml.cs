@@ -92,7 +92,7 @@ public partial class App : Application
         updates = new UpdateCoordinator(services.Updater, services.Settings, services.Notifier, dialogs, host);
         updates.Start();   // only arms the delayed first check through host.Delay
         StartControl(state, services, updates, host, paths, dataDir, dialogs);
-        var windows = new WindowRegistry(state, services, updates, dialogs);
+        var windows = new WindowRegistry(state, services, updates, dialogs, () => CommandLineTool);
         flyoutModel = new FlyoutModel(state, services.Settings);
         flyout = new FlyoutWindow(flyoutModel, windows);
         tray = new TrayController(state, flyout, windows);

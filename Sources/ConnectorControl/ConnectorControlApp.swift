@@ -47,7 +47,8 @@ struct ConnectorControlApp: App {
 
         Settings {
             SettingsView(state: state, settings: services.settings,
-                         autostart: services.autostart, updater: services.updater)
+                         autostart: services.autostart, updater: services.updater,
+                         commandLineTool: services.commandLineTool)
         }
     }
 }

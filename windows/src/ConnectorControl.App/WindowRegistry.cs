@@ -18,20 +18,25 @@ public sealed class WindowRegistry
     private readonly UpdateCoordinator updates;
     private readonly Dictionary<string, EditorWindow> editors = new(StringComparer.Ordinal);
     private readonly IDialogs dialogs;
+    private readonly Func<ICommandLineTool?> commandLineTool;
     private SettingsWindow? settings;
     private CollectionsWindow? collections;
 
     /// <summary>
     /// <paramref name="dialogs"/> is what the Collections window's model asks its questions
     /// through — AppState keeps its own copy private, so App hands over the ownerless instance it
-    /// built for AppState, and a test hands over its fake.
+    /// built for AppState, and a test hands over its fake. <paramref name="commandLineTool"/> gives the tool
+    /// Settings' Command-line tool group installs and removes, asked for each time Settings opens, so it does
+    /// not matter whether App made the tool before or after this registry.
     /// </summary>
-    public WindowRegistry(AppState state, PlatformServices services, UpdateCoordinator updates, IDialogs dialogs)
+    public WindowRegistry(AppState state, PlatformServices services, UpdateCoordinator updates, IDialogs dialogs,
+                          Func<ICommandLineTool?>? commandLineTool = null)
     {
         this.state = state;
         this.services = services;
         this.updates = updates;
         this.dialogs = dialogs;
+        this.commandLineTool = commandLineTool ?? (() => null);
     }
 
     public void OpenEditor(EditTarget target)
@@ -52,7 +57,7 @@ public sealed class WindowRegistry
     {
         if (settings is null)
         {
-            settings = new SettingsWindow(state, services, updates);
+            settings = new SettingsWindow(state, services, updates, commandLineTool());
             settings.Closed += (_, _) => settings = null;
             settings.Show();
         }

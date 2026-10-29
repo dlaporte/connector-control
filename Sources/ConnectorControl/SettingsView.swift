@@ -14,9 +14,10 @@ struct SettingsView: View {
     /// (or a Core Image pass over the app icon).
     @State private var claudeTabIcon: NSImage
 
-    init(state: AppState, settings: AppSettings, autostart: Autostart, updater: Updater) {
+    init(state: AppState, settings: AppSettings, autostart: Autostart, updater: Updater, commandLineTool: CommandLineTool?) {
         self.state = state
-        _model = StateObject(wrappedValue: SettingsModel(state: state, settings: settings, autostart: autostart, updater: updater))
+        _model = StateObject(wrappedValue: SettingsModel(state: state, settings: settings, autostart: autostart, updater: updater,
+                                                         commandLineTool: commandLineTool))
         _claudeTabIcon = State(initialValue: SettingsView.makeClaudeTabIcon(
             appPath: settings.claudeAppPath ?? AppState.defaultClaudeAppPath))
     }
@@ -36,9 +37,8 @@ struct SettingsView: View {
                     }
                 }
         }
-        // Tall enough that the largest tab (Claude, with the Tools section
-        // in its worst case: every tool found only in the shell) fits
-        // without scrolling; the Windows Settings window uses the same size.
+        // The Windows Settings window uses the same size. The Claude tab, with its integration and
+        // command-line groups, scrolls; the others fit.
         .frame(width: 480, height: 560)
         .sheet(isPresented: $showRestore) {
             RestoreSheetView(state: state)
@@ -124,6 +124,71 @@ struct SettingsView: View {
                     Button(SettingsModel.chooseTitle) { chooseClaudeApp() }
                     Button(SettingsModel.useDefaultTitle) { model.useDefaultClaudeApp() }
                         .disabled(!model.canUseDefaultClaudeApp)
+                }
+            }
+
+            Section(SettingsModel.claudeIntegrationHeader) {
+                // The switch has no label of its own, so a dimmed switch dims its title and never the note
+                // under it, which says why.
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(SettingsModel.claudeIntegrationTitle)
+                            .opacity(model.claudeIntegrationTitleOpacity)
+                        Text(model.claudeIntegrationCaptionText)
+                            .font(.caption)
+                            .foregroundStyle(model.claudeIntegrationCaptionIsWarning ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.secondary))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Toggle(SettingsModel.claudeIntegrationTitle, isOn: $model.claudeIntegrationEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .disabled(!model.canChangeClaudeIntegration)
+                }
+                // The checkbox keeps its value while the switch is off, dimmed, and its caption hides.
+                Toggle(isOn: $model.confirmClaudeChanges) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(SettingsModel.confirmClaudeChangesTitle)
+                        if let caption = model.confirmClaudeChangesCaption {
+                            Text(caption)
+                                .font(.caption)
+                                .foregroundStyle(model.confirmClaudeChangesCaptionIsWarning ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.secondary))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .toggleStyle(.checkbox)
+                .disabled(!model.canChangeConfirmClaudeChanges)
+                if let problem = model.controlEndpointProblem {
+                    // Plain amber text with no glyph, unlike a tool note's caution mark, and like every caption in
+                    // these two groups not selectable: the Windows window draws them the same way, so both read alike.
+                    Text(problem)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            if model.hasCommandLineTool {
+                Section(SettingsModel.commandLineToolHeader) {
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(runs: model.commandLineToolStatus)
+                            Text(runs: model.commandLineToolCaption)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if let message = model.commandLineToolMessage {
+                                Text(message)
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        Spacer()
+                        Button(model.commandLineToolButton) { model.commandLineToolAction() }
+                            .disabled(!model.canUseCommandLineToolButton)
+                    }
                 }
             }
 
