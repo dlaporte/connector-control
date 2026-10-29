@@ -208,7 +208,7 @@ public sealed partial class ControlTools
             return;
         }
         writing = true;
-        // Caught here, where the Mac has nothing to catch: a C# handler, the confirmer or the caller's
+        // Caught here, where the Mac has nothing to catch: a C# handler or the caller's
         // completion can throw, and a write that threw must still end and let the next start. Swift's
         // closures here do not throw, so nothing there can leave the line held.
         try

@@ -22,10 +22,10 @@ public abstract record ControlCaller
     public const string UnknownClientName = "Another app";
 
     /// <summary>
-    /// Who the confirmations and notifications say is asking: "Claude" for Claude Desktop, whose
-    /// clientInfo name starts with one of <see cref="ClaudeClientPrefixes"/>, in any case; any other
-    /// client by its own name; one that gave none by a name that claims nothing. The command-line
-    /// tool is never asked about and goes by the tool's own name.
+    /// Who the client is, not what a sentence shows (that is <see cref="ShownAsker"/>): "Claude" for Claude
+    /// Desktop, whose clientInfo name starts with one of <see cref="ClaudeClientPrefixes"/>, in any case; any other
+    /// client by its own name; one that gave none by a name that claims nothing. The command-line tool
+    /// goes by the tool's own name.
     /// </summary>
     public string AskerName
     {
@@ -36,7 +36,8 @@ public abstract record ControlCaller
                 return MasterStore.ReservedConnectorName;
             }
             // Claude Desktop starts each connector twice: once for chat ("claude-ai") and once for
-            // its agent mode ("local-agent-mode-<server key>"). Both are Claude.
+            // its agent mode ("local-agent-mode-<server key>"). Both are Claude. Compared literally, by
+            // code units, as the Mac mirror compares: canonical equivalence would tell them apart.
             if (ClaudeClientPrefixes.Any(prefix => relay.ClientName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
             {
                 return ClaudeName;
@@ -208,7 +209,7 @@ public sealed record ConfirmationRequest(string Title, string Message, IReadOnly
 /// <item>a <c>completion</c> never called holds the write queue for good: every later relay write only ever
 /// answers "queued", and every later command-line write waits for good;</item>
 /// <item>C# only: it never throws once its dialog is showing. It may throw before showing anything,
-/// which ends the call as refused; after that, a failure calls <c>completion(false)</c>.</item>
+/// which refuses the call with <c>NoQuestionError</c>, never with the exception's text; after that, a failure calls <c>completion(false)</c>.</item>
 /// </list>
 /// </summary>
 public interface IControlConfirmer

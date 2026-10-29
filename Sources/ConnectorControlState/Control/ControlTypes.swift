@@ -18,19 +18,20 @@ public enum ControlCaller: Equatable, Sendable {
     public static let claudeClientPrefixes = ["claude", "local-agent-mode-"]
     public static let unknownClientName = "Another app"
 
-    /// Who the confirmations and notifications say is asking: "Claude" for Claude Desktop, whose
-    /// clientInfo name starts with one of `claudeClientPrefixes`, in any case; any other client by
-    /// its own name; one that gave none by a name that claims nothing. The command-line tool is
-    /// never asked about and goes by the tool's own name.
+    /// Who the client is, not what a sentence shows (that is `shownAsker`): "Claude" for Claude
+    /// Desktop, whose clientInfo name starts with one of `claudeClientPrefixes`, in any case; any other
+    /// client by its own name; one that gave none by a name that claims nothing. The command-line tool
+    /// goes by the tool's own name.
     public var askerName: String {
         switch self {
         case .cli:
             return MasterStore.reservedConnectorName
         case .relay(let clientName):
             // Claude Desktop starts each connector twice: once for chat ("claude-ai") and once for
-            // its agent mode ("local-agent-mode-<server key>"). Both are Claude.
+            // its agent mode ("local-agent-mode-<server key>"). Both are Claude. Compared literally, by
+            // code units, as the Windows mirror compares: canonical equivalence would tell them apart.
             if ControlCaller.claudeClientPrefixes.contains(where: {
-                clientName.range(of: $0, options: [.caseInsensitive, .anchored]) != nil
+                clientName.range(of: $0, options: [.caseInsensitive, .anchored, .literal]) != nil
             }) {
                 return ControlCaller.claudeName
             }
@@ -226,7 +227,8 @@ public struct ConfirmationRequest: Equatable, Sendable {
 ///   has started before it is asked, and its progress and early answer run in the dialog's run loop;
 /// - a `completion` never called holds the write queue for good: every later relay write only ever
 ///   answers "queued", and every later command-line write waits for good.
-/// The Windows mirror adds that its confirmer never throws once its dialog is showing.
+/// The Windows mirror adds that its confirmer never throws once its dialog is showing; one that throws
+/// before showing anything is refused with `noQuestionError`, never with the exception's text.
 @MainActor
 public protocol ControlConfirmer: AnyObject {
     func confirm(_ request: ConfirmationRequest, completion: @escaping (Bool) -> Void)

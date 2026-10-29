@@ -53,6 +53,9 @@ final class ControlGateTests: XCTestCase {
                        "An app calling itself “connector-control”")
         XCTAssertEqual(ControlCaller.relay(clientName: "Cur”sor\n").shownAsker, #"An app calling itself “Cur\u{201D}sor\n”"#)
         XCTAssertEqual(ControlCaller.relay(clientName: "").shownAsker, ControlCaller.unknownClientName)
+        // Claude is told by its code units, as the Windows mirror tells it: "claude" and a combining
+        // accent starts with "claude", whatever it looks like.
+        XCTAssertEqual(ControlCaller.relay(clientName: "claude\u{301}").shownAsker, "Claude")
     }
 
     func testArgumentsAreCheckedAgainstTheSchemaBeforeAnythingRuns() {

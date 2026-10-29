@@ -70,6 +70,9 @@ public class ControlGateTests
         Assert.Equal("An app calling itself “connector-control”", new ControlCaller.Relay("connector-control").ShownAsker);
         Assert.Equal("""An app calling itself “Cur\u{201D}sor\n”""", new ControlCaller.Relay("Cur”sor\n").ShownAsker);
         Assert.Equal(ControlCaller.UnknownClientName, new ControlCaller.Relay("").ShownAsker);
+        // Claude is told by its code units, as the Mac mirror tells it: "claude" and a combining
+        // accent starts with "claude", whatever it looks like.
+        Assert.Equal("Claude", new ControlCaller.Relay("claude\u0301").ShownAsker);
     }
 
     [Fact]

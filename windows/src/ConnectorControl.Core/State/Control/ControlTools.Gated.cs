@@ -12,9 +12,9 @@ namespace ConnectorControl.Core.State;
 ///
 /// The question, the answer and the announcement name connectors, collections and the asker as
 /// others chose them — Claude names connectors, creates and renames collections without asking, and
-/// any client names itself — so every name goes through <see cref="ControlText.EscapedName"/>, and the asker arrives as
-/// <see cref="ControlCaller.ShownAsker"/>, escaped and framed already: none can break a line, reorder or hide text,
-/// or close its own quotes.
+/// any client names itself — so every name goes through <see cref="ControlText.EscapedName"/>, and the asker
+/// arrives as <see cref="ControlCaller.ShownAsker"/>, escaped and framed already: none can break a line, reorder
+/// or hide text, or close its own quotes.
 ///
 /// Mirror: Sources/ConnectorControlState/Control/ControlTools+Gated.swift
 /// </summary>

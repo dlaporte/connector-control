@@ -179,7 +179,7 @@ public final class ControlTools {
             return
         }
         writing = true
-        // The Windows mirror catches around what follows: a C# handler, the confirmer or the
+        // The Windows mirror catches around what follows: a C# handler or the
         // caller's completion can throw, and a write that threw must still end and let the next
         // start. Swift's closures here do not throw, so nothing can leave the line held.
         // Decided again: the settings may have changed while the call waited for its turn.

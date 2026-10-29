@@ -12,9 +12,9 @@ import ConnectorControlCore
 ///
 /// The question, the answer and the announcement name connectors, collections and the asker as
 /// others chose them — Claude names connectors, creates and renames collections without asking, and
-/// any client names itself — so every name goes through `ControlText.escapedName(_:)`, and the asker arrives as
-/// `ControlCaller.shownAsker`, escaped and framed already: none can break a line, reorder or hide text,
-/// or close its own quotes.
+/// any client names itself — so every name goes through `ControlText.escapedName(_:)`, and the asker
+/// arrives as `ControlCaller.shownAsker`, escaped and framed already: none can break a line, reorder
+/// or hide text, or close its own quotes.
 extension ControlTools {
     public static let takesEffectFooter = "Takes effect when Claude restarts."
     public static let configShapeError = "A connector’s config needs a “command” or a “url”."
