@@ -25,8 +25,8 @@ public final class PopoverModel: ObservableObject {
     /// connector authored elsewhere, a document still to be located. One value, so the two
     /// cannot drift; two names, so neither call site has to lie about what it is marking.
     public static let cautionGlyph = toolWarningGlyph
-    /// The offer's sparkle: news, not a caution. The Windows mirror draws the text star U+2726, as
-    /// the icon fonts there have no sparkle.
+    /// The offer's sparkle: news, not a caution. Platform idiom: the Windows mirror draws the text star
+    /// U+2726, as the icon fonts there have no sparkle.
     public static let offerGlyph = "sparkles"
     /// The amber dot's spoken form, beside the title that uses it so a view finds it here. The
     /// words are the Collections model's for the same condition, borrowed rather than written
@@ -119,6 +119,8 @@ public final class PopoverModel: ObservableObject {
 
     // MARK: offer
 
+    // Platform idiom: the error here is the app's last error alone; the Windows mirror's error strip also
+    // carries two lasting cautions the Mac has no counterpart for, and its offer ignores them too.
     /// The one-time offer of the Claude integration, in the banner slot: shown until it is answered,
     /// and only while neither an error nor a collection banner holds the slot — it waits behind both.
     public var showsClaudeIntegrationOffer: Bool {

@@ -622,7 +622,7 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(state.publishError, blocked, "refusing changes nothing, the error included")
     }
 
-    // MARK: The offer
+    // MARK: - The offer
 
     /// Shown once, in the banner slot: it waits behind an error and behind a collection's news, and
     /// Not Now dismisses it for good without turning anything on.
@@ -663,5 +663,24 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(try h.claudeServers()[ClaudeIntegration.entryName], ClaudeIntegration.entry(toolPath: "/x/connector-control"))
         XCTAssertEqual(popover.footer, .restartRequired)
         XCTAssertFalse(popover.rows.contains { $0.name == ClaudeIntegration.entryName })
+    }
+
+    /// Turn On with a Claude config that will not take the write: the answer stands and the setting is
+    /// on, the failure is the app's error, and the retry footer offers another go while the banner is gone.
+    func testTurnOnWhenTheWriteFailsKeepsTheAnswerAndOffersARetry() throws {
+        let h = AppStateHarness()
+        h.controlToolPath = "/x/connector-control"
+        let state = h.create()
+        h.drain()
+        try Data("{oops".utf8).write(to: h.claudeConfigURL)
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose(); h.dispose() }
+        popover.answerClaudeIntegrationOffer(turnOn: true)
+        h.drain()
+        XCTAssertTrue(h.settings.claudeIntegrationOfferAnswered)
+        XCTAssertTrue(h.settings.claudeIntegrationEnabled)
+        XCTAssertNotNil(state.lastError)
+        XCTAssertEqual(popover.footer, .retryApply)
+        XCTAssertFalse(popover.showsClaudeIntegrationOffer)
     }
 }

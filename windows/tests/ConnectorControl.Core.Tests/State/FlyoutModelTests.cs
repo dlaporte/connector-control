@@ -705,7 +705,7 @@ public class FlyoutModelTests
         Assert.Equal(blocked, state.PublishError);
     }
 
-    // The offer
+    // MARK: The offer
 
     /// <summary>Shown once, in the banner slot: it waits behind an error and behind a collection's news, and
     /// Not Now dismisses it for good without turning anything on.</summary>
@@ -762,5 +762,24 @@ public class FlyoutModelTests
         h.Settings.LastSaveError = "Disk full";
         Assert.True(flyout.HasError);
         Assert.True(flyout.ShowsClaudeIntegrationOffer);
+    }
+
+    /// <summary>Turn On with a Claude config that will not take the write: the answer stands and the setting is
+    /// on, the failure is the app's error, and the retry footer offers another go while the banner is gone.</summary>
+    [Fact]
+    public void TurnOnWhenTheWriteFailsKeepsTheAnswerAndOffersARetry()
+    {
+        using var h = new AppStateHarness { ControlToolPath = "/x/connector-control" };
+        using var state = h.Create();
+        h.Drain();
+        File.WriteAllText(h.ClaudeConfigPath, "{oops");
+        using var flyout = new FlyoutModel(state, h.Settings);
+        flyout.AnswerClaudeIntegrationOffer(turnOn: true);
+        h.Drain();
+        Assert.True(h.Settings.ClaudeIntegrationOfferAnswered);
+        Assert.True(h.Settings.ClaudeIntegrationEnabled);
+        Assert.NotNull(state.LastError);
+        Assert.Equal(FooterKind.RetryApply, flyout.Footer);
+        Assert.False(flyout.ShowsClaudeIntegrationOffer);
     }
 }

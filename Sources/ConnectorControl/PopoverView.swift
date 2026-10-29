@@ -128,9 +128,6 @@ struct PopoverView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// The one collection with news, active or not. Its buttons take a line of their own rather
-    /// than a column beside the sentence: the popover is 240–380 points wide, and a failed
-    /// publish offers two of them.
     // Platform idiom: the background carries the tint here, as the collection banner's orange does; the
     // Windows flyout marks both banners with their borders.
     /// The one-time offer, in the collection banner's slot and shape, tinted as news rather than a caution.
@@ -144,6 +141,7 @@ struct PopoverView: View {
                 .fixedSize(horizontal: false, vertical: true)
             } icon: {
                 Image(systemName: PopoverModel.offerGlyph).foregroundStyle(Color.accentColor)
+                    .accessibilityHidden(true)
             }
             .font(.caption)
             HStack(spacing: 8) {
@@ -160,6 +158,9 @@ struct PopoverView: View {
         .background(Color.accentColor.opacity(0.12))
     }
 
+    /// The one collection with news, active or not. Its buttons take a line of their own rather
+    /// than a column beside the sentence: the popover is 240–380 points wide, and a failed
+    /// publish offers two of them.
     private func collectionBanner(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Label(text, systemImage: PopoverModel.cautionGlyph)
