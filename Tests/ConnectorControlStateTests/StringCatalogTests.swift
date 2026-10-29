@@ -612,6 +612,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.switchedText"] = ControlTools.switchedText("X")
         actual["ControlTools.takesEffectFooter"] = ControlTools.takesEffectFooter
         actual["ControlTools.textKind"] = ControlTools.textKind
+        actual["ControlTools.tooLongToShowError"] = ControlTools.tooLongToShowError
         actual["ControlTools.turnedOffNotification"] = ControlTools.turnedOffNotification("X", "Y")
         actual["ControlTools.turnedOffText"] = ControlTools.turnedOffText("X", "Y")
         actual["ControlTools.turnedOnNotification"] = ControlTools.turnedOnNotification("X", "Y")

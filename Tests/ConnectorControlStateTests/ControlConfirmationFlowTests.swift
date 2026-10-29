@@ -22,6 +22,41 @@ final class ControlConfirmationFlowTests: XCTestCase {
         XCTAssertTrue(rig.h.notifier.sent.isEmpty)
     }
 
+    private func addRunning(_ argument: String) -> [String: JSONValue] {
+        ["name": .string("x"), "config": .object(["command": .string("node"), "args": .array([.string(argument)])])]
+    }
+
+    /// A question whose code would hold a line longer than `ControlTools.shownLineLimit` is refused
+    /// before it is asked, never shown cut: part of what would run must not be hidden. A long argument is one
+    /// such line; a long unknown key makes every line long, as each label is padded to the widest.
+    func testAChangeTooLongToShowIsRefusedUnasked() throws {
+        let longText = String(repeating: "a", count: ControlTools.shownLineLimit)
+        let adds: [[String: JSONValue]] = [
+            addRunning(longText),
+            ["name": .string("x"), "config": .object(["command": .string("node"), longText: .bool(true)])],
+        ]
+        for add in adds {
+            let rig = ControlRig(); defer { rig.dispose() }
+            let before = try Data(contentsOf: rig.h.claudeConfigURL)
+            XCTAssertEqual(rig.call("add_connector", add), .refusal(ControlTools.tooLongToShowError))
+            XCTAssertTrue(rig.confirmer.requests.isEmpty)
+            XCTAssertNil(rig.state.store.mcps["x"])
+            XCTAssertEqual(try Data(contentsOf: rig.h.claudeConfigURL), before)
+            XCTAssertTrue(rig.h.notifier.sent.isEmpty)
+        }
+    }
+
+    /// A line exactly `ControlTools.shownLineLimit` long is shown, and asked about.
+    func testALineAtTheLimitIsAsked() throws {
+        let rig = ControlRig(); defer { rig.dispose() }
+        rig.confirmer.scripted = false
+        _ = rig.call("add_connector", addRunning("a"))
+        let shortest = try XCTUnwrap(rig.confirmer.requests.first?.code.first { $0.hasSuffix(" a") })
+        let argument = String(repeating: "a", count: ControlTools.shownLineLimit - ControlText.width(shortest) + 1)
+        XCTAssertEqual(rig.call("add_connector", addRunning(argument)), .refusal(ControlTools.declinedError))
+        XCTAssertEqual(rig.confirmer.requests.last?.code.map(ControlText.width).max(), ControlTools.shownLineLimit)
+    }
+
     func testWithConfirmationsOffAChangeAppliesAndIsAnnounced() throws {
         let rig = ControlRig(confirm: false); defer { rig.dispose() }
         rig.h.claudeRunningSince(hours: 1)

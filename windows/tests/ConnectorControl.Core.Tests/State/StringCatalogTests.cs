@@ -622,6 +622,7 @@ public class StringCatalogTests
         actual["ControlTools.switchedText"] = ControlTools.SwitchedText("X");
         actual["ControlTools.takesEffectFooter"] = ControlTools.TakesEffectFooter;
         actual["ControlTools.textKind"] = ControlTools.TextKind;
+        actual["ControlTools.tooLongToShowError"] = ControlTools.TooLongToShowError;
         actual["ControlTools.turnedOffNotification"] = ControlTools.TurnedOffNotification("X", "Y");
         actual["ControlTools.turnedOffText"] = ControlTools.TurnedOffText("X", "Y");
         actual["ControlTools.turnedOnNotification"] = ControlTools.TurnedOnNotification("X", "Y");

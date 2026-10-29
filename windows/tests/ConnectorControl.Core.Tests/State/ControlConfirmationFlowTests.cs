@@ -29,6 +29,47 @@ public class ControlConfirmationFlowTests
         Assert.Empty(rig.H.Notifier.Sent);
     }
 
+    private static JsonValue AddRunning(string argument) => JsonValue.Object(("name", JsonValue.String("x")),
+        ("config", JsonValue.Object(("command", JsonValue.String("node")), ("args", JsonValue.Array([JsonValue.String(argument)])))));
+
+    /// <summary>A question whose code would hold a line longer than <see cref="ControlTools.ShownLineLimit"/> is refused
+    /// before it is asked, never shown cut: part of what would run must not be hidden. A long argument is one
+    /// such line; a long unknown key makes every line long, as each label is padded to the widest.</summary>
+    [Fact]
+    public void AChangeTooLongToShowIsRefusedUnasked()
+    {
+        var longText = new string('a', ControlTools.ShownLineLimit);
+        var adds = new[]
+        {
+            AddRunning(longText),
+            JsonValue.Object(("name", JsonValue.String("x")),
+                ("config", JsonValue.Object(("command", JsonValue.String("node")), (longText, JsonValue.Bool(true))))),
+        };
+        foreach (var add in adds)
+        {
+            using var rig = new ControlRig();
+            var before = File.ReadAllBytes(rig.H.ClaudeConfigPath);
+            Assert.Equal(ControlResult.Refusal(ControlTools.TooLongToShowError), rig.Call("add_connector", add));
+            Assert.Empty(rig.Confirmer.Requests);
+            Assert.False(rig.State.Store.Mcps.ContainsKey("x"));
+            Assert.Equal(before, File.ReadAllBytes(rig.H.ClaudeConfigPath));
+            Assert.Empty(rig.H.Notifier.Sent);
+        }
+    }
+
+    /// <summary>A line exactly <see cref="ControlTools.ShownLineLimit"/> long is shown, and asked about.</summary>
+    [Fact]
+    public void ALineAtTheLimitIsAsked()
+    {
+        using var rig = new ControlRig();
+        rig.Confirmer.Scripted = false;
+        rig.Call("add_connector", AddRunning("a"));
+        var shortest = rig.Confirmer.Requests[0].Code.Single(line => line.EndsWith(" a", StringComparison.Ordinal));
+        var argument = new string('a', ControlTools.ShownLineLimit - ControlText.Width(shortest) + 1);
+        Assert.Equal(ControlResult.Refusal(ControlTools.DeclinedError), rig.Call("add_connector", AddRunning(argument)));
+        Assert.Equal(ControlTools.ShownLineLimit, rig.Confirmer.Requests[1].Code.Max(ControlText.Width));
+    }
+
     [Fact]
     public void WithConfirmationsOffAChangeAppliesAndIsAnnounced()
     {

@@ -51,10 +51,6 @@ public partial class ConfirmDialog : DialogWindow
     /// the page's own layout round differently, so the widest line is never wrapped by a hair.</summary>
     private const double PageSlackEms = 4;
 
-    /// <summary>The widest the code area's page may be: WPF lays out no FlowDocument page wider than a million
-    /// device-independent pixels.</summary>
-    internal const double MaxPageWidth = 1_000_000;
-
     /// <summary>The confirmation of a change Claude asks for: the question with every name in the monospaced
     /// face, what would run, the closing line, and Don’t Allow — the default, which Return presses wherever
     /// the keyboard is and Escape presses, as closing the window answers, and where the keyboard starts —
@@ -98,14 +94,12 @@ public partial class ConfirmDialog : DialogWindow
             }
             document.Blocks.Add(new Paragraph(line) { Margin = new Thickness(0) });
         }
-        var width = WidestLine(question.Code) + PageSlackEms * CodeText.FontSize;
-        // A line wider than any page, some 140,000 characters, could only wrap, and its tail could then pass for a
-        // row of its own: such a question is not drawn at all, and the confirmer answers it Don’t Allow.
-        if (width > MaxPageWidth)
-        {
-            throw new InvalidOperationException("A line of what would run is too wide to show unwrapped.");
-        }
-        document.PageWidth = width;
+        // Every line is within ControlTools.ShownLineLimit, as the tools refuse a question with a longer one
+        // before asking it. So none reaches the 9,600 UTF-16 code units at which WPF breaks any line of text,
+        // whatever the page's width, and FormattedText measures each whole. The page stays below the million
+        // pixels a FlowDocument page may be, even at the widest glyphs; past them, setting it would throw and
+        // the confirmer would answer Don’t Allow.
+        document.PageWidth = WidestLine(question.Code) + PageSlackEms * CodeText.FontSize;
         return document;
     }
 

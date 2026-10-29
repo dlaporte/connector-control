@@ -683,6 +683,7 @@
   "ControlTools.titles.subscribe": "Subscribe to collection",
   "ControlTools.titles.switch_collection": "Switch collection",
   "ControlTools.titles.update_connector": "Change connector",
+  "ControlTools.tooLongToShowError": "Connector Control can’t show this change in full, so it wasn’t made.",
   "ControlTools.turnedOffNotification": {
     "format": "{0} turned off “{1}”."
   },

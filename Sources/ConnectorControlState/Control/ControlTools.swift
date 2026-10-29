@@ -25,6 +25,7 @@ public final class ControlTools {
     public static let queuedText = "Waiting for another change in Connector Control to finish."
     public static let changedWhileAskingError = "This changed while Connector Control was asking, so nothing was done. Ask again."
     public static let noQuestionError = "Connector Control couldn’t ask about this change, so nothing was done."
+    public static let tooLongToShowError = "Connector Control can’t show this change in full, so it wasn’t made."
     public static let argumentsNotObjectError = "The arguments must be a JSON object."
     public static let onWord = "on"
     public static let offWord = "off"
@@ -49,6 +50,11 @@ public final class ControlTools {
     /// Seconds between answering a restart and starting it, so the answer reaches Claude before it
     /// quits.
     public static let restartDelay: TimeInterval = 1
+    /// The longest a line of what would run may be, in Unicode scalars, for its question to be asked. A
+    /// longer one is refused rather than shown: cut, it would hide part of what would run, and wrapped, part
+    /// of it could pass for a row of its own. Windows breaks any line of text at 9,600 UTF-16 code units, and
+    /// a scalar takes at most two, so a line within this limit is drawn whole on both platforms.
+    public static let shownLineLimit = 4000
 
     public static func unknownToolError(_ name: String) -> String { "There’s no tool named “\(name)”." }
 
@@ -203,6 +209,11 @@ public final class ControlTools {
                 // run unasked.
                 guard let request else {
                     finish(call, .refusal(ControlTools.noQuestionError))
+                    return
+                }
+                // A question with a line too long to show whole is refused before it is asked (shownLineLimit).
+                guard !request.code.contains(where: { ControlText.width($0) > ControlTools.shownLineLimit }) else {
+                    finish(call, .refusal(ControlTools.tooLongToShowError))
                     return
                 }
                 // The wait starts before the question is put: the app's dialog is modal, so

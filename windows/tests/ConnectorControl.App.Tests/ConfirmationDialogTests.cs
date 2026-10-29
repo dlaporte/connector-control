@@ -33,21 +33,28 @@ public class ConfirmationDialogTests
 
     private static string Code(RichTextBox box) => string.Join("\n", Lines(box).Select(line => Text(line.Inlines)));
 
-    /// <summary>How many lines the box draws, once laid out: one a line of what would run, unless one wraps. None
-    /// before layout, which no assert here takes for a count.</summary>
-    private static int DrawnLines(RichTextBox box)
-    {
-        var count = 0;
-        for (var line = box.Document.ContentStart.GetLineStartPosition(0); line is not null; line = line.GetLineStartPosition(1))
-        {
-            count++;
-        }
-        return count;
-    }
+    /// <summary>Where each line of what would run starts and ends, as the box has laid it out: the rect of its first
+    /// character and of the end of its last.</summary>
+    private static List<(Rect Start, Rect End)> DrawnLines(RichTextBox box) =>
+        Lines(box).Select(line => (line.ContentStart.GetCharacterRect(LogicalDirection.Forward),
+            line.ContentEnd.GetCharacterRect(LogicalDirection.Backward))).ToList();
 
     /// <summary>The confirmation on screen, if one is: a window joins the application's list when it is built and
     /// leaves it only when closed, so a dialog another test built and never showed is listed too, and is not it.</summary>
     private static ConfirmDialog? Shown() => Application.Current.Windows.OfType<ConfirmDialog>().FirstOrDefault(window => window.IsVisible);
+
+    /// <summary>Shows <paramref name="dialog"/> off screen, modeless and not activated, and runs the dispatcher until it
+    /// is idle, so layout, and any text formatting left for the background, has finished: its text is laid out
+    /// and its box scrolls as the app's do.</summary>
+    private static void ShowOffScreen(ConfirmDialog dialog)
+    {
+        dialog.Left = FlyoutWindow.OffScreen;
+        dialog.Top = FlyoutWindow.OffScreen;
+        dialog.ShowActivated = false;
+        dialog.Show();
+        dialog.UpdateLayout();
+        dialog.Dispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle);
+    }
 
     [Fact]
     public void AChangeSetsNamesApartAndShowsWhatWouldRun()
@@ -117,43 +124,60 @@ public class ConfirmationDialogTests
         });
     }
 
-    /// <summary>A line far wider than the dialog — a long command line, a key's whole value — is still one line,
-    /// and the box scrolls sideways to it; with nothing that wide there is nothing to scroll. The wide line has
-    /// spaces to break at, so a page any narrower than it would wrap it.</summary>
+    /// <summary>A line far wider than the dialog is still one line, and the box scrolls sideways to it; with nothing
+    /// that wide there is nothing to scroll. The wide lines are as long as the tools let a line be: one of
+    /// ASCII words, with spaces to break at, the widest; one of scalars that each take two UTF-16 code units,
+    /// the longest in the units at which WPF breaks a line whatever the page's width.
+    ///
+    /// Measured on the real layout: the dialog is shown off screen, so the box lays out and scrolls its text as
+    /// the app's does, and each line's first character and its end are found where that layout put them. A
+    /// line that wrapped ends on a lower line than it starts on, so its end's top is at or below its start's
+    /// bottom; one that did not ends level with its start and, when it is wide, far to the right of the box. No
+    /// layout gives empty rects, which fail here rather than pass.</summary>
     [Fact]
     public void ALineNeverWrapsAndOnlyAWideOneScrolls()
     {
+        var words = string.Concat(Enumerable.Repeat("--flag=value ", ControlTools.ShownLineLimit / 13 + 1))[..ControlTools.ShownLineLimit];
+        var pairs = string.Concat(Enumerable.Repeat("\U0001D431", ControlTools.ShownLineLimit));
+        Assert.Equal(ControlTools.ShownLineLimit, ControlText.Width(words));
+        Assert.Equal(ControlTools.ShownLineLimit, ControlText.Width(pairs));
+        Assert.Equal(2 * ControlTools.ShownLineLimit, pairs.Length);
+        var wide = new ConfirmationRequest(ControlTools.ChangeTitle("Claude", "splunk"), ControlTools.ChangeActiveMessage("Harvard"),
+            ["command  npx", words, pairs, "env      TOKEN = ••• (set)"], null);
         WpfApp.Invoke(() =>
         {
-            var narrow = new ConfirmDialog(new ConfirmationDialog(Change));
-            WindowTestSupport.Layout(narrow, new Size(440, 1000));
-            Assert.Equal(Change.Code.Count, DrawnLines(narrow.CodeText));
-            Assert.True(narrow.CodeText.ViewportWidth > 0);
-            Assert.True(narrow.CodeText.ExtentWidth <= narrow.CodeText.ViewportWidth);
-            narrow.Close();
-
-            var longLine = "args     " + string.Join(" ", Enumerable.Repeat("--flag=value", 170));
-            Assert.True(longLine.Length > 2000);
-            var request = new ConfirmationRequest(ControlTools.ChangeTitle("Claude", "splunk"), ControlTools.ChangeActiveMessage("Harvard"),
-                ["command  npx", longLine, "env      TOKEN = ••• (set)"], null);
-            var wide = new ConfirmDialog(new ConfirmationDialog(request));
-            WindowTestSupport.Layout(wide, new Size(440, 1000));
-            Assert.Equal(request.Code.Count, DrawnLines(wide.CodeText));
-            Assert.True(wide.CodeText.ExtentWidth > wide.CodeText.ViewportWidth);
-            wide.Close();
-        });
-    }
-
-    /// <summary>A line wider than any page WPF lays out could only wrap, so a question holding one is not drawn: the
-    /// dialog fails before it shows, and the confirmer answers Don’t Allow.</summary>
-    [Fact]
-    public void ALineTooWideForAnyPageIsNotDrawn()
-    {
-        WpfApp.Invoke(() =>
-        {
-            var request = new ConfirmationRequest(ControlTools.ChangeTitle("Claude", "splunk"), ControlTools.ChangeActiveMessage("Harvard"),
-                ["args     " + string.Join(" ", Enumerable.Repeat("--flag=value", 15_000)), "env      SAFE = 1"], null);
-            Assert.Throws<InvalidOperationException>(() => new ConfirmDialog(new ConfirmationDialog(request)));
+            foreach (var (request, isWide) in new[] { (Change, false), (wide, true) })
+            {
+                var dialog = new ConfirmDialog(new ConfirmationDialog(request));
+                try
+                {
+                    ShowOffScreen(dialog);
+                    var box = dialog.CodeText;
+                    var drawn = DrawnLines(box);
+                    Assert.Equal(request.Code.Count, drawn.Count);
+                    for (var index = 0; index < drawn.Count; index++)
+                    {
+                        var (start, end) = drawn[index];
+                        Assert.False(start.IsEmpty);
+                        Assert.False(end.IsEmpty);
+                        Assert.True(end.Top < start.Bottom, $"line {index} wrapped: it starts at {start} and ends at {end}");
+                        if (index > 0)
+                        {
+                            Assert.True(start.Top > drawn[index - 1].Start.Top);
+                        }
+                        if (request.Code[index].Length > 100)
+                        {
+                            Assert.True(end.Left > box.ViewportWidth);
+                        }
+                    }
+                    Assert.True(box.ViewportWidth > 0);
+                    Assert.Equal(isWide, box.ExtentWidth > box.ViewportWidth);
+                }
+                finally
+                {
+                    dialog.Close();
+                }
+            }
         });
     }
 

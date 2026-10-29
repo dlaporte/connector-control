@@ -26,6 +26,7 @@ public sealed partial class ControlTools
     public const string QueuedText = "Waiting for another change in Connector Control to finish.";
     public const string ChangedWhileAskingError = "This changed while Connector Control was asking, so nothing was done. Ask again.";
     public const string NoQuestionError = "Connector Control couldn’t ask about this change, so nothing was done.";
+    public const string TooLongToShowError = "Connector Control can’t show this change in full, so it wasn’t made.";
     public const string ArgumentsNotObjectError = "The arguments must be a JSON object.";
     public const string OnWord = "on";
     public const string OffWord = "off";
@@ -50,6 +51,11 @@ public sealed partial class ControlTools
     /// <summary>Seconds between answering a restart and starting it, so the answer reaches Claude before it
     /// quits.</summary>
     public const double RestartDelay = 1;
+    /// <summary>The longest a line of what would run may be, in Unicode scalars, for its question to be asked. A
+    /// longer one is refused rather than shown: cut, it would hide part of what would run, and wrapped, part
+    /// of it could pass for a row of its own. Windows breaks any line of text at 9,600 UTF-16 code units, and
+    /// a scalar takes at most two, so a line within this limit is drawn whole on both platforms.</summary>
+    public const int ShownLineLimit = 4000;
 
     public static string UnknownToolError(string name) => $"There’s no tool named “{name}”.";
 
@@ -245,6 +251,12 @@ public sealed partial class ControlTools
                             if (ready.Request is not { } request)
                             {
                                 Finish(call, ControlResult.Refusal(NoQuestionError));
+                                return;
+                            }
+                            // A question with a line too long to show whole is refused before it is asked (ShownLineLimit).
+                            if (request.Code.Any(line => ControlText.Width(line) > ShownLineLimit))
+                            {
+                                Finish(call, ControlResult.Refusal(TooLongToShowError));
                                 return;
                             }
                             // The wait starts before the question is put: the app's dialog is modal, so
