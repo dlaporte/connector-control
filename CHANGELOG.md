@@ -37,7 +37,11 @@ bullet once the section is about to ship.
 
 ### Release pipeline
 
-- Mac previews now update themselves, as Windows previews do: a preview build reads its own Sparkle feed (the `preview-feed` prerelease), which every published preview and every stable release replaces, never with an older build, so a preview install is offered each later preview and then the final release. Previews up to preview-9 still read the stable feed; install preview-10 once by hand.
+- Mac previews now update themselves, as Windows previews do: a preview build reads its own
+  Sparkle feed (the `preview-feed` prerelease), which every published preview and every stable
+  release replaces, never with an older build, so a preview install is offered each later
+  preview and then the final release. Previews up to `preview-9` still read the stable feed;
+  install the first preview after `preview-9` once by hand.
 
 ## v1.4.0
 

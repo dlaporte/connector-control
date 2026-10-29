@@ -776,9 +776,11 @@ updates itself to later previews and to the final release on both platforms: on 
 through Velopack, on the Mac through Sparkle's preview feed, the `appcast.xml` of the
 permanent `preview-feed` prerelease, which a preview build reads instead of the stable
 feed (`build-app.sh` picks the feed from the version). Every published preview and every
-stable release replaces that appcast, and never with an older build. Mac previews before
-preview 10 read the stable feed, so install preview 10 once by hand. A `preview-dry-<n>`
-tag builds and signs everything, the preview appcast included, and publishes nothing.
+stable release replaces that appcast, and never with an older build. Mac previews up to
+`preview-9` read the stable feed, so install the first preview after `preview-9` once by
+hand. Never delete the newest published preview release: the preview feed's download points
+at its DMG until the next preview or release replaces it. A `preview-dry-<n>` tag builds
+and signs everything, the preview appcast included, and publishes nothing.
 The Mac job runs in the `signing` environment, whose deployment branch policy must allow
 `preview-*` tags and any branch previews are cut from.
 
@@ -802,7 +804,7 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
 | `scripts/mac/notarize.sh` | Submits a binary or app bundle for Apple notarization and staples the ticket. | `mac-build.yml` |
 | `scripts/mac/make-appcast.sh` | Builds and EdDSA-signs the Sparkle appcast for one release or preview. | `mac-build.yml` |
 | `scripts/release/changelog-section.sh` | Prints one version's CHANGELOG.md section. | `release.yml`, `scripts/release/preview-notes.sh` |
-| `scripts/release/preview-notes.sh` | Prints the release notes for a joint preview build. | `preview.yml` |
+| `scripts/release/preview-notes.sh` | Prints the release notes for a joint preview build: the prerelease page, or with `--dialog` the shorter text both apps' update dialogs show. | `preview.yml` |
 | `scripts/release/update-preview-feed.sh` | Copies a published release's appcast onto the `preview-feed` prerelease that Mac previews update from, creating it the first time and never moving it to an older build, then checks what it serves. | `preview.yml`, `release.yml` |
 | `scripts/release/ensure-release.sh` | Creates a GitHub release, or reuses one a previous run already created. | `release.yml`, `preview.yml` |
 | `scripts/release/upload-release-assets.sh` | Uploads one build's Velopack assets to an existing release. | `release.yml`, `preview.yml` |
