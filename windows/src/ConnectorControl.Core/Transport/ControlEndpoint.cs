@@ -38,10 +38,54 @@ public static class ControlEndpoint
         WindowsIdentity.GetCurrent().User?.Value ?? throw new InvalidOperationException("This process runs as no user.");
 
     /// <summary>Whether the tool may start the app when nothing answers: never while
-    /// CONNECTOR_CONTROL_STORE_DIR is set, since the app it would start reads the live store, not the one
-    /// named.</summary>
+    /// CONNECTOR_CONTROL_STORE_DIR or CONNECTOR_CONTROL_CLAUDE_CONFIG is set, since the app it would start reads
+    /// the live store and edits the live Claude config, not the ones named.</summary>
     public static bool MayStartApp(IReadOnlyDictionary<string, string> environment) =>
-        !environment.TryGetValue(AppPaths.StoreDirEnv, out var store) || store.Length == 0;
+        IsUnset(environment, AppPaths.StoreDirEnv) && IsUnset(environment, AppPaths.ClaudeConfigEnv);
+
+    private static bool IsUnset(IReadOnlyDictionary<string, string> environment, string name) =>
+        !environment.TryGetValue(name, out var value) || value.Length == 0;
+
+    /// <summary>The prefix of every variable that points the app or the tool somewhere other than the live files.</summary>
+    private const string OverridePrefix = "CONNECTOR_CONTROL_";
+
+    /// <summary>
+    /// The environment the tool starts the app with, sorted as Windows wants an environment block. Platform idiom:
+    /// the Mac's <c>open</c> hands the app launchd's environment, never the caller's; CreateProcess would hand it the
+    /// tool's, which is Claude's or a terminal's. So the app gets the caller's environment without any
+    /// CONNECTOR_CONTROL_* variable, and with its PATH rebuilt as Explorer builds it at sign-in: the machine's
+    /// setting, then the user's (<paramref name="machinePath"/>, <paramref name="userPath"/>, already expanded). A
+    /// terminal's PATH (an nvm or venv folder first) would otherwise decide which npx or uvx the app finds for as
+    /// long as it runs. The rest is kept rather than rebuilt from the registry: it is the same sign-in's, and a
+    /// variable only a terminal set changes nothing the app reads. When neither setting can be read, the caller's
+    /// PATH stays: an app with no PATH at all finds no tool.
+    /// </summary>
+    public static IReadOnlyList<(string Name, string Value)> AppEnvironment(IReadOnlyDictionary<string, string> current, string? machinePath, string? userPath)
+    {
+        var kept = current
+            .Where(pair => pair.Key.Length > 0 && !pair.Key.Contains('=') && !pair.Key.Contains('\0') && !pair.Value.Contains('\0'))
+            .Where(pair => !pair.Key.StartsWith(OverridePrefix, StringComparison.OrdinalIgnoreCase))
+            .Select(pair => (Name: pair.Key, Value: pair.Value))
+            .ToList();
+        var parts = new[] { machinePath, userPath }.Where(part => !string.IsNullOrEmpty(part)).ToList();
+        if (parts.Count > 0)
+        {
+            kept.RemoveAll(pair => string.Equals(pair.Name, "PATH", StringComparison.OrdinalIgnoreCase));
+            kept.Add(("Path", string.Join(';', parts)));
+        }
+        return kept.OrderBy(pair => pair.Name, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>The Unicode environment block CreateProcess takes: <c>NAME=value</c> each ended by a NUL, and one more NUL to close.</summary>
+    public static string EnvironmentBlock(IEnumerable<(string Name, string Value)> environment)
+    {
+        var block = new StringBuilder();
+        foreach (var (name, value) in environment)
+        {
+            block.Append(name).Append('=').Append(value).Append('\0');
+        }
+        return block.Append('\0').ToString();
+    }
 
     /// <summary>Whether a token runs elevated: its owner — who owns what it creates, the pipe among them — is not
     /// its user, as for an administrator's elevated token, owned by BUILTIN\Administrators. Its pipe check admits

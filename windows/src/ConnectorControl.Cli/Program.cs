@@ -76,8 +76,9 @@ internal static class Program
         var toolPath = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, ControlEndpoint.ToolFileName);
         var pipe = ControlEndpoint.PipeName(environment, ControlEndpoint.CurrentUserSid());
         // Starting is allowed only for the tool that came with an app (AppExecutable finds no other), and
-        // never while CONNECTOR_CONTROL_STORE_DIR names a store the app it would start does not read.
-        Func<bool>? launch = ControlEndpoint.MayStartApp(environment) ? () => Launch(toolPath) : null;
+        // never while CONNECTOR_CONTROL_STORE_DIR or CONNECTOR_CONTROL_CLAUDE_CONFIG names a store or a config
+        // the app it would start does not use.
+        Func<bool>? launch = ControlEndpoint.MayStartApp(environment) ? () => Launch(toolPath, environment) : null;
         return new ControlClient(() => ControlPipe.TryConnect(pipe, ConnectWait), launch, announce, elevated: ControlEndpoint.IsElevated());
     }
 
@@ -88,10 +89,11 @@ internal static class Program
         return output.ExitCode;
     }
 
-    /// <summary>Starts the app in the background: no flyout, and a second instance leaves without a word.</summary>
-    private static bool Launch(string toolPath) =>
+    /// <summary>Starts the app in the background: no flyout, and a second instance leaves without a word. It gets the
+    /// sign-in's environment, not this tool's (ControlEndpoint.AppEnvironment).</summary>
+    private static bool Launch(string toolPath, IReadOnlyDictionary<string, string> environment) =>
         ControlEndpoint.AppExecutable(toolPath, File.Exists, ReadText) is { } app
-        && DetachedProcess.Start(app, ControlEndpoint.BackgroundArgument);
+        && DetachedProcess.Start(app, ControlEndpoint.BackgroundArgument, DetachedProcess.AppEnvironmentBlock(environment));
 
     private static string? ReadText(string path)
     {

@@ -19,9 +19,10 @@ public enum ControlEndpoint {
     }
 
     /// Whether the tool may start the app when nothing answers: never while CONNECTOR_CONTROL_STORE_DIR
-    /// is set, since the app it would start reads the live store, not the one named.
+    /// or CONNECTOR_CONTROL_CLAUDE_CONFIG is set, since the app it would start reads the live store and
+    /// edits the live Claude config, not the ones named.
     public static func mayStartApp(environment: [String: String]) -> Bool {
-        (environment[AppPaths.storeDirEnv] ?? "").isEmpty
+        (environment[AppPaths.storeDirEnv] ?? "").isEmpty && (environment[AppPaths.claudeConfigEnv] ?? "").isEmpty
     }
 
     /// Whether the tool runs as root — under sudo, say. Its socket check admits only an app of the same
@@ -102,8 +103,9 @@ public enum ControlEndpoint {
 
     /// `/usr/bin/open` with `arguments`; its exit status. Public, as the default of a public function's
     /// argument must be. Its standard streams are the null device: the relay's are Claude's MCP stream,
-    /// which `open` must neither read nor write. Platform-forced: LaunchServices starts the app with
-    /// launchd's own environment, not the tool's, where Windows' detached start inherits the tool's.
+    /// which `open` must neither read nor write. Platform idiom: LaunchServices starts the app with
+    /// launchd's own environment, not the tool's; Windows' CreateProcess would pass on the tool's, so the
+    /// Windows tool builds the app's from the sign-in's settings instead (ControlEndpoint.AppEnvironment).
     public static func runOpen(_ arguments: [String]) -> Int32 {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")

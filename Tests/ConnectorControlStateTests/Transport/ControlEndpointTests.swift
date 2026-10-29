@@ -24,6 +24,12 @@ final class ControlEndpointTests: XCTestCase {
         XCTAssertFalse(ControlEndpoint.mayStartApp(environment: [AppPaths.storeDirEnv: "/tmp/cc-x/store"]))
     }
 
+    /// The app it would start edits the live Claude config, not the one named.
+    func testTheToolStartsNoAppWhileAnotherClaudeConfigIsNamed() {
+        XCTAssertTrue(ControlEndpoint.mayStartApp(environment: [AppPaths.claudeConfigEnv: ""]))
+        XCTAssertFalse(ControlEndpoint.mayStartApp(environment: [AppPaths.claudeConfigEnv: "/tmp/cc-x/claude_desktop_config.json"]))
+    }
+
     func testOnlyRootIsElevated() {
         XCTAssertTrue(ControlEndpoint.isElevated(effectiveUserID: 0), "under sudo")
         XCTAssertFalse(ControlEndpoint.isElevated(effectiveUserID: 501))

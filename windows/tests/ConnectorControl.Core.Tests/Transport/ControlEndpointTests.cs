@@ -31,6 +31,45 @@ public class ControlEndpointTests
         Assert.False(ControlEndpoint.MayStartApp(Store(Path.GetTempPath())));
     }
 
+    /// <summary>The app it would start edits the live Claude config, not the one named.</summary>
+    [Fact]
+    public void TheToolStartsNoAppWhileAnotherClaudeConfigIsNamed()
+    {
+        Assert.True(ControlEndpoint.MayStartApp(new Dictionary<string, string> { [AppPaths.ClaudeConfigEnv] = "" }));
+        Assert.False(ControlEndpoint.MayStartApp(new Dictionary<string, string> { [AppPaths.ClaudeConfigEnv] = Path.Combine(Path.GetTempPath(), "claude_desktop_config.json") }));
+    }
+
+    /// <summary>The app the tool starts gets what Explorer would give it, not the caller's environment: no
+    /// CONNECTOR_CONTROL_* override, and the PATH from the machine's and the user's settings, not a terminal's.</summary>
+    [Fact]
+    public void TheAppTheToolStartsGetsTheSignInEnvironmentNotTheCallers()
+    {
+        var caller = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Path"] = @"C:\Users\me\.nvm\v20;C:\Windows",
+            ["CONNECTOR_CONTROL_CLAUDE_CONFIG"] = @"C:\elsewhere\claude_desktop_config.json",
+            ["connector_control_store_dir"] = @"C:\elsewhere\store",
+            ["USERPROFILE"] = @"C:\Users\me",
+            ["APPDATA"] = @"C:\Users\me\AppData\Roaming",
+        };
+        var given = ControlEndpoint.AppEnvironment(caller, machinePath: @"C:\Windows\system32;C:\Windows", userPath: @"C:\Users\me\AppData\Local\Microsoft\WindowsApps");
+        Assert.Equal(
+            [("APPDATA", @"C:\Users\me\AppData\Roaming"), ("Path", @"C:\Windows\system32;C:\Windows;C:\Users\me\AppData\Local\Microsoft\WindowsApps"), ("USERPROFILE", @"C:\Users\me")],
+            given);
+        Assert.Equal("APPDATA=C:\\Users\\me\\AppData\\Roaming\0Path=C:\\Windows\\system32;C:\\Windows;C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps\0USERPROFILE=C:\\Users\\me\0\0",
+            ControlEndpoint.EnvironmentBlock(given));
+    }
+
+    /// <summary>Settings that cannot be read leave the caller's PATH: an app with no PATH at all finds no tool.</summary>
+    [Fact]
+    public void ThePathStaysTheCallersOnlyWhenNoSettingCanBeRead()
+    {
+        var caller = new Dictionary<string, string> { ["PATH"] = @"C:\Windows" };
+        Assert.Equal([("PATH", @"C:\Windows")], ControlEndpoint.AppEnvironment(caller, null, null));
+        Assert.Equal([("Path", @"C:\Users\me\bin")], ControlEndpoint.AppEnvironment(caller, null, @"C:\Users\me\bin"));
+        Assert.Equal([("Path", @"C:\Windows")], ControlEndpoint.AppEnvironment(caller, @"C:\Windows", ""));
+    }
+
     /// <summary>A token whose owner is not its user is elevated: an administrator's elevated token is owned by
     /// BUILTIN\Administrators. One Windows cannot name counts as elevated, so the tool starts nothing.</summary>
     [Fact]
