@@ -31,6 +31,10 @@ public static class UiThread
         }
     }
 
+    /// <summary>Posts to the UI thread even from the UI thread itself, so the caller returns first: a
+    /// confirmation is shown on a turn of its own, after the call that asked for it has returned.</summary>
+    public static void Post(Action action) => Application.Current.Dispatcher.BeginInvoke(action);
+
     /// <summary>
     /// Runs <paramref name="work"/> on the thread pool, off the UI thread. A Task.Run work item,
     /// so a throw is captured in a task nobody reads rather than taking the process down; the

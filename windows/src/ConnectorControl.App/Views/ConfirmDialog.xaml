@@ -6,8 +6,19 @@
         Title="{x:Static core:Product.Name}"
         Width="440">
   <StackPanel Margin="20">
-    <TextBlock x:Name="MessageText" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" />
-    <TextBlock x:Name="InformativeText" Style="{StaticResource CaptionText}" FontSize="13" Margin="0,8,0,0" />
+    <TextBlock x:Name="MessageText" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" FlowDirection="LeftToRight" />
+    <TextBlock x:Name="InformativeText" Style="{StaticResource CaptionText}" FontSize="13" Margin="0,8,0,0" FlowDirection="LeftToRight" />
+    <!-- What would run, for a change Claude asks for: read-only but selectable, so it can be copied. Its page is
+         far wider than the dialog, so one line of it is one line here and the box scrolls sideways rather than
+         wrap: a long value can never pass for a row of its own. Platform idiom: 200 device-independent pixels,
+         as the Mac's block is 200 points, the same height at the same scale. Return is left to the dialog, so
+         it answers Don’t Allow even while this box holds the keyboard, as it does on the Mac. -->
+    <RichTextBox x:Name="CodeText" Visibility="Collapsed" Margin="0,10,0,0" IsReadOnly="True" IsReadOnlyCaretVisible="False"
+                 AcceptsReturn="False"
+                 HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" MaxHeight="200" Padding="4,6"
+                 FontFamily="{StaticResource MonoFont}" FontSize="12" FlowDirection="LeftToRight"
+                 BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" Background="{DynamicResource LayerFillColorDefaultBrush}" />
+    <TextBlock x:Name="FooterText" Style="{StaticResource CaptionText}" Margin="0,8,0,0" Visibility="Collapsed" FlowDirection="LeftToRight" />
     <StackPanel Style="{StaticResource DialogButtons}" Margin="0,20,0,0">
       <Button x:Name="CancelButton" MinWidth="80" IsCancel="True" Click="OnCancel" />
       <Button x:Name="PrimaryButton" MinWidth="80" Margin="8,0,0,0" IsDefault="True" Style="{DynamicResource AccentButtonStyle}" Click="OnPrimary" />

@@ -91,7 +91,7 @@ public partial class App : Application
         state.QuitRequested += () => Shutdown();
         updates = new UpdateCoordinator(services.Updater, services.Settings, services.Notifier, dialogs, host);
         updates.Start();   // only arms the delayed first check through host.Delay
-        StartControl(state, services, updates, host, paths, dataDir);
+        StartControl(state, services, updates, host, paths, dataDir, dialogs);
         var windows = new WindowRegistry(state, services, updates, dialogs);
         flyoutModel = new FlyoutModel(state, services.Settings);
         flyout = new FlyoutWindow(flyoutModel, windows);
@@ -102,12 +102,13 @@ public partial class App : Application
 
     /// <summary>The control layer: the one ControlTools every connection shares, the server that gives each its
     /// own session, and the pipe it listens on.</summary>
-    private void StartControl(AppState appState, PlatformServices platform, UpdateCoordinator coordinator, AppHost host, PathContext paths, string dataDir)
+    private void StartControl(AppState appState, PlatformServices platform, UpdateCoordinator coordinator, AppHost host, PathContext paths, string dataDir,
+                              IDialogs dialogs)
     {
         controlSettings = new SettingsModel(appState, platform.Settings, platform.Autostart, platform.ClaudeInstall, platform.Updater, coordinator);
-        // Declines every question: until the app can show its confirmation dialog, a change Claude must be
-        // asked about is refused rather than made unasked.
-        var tools = new ControlTools(appState, controlSettings, new DecliningConfirmer(), host);
+        // Claude's gated changes are asked about in the app's own dialog, posted to a turn of its own, so
+        // the call's progress and early answer go out while it is open.
+        var tools = new ControlTools(appState, controlSettings, new DialogConfirmer(dialogs, UiThread.Post), host);
         controlServer = new ControlServer(tools);
         try
         {

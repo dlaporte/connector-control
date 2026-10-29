@@ -235,7 +235,7 @@ public protocol ControlConfirmer: AnyObject {
 }
 
 /// Answers every question Don't Allow, at once: the confirmer of a host that can show no dialog —
-/// the test host, and the app until it can show its own — so a change that must be asked about is
+/// the test hosts; the apps ask in their own (`DialogConfirmer`) — so a change that must be asked about is
 /// refused, never made unasked. It keeps the confirmer's contract: one completion, every time.
 @MainActor
 public final class DecliningConfirmer: ControlConfirmer {
