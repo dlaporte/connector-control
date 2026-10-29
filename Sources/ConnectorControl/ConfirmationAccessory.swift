@@ -88,8 +88,12 @@ enum ConfirmationAccessory {
         }
         view.textStorage?.setAttributedString(text)
         let lineHeight = NSLayoutManager().defaultLineHeight(for: font)
+        // With scroll bars always shown, the sideways one takes its height from the lines, so the block
+        // makes room for it rather than hide the last line under it; an overlay scroller takes none.
+        let scroller = NSScroller.preferredScrollerStyle == .legacy
+            ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) : 0
         scroll.translatesAutoresizingMaskIntoConstraints = false
-        scroll.heightAnchor.constraint(equalToConstant: min(codeHeight, CGFloat(dialog.code.count) * lineHeight + 16)).isActive = true
+        scroll.heightAnchor.constraint(equalToConstant: min(codeHeight, CGFloat(dialog.code.count) * lineHeight + 16 + scroller)).isActive = true
         return scroll
     }
 }
