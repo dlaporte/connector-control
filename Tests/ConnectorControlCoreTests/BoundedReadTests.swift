@@ -22,7 +22,9 @@ final class BoundedReadTests: XCTestCase {
         XCTAssertEqual(try BoundedRead.data(at: url, limit: 5), Data("12345".utf8))
     }
 
-    /// The read itself refuses what is over the limit, with no size checked beforehand to rely on.
+    /// The read itself refuses what is over the limit, with no size checked beforehand to rely on. This
+    /// file is refused by the open handle's size; the limit + 1 read covers one that grows after that
+    /// check, which no test can make happen between the two deterministically.
     func testAFileOverTheLimitIsRefusedByTheReadItself() throws {
         let url = dir.appendingPathComponent("doc.json")
         try Data("123456".utf8).write(to: url)

@@ -23,6 +23,9 @@ public static class BoundedRead
     public const string NotAFileError = "It isn’t a file.";
     public const string TooLargeError = "The file is too large.";
 
+    /// <summary>How much more a read takes at a time once the file outgrows what it said it held.</summary>
+    private const int ChunkBytes = 64 * 1024;
+
     public static byte[] Data(string path, int limit)
     {
         // Platform idiom: a handle, asked what it is and how long; the Mac mirror opens without waiting,
@@ -56,16 +59,21 @@ public static class BoundedRead
         {
             throw new BoundedReadException(TooLargeError);
         }
-        return ReadUpTo(handle, limit);
+        return ReadUpTo(handle, length, limit);
     }
 
-    /// <summary>One byte past the limit is enough to know the file grew past it.</summary>
-    private static byte[] ReadUpTo(SafeFileHandle handle, int limit)
+    /// <summary>One byte past the limit is enough to know the file grew past it. The buffer starts at what the
+    /// handle said it holds and grows in chunks only for a file that grows while it is read.</summary>
+    private static byte[] ReadUpTo(SafeFileHandle handle, long length, int limit)
     {
-        var buffer = new byte[limit + 1];
+        var buffer = new byte[(int)Math.Min(length, limit) + 1];
         var count = 0;
-        while (count < buffer.Length)
+        while (count <= limit)
         {
+            if (count == buffer.Length)
+            {
+                Array.Resize(ref buffer, (int)Math.Min((long)buffer.Length + ChunkBytes, (long)limit + 1));
+            }
             var read = RandomAccess.Read(handle, buffer.AsSpan(count), count);
             if (read == 0)
             {

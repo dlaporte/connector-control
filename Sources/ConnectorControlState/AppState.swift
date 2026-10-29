@@ -1206,6 +1206,7 @@ public final class AppState: ObservableObject {
     /// bytes read from `url`. The binding records their hash, so what lands is what the caller decided
     /// on, and a file that has moved since shows as an update.
     public func subscribe(document: CollectionDocument, data: Data, at url: URL, as requestedName: String?) -> String? {
+        let url = url.standardizedFileURL
         // Subscribing to what this machine publishes would make the app its own author: every
         // local edit would come straight back as a pending update to itself.
         if let origin = document.origin,
@@ -1506,6 +1507,7 @@ public final class AppState: ObservableObject {
         // As `importCopies(documentAt:into:choices:)` guards it.
         guard store.collections[collection] != nil else { return nil }
         guard kind(of: collection) == .local else { return AppState.targetMustBeLocalError }
+        let url = url.standardizedFileURL
         let directory = url.deletingLastPathComponent().path
         let rendered = document.render()
         let date = today

@@ -618,6 +618,17 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(held["swapped"])
     }
 
+    /// A subscription to a document already read binds the file's standard path, as one by path does.
+    func testSubscribingToADecodedDocumentBindsItsStandardPath() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try h.writeDocument(oneLocalConnector("asked", command: "echo", args: []), named: "tools.json")
+        let roundabout = url.deletingLastPathComponent().appendingPathComponent(".").appendingPathComponent("tools.json")
+        let (decided, bytes, _) = AppState.readDocument(at: url)
+        XCTAssertNil(state.subscribe(document: try XCTUnwrap(decided), data: try XCTUnwrap(bytes), at: roundabout, as: nil))
+        XCTAssertEqual(state.sourceBinding(of: "Tools")?.path, url.standardizedFileURL.path)
+    }
+
     /// A document over the limit is refused by the read itself, whatever a size checked beforehand said.
     func testADocumentOverTheLimitIsRefusedByItsRead() throws {
         let (h, _) = AppStateHarness.started()

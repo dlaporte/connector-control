@@ -26,6 +26,9 @@ public enum BoundedRead {
     public static let notAFileError = "It isn’t a file."
     public static let tooLargeError = "The file is too large."
 
+    /// How much more a read takes at a time once the file outgrows what it said it held.
+    private static let chunkBytes = 64 * 1024
+
     public static func data(at url: URL, limit: Int) throws -> Data {
         // Platform idiom: open(2) without waiting, so a FIFO cannot hold the read open, and the
         // descriptor's own fstat; the Windows mirror opens a handle and asks it.
@@ -36,9 +39,10 @@ public enum BoundedRead {
         guard fstat(descriptor, &info) == 0 else { throw openError(errno, url) }
         guard info.st_mode & S_IFMT == S_IFREG else { throw BoundedReadError.notAFile }
         guard info.st_size <= Int64(limit) else { throw BoundedReadError.tooLarge }
-        var data = Data()
-        var buffer = [UInt8](repeating: 0, count: 64 * 1024)
-        // One byte past the limit is enough to know the file grew past it.
+        // One byte past the limit is enough to know the file grew past it. The data starts at what the
+        // descriptor said it holds and grows in chunks only for a file that grows while it is read.
+        var data = Data(capacity: Int(info.st_size) + 1)
+        var buffer = [UInt8](repeating: 0, count: chunkBytes)
         while data.count <= limit {
             let wanted = min(buffer.count, limit + 1 - data.count)
             let count = buffer.withUnsafeMutableBytes { read(descriptor, $0.baseAddress, wanted) }

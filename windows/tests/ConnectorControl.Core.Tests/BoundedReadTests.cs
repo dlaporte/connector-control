@@ -17,7 +17,9 @@ public class BoundedReadTests : IDisposable
         Assert.Equal("12345"u8.ToArray(), BoundedRead.Data(path, 5));
     }
 
-    /// <summary>The read itself refuses what is over the limit, with no size checked beforehand to rely on.</summary>
+    /// <summary>The read itself refuses what is over the limit, with no size checked beforehand to rely on. This
+    /// file is refused by the open handle's size; the limit + 1 read covers one that grows after that
+    /// check, which no test can make happen between the two deterministically.</summary>
     [Fact]
     public void AFileOverTheLimitIsRefusedByTheReadItself()
     {

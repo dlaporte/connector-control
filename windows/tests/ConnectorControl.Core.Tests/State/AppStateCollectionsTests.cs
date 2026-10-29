@@ -711,6 +711,19 @@ public class AppStateCollectionsTests
         Assert.False(held.ContainsKey("swapped"));
     }
 
+    /// <summary>A subscription to a document already read binds the file's standard path, as one by path does.</summary>
+    [Fact]
+    public void SubscribingToADecodedDocumentBindsItsStandardPath()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.WriteDocument(OneLocalConnector("asked", "echo", []), "tools.json");
+        var roundabout = Path.Combine(Path.GetDirectoryName(path)!, ".", "tools.json");
+        var (decided, bytes, _) = AppState.ReadDocument(path);
+        Assert.Null(state.Subscribe(decided!, bytes!, roundabout, null));
+        Assert.Equal(Path.GetFullPath(path), state.SourceBinding("Tools")?.Path);
+    }
+
     /// <summary>A document over the limit is refused by the read itself, whatever a size checked beforehand said.</summary>
     [Fact]
     public void ADocumentOverTheLimitIsRefusedByItsRead()
