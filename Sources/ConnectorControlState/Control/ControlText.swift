@@ -242,8 +242,9 @@ public enum ControlText {
     /// The rule for combining marks as a text is read from its start: the first two marks on a character
     /// are drawn, and a third or later one, or a mark that starts the text, shows as its code. Two, because
     /// ordinary text needs two — a Thai vowel and its tone, decomposed Vietnamese, a Hebrew dagesh and
-    /// vowel, an Arabic shadda and vowel — and two stay within the line; painting over the lines around
-    /// it takes a deep stack, which no character can now carry.
+    /// vowel, an Arabic shadda and vowel. Even two tall marks reach past a line's own height, so the
+    /// dialog clips each line of what would run to its own box, and no mark can draw over another line;
+    /// the count keeps a tall stack, cut off by that clip, from hiding the line's own text.
     struct Marks {
         /// The most marks drawn on one character.
         static let drawn = 2

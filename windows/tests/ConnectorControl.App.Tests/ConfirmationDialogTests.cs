@@ -28,16 +28,10 @@ public class ConfirmationDialogTests
         _ => "",
     }));
 
-    /// <summary>What would run, as the box holds it: a paragraph a line.</summary>
-    private static List<Paragraph> Lines(RichTextBox box) => box.Document.Blocks.Cast<Paragraph>().ToList();
+    /// <summary>What would run, as the dialog holds it: a read-only text box a line.</summary>
+    private static List<TextBox> Lines(ConfirmDialog dialog) => dialog.CodeLines.Children.OfType<TextBox>().ToList();
 
-    private static string Code(RichTextBox box) => string.Join("\n", Lines(box).Select(line => Text(line.Inlines)));
-
-    /// <summary>Where each line of what would run starts and ends, as the box has laid it out: the rect of its first
-    /// character and of the end of its last.</summary>
-    private static List<(Rect Start, Rect End)> DrawnLines(RichTextBox box) =>
-        Lines(box).Select(line => (line.ContentStart.GetCharacterRect(LogicalDirection.Forward),
-            line.ContentEnd.GetCharacterRect(LogicalDirection.Backward))).ToList();
+    private static string Code(ConfirmDialog dialog) => string.Join("\n", Lines(dialog).Select(line => line.Text));
 
     /// <summary>The confirmation on screen, if one is: a window joins the application's list when it is built and
     /// leaves it only when closed, so a dialog another test built and never showed is listed too, and is not it.</summary>
@@ -69,11 +63,16 @@ public class ConfirmationDialogTests
             Assert.NotEqual(mono, dialog.MessageText.Inlines.OfType<Run>().First().FontFamily.Source);
             Assert.Equal($"In “{new TextRun("Harvard", IsSetApart: true).ShownText}”, the collection Claude is running:",
                 Text(dialog.InformativeText.Inlines));
-            Assert.Equal("url\n  − https://a.example/mcp\n  + https://b.example/mcp", Code(dialog.CodeText));
-            // A paragraph a line, as the Mac lays them out, each its own left-to-right paragraph and none spaced
-            // from the next.
-            Assert.All(Lines(dialog.CodeText), line => Assert.Equal(new Thickness(0), line.Margin));
-            Assert.True(dialog.CodeText.IsReadOnly);
+            Assert.Equal("url\n  − https://a.example/mcp\n  + https://b.example/mcp", Code(dialog));
+            // A box a line, as the Mac lays them out, each read-only but selectable, left to right, and none
+            // spaced from the next.
+            Assert.All(Lines(dialog), line =>
+            {
+                Assert.True(line.IsReadOnly);
+                Assert.Equal(new Thickness(0), line.Margin);
+                Assert.Equal(FlowDirection.LeftToRight, line.FlowDirection);
+                Assert.Equal(TextWrapping.NoWrap, line.TextWrapping);
+            });
             Assert.Equal(Visibility.Visible, dialog.CodeText.Visibility);
             Assert.Equal(ControlTools.TakesEffectFooter, Text(dialog.FooterText.Inlines));
             Assert.Equal(Visibility.Visible, dialog.FooterText.Visibility);
@@ -118,7 +117,7 @@ public class ConfirmationDialogTests
         {
             var dialog = new ConfirmDialog(new ConfirmationDialog(new ConfirmationRequest(ControlTools.ChangeTitle("Claude", "splunk"),
                 ControlTools.ChangeActiveMessage("Harvard"), ["url", line], null)));
-            Assert.Equal("url\n\u202D" + line + "\u202C", Code(dialog.CodeText));
+            Assert.Equal("url\n\u202D" + line + "\u202C", Code(dialog));
             dialog.Close();
         });
     }
@@ -131,10 +130,10 @@ public class ConfirmationDialogTests
         WpfApp.Invoke(() =>
         {
             var dialog = new ConfirmDialog(new ConfirmationDialog(Change));
-            var runs = Lines(dialog.CodeText).Select(line => line.Inlines.OfType<Run>().Single()).ToList();
-            Assert.Equal(DependencyProperty.UnsetValue, runs[0].ReadLocalValue(TextElement.ForegroundProperty));
-            Assert.Same(dialog.TryFindResource("SystemFillColorCriticalBrush") ?? runs[0].Foreground, runs[1].Foreground);
-            Assert.Same(dialog.TryFindResource("SystemFillColorSuccessBrush") ?? runs[0].Foreground, runs[2].Foreground);
+            var lines = Lines(dialog);
+            Assert.Equal(DependencyProperty.UnsetValue, lines[0].ReadLocalValue(Control.ForegroundProperty));
+            Assert.Same(dialog.TryFindResource("SystemFillColorCriticalBrush") ?? lines[0].Foreground, lines[1].Foreground);
+            Assert.Same(dialog.TryFindResource("SystemFillColorSuccessBrush") ?? lines[0].Foreground, lines[2].Foreground);
             dialog.Close();
         });
     }
@@ -142,13 +141,11 @@ public class ConfirmationDialogTests
     /// <summary>A line far wider than the dialog is still one line, and the box scrolls sideways to it; with nothing
     /// that wide there is nothing to scroll. The wide lines are as long as the tools let a line be: one of
     /// ASCII words, with spaces to break at, the widest; one of scalars that each take two UTF-16 code units,
-    /// the longest in the units at which WPF breaks a line whatever the page's width.
+    /// the longest in the units at which WPF breaks a line whatever its width.
     ///
-    /// Measured on the real layout: the dialog is shown off screen, so the box lays out and scrolls its text as
-    /// the app's does, and each line's first character and its end are found where that layout put them. A
-    /// line that wrapped ends on a lower line than it starts on, so its end's top is at or below its start's
-    /// bottom; one that did not ends level with its start and, when it is wide, far to the right of the box. No
-    /// layout gives empty rects, which fail here rather than pass.</summary>
+    /// Measured on the real layout: the dialog is shown off screen, so the box lays out and scrolls its lines as
+    /// the app's does. Each line keeps to one line of text, one under the other, and a wide one runs far past
+    /// the box's right edge.</summary>
     [Fact]
     public void ALineNeverWrapsAndOnlyAWideOneScrolls()
     {
@@ -167,31 +164,63 @@ public class ConfirmationDialogTests
                 try
                 {
                     ShowOffScreen(dialog);
-                    var box = dialog.CodeText;
-                    var drawn = DrawnLines(box);
-                    Assert.Equal(request.Code.Count, drawn.Count);
-                    for (var index = 0; index < drawn.Count; index++)
+                    var scroll = dialog.CodeScroll;
+                    var lines = Lines(dialog);
+                    Assert.Equal(request.Code.Count, lines.Count);
+                    for (var index = 0; index < lines.Count; index++)
                     {
-                        var (start, end) = drawn[index];
-                        Assert.False(start.IsEmpty);
-                        Assert.False(end.IsEmpty);
-                        Assert.True(end.Top < start.Bottom, $"line {index} wrapped: it starts at {start} and ends at {end}");
+                        Assert.Equal(1, lines[index].LineCount);
                         if (index > 0)
                         {
-                            Assert.True(start.Top > drawn[index - 1].Start.Top);
+                            Assert.True(Top(lines[index], dialog) > Top(lines[index - 1], dialog));
                         }
                         if (request.Code[index].Length > 100)
                         {
-                            Assert.True(end.Left > box.ViewportWidth);
+                            Assert.True(lines[index].ActualWidth > scroll.ViewportWidth);
                         }
                     }
-                    Assert.True(box.ViewportWidth > 0);
-                    Assert.Equal(isWide, box.ExtentWidth > box.ViewportWidth);
+                    Assert.True(scroll.ViewportWidth > 0);
+                    Assert.Equal(isWide, scroll.ExtentWidth > scroll.ViewportWidth);
                 }
                 finally
                 {
                     dialog.Close();
                 }
+            }
+        });
+    }
+
+    /// <summary>Where <paramref name="line"/>'s top is, in the lines' own panel.</summary>
+    private static double Top(TextBox line, ConfirmDialog dialog) => line.TranslatePoint(new Point(0, 0), dialog.CodeLines).Y;
+
+    /// <summary>Each line of what would run is clipped to a box one line tall, and the boxes touch without
+    /// overlapping, so no combining marks stacked on a line, however tall, can draw over the line above or below
+    /// it. A line's height comes from the face alone: one with marks is as tall as one without.</summary>
+    [Fact]
+    public void EachLineIsClippedToItsOwnBox()
+    {
+        var request = new ConfirmationRequest(ControlTools.ChangeTitle("Claude", "splunk"), ControlTools.ChangeActiveMessage("Harvard"),
+            ["url", "  + l\u1DD8\u1DD8", "  + g\u034D\u034D", "  + NODE_OPTIONS = --require=/tmp/evil.js"], null);
+        WpfApp.Invoke(() =>
+        {
+            var dialog = new ConfirmDialog(new ConfirmationDialog(request));
+            try
+            {
+                ShowOffScreen(dialog);
+                var lines = Lines(dialog);
+                Assert.Equal(request.Code.Count, lines.Count);
+                var height = lines[0].ActualHeight;
+                Assert.True(height > 0);
+                for (var index = 0; index < lines.Count; index++)
+                {
+                    Assert.True(lines[index].ClipToBounds, $"line {index} is clipped to its own box");
+                    Assert.Equal(height, lines[index].ActualHeight);
+                    Assert.Equal(Top(lines[0], dialog) + index * height, Top(lines[index], dialog), 3);
+                }
+            }
+            finally
+            {
+                dialog.Close();
             }
         });
     }

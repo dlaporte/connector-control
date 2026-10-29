@@ -58,5 +58,9 @@ let package = Package(
         .testTarget(
             name: "ConnectorControlStateTests",
             dependencies: ["ConnectorControlState", "ConnectorControlTransport", "ConnectorControlTestSupport"]),
+        // The app's own views, where a test needs AppKit's layout: the confirmation dialog's code lines.
+        .testTarget(
+            name: "ConnectorControlAppTests",
+            dependencies: ["ConnectorControl", "ConnectorControlState"]),
     ]
 )

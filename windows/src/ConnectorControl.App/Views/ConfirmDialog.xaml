@@ -5,19 +5,53 @@
         xmlns:views="clr-namespace:ConnectorControl.App.Views"
         Title="{x:Static core:Product.Name}"
         Width="440">
+  <views:DialogWindow.Resources>
+    <!-- One line of what would run: read-only but selectable, so it can be copied; never wrapped; left to right; and
+         clipped to its own box, which the dialog sets to one line's height, so combining marks stacked on a line,
+         however tall, can never draw over the line above or below. No border, background or padding of its own:
+         the lines sit in the block's box, touching. The colours are the Fluent theme's text box ones, as the
+         Watermarked style restores them, since this style replaces the theme's rather than building on it. -->
+    <Style x:Key="CodeLine" TargetType="TextBox">
+      <Setter Property="Foreground" Value="{DynamicResource TextControlForeground}" />
+      <Setter Property="SelectionBrush" Value="{DynamicResource TextControlSelectionHighlightColor}" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="IsReadOnly" Value="True" />
+      <Setter Property="IsReadOnlyCaretVisible" Value="False" />
+      <Setter Property="AcceptsReturn" Value="False" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
+      <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FlowDirection" Value="LeftToRight" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="ClipToBounds" Value="True" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TextBox">
+            <ScrollViewer x:Name="PART_ContentHost" Focusable="False" Padding="0"
+                          HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" />
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </views:DialogWindow.Resources>
   <StackPanel Margin="20">
     <TextBlock x:Name="MessageText" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" FlowDirection="LeftToRight" />
     <TextBlock x:Name="InformativeText" Style="{StaticResource CaptionText}" FontSize="13" Margin="0,8,0,0" FlowDirection="LeftToRight" />
-    <!-- What would run, for a change Claude asks for: read-only but selectable, so it can be copied. Its page is
-         as wide as its widest line, so one line of it is one line here and the box scrolls sideways rather than
-         wrap: a long value can never pass for a row of its own. Platform idiom: 200 device-independent pixels,
-         as the Mac's block is 200 points, the same height at the same scale. Return is left to the dialog, so
-         it answers Don’t Allow even while this box holds the keyboard, as it does on the Mac. -->
-    <RichTextBox x:Name="CodeText" Visibility="Collapsed" Margin="0,10,0,0" IsReadOnly="True" IsReadOnlyCaretVisible="False"
-                 AcceptsReturn="False"
-                 HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" MaxHeight="200" Padding="4,6"
-                 FontFamily="{StaticResource MonoFont}" FontSize="12" FlowDirection="LeftToRight"
-                 BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" Background="{DynamicResource LayerFillColorDefaultBrush}" />
+    <!-- What would run, for a change Claude asks for: a CodeLine box a line, as the Mac draws a label a line. Each line
+         is one line here and the block scrolls sideways rather than wrap: a long value can never pass for a row of
+         its own. A line is selected and copied on its own. The lines are one stop for Tab. Platform idiom: 200
+         device-independent pixels, as the Mac's block is 200 points, the same height at the same scale. Return
+         is left to the dialog, so it answers Don’t Allow even while a line holds the keyboard, as on the Mac. -->
+    <Border x:Name="CodeText" Visibility="Collapsed" Margin="0,10,0,0" MaxHeight="200" FlowDirection="LeftToRight" BorderThickness="1"
+            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" Background="{DynamicResource LayerFillColorDefaultBrush}">
+      <ScrollViewer x:Name="CodeScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Padding="4,6" Focusable="False">
+        <StackPanel x:Name="CodeLines" KeyboardNavigation.TabNavigation="Once" />
+      </ScrollViewer>
+    </Border>
     <TextBlock x:Name="FooterText" Style="{StaticResource CaptionText}" Margin="0,8,0,0" Visibility="Collapsed" FlowDirection="LeftToRight" />
     <StackPanel Style="{StaticResource DialogButtons}" Margin="0,20,0,0">
       <Button x:Name="CancelButton" MinWidth="80" IsCancel="True" Click="OnCancel" />

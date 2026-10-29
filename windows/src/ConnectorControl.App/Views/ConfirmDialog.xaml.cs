@@ -1,5 +1,5 @@
 using System.Windows;
-using System.Windows.Documents;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using ConnectorControl.Core.State;
@@ -50,10 +50,6 @@ public partial class ConfirmDialog : DialogWindow
         }
     }
 
-    /// <summary>How far the code area's page runs past its widest line, in ems: room for whatever the measure and
-    /// the page's own layout round differently, so the widest line is never wrapped by a hair.</summary>
-    private const double PageSlackEms = 4;
-
     /// <summary>The confirmation of a change Claude asks for: the question with every name in the monospaced
     /// face, what would run, the closing line, and Don’t Allow — the default, which Return presses wherever
     /// the keyboard is and Escape presses, as closing the window answers, and where the keyboard starts —
@@ -66,56 +62,51 @@ public partial class ConfirmDialog : DialogWindow
         TextRuns.Fill(MessageText, question.Title);
         TextRuns.Fill(InformativeText, question.Message);
         InformativeText.Visibility = question.Message.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
-        CodeText.Document = CodeDocument(question);
+        FillCode(question);
         CodeText.Visibility = question.Code.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         TextRuns.Fill(FooterText, question.Footer ?? []);
         FooterText.Visibility = question.Footer is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    /// <summary>What would run, a paragraph a line, as the Mac lays it out: each line is its own left-to-right
-    /// paragraph, whatever the one before it holds, drawn in the order it is stored
-    /// (<see cref="ConfirmationDialog.ShownCode"/>), and none is spaced from the next. Removed lines take the
-    /// theme's critical colour and added ones its success colour; a theme without one leaves the line in the
-    /// box's own, and its "−" or "+" still says what it does. The page is as wide as the widest line and some,
-    /// so no line wraps, and only a line wider than the box gives it something to scroll to.</summary>
-    private FlowDocument CodeDocument(ConfirmationDialog question)
+    /// <summary>What would run, a box a line, as the Mac lays it out: each line is its own left-to-right line, drawn in
+    /// the order it is stored (<see cref="ConfirmationDialog.ShownCode"/>), one line tall and clipped to that, so no
+    /// combining marks stacked on a line, however tall, can draw over the line above or below; at most two are drawn
+    /// on a character (<see cref="ControlText"/>), so a stack cut off by the clip cannot hide the line's own text
+    /// either. Removed lines take the theme's critical colour and added ones its success colour; a theme without
+    /// one leaves the line in the box's own, and its "−" or "+" still says what it does. No line wraps, and only a
+    /// line wider than the block gives it something to scroll to. Every line is within ControlTools.ShownLineLimit,
+    /// as the tools refuse a question with a longer one before asking it, so none reaches the 9,600 UTF-16 code
+    /// units at which WPF breaks any line of text.</summary>
+    private void FillCode(ConfirmationDialog question)
     {
-        var document = new FlowDocument { PagePadding = new Thickness(0), FontFamily = CodeText.FontFamily, FontSize = CodeText.FontSize };
         var shown = question.ShownCode;
         for (var index = 0; index < shown.Count; index++)
         {
-            var line = new Run(shown[index]);
+            var line = new TextBox { Style = (Style)FindResource("CodeLine"), Text = shown[index] };
             switch (question.CodeKinds[index])
             {
                 case ConfirmationDialog.LineKind.Removed:
-                    line.SetResourceReference(TextElement.ForegroundProperty, "SystemFillColorCriticalBrush");
+                    line.SetResourceReference(Control.ForegroundProperty, "SystemFillColorCriticalBrush");
                     break;
                 case ConfirmationDialog.LineKind.Added:
-                    line.SetResourceReference(TextElement.ForegroundProperty, "SystemFillColorSuccessBrush");
+                    line.SetResourceReference(Control.ForegroundProperty, "SystemFillColorSuccessBrush");
                     break;
             }
-            document.Blocks.Add(new Paragraph(line) { Margin = new Thickness(0) });
+            line.Height = LineHeight(line);
+            CodeLines.Children.Add(line);
         }
-        // Every line is within ControlTools.ShownLineLimit, as the tools refuse a question with a longer one
-        // before asking it. So none reaches the 9,600 UTF-16 code units at which WPF breaks any line of text,
-        // whatever the page's width, and FormattedText measures each whole. The page stays below the million
-        // pixels a FlowDocument page may be, even at the widest glyphs; past them, setting it would throw and
-        // the confirmer would answer Don’t Allow.
-        document.PageWidth = WidestLine(shown) + PageSlackEms * CodeText.FontSize;
-        return document;
     }
 
-    /// <summary>How wide the widest of <paramref name="lines"/> is drawn in the code area's face, size, language
-    /// and formatting mode, at this window's scale.</summary>
-    private double WidestLine(IReadOnlyList<string> lines)
+    /// <summary>One line's height in <paramref name="line"/>'s face and size, at this window's scale: from the face alone,
+    /// never from what the line holds, so marks cannot make a line taller.</summary>
+    private double LineHeight(TextBox line)
     {
-        var typeface = new Typeface(CodeText.FontFamily, CodeText.FontStyle, CodeText.FontWeight, CodeText.FontStretch);
-        var culture = CodeText.Language.GetSpecificCulture();
-        var mode = TextOptions.GetTextFormattingMode(CodeText);
+        var typeface = new Typeface(line.FontFamily, line.FontStyle, line.FontWeight, line.FontStretch);
+        var culture = line.Language.GetSpecificCulture();
+        var mode = TextOptions.GetTextFormattingMode(line);
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
-        return lines.Select(line => new FormattedText(line, culture, FlowDirection.LeftToRight, typeface, CodeText.FontSize, Brushes.Black,
-                null, mode, pixelsPerDip).WidthIncludingTrailingWhitespace)
-            .DefaultIfEmpty(0).Max();
+        return Math.Ceiling(new FormattedText("Xg", culture, FlowDirection.LeftToRight, typeface, line.FontSize, Brushes.Black,
+            null, mode, pixelsPerDip).Height);
     }
 
     /// <summary>True when the primary button was chosen.</summary>
