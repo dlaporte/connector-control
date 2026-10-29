@@ -41,9 +41,9 @@ public sealed class ControlRelay
     public bool IsConnected { get; private set; }
     /// <summary>The <c>initialize</c> the app accepted, as Claude sent it: the one a new connection replays.</summary>
     private JsonValue? initialize;
-    /// <summary>Claude's latest <c>initialize</c> while none is accepted: kept for a replay only once the app answers
-    /// it with a result, so one the app refused is never replayed.</summary>
-    private JsonValue? offered;
+    /// <summary>Claude's <c>initialize</c> requests while none is accepted, by id: one is kept for a replay only once the
+    /// app answers it, under its own id, with a result, so one the app refused is never replayed.</summary>
+    private readonly Dictionary<JsonValue, JsonValue> offered = [];
     /// <summary>Claude's <c>notifications/initialized</c>, as it sent it.</summary>
     private string? initialized;
     /// <summary>The app has accepted Claude's own <c>initialize</c>.</summary>
@@ -52,7 +52,8 @@ public sealed class ControlRelay
     private readonly List<(JsonValue Id, string Method)> pending = [];
     /// <summary>Ids whose request Claude cancelled on this connection while it was waited for. The app may still be
     /// running it, and then answers a request reusing the id with id null and drops the old one's answer: nothing
-    /// will come under the id, so a request reusing it is not waited for.</summary>
+    /// will come under the id, so a request reusing it is not waited for. An answer under the id is the reusing
+    /// request's, so the first has ended, and the id is waited for again.</summary>
     private readonly List<JsonValue> cancelled = [];
     /// <summary>Lines from Claude waiting for a connection.</summary>
     private readonly List<string> held = [];
@@ -66,9 +67,10 @@ public sealed class ControlRelay
     public IReadOnlyList<Action> FromClaude(string line)
     {
         var message = Message(line);
-        if (message is not null && message["id"] is not null && message["method"] == JsonValue.String("initialize") && initialize is null)
+        if (message is not null && message["method"] == JsonValue.String("initialize") && initialize is null
+            && Request(message) is { } offer)
         {
-            offered = message;
+            offered[offer.Id] = message;
         }
         if (message is not null && message["id"] is null && message["method"] == JsonValue.String("notifications/initialized") && initialized is null)
         {
@@ -166,19 +168,22 @@ public sealed class ControlRelay
             var index = pending.FindIndex(entry => entry.Id == id);
             if (index >= 0)
             {
-                var method = pending[index].Method;
+                var (requestId, method) = pending[index];
                 pending.RemoveAt(index);
                 // Only an answer with a result is the handshake: an error leaves the relay as before it, so the
                 // app going still ends it, and the refused initialize is never replayed.
-                if (method == "initialize" && message["result"] is not null)
+                if (method == "initialize")
                 {
-                    if (initialize is null && offered is not null && Request(offered)?.Id == id)
+                    offered.Remove(requestId, out var mine);
+                    if (message["result"] is not null)
                     {
-                        initialize = offered;
+                        initialize ??= mine;
+                        handshakeDone = true;
+                        offered.Clear();
                     }
-                    handshakeDone = true;
                 }
             }
+            cancelled.RemoveAll(entry => entry == id);
         }
         var actions = new List<Action> { new Action.ToClaude(line) };
         if (closing && pending.Count == 0)

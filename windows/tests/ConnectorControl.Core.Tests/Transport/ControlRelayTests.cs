@@ -109,6 +109,21 @@ public class ControlRelayTests
 
     /// <summary>A request the session answers with id null — an id that is neither a string nor an integer, or
     /// one already running — is not waited for under that id.</summary>
+    /// <summary>An answer under a cancelled id is the answer to a request reusing it, so the request first sent under it
+    /// has ended: the id is waited for again.</summary>
+    [Fact]
+    public void AnAnswerUnderACancelledIdLetsItBeWaitedForAgain()
+    {
+        var relay = Started();
+        _ = relay.FromClaude(Call(8));
+        _ = relay.FromClaude("""{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":8}}""");
+        _ = relay.FromClaude(Call(8));
+        Assert.Equal([ToClaude(Answer(8))], relay.FromApp(Answer(8)));
+        _ = relay.FromClaude(Call(8));
+        Assert.Empty(relay.ClaudeClosed());   // 8 is waited for again
+        Assert.Equal([ToClaude(Answer(8)), Exit(ControlOutput.DoneExit)], relay.FromApp(Answer(8)));
+    }
+
     /// <summary>A cancel held for a new connection behind its request settles that request when it reaches the app,
     /// not before: the app drops the request's answer, so the relay no longer waits for it and ends once Claude
     /// closes its side.</summary>
@@ -257,6 +272,27 @@ public class ControlRelayTests
         var replayed = Assert.IsType<ControlRelay.Action.ToApp>(replay[0]).Line;
         // the initialize the app accepted, not the one it refused
         Assert.Equal(ControlRelay.Message(second)!["params"], ControlRelay.Message(replayed)!["params"]);
+    }
+
+    /// <summary>Two <c>initialize</c> requests before either is answered: the one the app accepts, under its own id, is
+    /// the one replayed, though another came after it.</summary>
+    [Fact]
+    public void TheInitializeAcceptedUnderItsOwnIdIsReplayedThoughAnotherFollowedIt()
+    {
+        var relay = new ControlRelay();
+        _ = relay.FromClaude(Initialize);
+        _ = relay.ConnectSucceeded();
+        var second = Initialize.Replace("\"id\":0", "\"id\":1", StringComparison.Ordinal).Replace("2025-11-25", "2025-06-18", StringComparison.Ordinal);
+        Assert.Equal([ToApp(second)], relay.FromClaude(second));
+        Assert.Equal([ToClaude(InitializeAnswer)], relay.FromApp(InitializeAnswer));
+        const string refusal = """{"error":{"code":-32600,"message":"Invalid Request"},"id":1,"jsonrpc":"2.0"}""";
+        Assert.Equal([ToClaude(refusal)], relay.FromApp(refusal));
+        _ = relay.FromClaude(Initialized);
+        Assert.Empty(relay.ConnectionLost());
+        Assert.Equal([Connect()], relay.FromClaude(Call(2)));
+        var replayed = Assert.IsType<ControlRelay.Action.ToApp>(relay.ConnectSucceeded()[0]).Line;
+        // the initialize answered with a result, not the later one
+        Assert.Equal(ControlRelay.Message(Initialize)!["params"], ControlRelay.Message(replayed)!["params"]);
     }
 
     [Fact]

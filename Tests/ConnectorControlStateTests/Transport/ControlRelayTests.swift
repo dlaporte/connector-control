@@ -124,6 +124,19 @@ final class ControlRelayTests: XCTestCase {
         XCTAssertEqual(relay.claudeClosed(), [.exit(ControlOutput.doneExit)])
     }
 
+    /// An answer under a cancelled id is the answer to a request reusing it, so the request first sent under
+    /// it has ended: the id is waited for again.
+    func testAnAnswerUnderACancelledIDLetsItBeWaitedForAgain() {
+        let relay = started()
+        _ = relay.fromClaude(call(8))
+        _ = relay.fromClaude(#"{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":8}}"#)
+        _ = relay.fromClaude(call(8))
+        XCTAssertEqual(relay.fromApp(answer(8)), [.toClaude(answer(8))])
+        _ = relay.fromClaude(call(8))
+        XCTAssertEqual(relay.claudeClosed(), [], "8 is waited for again")
+        XCTAssertEqual(relay.fromApp(answer(8)), [.toClaude(answer(8)), .exit(ControlOutput.doneExit)])
+    }
+
     /// A request the session answers with id null — an id that is neither a string nor an integer, or
     /// one already running — is not waited for under that id.
     func testARequestTheSessionCannotAnswerByItsIDIsNotWaitedFor() {
@@ -222,6 +235,27 @@ final class ControlRelayTests: XCTestCase {
         guard case .toApp(let replayed)? = replay.first else { return XCTFail("\(replay)") }
         XCTAssertEqual(try XCTUnwrap(ControlRelay.message(replayed))["params"], ControlRelay.message(second)?["params"],
                        "the initialize the app accepted, not the one it refused")
+    }
+
+    /// Two `initialize` requests before either is answered: the one the app accepts, under its own id, is
+    /// the one replayed, though another came after it.
+    func testTheInitializeAcceptedUnderItsOwnIDIsReplayedThoughAnotherFollowedIt() throws {
+        let relay = ControlRelay()
+        _ = relay.fromClaude(initialize)
+        _ = relay.connectSucceeded()
+        let second = initialize.replacingOccurrences(of: #""id":0"#, with: #""id":1"#)
+            .replacingOccurrences(of: "2025-11-25", with: "2025-06-18")
+        XCTAssertEqual(relay.fromClaude(second), [.toApp(second)])
+        XCTAssertEqual(relay.fromApp(initializeAnswer), [.toClaude(initializeAnswer)])
+        let refusal = #"{"error":{"code":-32600,"message":"Invalid Request"},"id":1,"jsonrpc":"2.0"}"#
+        XCTAssertEqual(relay.fromApp(refusal), [.toClaude(refusal)])
+        _ = relay.fromClaude(initialized)
+        XCTAssertEqual(relay.connectionLost(), [])
+        XCTAssertEqual(relay.fromClaude(call(2)), [.connect])
+        let replay = relay.connectSucceeded()
+        guard case .toApp(let replayed)? = replay.first else { return XCTFail("\(replay)") }
+        XCTAssertEqual(ControlRelay.message(replayed)?["params"], ControlRelay.message(initialize)?["params"],
+                       "the initialize answered with a result, not the later one")
     }
 
     func testWhenClaudeClosesTheRelayEndsOnceItsRequestsAreAnswered() {

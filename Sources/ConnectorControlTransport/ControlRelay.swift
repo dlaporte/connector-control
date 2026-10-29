@@ -29,9 +29,9 @@ public final class ControlRelay {
     public private(set) var isConnected = false
     /// The `initialize` the app accepted, as Claude sent it: the one a new connection replays.
     private var initialize: [String: JSONValue]?
-    /// Claude's latest `initialize` while none is accepted: kept for a replay only once the app answers it
-    /// with a result, so one the app refused is never replayed.
-    private var offered: [String: JSONValue]?
+    /// Claude's `initialize` requests while none is accepted, by id: one is kept for a replay only once the
+    /// app answers it, under its own id, with a result, so one the app refused is never replayed.
+    private var offered: [JSONValue: [String: JSONValue]] = [:]
     /// Claude's `notifications/initialized`, as it sent it.
     private var initialized: String?
     /// The app has accepted Claude's own `initialize`.
@@ -40,7 +40,8 @@ public final class ControlRelay {
     private var pending: [(id: JSONValue, method: String)] = []
     /// Ids whose request Claude cancelled on this connection while it was waited for. The app may still be
     /// running it, and then answers a request reusing the id with id null and drops the old one's answer:
-    /// nothing will come under the id, so a request reusing it is not waited for.
+    /// nothing will come under the id, so a request reusing it is not waited for. An answer under the id is the
+    /// reusing request's, so the first has ended, and the id is waited for again.
     private var cancelled: Set<JSONValue> = []
     /// Lines from Claude waiting for a connection.
     private var held: [String] = []
@@ -55,8 +56,9 @@ public final class ControlRelay {
 
     public func fromClaude(_ line: String) -> [Action] {
         let message = ControlRelay.message(line)
-        if let message, message["id"] != nil, message["method"] == .string("initialize"), initialize == nil {
-            offered = message
+        if let message, message["method"] == .string("initialize"), initialize == nil,
+           let request = ControlRelay.request(message) {
+            offered[request.id] = message
         }
         if let message, message["id"] == nil, message["method"] == .string("notifications/initialized"), initialized == nil {
             initialized = line
@@ -124,11 +126,18 @@ public final class ControlRelay {
             }
             // Only an answer with a result is the handshake: an error leaves the relay as before it, so the
             // app going still ends it, and the refused `initialize` is never replayed.
-            if let index = pending.firstIndex(where: { $0.id == id }), pending.remove(at: index).method == "initialize",
-               message["result"] != nil {
-                if initialize == nil, let offered, ControlRelay.request(offered)?.id == id { initialize = offered }
-                handshakeDone = true
+            if let index = pending.firstIndex(where: { $0.id == id }) {
+                let request = pending.remove(at: index)
+                if request.method == "initialize" {
+                    let mine = offered.removeValue(forKey: request.id)
+                    if message["result"] != nil {
+                        if initialize == nil, let mine { initialize = mine }
+                        handshakeDone = true
+                        offered = [:]
+                    }
+                }
             }
+            if let settled = cancelled.first(where: { $0 == id }) { cancelled.remove(settled) }
         }
         var actions: [Action] = [.toClaude(line)]
         if closing, pending.isEmpty { actions.append(.exit(ControlOutput.doneExit)) }
