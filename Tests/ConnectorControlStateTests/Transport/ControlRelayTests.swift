@@ -111,6 +111,19 @@ final class ControlRelayTests: XCTestCase {
         XCTAssertEqual(restarted.fromApp(answer(9)), [.toClaude(answer(9)), .exit(ControlOutput.doneExit)])
     }
 
+    /// A cancel held for a new connection behind its request settles that request when it reaches the
+    /// app, not before: the app drops the request's answer, so the relay no longer waits for it and ends
+    /// once Claude closes its side.
+    func testAHeldCancelSettlesTheRequestHeldBeforeIt() {
+        let relay = started()
+        _ = relay.connectionLost()
+        XCTAssertEqual(relay.fromClaude(call(5)), [.connect])
+        let cancel = #"{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":5}}"#
+        XCTAssertEqual(relay.fromClaude(cancel), [])
+        XCTAssertEqual(Array(relay.connectSucceeded().dropFirst(2)), [.toApp(call(5)), .toApp(cancel)])
+        XCTAssertEqual(relay.claudeClosed(), [.exit(ControlOutput.doneExit)])
+    }
+
     /// A request the session answers with id null — an id that is neither a string nor an integer, or
     /// one already running — is not waited for under that id.
     func testARequestTheSessionCannotAnswerByItsIDIsNotWaitedFor() {

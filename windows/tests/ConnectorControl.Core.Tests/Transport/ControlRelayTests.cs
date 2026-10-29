@@ -109,6 +109,21 @@ public class ControlRelayTests
 
     /// <summary>A request the session answers with id null — an id that is neither a string nor an integer, or
     /// one already running — is not waited for under that id.</summary>
+    /// <summary>A cancel held for a new connection behind its request settles that request when it reaches the app,
+    /// not before: the app drops the request's answer, so the relay no longer waits for it and ends once Claude
+    /// closes its side.</summary>
+    [Fact]
+    public void AHeldCancelSettlesTheRequestHeldBeforeIt()
+    {
+        var relay = Started();
+        _ = relay.ConnectionLost();
+        Assert.Equal([Connect()], relay.FromClaude(Call(5)));
+        const string cancel = """{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":5}}""";
+        Assert.Empty(relay.FromClaude(cancel));
+        Assert.Equal([ToApp(Call(5)), ToApp(cancel)], relay.ConnectSucceeded().Skip(2));
+        Assert.Equal([Exit(ControlOutput.DoneExit)], relay.ClaudeClosed());
+    }
+
     /// <summary>An id Claude reuses after cancelling its request may still be running in the app, which answers the
     /// new request with id null and drops the old one's answer: nothing will come under that id, so it is not
     /// waited for, and the relay still ends once Claude closes its side. A new connection is a new session, where

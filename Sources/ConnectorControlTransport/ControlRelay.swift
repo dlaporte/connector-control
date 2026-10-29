@@ -61,13 +61,6 @@ public final class ControlRelay {
         if let message, message["id"] == nil, message["method"] == .string("notifications/initialized"), initialized == nil {
             initialized = line
         }
-        // A cancelled request is never answered — the session drops its answer — so it is waited for
-        // no longer.
-        if let message, message["id"] == nil, message["method"] == .string("notifications/cancelled"),
-           case .object(let params)? = message["params"], let id = params["requestId"] {
-            for request in pending where request.id == id { cancelled.insert(request.id) }
-            pending.removeAll { $0.id == id }
-        }
         guard isConnected else {
             held.append(line)
             // After the first handshake only a request reconnects, and may start the app: a
@@ -172,6 +165,14 @@ public final class ControlRelay {
     /// one whose id is neither a string nor an integer, or is already running — a cancelled request's
     /// included — is answered with id null or not at all.
     private func forward(_ line: String, _ message: [String: JSONValue]?) -> [Action] {
+        // A cancelled request is never answered — the session drops its answer — so it is waited for no
+        // longer. Settled as the cancel goes to the app, not as it arrives: a cancel held for a new
+        // connection follows its request there, and only then is that request waited for.
+        if let message, message["id"] == nil, message["method"] == .string("notifications/cancelled"),
+           case .object(let params)? = message["params"], let id = params["requestId"] {
+            for request in pending where request.id == id { cancelled.insert(request.id) }
+            pending.removeAll { $0.id == id }
+        }
         if let request = ControlRelay.request(message), !pending.contains(where: { $0.id == request.id }),
            !cancelled.contains(request.id) {
             pending.append(request)

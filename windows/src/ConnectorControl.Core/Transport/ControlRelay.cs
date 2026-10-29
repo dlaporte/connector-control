@@ -74,14 +74,6 @@ public sealed class ControlRelay
         {
             initialized = line;
         }
-        // A cancelled request is never answered — the session drops its answer — so it is waited for
-        // no longer.
-        if (message is not null && message["id"] is null && message["method"] == JsonValue.String("notifications/cancelled")
-            && message["params"] is { Kind: JsonKind.Object } parameters && parameters["requestId"] is { } id)
-        {
-            cancelled.AddRange(pending.Where(entry => entry.Id == id).Select(entry => entry.Id));
-            pending.RemoveAll(entry => entry.Id == id);
-        }
         if (!IsConnected)
         {
             held.Add(line);
@@ -238,6 +230,15 @@ public sealed class ControlRelay
     /// included — is answered with id null or not at all.</summary>
     private List<Action> Forward(string line, JsonValue? message)
     {
+        // A cancelled request is never answered — the session drops its answer — so it is waited for no
+        // longer. Settled as the cancel goes to the app, not as it arrives: a cancel held for a new
+        // connection follows its request there, and only then is that request waited for.
+        if (message is not null && message["id"] is null && message["method"] == JsonValue.String("notifications/cancelled")
+            && message["params"] is { Kind: JsonKind.Object } parameters && parameters["requestId"] is { } id)
+        {
+            cancelled.AddRange(pending.Where(entry => entry.Id == id).Select(entry => entry.Id));
+            pending.RemoveAll(entry => entry.Id == id);
+        }
         if (Request(message) is { } request && !pending.Exists(entry => entry.Id == request.Id)
             && !cancelled.Exists(id => id == request.Id))
         {
