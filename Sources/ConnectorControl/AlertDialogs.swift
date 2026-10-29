@@ -22,19 +22,7 @@ final class AlertDialogs: Dialogs {
         cancelButton.keyEquivalent = "\u{1b}"
         if destructive { primaryButton.hasDestructiveAction = true }
         guard cancelIsDefault else { return alert.runModal() == .alertFirstButtonReturn }
-        // Return presses the cancel button, and the primary answers only a click. A button holds
-        // one key equivalent, so Escape reaches the cancel button through a monitor that lives
-        // exactly as long as the alert, as the Windows dialog's IsDefault and IsCancel both sit
-        // on its cancel button.
-        primaryButton.keyEquivalent = ""
-        cancelButton.keyEquivalent = "\r"
-        let escape = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard event.keyCode == UInt16(kVK_Escape), event.window == alert.window else { return event }
-            cancelButton.performClick(nil)
-            return nil
-        }
-        defer { escape.map(NSEvent.removeMonitor) }
-        return alert.runModal() == .alertFirstButtonReturn
+        return runSafeDefault(alert, primary: primaryButton, cancel: cancelButton)
     }
 
     func promptForName(title: String, initial: String) -> String? {
@@ -60,6 +48,30 @@ final class AlertDialogs: Dialogs {
         alert.runModal()
     }
 
-    // Don’t Allow, as the declining confirmer the app still uses answers.
-    func confirmChange(_ dialog: ConfirmationDialog) -> Bool { false }
+    /// A change Claude asks for: the title as the alert's message, the rest in the accessory view,
+    /// and Allow the answer only a click gives. Allow is added first, so Don’t Allow sits left of it.
+    func confirmChange(_ dialog: ConfirmationDialog) -> Bool {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = ConfirmationAccessory.title(dialog)
+        alert.accessoryView = ConfirmationAccessory.view(dialog)
+        let allow = alert.addButton(withTitle: ConfirmationDialog.allowButton)
+        let dontAllow = alert.addButton(withTitle: ConfirmationDialog.dontAllowButton)
+        return runSafeDefault(alert, primary: allow, cancel: dontAllow)
+    }
+
+    /// Return presses the cancel button, and the primary answers only a click. A button holds one key
+    /// equivalent, so Escape reaches the cancel button through a monitor that lives exactly as long as
+    /// the alert, as the Windows dialog's IsDefault and IsCancel both sit on its cancel button.
+    private func runSafeDefault(_ alert: NSAlert, primary: NSButton, cancel: NSButton) -> Bool {
+        primary.keyEquivalent = ""
+        cancel.keyEquivalent = "\r"
+        let escape = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.keyCode == UInt16(kVK_Escape), event.window == alert.window else { return event }
+            cancel.performClick(nil)
+            return nil
+        }
+        defer { escape.map(NSEvent.removeMonitor) }
+        return alert.runModal() == .alertFirstButtonReturn
+    }
 }

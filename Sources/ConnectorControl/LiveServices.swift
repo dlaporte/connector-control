@@ -48,9 +48,9 @@ final class LiveServices {
                          paths: paths, host: host, toolProbe: ToolProbe.live())
         state.quitRequested = { NSApp.terminate(nil) }
         controlSettings = SettingsModel(state: state, settings: settings, autostart: autostart, updater: updater)
-        // Declines every question: until the app can show its confirmation dialog, a change Claude must
-        // be asked about is refused rather than made unasked.
-        controlTools = ControlTools(state: state, settings: controlSettings, confirmer: DecliningConfirmer(), host: host)
+        // Claude's gated changes are asked about in the app's own alert, shown on a turn of the run loop
+        // of its own, so the call's progress and early answer go out while it is open.
+        controlTools = ControlTools(state: state, settings: controlSettings, confirmer: DialogConfirmer(dialogs: dialogs), host: host)
         controlServer = ControlServer(tools: controlTools)
         commandLineTool = SymlinkCommandLineTool(toolPath: toolPath, host: host)
         do {

@@ -199,7 +199,11 @@ struct SettingsView: View {
                 let problem = ClaudeRestarter.verifyIsClaude(at: url)
                 DispatchQueue.main.async {
                     if let problem {
-                        dialogs.inform(message: SettingsModel.claudeAppRejectedTitle, informative: problem)
+                        // Not inside this main-queue block: a modal entered here would hold back every
+                        // other one, the control socket's lines among them, until it is answered.
+                        DialogConfirmer.nextRunLoopTurn {
+                            dialogs.inform(message: SettingsModel.claudeAppRejectedTitle, informative: problem)
+                        }
                     } else {
                         model.chooseClaudeApp(url)
                     }

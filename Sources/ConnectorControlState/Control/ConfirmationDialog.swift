@@ -72,14 +72,32 @@ public struct ConfirmationDialog: Equatable, Sendable {
 /// the call's progress and early answer go out while the dialog is open (see `ControlConfirmer`).
 /// `completion` is called once, with true only for Allow; the dialog's own Don’t Allow, Escape and
 /// close all answer false.
+///
+/// Platform idiom: the initialiser defaults its presenter to a turn of the main run loop
+/// (`nextRunLoopTurn`); the Windows mirror's assembly cannot name the WPF dispatcher, so its app always
+/// passes `UiThread.Post`.
 @MainActor
 public final class DialogConfirmer: ControlConfirmer {
     private let dialogs: Dialogs
     private let present: (@escaping MainActorAction) -> Void
 
-    public init(dialogs: Dialogs, present: @escaping (@escaping MainActorAction) -> Void) {
+    public init(dialogs: Dialogs, present: @escaping (@escaping MainActorAction) -> Void = DialogConfirmer.nextRunLoopTurn) {
         self.dialogs = dialogs
         self.present = present
+    }
+
+    /// AppKit's NSModalPanelRunLoopMode, named here because this module is Foundation only.
+    public nonisolated static let modalPanelMode = RunLoop.Mode("NSModalPanelRunLoopMode")
+
+    // Platform idiom: on the Mac a nested run loop entered from inside a block on the main queue, or a
+    // main-actor Task, runs no other main-queue block, and every line from the socket arrives in one; a
+    // modal entered from a run-loop turn of its own runs them all. WPF's nested frame runs the
+    // dispatcher's queue whatever called it, so the Windows mirror's presenter only posts.
+    /// The Mac's presenter, for this confirmer and for any other modal the app enters: `work` on the next
+    /// turn of the main run loop, in the default mode or while another of the app's alerts is up —
+    /// never inside the block that asked, and never during a menu or a drag. Nonisolated: it only posts.
+    public nonisolated static func nextRunLoopTurn(_ work: @escaping MainActorAction) {
+        RunLoop.main.perform(inModes: [.default, modalPanelMode]) { MainActor.assumeIsolated(work) }
     }
 
     public func confirm(_ request: ConfirmationRequest, completion: @escaping (Bool) -> Void) {
