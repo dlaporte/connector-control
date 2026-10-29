@@ -66,8 +66,8 @@ public struct TextRun: Equatable, Sendable {
 
     /// One of the app's sentences with every name between its own quotes set apart: the text between
     /// each “ and the ” after it. A name's own “ and ” are escaped before it reaches a sentence, so
-    /// every raw one is the sentence's. A name longer than `limit` scalars is cut to `limit - 1` and
-    /// `cutMark`; an empty name, or a “ never closed, stays words.
+    /// every raw one is the sentence's. A name longer than `limit` scalars is cut in the middle (see
+    /// `cut(_:_:)`); an empty name, or a “ never closed, stays words.
     public static func names(in sentence: String, limit: Int) -> [TextRun] {
         var runs: [TextRun] = []
         var words: [Unicode.Scalar] = []
@@ -95,9 +95,49 @@ public struct TextRun: Equatable, Sendable {
         return runs
     }
 
-    /// `name` no longer than `limit` scalars, the last of them `cutMark` when it was longer.
+    /// `name` no longer than `limit` scalars: when it is longer, as much of its start and of its end as
+    /// fit with `cutMark` between them, the end given the odd scalar. Names that share a long start,
+    /// as a team's often do, still read apart by their ends. A name comes here escaped, and an escape is
+    /// kept or left out whole, never split into a piece that reads as something else.
     static func cut(_ name: [Unicode.Scalar], _ limit: Int) -> [Unicode.Scalar] {
-        name.count <= limit ? name : Array(name.prefix(limit - 1)) + Array(cutMark.unicodeScalars)
+        guard name.count > limit else { return name }
+        let pieces = escapes(name)
+        let room = limit - cutMark.unicodeScalars.count
+        let start = fitting(pieces, room / 2)
+        let end = fitting(pieces.reversed(), room - room / 2).reversed()
+        return start.flatMap { $0 } + Array(cutMark.unicodeScalars) + end.flatMap { $0 }
+    }
+
+    /// An escaped name in pieces: each escape whole — a backslash and the character after it, or
+    /// `\u{…}` to its closing brace — and every other scalar alone.
+    static func escapes(_ name: [Unicode.Scalar]) -> [[Unicode.Scalar]] {
+        var pieces: [[Unicode.Scalar]] = []
+        var index = 0
+        while index < name.count {
+            var end = index + 1
+            if name[index] == "\\", end < name.count {
+                end += 1
+                if name[index + 1] == "u", end < name.count, name[end] == "{",
+                   let close = name[end...].firstIndex(of: "}") {
+                    end = close + 1
+                }
+            }
+            pieces.append(Array(name[index..<end]))
+            index = end
+        }
+        return pieces
+    }
+
+    /// The leading pieces that fit in `room` scalars, stopping at the first that does not.
+    static func fitting<Pieces: Sequence>(_ pieces: Pieces, _ room: Int) -> [[Unicode.Scalar]] where Pieces.Element == [Unicode.Scalar] {
+        var taken: [[Unicode.Scalar]] = []
+        var used = 0
+        for piece in pieces {
+            guard used + piece.count <= room else { break }
+            taken.append(piece)
+            used += piece.count
+        }
+        return taken
     }
 
     // Platform idiom: the Windows mirror calls this Join, since there Text is the record's own property.

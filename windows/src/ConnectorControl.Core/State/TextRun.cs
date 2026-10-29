@@ -61,8 +61,8 @@ public readonly record struct TextRun(string Text, bool IsSetApart = false)
 
     /// <summary>One of the app's sentences with every name between its own quotes set apart: the text between
     /// each “ and the ” after it. A name's own “ and ” are escaped before it reaches a sentence, so every raw
-    /// one is the sentence's. A name longer than <paramref name="limit"/> scalars is cut to <c>limit - 1</c> and
-    /// <see cref="CutMark"/>; an empty name, or a “ never closed, stays words.</summary>
+    /// one is the sentence's. A name longer than <paramref name="limit"/> scalars is cut in the middle (see
+    /// <see cref="Cut"/>); an empty name, or a “ never closed, stays words.</summary>
     public static IReadOnlyList<TextRun> Names(string sentence, int limit)
     {
         var runs = new List<TextRun>();
@@ -98,9 +98,64 @@ public readonly record struct TextRun(string Text, bool IsSetApart = false)
         return runs;
     }
 
-    /// <summary><paramref name="name"/> no longer than <paramref name="limit"/> scalars, the last of them <see cref="CutMark"/> when it was longer.</summary>
-    internal static List<int> Cut(List<int> name, int limit) =>
-        name.Count <= limit ? name : [.. name.Take(limit - 1), .. ControlText.Scalars(CutMark)];
+    /// <summary><paramref name="name"/> no longer than <paramref name="limit"/> scalars: when it is longer, as much of its start and
+    /// of its end as fit with <see cref="CutMark"/> between them, the end given the odd scalar. Names that share a long
+    /// start, as a team's often do, still read apart by their ends. A name comes here escaped, and an escape is kept or
+    /// left out whole, never split into a piece that reads as something else.</summary>
+    internal static List<int> Cut(List<int> name, int limit)
+    {
+        if (name.Count <= limit)
+        {
+            return name;
+        }
+        var pieces = Escapes(name);
+        var mark = ControlText.Scalars(CutMark).ToList();
+        var room = limit - mark.Count;
+        var start = Fitting(pieces, room / 2);
+        var end = Fitting(Enumerable.Reverse(pieces), room - room / 2);
+        end.Reverse();
+        return [.. start.SelectMany(piece => piece), .. mark, .. end.SelectMany(piece => piece)];
+    }
+
+    /// <summary>An escaped name in pieces: each escape whole — a backslash and the character after it, or
+    /// <c>\u{…}</c> to its closing brace — and every other scalar alone.</summary>
+    internal static List<List<int>> Escapes(List<int> name)
+    {
+        var pieces = new List<List<int>>();
+        var index = 0;
+        while (index < name.Count)
+        {
+            var end = index + 1;
+            if (name[index] == '\\' && end < name.Count)
+            {
+                end++;
+                if (name[index + 1] == 'u' && end < name.Count && name[end] == '{' && name.IndexOf('}', end) is var close and >= 0)
+                {
+                    end = close + 1;
+                }
+            }
+            pieces.Add(name.GetRange(index, end - index));
+            index = end;
+        }
+        return pieces;
+    }
+
+    /// <summary>The leading pieces that fit in <paramref name="room"/> scalars, stopping at the first that does not.</summary>
+    internal static List<List<int>> Fitting(IEnumerable<List<int>> pieces, int room)
+    {
+        var taken = new List<List<int>>();
+        var used = 0;
+        foreach (var piece in pieces)
+        {
+            if (used + piece.Count > room)
+            {
+                break;
+            }
+            taken.Add(piece);
+            used += piece.Count;
+        }
+        return taken;
+    }
 
     // Platform idiom: Join, where the Mac mirror says text(_:), since here Text is the record's own property.
     /// <summary>The scalars as text.</summary>

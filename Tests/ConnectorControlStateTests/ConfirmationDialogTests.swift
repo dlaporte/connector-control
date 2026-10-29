@@ -39,9 +39,10 @@ final class ConfirmationDialogTests: XCTestCase {
     }
 
     func testALongNameIsCutAndTheRestOfTheQuestionStays() {
-        let long = String(repeating: "x", count: 100)
+        let long = String(repeating: "a", count: 50) + String(repeating: "z", count: 50)
         XCTAssertEqual(ConfirmationDialog(question(ControlTools.addTitle("Claude", long))).title,
-                       [TextRun("Claude wants to add “"), TextRun(String(repeating: "x", count: 63) + TextRun.cutMark, isSetApart: true),
+                       [TextRun("Claude wants to add “"),
+                        TextRun(String(repeating: "a", count: 31) + TextRun.cutMark + String(repeating: "z", count: 32), isSetApart: true),
                         TextRun("”")])
         let exact = String(repeating: "y", count: ConfirmationDialog.nameLimit)
         XCTAssertEqual(ConfirmationDialog(question(ControlTools.addTitle("Claude", exact))).title[1], TextRun(exact, isSetApart: true),
@@ -49,6 +50,36 @@ final class ConfirmationDialogTests: XCTestCase {
         // Counted in scalars, as the Windows mirror counts them: 64 of these are 128 UTF-16 units.
         let wide = String(repeating: "👍", count: ConfirmationDialog.nameLimit)
         XCTAssertEqual(ConfirmationDialog(question(ControlTools.addTitle("Claude", wide))).title[1].text, wide)
+    }
+
+    /// A long name is cut in the middle, so two names that differ only at their ends read apart, and the
+    /// cut's own "…" is the only raw one: a name's own shows as its code.
+    func testNamesPastTheLimitStillReadApart() {
+        let prefix = String(repeating: "p", count: 63)
+        let one = ConfirmationDialog(question(ControlTools.deleteTitle("Claude", ControlText.quotedList([prefix + "-prod-1"]))))
+        let other = ConfirmationDialog(question(ControlTools.deleteTitle("Claude", ControlText.quotedList([prefix + "-prod-2"]))))
+        XCTAssertNotEqual(one.title, other.title)
+        XCTAssertEqual(one.title[1].text, String(repeating: "p", count: 31) + TextRun.cutMark + String(repeating: "p", count: 25) + "-prod-1")
+        XCTAssertEqual(one.title[1].text.unicodeScalars.count, ConfirmationDialog.nameLimit)
+        // A name that ends in its own "…" cannot pass for one that was cut.
+        XCTAssertEqual(ControlText.escapedName("name\u{2026}"), #"name\u{2026}"#)
+        let mimic = String(repeating: "m", count: 63) + "\u{2026}"
+        XCTAssertFalse(ConfirmationDialog(question(ControlTools.addTitle("Claude", ControlText.escapedName(mimic)))).title[1].text
+                        .hasSuffix(String(repeating: "m", count: 32) + TextRun.cutMark))
+    }
+
+    /// The cut never splits a character's escape: an escape is kept whole on its side of the "…", or left
+    /// out whole.
+    func testTheCutNeverSplitsAnEscape() {
+        // An escape across the 31st scalar, and one across the last 32.
+        let name = ControlText.escapedName(String(repeating: "a", count: 27) + "\u{202E}" + String(repeating: "b", count: 40)
+                                           + "\u{202E}" + String(repeating: "c", count: 27))
+        let shown = ConfirmationDialog(question(ControlTools.addTitle("Claude", name))).title[1].text
+        XCTAssertEqual(shown, String(repeating: "a", count: 27) + TextRun.cutMark + String(repeating: "c", count: 27))
+        let backslashes = ControlText.escapedName(String(repeating: "\\", count: 40))
+        let cut = ConfirmationDialog(question(ControlTools.addTitle("Claude", backslashes))).title[1].text
+        XCTAssertEqual(cut, String(repeating: "\\\\", count: 15) + TextRun.cutMark + String(repeating: "\\\\", count: 16))
+        XCTAssertLessThanOrEqual(cut.unicodeScalars.count, ConfirmationDialog.nameLimit)
     }
 
     func testAQuoteNeverClosedOrAnEmptyNameStaysWords() {

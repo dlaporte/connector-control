@@ -45,8 +45,9 @@ public class ConfirmationDialogTests
     [Fact]
     public void ALongNameIsCutAndTheRestOfTheQuestionStays()
     {
-        var longName = new string('x', 100);
-        Assert.Equal([new TextRun("Claude wants to add “"), new TextRun(new string('x', 63) + TextRun.CutMark, IsSetApart: true),
+        var longName = new string('a', 50) + new string('z', 50);
+        Assert.Equal([new TextRun("Claude wants to add “"),
+                      new TextRun(new string('a', 31) + TextRun.CutMark + new string('z', 32), IsSetApart: true),
                       new TextRun("”")],
             new ConfirmationDialog(Question(ControlTools.AddTitle("Claude", longName))).Title);
         var exact = new string('y', ConfirmationDialog.NameLimit);
@@ -55,6 +56,39 @@ public class ConfirmationDialogTests
         // Counted in scalars, as the Mac mirror counts them: 64 of these are 128 UTF-16 units.
         var wide = string.Concat(Enumerable.Repeat("👍", ConfirmationDialog.NameLimit));
         Assert.Equal(wide, new ConfirmationDialog(Question(ControlTools.AddTitle("Claude", wide))).Title[1].Text);
+    }
+
+    /// <summary>A long name is cut in the middle, so two names that differ only at their ends read apart, and the
+    /// cut's own "…" is the only raw one: a name's own shows as its code.</summary>
+    [Fact]
+    public void NamesPastTheLimitStillReadApart()
+    {
+        var prefix = new string('p', 63);
+        var one = new ConfirmationDialog(Question(ControlTools.DeleteTitle("Claude", ControlText.QuotedList([prefix + "-prod-1"]))));
+        var other = new ConfirmationDialog(Question(ControlTools.DeleteTitle("Claude", ControlText.QuotedList([prefix + "-prod-2"]))));
+        Assert.NotEqual(one.Title, other.Title);
+        Assert.Equal(new string('p', 31) + TextRun.CutMark + new string('p', 25) + "-prod-1", one.Title[1].Text);
+        Assert.Equal(ConfirmationDialog.NameLimit, ControlText.Width(one.Title[1].Text));
+        // A name that ends in its own "…" cannot pass for one that was cut.
+        Assert.Equal(@"name\u{2026}", ControlText.EscapedName("name\u2026"));
+        var mimic = new string('m', 63) + "\u2026";
+        Assert.False(new ConfirmationDialog(Question(ControlTools.AddTitle("Claude", ControlText.EscapedName(mimic)))).Title[1].Text
+            .EndsWith(new string('m', 32) + TextRun.CutMark, StringComparison.Ordinal));
+    }
+
+    /// <summary>The cut never splits a character's escape: an escape is kept whole on its side of the "…", or left
+    /// out whole.</summary>
+    [Fact]
+    public void TheCutNeverSplitsAnEscape()
+    {
+        // An escape across the 31st scalar, and one across the last 32.
+        var name = ControlText.EscapedName(new string('a', 27) + "\u202E" + new string('b', 40) + "\u202E" + new string('c', 27));
+        var shown = new ConfirmationDialog(Question(ControlTools.AddTitle("Claude", name))).Title[1].Text;
+        Assert.Equal(new string('a', 27) + TextRun.CutMark + new string('c', 27), shown);
+        var backslashes = ControlText.EscapedName(new string('\\', 40));
+        var cut = new ConfirmationDialog(Question(ControlTools.AddTitle("Claude", backslashes))).Title[1].Text;
+        Assert.Equal(string.Concat(Enumerable.Repeat(@"\\", 15)) + TextRun.CutMark + string.Concat(Enumerable.Repeat(@"\\", 16)), cut);
+        Assert.True(ControlText.Width(cut) <= ConfirmationDialog.NameLimit);
     }
 
     [Fact]

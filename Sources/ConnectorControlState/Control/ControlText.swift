@@ -94,7 +94,8 @@ public enum ControlText {
     }
 
     /// A name as the app's sentences quote it: as `escaped(_:)` shows it, with “ and ” escaped as
-    /// well, so a name can neither break its line nor close its own quotes and read as two names, and
+    /// well, so a name can neither break its line nor close its own quotes and read as two names, “…”
+    /// escaped, so a name's own cannot pass for where a long name was cut (`TextRun.cut(_:_:)`), and
     /// a backslash doubled, as `word(_:)` doubles one, so no two names read alike.
     public static func escapedName(_ text: String) -> String {
         var name = ""
@@ -103,7 +104,7 @@ public enum ControlText {
             let bare = marks.bare(scalar)
             switch scalar {
             case "\\": name += "\\\\"
-            case "\u{201C}", "\u{201D}": name += hexEscape(scalar)
+            case "\u{201C}", "\u{201D}", "\u{2026}": name += hexEscape(scalar)
             default: name += bare ? hexEscape(scalar) : escapeShown(scalar) ?? String(scalar)
             }
         }

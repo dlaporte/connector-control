@@ -113,7 +113,8 @@ public static class ControlText
     }
 
     /// <summary>A name as the app's sentences quote it: as <see cref="Escaped(string)"/> shows it, with “ and ” escaped as
-    /// well, so a name can neither break its line nor close its own quotes and read as two names, and
+    /// well, so a name can neither break its line nor close its own quotes and read as two names, “…”
+    /// escaped, so a name's own cannot pass for where a long name was cut (<see cref="TextRun.Cut"/>), and
     /// a backslash doubled, as <see cref="Word"/> doubles one, so no two names read alike.</summary>
     public static string EscapedName(string text)
     {
@@ -125,7 +126,7 @@ public static class ControlText
             name.Append(scalar switch
             {
                 Backslash => "\\\\",
-                OpeningQuote or ClosingQuote => HexEscape(scalar),
+                OpeningQuote or ClosingQuote or Ellipsis => HexEscape(scalar),
                 _ => bare ? HexEscape(scalar) : EscapeShown(scalar) ?? Text(scalar),
             });
         }
@@ -164,6 +165,7 @@ public static class ControlText
     private const int Apostrophe = '\'';
     private const int OpeningQuote = '\u201C';
     private const int ClosingQuote = '\u201D';
+    private const int Ellipsis = '\u2026';
 
     // Platform idiom: the Mac walks a string's scalars; a .NET string is UTF-16, so this walks the same
     // scalars itself, and keeps a lone surrogate, which only it can hold, as its own unit.
