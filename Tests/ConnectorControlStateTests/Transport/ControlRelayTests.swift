@@ -161,6 +161,35 @@ final class ControlRelayTests: XCTestCase {
         ], "the app went before it answered initialize")
     }
 
+    /// An `initialize` the app refuses is neither the handshake nor kept to replay: the app going then
+    /// ends the relay, as before any handshake, and the `initialize` the app accepts next is the one a
+    /// new connection replays.
+    func testARefusedInitializeIsNeitherTheHandshakeNorReplayed() throws {
+        let refusal = #"{"error":{"code":-32602,"message":"Unsupported protocol version"},"id":0,"jsonrpc":"2.0"}"#
+        let refused = ControlRelay()
+        _ = refused.fromClaude(initialize)
+        _ = refused.connectSucceeded()
+        XCTAssertEqual(refused.fromApp(refusal), [.toClaude(refusal)])
+        XCTAssertEqual(refused.connectionLost(), [.exit(ControlOutput.unreachableExit)], "no handshake was made")
+
+        let retried = ControlRelay()
+        _ = retried.fromClaude(initialize)
+        _ = retried.connectSucceeded()
+        _ = retried.fromApp(refusal)
+        let second = initialize.replacingOccurrences(of: #""id":0"#, with: #""id":1"#)
+            .replacingOccurrences(of: "2025-11-25", with: "2025-06-18")
+        XCTAssertEqual(retried.fromClaude(second), [.toApp(second)])
+        let accepted = initializeAnswer.replacingOccurrences(of: #""id":0"#, with: #""id":1"#)
+        XCTAssertEqual(retried.fromApp(accepted), [.toClaude(accepted)])
+        _ = retried.fromClaude(initialized)
+        XCTAssertEqual(retried.connectionLost(), [], "the accepted initialize was the handshake")
+        XCTAssertEqual(retried.fromClaude(call(2)), [.connect])
+        let replay = retried.connectSucceeded()
+        guard case .toApp(let replayed)? = replay.first else { return XCTFail("\(replay)") }
+        XCTAssertEqual(try XCTUnwrap(ControlRelay.message(replayed))["params"], ControlRelay.message(second)?["params"],
+                       "the initialize the app accepted, not the one it refused")
+    }
+
     func testWhenClaudeClosesTheRelayEndsOnceItsRequestsAreAnswered() {
         XCTAssertEqual(started().claudeClosed(), [.exit(ControlOutput.doneExit)], "nothing waiting: at once")
         let relay = started()

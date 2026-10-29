@@ -191,6 +191,36 @@ public class ControlRelayTests
         ], dropped.ConnectionLost());
     }
 
+    /// <summary>An <c>initialize</c> the app refuses is neither the handshake nor kept to replay: the app going then
+    /// ends the relay, as before any handshake, and the <c>initialize</c> the app accepts next is the one a new
+    /// connection replays.</summary>
+    [Fact]
+    public void ARefusedInitializeIsNeitherTheHandshakeNorReplayed()
+    {
+        const string refusal = """{"error":{"code":-32602,"message":"Unsupported protocol version"},"id":0,"jsonrpc":"2.0"}""";
+        var refused = new ControlRelay();
+        _ = refused.FromClaude(Initialize);
+        _ = refused.ConnectSucceeded();
+        Assert.Equal([ToClaude(refusal)], refused.FromApp(refusal));
+        Assert.Equal([Exit(ControlOutput.UnreachableExit)], refused.ConnectionLost());   // no handshake was made
+
+        var retried = new ControlRelay();
+        _ = retried.FromClaude(Initialize);
+        _ = retried.ConnectSucceeded();
+        _ = retried.FromApp(refusal);
+        var second = Initialize.Replace("\"id\":0", "\"id\":1", StringComparison.Ordinal).Replace("2025-11-25", "2025-06-18", StringComparison.Ordinal);
+        Assert.Equal([ToApp(second)], retried.FromClaude(second));
+        var accepted = InitializeAnswer.Replace("\"id\":0", "\"id\":1", StringComparison.Ordinal);
+        Assert.Equal([ToClaude(accepted)], retried.FromApp(accepted));
+        _ = retried.FromClaude(Initialized);
+        Assert.Empty(retried.ConnectionLost());   // the accepted initialize was the handshake
+        Assert.Equal([Connect()], retried.FromClaude(Call(2)));
+        var replay = retried.ConnectSucceeded();
+        var replayed = Assert.IsType<ControlRelay.Action.ToApp>(replay[0]).Line;
+        // the initialize the app accepted, not the one it refused
+        Assert.Equal(ControlRelay.Message(second)!["params"], ControlRelay.Message(replayed)!["params"]);
+    }
+
     [Fact]
     public void WhenClaudeClosesTheRelayEndsOnceItsRequestsAreAnswered()
     {

@@ -39,11 +39,14 @@ public sealed class ControlRelay
     }
 
     public bool IsConnected { get; private set; }
-    /// <summary>Claude's <c>initialize</c>, as it sent it.</summary>
+    /// <summary>The <c>initialize</c> the app accepted, as Claude sent it: the one a new connection replays.</summary>
     private JsonValue? initialize;
+    /// <summary>Claude's latest <c>initialize</c> while none is accepted: kept for a replay only once the app answers
+    /// it with a result, so one the app refused is never replayed.</summary>
+    private JsonValue? offered;
     /// <summary>Claude's <c>notifications/initialized</c>, as it sent it.</summary>
     private string? initialized;
-    /// <summary>The app has answered Claude's own <c>initialize</c>.</summary>
+    /// <summary>The app has accepted Claude's own <c>initialize</c>.</summary>
     private bool handshakeDone;
     /// <summary>Requests forwarded and not yet answered, oldest first.</summary>
     private readonly List<(JsonValue Id, string Method)> pending = [];
@@ -61,7 +64,7 @@ public sealed class ControlRelay
         var message = Message(line);
         if (message is not null && message["id"] is not null && message["method"] == JsonValue.String("initialize") && initialize is null)
         {
-            initialize = message;
+            offered = message;
         }
         if (message is not null && message["id"] is null && message["method"] == JsonValue.String("notifications/initialized") && initialized is null)
         {
@@ -168,8 +171,14 @@ public sealed class ControlRelay
             {
                 var method = pending[index].Method;
                 pending.RemoveAt(index);
-                if (method == "initialize")
+                // Only an answer with a result is the handshake: an error leaves the relay as before it, so the
+                // app going still ends it, and the refused initialize is never replayed.
+                if (method == "initialize" && message["result"] is not null)
                 {
+                    if (initialize is null && offered is not null && Request(offered)?.Id == id)
+                    {
+                        initialize = offered;
+                    }
                     handshakeDone = true;
                 }
             }

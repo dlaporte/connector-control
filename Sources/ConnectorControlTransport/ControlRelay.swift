@@ -27,11 +27,14 @@ public final class ControlRelay {
     }
 
     public private(set) var isConnected = false
-    /// Claude's `initialize`, as it sent it.
+    /// The `initialize` the app accepted, as Claude sent it: the one a new connection replays.
     private var initialize: [String: JSONValue]?
+    /// Claude's latest `initialize` while none is accepted: kept for a replay only once the app answers it
+    /// with a result, so one the app refused is never replayed.
+    private var offered: [String: JSONValue]?
     /// Claude's `notifications/initialized`, as it sent it.
     private var initialized: String?
-    /// The app has answered Claude's own `initialize`.
+    /// The app has accepted Claude's own `initialize`.
     private var handshakeDone = false
     /// Requests forwarded and not yet answered, oldest first.
     private var pending: [(id: JSONValue, method: String)] = []
@@ -49,7 +52,7 @@ public final class ControlRelay {
     public func fromClaude(_ line: String) -> [Action] {
         let message = ControlRelay.message(line)
         if let message, message["id"] != nil, message["method"] == .string("initialize"), initialize == nil {
-            initialize = message
+            offered = message
         }
         if let message, message["id"] == nil, message["method"] == .string("notifications/initialized"), initialized == nil {
             initialized = line
@@ -121,7 +124,11 @@ public final class ControlRelay {
                 replayID = nil
                 return []
             }
-            if let index = pending.firstIndex(where: { $0.id == id }), pending.remove(at: index).method == "initialize" {
+            // Only an answer with a result is the handshake: an error leaves the relay as before it, so the
+            // app going still ends it, and the refused `initialize` is never replayed.
+            if let index = pending.firstIndex(where: { $0.id == id }), pending.remove(at: index).method == "initialize",
+               message["result"] != nil {
+                if initialize == nil, let offered, ControlRelay.request(offered)?.id == id { initialize = offered }
                 handshakeDone = true
             }
         }
