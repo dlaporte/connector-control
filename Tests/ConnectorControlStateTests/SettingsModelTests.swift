@@ -299,4 +299,136 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertFalse(model.canChangeClaudeIntegration)
         XCTAssertEqual(model.claudeIntegrationNote, ClaudeIntegration.clashNote)
     }
+
+    /// The Claude group follows a change made anywhere else while the window is open: the command-line
+    /// tool turning the integration on, the endpoint failing. Dispose stops it.
+    func testTheClaudeGroupFollowsChangesMadeElsewhere() {
+        let rig = Rig(); defer { rig.dispose() }
+        var raised = 0
+        let subscription = rig.model.objectWillChange.sink { _ in raised += 1 }
+        defer { subscription.cancel() }
+        XCTAssertNil(rig.state.setClaudeIntegrationEnabled(true), "as the command-line tool turns it on")
+        XCTAssertGreaterThan(raised, 0)
+        XCTAssertTrue(rig.model.claudeIntegrationEnabled)
+        XCTAssertNil(rig.model.controlEndpointProblem)
+        let before = raised
+        rig.state.reportControlEndpointUnavailable()
+        XCTAssertGreaterThan(raised, before)
+        XCTAssertEqual(rig.model.controlEndpointProblem, ClaudeIntegration.endpointUnavailableText)
+        rig.model.dispose()
+        let disposed = raised
+        rig.state.setClaudeIntegrationEnabled(false)
+        XCTAssertEqual(raised, disposed, "dispose stops the relay")
+    }
+
+    /// Switching into a collection whose connector holds the name, and out again: while on, the switch
+    /// can still go off and names the clash in place of its caption; while off, it is dimmed until the
+    /// clash ends.
+    func testSwitchingIntoAndOutOfAClashingCollection() throws {
+        let h = AppStateHarness()
+        try MasterStoreIO.save(MasterStore(activeCollection: "Default", collections: [
+            "Default": Collection(mcps: [:]),
+            "Old": Collection(mcps: [ClaudeIntegration.entryName: MCPEntry(config: .object(["command": .string("x")]))]),
+        ]), to: h.masterStoreURL)
+        h.controlToolPath = "/x/connector-control"
+        h.settings.claudeIntegrationEnabled = true
+        let state = h.create()
+        let model = SettingsModel(state: state, settings: h.settings, autostart: FakeAutostart(), updater: FakeUpdater())
+        defer { model.dispose(); h.dispose() }
+        h.drain()
+        XCTAssertEqual(model.claudeIntegrationCaptionText, SettingsModel.claudeIntegrationCaption)
+        XCTAssertFalse(model.claudeIntegrationCaptionIsWarning)
+        XCTAssertEqual(model.claudeIntegrationTitleOpacity, 1)
+        XCTAssertEqual(try h.claudeServers()[ClaudeIntegration.entryName], ClaudeIntegration.entry(toolPath: "/x/connector-control"))
+        state.switchCollection(to: "Old")
+        h.drain()
+        XCTAssertTrue(model.canChangeClaudeIntegration, "on, it can still go off")
+        XCTAssertEqual(model.claudeIntegrationCaptionText, ClaudeIntegration.clashNote)
+        XCTAssertTrue(model.claudeIntegrationCaptionIsWarning)
+        XCTAssertNotEqual(try h.claudeServers()[ClaudeIntegration.entryName], ClaudeIntegration.entry(toolPath: "/x/connector-control"),
+                          "the app's own entry gives way to the connector that holds the name")
+        model.claudeIntegrationEnabled = false
+        XCTAssertFalse(model.canChangeClaudeIntegration, "off, it is dimmed while the clash lasts")
+        XCTAssertEqual(model.claudeIntegrationTitleOpacity, SettingsModel.dimmedOpacity, "its title fades; the note does not")
+        state.switchCollection(to: "Default")
+        h.drain()
+        XCTAssertTrue(model.canChangeClaudeIntegration)
+        XCTAssertEqual(model.claudeIntegrationCaptionText, SettingsModel.claudeIntegrationCaption)
+    }
+
+    /// An app run from where it will not stay cannot turn the integration on or install the tool: the
+    /// switch and Install are dimmed and say why. Removing a link made earlier still works.
+    func testAnAppRunFromWhereItWillNotStayDimsTheSwitchAndInstall() {
+        let h = AppStateHarness()
+        h.controlToolPath = "/Volumes/Connector Control/Connector Control.app/Contents/MacOS/connector-control"
+        h.controlToolIsTransient = true
+        let state = h.create()
+        let tool = FakeCommandLineTool()
+        let model = SettingsModel(state: state, settings: h.settings, autostart: FakeAutostart(), updater: FakeUpdater(),
+                                  commandLineTool: tool)
+        defer { model.dispose(); h.dispose() }
+        XCTAssertFalse(model.canChangeClaudeIntegration)
+        XCTAssertEqual(model.claudeIntegrationCaptionText, ClaudeIntegration.moveToApplicationsError)
+        XCTAssertTrue(model.claudeIntegrationCaptionIsWarning)
+        XCTAssertFalse(model.canUseCommandLineToolButton)
+        XCTAssertEqual(model.commandLineToolMessage, ClaudeIntegration.moveToApplicationsError)
+        model.commandLineToolAction()
+        XCTAssertEqual(tool.installs, 0)
+        tool.isInstalled = true
+        XCTAssertTrue(model.canUseCommandLineToolButton, "a link made earlier can still go")
+        XCTAssertNil(model.commandLineToolMessage)
+    }
+
+    // MARK: Command-line tool
+
+    func testTheCommandLineToolRowInstallsAndRemoves() {
+        let h = AppStateHarness()
+        let state = h.create()
+        let tool = FakeCommandLineTool()
+        let model = SettingsModel(state: state, settings: h.settings, autostart: FakeAutostart(), updater: FakeUpdater(),
+                                  commandLineTool: tool)
+        defer { model.dispose(); h.dispose() }
+        XCTAssertTrue(model.hasCommandLineTool)
+        XCTAssertEqual(model.commandLineToolStatus, [TextRun(CommandLineToolText.notInstalledText)])
+        XCTAssertEqual(model.commandLineToolCaption, [TextRun("Scripts can always use "), TextRun(tool.toolPath, isSetApart: true)])
+        XCTAssertEqual(model.commandLineToolButton, CommandLineToolText.installButton)
+        XCTAssertNil(model.commandLineToolMessage)
+
+        model.commandLineToolAction()
+        XCTAssertEqual(tool.installs, 1)
+        XCTAssertTrue(model.commandLineToolBusy)
+        XCTAssertFalse(model.canUseCommandLineToolButton, "one at a time, while the password prompt is up")
+        model.commandLineToolAction()
+        XCTAssertEqual(tool.installs, 1)
+        let reopened = SettingsModel(state: state, settings: h.settings, autostart: FakeAutostart(), updater: FakeUpdater(),
+                                     commandLineTool: tool)
+        XCTAssertFalse(reopened.canUseCommandLineToolButton, "a Settings window opened while the prompt is up cannot start a second one")
+        tool.finish(installed: true)
+        XCTAssertFalse(model.commandLineToolBusy)
+        XCTAssertTrue(reopened.canUseCommandLineToolButton)
+        reopened.dispose()
+        XCTAssertEqual(model.commandLineToolStatus, [TextRun("Installed at "), TextRun("/usr/local/bin/connector-control", isSetApart: true)])
+        XCTAssertEqual(model.commandLineToolCaption, [TextRun("Run "), TextRun(CommandLineToolText.helpCommand, isSetApart: true),
+                                                      TextRun(" in Terminal.")])
+        XCTAssertEqual(model.commandLineToolButton, CommandLineToolText.removeButton)
+        tool.installedLocation = nil
+        XCTAssertEqual(model.commandLineToolStatus, [TextRun(CommandLineToolText.inPathText)], "in the PATH, as Windows puts it there")
+
+        model.commandLineToolAction()
+        XCTAssertEqual(tool.removals, 1)
+        tool.finish(installed: true, problem: CommandLineToolText.removeFailedError("Access denied."))
+        XCTAssertEqual(model.commandLineToolMessage, CommandLineToolText.removeFailedError("Access denied."))
+        XCTAssertEqual(model.commandLineToolButton, CommandLineToolText.removeButton)
+        model.commandLineToolAction()
+        XCTAssertNil(model.commandLineToolMessage, "a new try clears the last failure")
+        tool.finish(installed: false)
+        XCTAssertEqual(model.commandLineToolButton, CommandLineToolText.installButton)
+    }
+
+    func testWithNoToolThereIsNoRow() {
+        let rig = Rig(); defer { rig.dispose() }
+        XCTAssertFalse(rig.model.hasCommandLineTool)
+        XCTAssertEqual(rig.model.commandLineToolStatus, [])
+        XCTAssertFalse(rig.model.canUseCommandLineToolButton)
+    }
 }

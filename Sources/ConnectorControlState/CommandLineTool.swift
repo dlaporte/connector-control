@@ -12,6 +12,12 @@ public protocol CommandLineTool: AnyObject {
     var toolPath: String { get }
     /// Whether the tool is on PATH as this app put it there.
     var isInstalled: Bool { get }
+    /// Where the tool is on PATH, when that is one place a person can be told of: the Mac's link.
+    /// nil on Windows, which puts a folder in the user PATH.
+    var installedLocation: String? { get }
+    /// Install or Remove is running — an administrator prompt is up, or the PATH's change is being
+    /// announced. The seam's, not a window's, so a Settings window opened meanwhile cannot start another.
+    var isBusy: Bool { get }
     /// Puts the tool on PATH. `completion` runs on the main actor, once, with nil when it is done or the
     /// person cancelled — `isInstalled` says which — or the reason it failed, in the app's words.
     /// It may run before `install` returns (nothing to do, or a refusal), so a caller sets its busy state before
@@ -23,10 +29,23 @@ public protocol CommandLineTool: AnyObject {
 
 /// Mirror: windows/src/ConnectorControl.Core/State/CommandLineTool.cs
 ///
-/// What installing or removing the command-line tool says when it fails.
+/// What Settings' Command-Line Tool row says, and what installing or removing the tool says when it fails.
 public enum CommandLineToolText {
     /// Why the Mac's administrator prompt asks. Windows asks for nothing, so never shows it.
     public static let adminPrompt = "Connector Control needs your password to change the connector-control command in /usr/local/bin."
+    public static let notInstalledText = "Not installed"
+    public static let inPathText = "In your PATH"
+    public static let installButton = "Install"
+    public static let removeButton = "Remove"
+    /// The command the caption sets apart.
+    public static let helpCommand = "connector-control help"
+    // Platform idiom: a link in /usr/local/bin reaches every terminal at once, so the Mac names its Terminal
+    // app; on Windows a terminal already open keeps the PATH it started with, so the mirror says "a new terminal".
+    public static let runHelpCaption = "Run connector-control help in Terminal."
+
+    public static func installedAtText(_ path: String) -> String { "Installed at \(path)" }
+
+    public static func scriptsCaption(_ path: String) -> String { "Scripts can always use \(path)" }
 
     public static func installFailedError(_ reason: String) -> String { "The command-line tool couldn’t be installed: \(reason)" }
 

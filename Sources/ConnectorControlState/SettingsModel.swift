@@ -34,6 +34,11 @@ public final class SettingsModel: ObservableObject {
     public static let confirmClaudeChangesTitle = "Confirm changes Claude makes to connectors"
     public static let confirmClaudeChangesOnCaption = "Adding, editing or deleting a connector, deleting a collection, importing, subscribing, applying an update and restoring a backup ask here first."
     public static let confirmClaudeChangesOffCaption = "Claude can then change what it runs without asking here. Text Claude reads, such as a web page, could ask it to."
+    /// "Command-Line Tool" is the Mac's title case; the Windows mirror says "Command-line tool".
+    public static let commandLineToolHeader = "Command-Line Tool"
+    /// How far a row's title fades while its switch cannot change, as the mockup draws it; the note that
+    /// says why keeps full opacity.
+    public static let dimmedOpacity = 0.45
     public static let loginItemApprovalNote = "Approve Connector Control under System Settings → General → Login Items."
     public static let minKeepCount = 5
     public static let maxKeepCount = 100
@@ -48,21 +53,24 @@ public final class SettingsModel: ObservableObject {
     private let settings: AppSettings
     private let autostart: Autostart
     private let updater: Updater
+    private let commandLineTool: CommandLineTool?
     private var subscriptions: Set<AnyCancellable> = []
     private var settingLaunchAtLoginSilently = false
 
-    public init(state: AppState, settings: AppSettings, autostart: Autostart, updater: Updater) {
+    public init(state: AppState, settings: AppSettings, autostart: Autostart, updater: Updater,
+                commandLineTool: CommandLineTool? = nil) {
         self.state = state
         self.settings = settings
         self.autostart = autostart
         self.updater = updater
+        self.commandLineTool = commandLineTool
         launchAtLogin = autostart.isEnabled
-        // Only the tool statuses are relayed from AppState. The Storage tab's
-        // path and keep count derive from state.service, whose only writers
-        // (repointStore, refreshServiceSettings) are called from this model,
-        // which raises objectWillChange itself first. An AppState-side repoint
-        // added later would need a relay of state.objectWillChange here.
-        state.$toolStatuses.dropFirst()
+        // Every change AppState announces repaints the view, as the popover's model relays them: the
+        // tool statuses, and the Claude group's state, which the command-line tool, MDM, a synced
+        // store or a failing endpoint can change while the window is open. Platform idiom: SwiftUI
+        // repaints from this one relay; WPF bindings listen by name, so the Windows mirror raises the
+        // members each change affects.
+        state.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &subscriptions)
         // A change made in Sparkle's own dialog must not leave the toggle stale.
@@ -215,11 +223,31 @@ public final class SettingsModel: ObservableObject {
         }
     }
 
-    /// Dimmed while a connector holds the name — unless the switch is on, so it can still go off.
-    public var canChangeClaudeIntegration: Bool { settings.claudeIntegrationEnabled || !state.claudeIntegrationClash }
+    /// Dimmed while a connector holds the name, or the app runs from where it will not stay — unless
+    /// the switch is on, so it can still go off.
+    public var canChangeClaudeIntegration: Bool {
+        settings.claudeIntegrationEnabled || (!state.claudeIntegrationClash && !state.controlToolIsTransient)
+    }
 
-    /// The clash, named under the switch; nil while there is none.
-    public var claudeIntegrationNote: String? { state.claudeIntegrationClash ? ClaudeIntegration.clashNote : nil }
+    /// Why the switch is dimmed, under it: the app runs from where it will not stay (while off: moving
+    /// it is the one thing that helps), else the clash; nil while there is neither.
+    public var claudeIntegrationNote: String? {
+        if !settings.claudeIntegrationEnabled, state.controlToolIsTransient { return ClaudeIntegration.moveToApplicationsError }
+        return state.claudeIntegrationClash ? ClaudeIntegration.clashNote : nil
+    }
+
+    /// Under the switch: the note while there is one, else what the switch does.
+    public var claudeIntegrationCaptionText: String { claudeIntegrationNote ?? SettingsModel.claudeIntegrationCaption }
+
+    /// A note under the switch is a warning (amber in the view).
+    public var claudeIntegrationCaptionIsWarning: Bool { claudeIntegrationNote != nil }
+
+    /// The switch's title, dimmed with the switch; the note under it is not.
+    public var claudeIntegrationTitleOpacity: Double { canChangeClaudeIntegration ? 1 : SettingsModel.dimmedOpacity }
+
+    /// Why Claude and the command-line tool cannot reach this app, while they cannot; shown in the
+    /// Claude Integration group whether the switch is on or off.
+    public var controlEndpointProblem: String? { state.controlEndpointProblem }
 
     public var confirmClaudeChanges: Bool {
         get { settings.confirmClaudeChanges }
@@ -246,6 +274,66 @@ public final class SettingsModel: ObservableObject {
 
     /// The running app's version, as the Updates section shows it.
     public var version: String { updater.versionDisplay }
+
+    // MARK: - Command-line tool
+
+    /// Whether the app has a tool to put on PATH; the group is left out when it has none.
+    public var hasCommandLineTool: Bool { commandLineTool != nil }
+
+    /// Where the tool is, or that it is not installed; the link set apart.
+    public var commandLineToolStatus: [TextRun] {
+        guard let tool = commandLineTool else { return [] }
+        guard tool.isInstalled else { return [TextRun(CommandLineToolText.notInstalledText)] }
+        guard let location = tool.installedLocation else { return [TextRun(CommandLineToolText.inPathText)] }
+        return TextRun.runs(CommandLineToolText.installedAtText(location), settingApart: [location])
+    }
+
+    /// What to do with it: run `help` once installed; else the full path scripts can always use.
+    public var commandLineToolCaption: [TextRun] {
+        guard let tool = commandLineTool else { return [] }
+        if tool.isInstalled {
+            return TextRun.runs(CommandLineToolText.runHelpCaption, settingApart: [CommandLineToolText.helpCommand])
+        }
+        return TextRun.runs(CommandLineToolText.scriptsCaption(tool.toolPath), settingApart: [tool.toolPath])
+    }
+
+    public var commandLineToolButton: String {
+        commandLineTool?.isInstalled == true ? CommandLineToolText.removeButton : CommandLineToolText.installButton
+    }
+
+    /// Install or Remove is running: an administrator prompt, or the PATH's broadcast. The seam's state,
+    /// so a window opened meanwhile sees it too.
+    public var commandLineToolBusy: Bool { commandLineTool?.isBusy == true }
+
+    @Published private var commandLineToolError: String?
+
+    /// Under the row: why the last try failed, else why Install cannot work here; nil otherwise.
+    public var commandLineToolMessage: String? {
+        commandLineToolError ?? (installRefused ? ClaudeIntegration.moveToApplicationsError : nil)
+    }
+
+    public var canUseCommandLineToolButton: Bool { commandLineTool != nil && !commandLineToolBusy && !installRefused }
+
+    /// Install while the app runs from where it will not stay: a link would point at a path about to be gone.
+    private var installRefused: Bool { commandLineTool?.isInstalled == false && state.controlToolIsTransient }
+
+    // Platform idiom: the Windows mirror raises the row's members by name as the operation starts and as it
+    // ends; here objectWillChange repaints the view, which reads the seam's busy state afresh.
+    /// The row's button: Install or Remove, one at a time. A failure stays under the row until the next try.
+    public func commandLineToolAction() {
+        guard let tool = commandLineTool, canUseCommandLineToolButton else { return }
+        objectWillChange.send()
+        commandLineToolError = nil
+        let finished: (String?) -> Void = { [weak self] problem in
+            self?.objectWillChange.send()
+            self?.commandLineToolError = problem
+        }
+        if tool.isInstalled {
+            tool.remove(completion: finished)
+        } else {
+            tool.install(completion: finished)
+        }
+    }
 
     // MARK: - Tools
 

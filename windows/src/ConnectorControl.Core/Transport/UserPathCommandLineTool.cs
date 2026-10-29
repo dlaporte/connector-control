@@ -13,7 +13,15 @@ namespace ConnectorControl.Core.Transport;
 /// </summary>
 public sealed class UserPathCommandLineTool(string binDir, IUserEnvironment environment, AppHost host) : ICommandLineTool
 {
+    private bool busy;
+
     public string ToolPath => Path.Combine(binDir, ControlEndpoint.ToolFileName);
+
+    /// <summary>None: the user PATH holds a folder, with no one place to name.</summary>
+    public string? InstalledLocation => null;
+
+    /// <summary>While the change runs and is announced, off the UI thread.</summary>
+    public bool IsBusy => busy;
 
     public bool IsInstalled
     {
@@ -34,7 +42,9 @@ public sealed class UserPathCommandLineTool(string binDir, IUserEnvironment envi
 
     public void Remove(Action<string?> completion) => Change(path => UserPath.Removing(path, binDir), CommandLineToolText.RemoveFailedError, completion);
 
-    private void Change(Func<string?, string> change, Func<string, string> failure, Action<string?> completion) =>
+    private void Change(Func<string?, string> change, Func<string, string> failure, Action<string?> completion)
+    {
+        busy = true;
         host.Background(() =>
         {
             string? problem = null;
@@ -52,6 +62,12 @@ public sealed class UserPathCommandLineTool(string binDir, IUserEnvironment envi
                 // The task's boundary: whatever goes wrong becomes the sentence, so a bound UI is never left waiting.
                 problem = failure(ex.Message);
             }
-            host.Marshal(() => completion(problem));
+            host.Marshal(() =>
+            {
+                // Not busy by the time the completion runs, so what it raises can start the next one.
+                busy = false;
+                completion(problem);
+            });
         });
+    }
 }

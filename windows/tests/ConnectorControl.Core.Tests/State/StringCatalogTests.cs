@@ -109,8 +109,10 @@ public class StringCatalogTests
         ["CollectionsModel.selectedCount"] = ["3"],
         ["CollectionsModel.stopSyncingMessage"] = ["X"],
         ["CommandLineToolText.installFailedError"] = ["X"],
+        ["CommandLineToolText.installedAtText"] = ["X"],
         ["CommandLineToolText.occupiedError"] = ["X"],
         ["CommandLineToolText.removeFailedError"] = ["X"],
+        ["CommandLineToolText.scriptsCaption"] = ["X"],
         ["ConfigService.corruptStoreNote"] = ["X"],
         ["ConfigService.corruptStoreRestoredNote"] = ["X", "Y"],
         ["ConfigService.invalidBackupError"] = ["X", "Y"],
@@ -427,9 +429,17 @@ public class StringCatalogTests
         // MARK: CommandLineToolText
 
         actual["CommandLineToolText.adminPrompt"] = CommandLineToolText.AdminPrompt;
+        actual["CommandLineToolText.helpCommand"] = CommandLineToolText.HelpCommand;
+        actual["CommandLineToolText.inPathText"] = CommandLineToolText.InPathText;
+        actual["CommandLineToolText.installButton"] = CommandLineToolText.InstallButton;
         actual["CommandLineToolText.installFailedError"] = CommandLineToolText.InstallFailedError("X");
+        actual["CommandLineToolText.installedAtText"] = CommandLineToolText.InstalledAtText("X");
+        actual["CommandLineToolText.notInstalledText"] = CommandLineToolText.NotInstalledText;
         actual["CommandLineToolText.occupiedError"] = CommandLineToolText.OccupiedError("X");
+        actual["CommandLineToolText.removeButton"] = CommandLineToolText.RemoveButton;
         actual["CommandLineToolText.removeFailedError"] = CommandLineToolText.RemoveFailedError("X");
+        actual["CommandLineToolText.runHelpCaption"] = CommandLineToolText.RunHelpCaption;
+        actual["CommandLineToolText.scriptsCaption"] = CommandLineToolText.ScriptsCaption("X");
 
         // MARK: ControlMasking / ControlText
 
@@ -887,6 +897,7 @@ public class StringCatalogTests
         actual["SettingsModel.claudeIntegrationHeader"] = SettingsModel.ClaudeIntegrationHeader;
         actual["SettingsModel.claudeIntegrationTitle"] = SettingsModel.ClaudeIntegrationTitle;
         actual["SettingsModel.claudeTab"] = SettingsModel.ClaudeTab;
+        actual["SettingsModel.commandLineToolHeader"] = SettingsModel.CommandLineToolHeader;
         actual["SettingsModel.confirmClaudeChangesOffCaption"] = SettingsModel.ConfirmClaudeChangesOffCaption;
         actual["SettingsModel.confirmClaudeChangesOnCaption"] = SettingsModel.ConfirmClaudeChangesOnCaption;
         actual["SettingsModel.confirmClaudeChangesTitle"] = SettingsModel.ConfirmClaudeChangesTitle;

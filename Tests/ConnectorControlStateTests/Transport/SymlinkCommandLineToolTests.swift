@@ -9,6 +9,8 @@ final class SymlinkCommandLineToolTests: XCTestCase {
     final class Scripts: @unchecked Sendable {
         var ran: [[String]] = []
         var answer: (Int32, String) = (0, "")
+        /// Runs while a script runs, before it answers: what the tool shows while the prompt is up.
+        var whileRunning: (() -> Void)?
     }
 
     private let tool = "/Applications/Connector Control.app/Contents/MacOS/connector-control"
@@ -23,6 +25,7 @@ final class SymlinkCommandLineToolTests: XCTestCase {
         SymlinkCommandLineTool(toolPath: tool ?? self.tool, linkPath: dir.file("bin/connector-control").path, host: host(transient: transient),
                                runScript: { arguments in
                                    scripts.ran.append(arguments)
+                                   scripts.whileRunning?()
                                    return scripts.answer
                                })
     }
@@ -39,7 +42,9 @@ final class SymlinkCommandLineToolTests: XCTestCase {
         let scripts = Scripts()
         let installer = make(dir, scripts)
         XCTAssertFalse(installer.isInstalled)
+        XCTAssertEqual(installer.installedLocation, installer.linkPath, "the link is where it is installed")
         XCTAssertEqual(answer(installer.install), .some(nil))
+        XCTAssertFalse(installer.isBusy)
         XCTAssertTrue(installer.isInstalled)
         XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: installer.linkPath), tool)
         XCTAssertEqual(answer(installer.remove), .some(nil))
@@ -56,7 +61,11 @@ final class SymlinkCommandLineToolTests: XCTestCase {
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: bin.path) }
         let scripts = Scripts()
         let installer = make(dir, scripts)
+        var busy: [Bool] = []
+        scripts.whileRunning = { MainActor.assumeIsolated { busy.append(installer.isBusy) } }
         XCTAssertEqual(answer(installer.install), .some(nil))
+        XCTAssertEqual(busy, [true], "busy while the prompt is up")
+        XCTAssertFalse(installer.isBusy)
         let script = SymlinkCommandLineTool.installScript.flatMap { ["-e", $0] }
         XCTAssertEqual(scripts.ran, [script + [tool, installer.linkPath, bin.path, CommandLineToolText.adminPrompt]],
                        "the paths and the prompt go as arguments, never as script")

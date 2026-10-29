@@ -911,6 +911,10 @@ public final class AppState: ObservableObject {
         store.collections[activeCollection]?.mcps[ClaudeIntegration.entryName] != nil
     }
 
+    /// Whether the app runs from where it will not stay — a translocated copy, or its disk image — so
+    /// what that refuses can be dimmed in Settings, with the reason.
+    public var controlToolIsTransient: Bool { host.controlToolIsTransient }
+
     /// Connector Control's own entry while the switch is on, the app has a tool to name and no
     /// connector holds the name; nil otherwise.
     var claudeIntegrationEntry: JSONValue? {

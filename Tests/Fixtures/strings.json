@@ -227,14 +227,29 @@
   "CollectionsModel.updateAvailableStatus": "update available",
   "CollectionsModel.windowTitle": "Collections",
   "CommandLineToolText.adminPrompt": "Connector Control needs your password to change the connector-control command in /usr/local/bin.",
+  "CommandLineToolText.helpCommand": "connector-control help",
+  "CommandLineToolText.inPathText": "In your PATH",
+  "CommandLineToolText.installButton": "Install",
   "CommandLineToolText.installFailedError": {
     "format": "The command-line tool couldn’t be installed: {0}"
   },
+  "CommandLineToolText.installedAtText": {
+    "format": "Installed at {0}"
+  },
+  "CommandLineToolText.notInstalledText": "Not installed",
   "CommandLineToolText.occupiedError": {
     "format": "{0} already exists and isn’t a link to Connector Control. Remove it, then try again."
   },
+  "CommandLineToolText.removeButton": "Remove",
   "CommandLineToolText.removeFailedError": {
     "format": "The command-line tool couldn’t be removed: {0}"
+  },
+  "CommandLineToolText.runHelpCaption": {
+    "mac": "Run connector-control help in Terminal.",
+    "win": "Run connector-control help in a new terminal."
+  },
+  "CommandLineToolText.scriptsCaption": {
+    "format": "Scripts can always use {0}"
   },
   "ConfigService.corruptStoreNote": {
     "format": "The MCP list file was unreadable; it was preserved as {0} and rebuilt from Claude’s config."
@@ -1016,6 +1031,10 @@
   },
   "SettingsModel.claudeIntegrationTitle": "Let Claude manage Connector Control",
   "SettingsModel.claudeTab": "Claude",
+  "SettingsModel.commandLineToolHeader": {
+    "mac": "Command-Line Tool",
+    "win": "Command-line tool"
+  },
   "SettingsModel.configPathLabel": {
     "win": "Config file"
   },

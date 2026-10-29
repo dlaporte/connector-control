@@ -1324,6 +1324,12 @@ public sealed class AppState : ObservableObject, IDisposable
         Store.Collections.TryGetValue(ActiveCollection, out var collection) && collection.Mcps.ContainsKey(ClaudeIntegration.EntryName);
 
     /// <summary>
+    /// Whether the app runs from where it will not stay — a translocated copy, or its disk image — so
+    /// what that refuses can be dimmed in Settings, with the reason.
+    /// </summary>
+    public bool ControlToolIsTransient => host.ControlToolIsTransient;
+
+    /// <summary>
     /// Connector Control's own entry while the switch is on, the app has a tool to name and no
     /// connector holds the name; null otherwise.
     /// </summary>

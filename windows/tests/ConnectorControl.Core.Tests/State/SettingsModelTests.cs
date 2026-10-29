@@ -17,12 +17,12 @@ public class SettingsModelTests
         public UpdateCoordinator Updates { get; }
         public SettingsModel Model { get; }
 
-        public Rig(Action<AppStateHarness>? beforeCreate = null)
+        public Rig(Action<AppStateHarness>? beforeCreate = null, ICommandLineTool? tool = null)
         {
             beforeCreate?.Invoke(H);
             State = H.Create();
             Updates = new UpdateCoordinator(Updater, H.Settings, H.Notifier, H.Dialogs, AppHost.Inline());
-            Model = new SettingsModel(State, H.Settings, Autostart, Install, Updater, Updates);
+            Model = new SettingsModel(State, H.Settings, Autostart, Install, Updater, Updates, tool);
         }
 
         public void Dispose()
@@ -316,5 +316,165 @@ public class SettingsModelTests
             h.MasterStorePath));
         Assert.False(rig.Model.CanChangeClaudeIntegration);
         Assert.Equal(ClaudeIntegration.ClashNote, rig.Model.ClaudeIntegrationNote);
+    }
+
+    /// <summary>The Claude group follows a change made anywhere else while the window is open: the command-line
+    /// tool turning the integration on, the endpoint failing. Dispose stops it.</summary>
+    [Fact]
+    public void TheClaudeGroupFollowsChangesMadeElsewhere()
+    {
+        using var rig = new Rig();
+        var names = new List<string>();
+        rig.Model.PropertyChanged += (_, e) => names.Add(e.PropertyName ?? "");
+        int Raised() => names.Count(name => name is nameof(SettingsModel.ClaudeIntegrationEnabled) or nameof(SettingsModel.ControlEndpointProblem));
+        Assert.Null(rig.State.SetClaudeIntegrationEnabled(true));   // as the command-line tool turns it on
+        Assert.True(Raised() > 0);
+        Assert.True(rig.Model.ClaudeIntegrationEnabled);
+        Assert.Null(rig.Model.ControlEndpointProblem);
+        Assert.False(rig.Model.HasControlEndpointProblem);
+        var before = Raised();
+        rig.State.ReportControlEndpointUnavailable();
+        Assert.True(Raised() > before);
+        Assert.Equal(ClaudeIntegration.EndpointUnavailableText, rig.Model.ControlEndpointProblem);
+        Assert.True(rig.Model.HasControlEndpointProblem);
+        rig.Model.Dispose();
+        var disposed = names.Count;
+        rig.State.SetClaudeIntegrationEnabled(false);
+        Assert.Equal(disposed, names.Count);   // Dispose stops the relay
+    }
+
+    /// <summary>Switching into a collection whose connector holds the name, and out again: while on, the switch
+    /// can still go off and names the clash in place of its caption; while off, it is dimmed until the
+    /// clash ends.</summary>
+    [Fact]
+    public void SwitchingIntoAndOutOfAClashingCollection()
+    {
+        using var rig = new Rig(h =>
+        {
+            MasterStoreIO.Save(new MasterStore(MasterStore.CurrentVersion, "Default",
+            [
+                new("Default", new Collection()),
+                new("Old", new Collection([new(ClaudeIntegration.EntryName, new McpEntry(true, JsonValue.Object(("command", JsonValue.String("x")))))])),
+            ]), h.MasterStorePath);
+            h.ControlToolPath = "/x/connector-control";
+            h.Settings.ClaudeIntegrationEnabled = true;
+        });
+        rig.H.Drain();
+        Assert.Equal(SettingsModel.ClaudeIntegrationCaption, rig.Model.ClaudeIntegrationCaptionText);
+        Assert.False(rig.Model.ClaudeIntegrationCaptionIsWarning);
+        Assert.Equal(1.0, rig.Model.ClaudeIntegrationTitleOpacity);
+        Assert.Equal(ClaudeIntegration.Entry("/x/connector-control"), rig.H.ClaudeServers()[ClaudeIntegration.EntryName]);
+        rig.State.SwitchCollection("Old");
+        rig.H.Drain();
+        Assert.True(rig.Model.CanChangeClaudeIntegration);   // on, it can still go off
+        Assert.Equal(ClaudeIntegration.ClashNote, rig.Model.ClaudeIntegrationCaptionText);
+        Assert.True(rig.Model.ClaudeIntegrationCaptionIsWarning);
+        // The app's own entry gives way to the connector that holds the name.
+        Assert.NotEqual(ClaudeIntegration.Entry("/x/connector-control"), rig.H.ClaudeServers()[ClaudeIntegration.EntryName]);
+        rig.Model.ClaudeIntegrationEnabled = false;
+        Assert.False(rig.Model.CanChangeClaudeIntegration);   // off, it is dimmed while the clash lasts
+        Assert.Equal(SettingsModel.DimmedOpacity, rig.Model.ClaudeIntegrationTitleOpacity);   // its title fades; the note does not
+        rig.State.SwitchCollection("Default");
+        rig.H.Drain();
+        Assert.True(rig.Model.CanChangeClaudeIntegration);
+        Assert.Equal(SettingsModel.ClaudeIntegrationCaption, rig.Model.ClaudeIntegrationCaptionText);
+    }
+
+    /// <summary>An app run from where it will not stay cannot turn the integration on or install the tool: the
+    /// switch and Install are dimmed and say why. Removing a link made earlier still works.</summary>
+    [Fact]
+    public void AnAppRunFromWhereItWillNotStayDimsTheSwitchAndInstall()
+    {
+        var tool = new FakeCommandLineTool();
+        using var rig = new Rig(h =>
+        {
+            h.ControlToolPath = "/Volumes/Connector Control/Connector Control.app/Contents/MacOS/connector-control";
+            h.ControlToolIsTransient = true;
+        }, tool);
+        Assert.False(rig.Model.CanChangeClaudeIntegration);
+        Assert.Equal(ClaudeIntegration.MoveToApplicationsError, rig.Model.ClaudeIntegrationCaptionText);
+        Assert.True(rig.Model.ClaudeIntegrationCaptionIsWarning);
+        Assert.False(rig.Model.CanUseCommandLineToolButton);
+        Assert.Equal(ClaudeIntegration.MoveToApplicationsError, rig.Model.CommandLineToolMessage);
+        Assert.True(rig.Model.HasCommandLineToolMessage);
+        rig.Model.CommandLineToolAction();
+        Assert.Equal(0, tool.Installs);
+        tool.IsInstalled = true;
+        Assert.True(rig.Model.CanUseCommandLineToolButton);   // a link made earlier can still go
+        Assert.Null(rig.Model.CommandLineToolMessage);
+        Assert.False(rig.Model.HasCommandLineToolMessage);
+    }
+
+    // MARK: Command-line tool
+
+    [Fact]
+    public void TheCommandLineToolRowInstallsAndRemoves()
+    {
+        var tool = new FakeCommandLineTool();
+        using var rig = new Rig(tool: tool);
+        Assert.True(rig.Model.HasCommandLineTool);
+        Assert.Equal([new TextRun(CommandLineToolText.NotInstalledText)], rig.Model.CommandLineToolStatus);
+        Assert.Equal([new TextRun("Scripts can always use "), new TextRun(tool.ToolPath, IsSetApart: true)], rig.Model.CommandLineToolCaption);
+        Assert.Equal(CommandLineToolText.InstallButton, rig.Model.CommandLineToolButton);
+        Assert.Null(rig.Model.CommandLineToolMessage);
+
+        rig.Model.CommandLineToolAction();
+        Assert.Equal(1, tool.Installs);
+        Assert.True(rig.Model.CommandLineToolBusy);
+        Assert.False(rig.Model.CanUseCommandLineToolButton);   // one at a time, while the PATH's change is announced
+        rig.Model.CommandLineToolAction();
+        Assert.Equal(1, tool.Installs);
+        var reopened = new SettingsModel(rig.State, rig.H.Settings, rig.Autostart, rig.Install, rig.Updater, rig.Updates, tool);
+        Assert.False(reopened.CanUseCommandLineToolButton);   // a Settings window opened meanwhile cannot start a second one
+        tool.Finish(installed: true);
+        Assert.False(rig.Model.CommandLineToolBusy);
+        Assert.True(reopened.CanUseCommandLineToolButton);
+        reopened.Dispose();
+        Assert.Equal([new TextRun(CommandLineToolText.InPathText)], rig.Model.CommandLineToolStatus);
+        Assert.Equal([new TextRun("Run "), new TextRun(CommandLineToolText.HelpCommand, IsSetApart: true), new TextRun(" in a new terminal.")],
+            rig.Model.CommandLineToolCaption);
+        Assert.Equal(CommandLineToolText.RemoveButton, rig.Model.CommandLineToolButton);
+        tool.InstalledLocation = "/usr/local/bin/connector-control";
+        // At the link, as the Mac puts it there.
+        Assert.Equal([new TextRun("Installed at "), new TextRun("/usr/local/bin/connector-control", IsSetApart: true)], rig.Model.CommandLineToolStatus);
+
+        rig.Model.CommandLineToolAction();
+        Assert.Equal(1, tool.Removals);
+        tool.Finish(installed: true, CommandLineToolText.RemoveFailedError("Access denied."));
+        Assert.Equal(CommandLineToolText.RemoveFailedError("Access denied."), rig.Model.CommandLineToolMessage);
+        Assert.True(rig.Model.HasCommandLineToolMessage);
+        Assert.Equal(CommandLineToolText.RemoveButton, rig.Model.CommandLineToolButton);
+        rig.Model.CommandLineToolAction();
+        Assert.Null(rig.Model.CommandLineToolMessage);   // a new try clears the last failure
+        tool.Finish(installed: false);
+        Assert.Equal(CommandLineToolText.InstallButton, rig.Model.CommandLineToolButton);
+    }
+
+    /// <summary>Windows only: WPF bindings re-read only the members raised, so the row's must be raised as an
+    /// operation starts and as it ends; SwiftUI re-reads the whole view from one send.</summary>
+    [Fact]
+    public void TheCommandLineToolRowRaisesAsAnOperationStartsAndEnds()
+    {
+        var tool = new FakeCommandLineTool();
+        using var rig = new Rig(tool: tool);
+        var names = new List<string>();
+        rig.Model.PropertyChanged += (_, e) => names.Add(e.PropertyName ?? "");
+        rig.Model.CommandLineToolAction();
+        Assert.Contains(nameof(SettingsModel.CommandLineToolBusy), names);
+        Assert.Contains(nameof(SettingsModel.CanUseCommandLineToolButton), names);
+        names.Clear();
+        tool.Finish(installed: false, CommandLineToolText.InstallFailedError("Access denied."));
+        Assert.Contains(nameof(SettingsModel.CommandLineToolMessage), names);
+        Assert.Contains(nameof(SettingsModel.HasCommandLineToolMessage), names);
+        Assert.Contains(nameof(SettingsModel.CommandLineToolBusy), names);
+    }
+
+    [Fact]
+    public void WithNoToolThereIsNoRow()
+    {
+        using var rig = new Rig();
+        Assert.False(rig.Model.HasCommandLineTool);
+        Assert.Empty(rig.Model.CommandLineToolStatus);
+        Assert.False(rig.Model.CanUseCommandLineToolButton);
     }
 }

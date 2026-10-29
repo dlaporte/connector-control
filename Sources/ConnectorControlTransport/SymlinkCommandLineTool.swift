@@ -44,6 +44,11 @@ public final class SymlinkCommandLineTool: CommandLineTool {
 
     public let toolPath: String
     public let linkPath: String
+    /// The link, whether or not it is there yet.
+    public var installedLocation: String? { linkPath }
+    /// Only while the administrator prompt's script runs: a link made or taken away directly, with no
+    /// prompt, finishes inside the call and is never busy.
+    public private(set) var isBusy = false
     private let host: AppHost
     private let runScript: @Sendable ([String]) -> (Int32, String)
 
@@ -126,9 +131,12 @@ public final class SymlinkCommandLineTool: CommandLineTool {
         let runScript = self.runScript
         let host = self.host
         let occupied = CommandLineToolText.occupiedError(linkPath)
+        isBusy = true
         host.background {
             let (code, error) = runScript(argv)
             host.marshal {
+                // Not busy by the time the completion runs, so what it repaints can start the next one.
+                self.isBusy = false
                 // What AppleScript says ends the text: the cancel code, or the marker before the exit status.
                 let said = error.trimmingCharacters(in: .whitespacesAndNewlines)
                 let reason = SymlinkCommandLineTool.reason(from: said)

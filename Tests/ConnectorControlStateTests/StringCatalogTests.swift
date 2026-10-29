@@ -103,8 +103,10 @@ final class StringCatalogTests: XCTestCase {
         "CollectionsModel.selectedCount": ["3"],
         "CollectionsModel.stopSyncingMessage": ["X"],
         "CommandLineToolText.installFailedError": ["X"],
+        "CommandLineToolText.installedAtText": ["X"],
         "CommandLineToolText.occupiedError": ["X"],
         "CommandLineToolText.removeFailedError": ["X"],
+        "CommandLineToolText.scriptsCaption": ["X"],
         "ConfigService.corruptStoreNote": ["X"],
         "ConfigService.corruptStoreRestoredNote": ["X", "Y"],
         "ConfigService.invalidBackupError": ["X", "Y"],
@@ -418,9 +420,17 @@ final class StringCatalogTests: XCTestCase {
         // MARK: CommandLineToolText
 
         actual["CommandLineToolText.adminPrompt"] = CommandLineToolText.adminPrompt
+        actual["CommandLineToolText.helpCommand"] = CommandLineToolText.helpCommand
+        actual["CommandLineToolText.inPathText"] = CommandLineToolText.inPathText
+        actual["CommandLineToolText.installButton"] = CommandLineToolText.installButton
         actual["CommandLineToolText.installFailedError"] = CommandLineToolText.installFailedError("X")
+        actual["CommandLineToolText.installedAtText"] = CommandLineToolText.installedAtText("X")
+        actual["CommandLineToolText.notInstalledText"] = CommandLineToolText.notInstalledText
         actual["CommandLineToolText.occupiedError"] = CommandLineToolText.occupiedError("X")
+        actual["CommandLineToolText.removeButton"] = CommandLineToolText.removeButton
         actual["CommandLineToolText.removeFailedError"] = CommandLineToolText.removeFailedError("X")
+        actual["CommandLineToolText.runHelpCaption"] = CommandLineToolText.runHelpCaption
+        actual["CommandLineToolText.scriptsCaption"] = CommandLineToolText.scriptsCaption("X")
 
         // MARK: ControlMasking / ControlText
 
@@ -849,6 +859,7 @@ final class StringCatalogTests: XCTestCase {
         actual["SettingsModel.claudeIntegrationHeader"] = SettingsModel.claudeIntegrationHeader
         actual["SettingsModel.claudeIntegrationTitle"] = SettingsModel.claudeIntegrationTitle
         actual["SettingsModel.claudeTab"] = SettingsModel.claudeTab
+        actual["SettingsModel.commandLineToolHeader"] = SettingsModel.commandLineToolHeader
         actual["SettingsModel.confirmClaudeChangesOffCaption"] = SettingsModel.confirmClaudeChangesOffCaption
         actual["SettingsModel.confirmClaudeChangesOnCaption"] = SettingsModel.confirmClaudeChangesOnCaption
         actual["SettingsModel.confirmClaudeChangesTitle"] = SettingsModel.confirmClaudeChangesTitle

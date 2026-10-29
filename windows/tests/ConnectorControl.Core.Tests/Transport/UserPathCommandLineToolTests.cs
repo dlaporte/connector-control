@@ -15,9 +15,12 @@ public class UserPathCommandLineToolTests
         public Exception? Failure { get; set; }
         public int Writes { get; private set; }
         public Exception? ReadFailure { get; set; }
+        /// <summary>Runs as the PATH is written, before it is: what the tool shows while its change is announced.</summary>
+        public Action? WhileWriting { get; set; }
         public string? ReadPath() => ReadFailure is null ? Path : throw ReadFailure;
         public void WritePath(string value)
         {
+            WhileWriting?.Invoke();
             if (Failure is not null)
             {
                 throw Failure;
@@ -42,8 +45,13 @@ public class UserPathCommandLineToolTests
         var tool = new UserPathCommandLineTool(Bin, environment, AppHost.Inline());
         Assert.StartsWith(Bin, tool.ToolPath);
         Assert.EndsWith("connector-control.exe", tool.ToolPath);
+        Assert.Null(tool.InstalledLocation);   // Windows puts a folder in the user PATH, with no one place to name
         Assert.False(tool.IsInstalled);
+        var busy = new List<bool>();
+        environment.WhileWriting = () => busy.Add(tool.IsBusy);
         Assert.Null(Answer(tool.Install));
+        Assert.Equal([true], busy);   // busy while the PATH's change is written and announced
+        Assert.False(tool.IsBusy);
         Assert.True(tool.IsInstalled);
         Assert.Equal(@"C:\Windows;" + Bin, environment.Path);
         Assert.Null(Answer(tool.Install));
