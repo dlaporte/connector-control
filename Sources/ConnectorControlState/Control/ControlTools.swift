@@ -37,8 +37,10 @@ public final class ControlTools {
     public static let relayUsage = "mcp"
     public static let relaySummary = "The relay Claude Desktop runs; not for direct use"
     public static let helpOptions = "Options: --json  --version  --help"
-    /// The column `help` starts its summaries in.
-    public static let helpColumn = 32
+    /// The width of the usage field in `help`: two spaces of indent, then the usage padded to this, then the
+    /// summary, so every summary starts in column 38. A usage too long to leave two spaces goes alone on its
+    /// line and its summary follows on the next, indented to the same column.
+    public static let helpColumn = 35
     /// Seconds between progress reports while a change waits.
     public static let progressInterval: TimeInterval = 5
     /// How long a call waits before it answers `waitingText`: under Claude Desktop's tool-call
@@ -139,8 +141,15 @@ public final class ControlTools {
             if group == ControlTools.claudeGroup { rows.append((ControlTools.relayUsage, ControlTools.relaySummary)) }
             guard !rows.isEmpty else { continue }
             lines.append(group)
-            lines += rows.map { usage, summary in
-                "  " + ControlText.pad(usage, to: max(ControlTools.helpColumn, ControlText.width(usage) + 2)) + summary
+            for (usage, summary) in rows {
+                // Widths count Unicode scalars (`delete <name>…` holds U+2026, one wide); the Windows
+                // mirror counts runes, so both agree where a .NET string's UTF-16 would not.
+                if ControlText.width(usage) + 2 > ControlTools.helpColumn {
+                    lines.append("  " + usage)
+                    lines.append(String(repeating: " ", count: 2 + ControlTools.helpColumn) + summary)
+                } else {
+                    lines.append("  " + ControlText.pad(usage, to: ControlTools.helpColumn) + summary)
+                }
             }
         }
         lines.append(ControlTools.helpOptions)

@@ -38,8 +38,10 @@ public sealed partial class ControlTools
     public const string RelayUsage = "mcp";
     public const string RelaySummary = "The relay Claude Desktop runs; not for direct use";
     public const string HelpOptions = "Options: --json  --version  --help";
-    /// <summary>The column <c>help</c> starts its summaries in.</summary>
-    public const int HelpColumn = 32;
+    /// <summary>The width of the usage field in <c>help</c>: two spaces of indent, then the usage padded to this, then the
+    /// summary, so every summary starts in column 38. A usage too long to leave two spaces goes alone on its
+    /// line and its summary follows on the next, indented to the same column.</summary>
+    public const int HelpColumn = 35;
     /// <summary>Seconds between progress reports while a change waits.</summary>
     public const double ProgressInterval = 5;
     /// <summary>How long, in seconds, a call waits before it answers <see cref="WaitingText"/>: under
@@ -161,8 +163,20 @@ public sealed partial class ControlTools
                 continue;
             }
             lines.Add(group);
-            lines.AddRange(rows.Select(row =>
-                "  " + ControlText.Pad(row.Usage, Math.Max(HelpColumn, ControlText.Width(row.Usage) + 2)) + row.Summary));
+            foreach (var (usage, summary) in rows)
+            {
+                // Widths count runes (`delete <name>…` holds U+2026, one wide); the Mac mirror counts
+                // Unicode scalars, so both agree where a .NET string's UTF-16 would not.
+                if (ControlText.Width(usage) + 2 > HelpColumn)
+                {
+                    lines.Add("  " + usage);
+                    lines.Add(new string(' ', 2 + HelpColumn) + summary);
+                }
+                else
+                {
+                    lines.Add("  " + ControlText.Pad(usage, HelpColumn) + summary);
+                }
+            }
         }
         lines.Add(HelpOptions);
         return string.Join("\n", lines);

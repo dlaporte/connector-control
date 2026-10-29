@@ -124,12 +124,32 @@ public class ControlCatalogTests
         Assert.Equal(ControlTools.HelpUsage, lines[0]);
         Assert.Equal(ControlTools.HelpOptions, lines[^1]);
         Assert.Equal(ControlTools.HelpGroups, lines.Where(line => !line.StartsWith(' ')).Skip(1).SkipLast(1));
-        foreach (var tool in ControlTools.Catalog)
+        // Every description starts in the same column (38, 1-based), counted in runes.
+        var prefix = 2 + ControlTools.HelpColumn;
+        var rows = ControlTools.Catalog.Select(tool => (Usage: tool.CliUsage, tool.Summary))
+            .Append((ControlTools.RelayUsage, ControlTools.RelaySummary));
+        foreach (var (usage, summary) in rows)
         {
-            var line = "  " + ControlText.Pad(tool.CliUsage, Math.Max(ControlTools.HelpColumn, ControlText.Width(tool.CliUsage) + 2)) + tool.Summary;
-            Assert.True(lines.Count(l => l == line) == 1, tool.CliUsage);
+            var matches = Enumerable.Range(0, lines.Length)
+                .Where(i => lines[i].EndsWith(summary, StringComparison.Ordinal) && lines[i].StartsWith("  ", StringComparison.Ordinal)).ToList();
+            Assert.True(matches.Count == 1, usage);
+            var index = matches[0];
+            Assert.True(ControlText.Width(lines[index]) - ControlText.Width(summary) == prefix, usage);
+            if (ControlText.Width(usage) + 4 > prefix)
+            {
+                Assert.Equal("  " + usage, lines[index - 1]);
+                Assert.Equal(new string(' ', prefix) + summary, lines[index]);
+            }
+            else
+            {
+                Assert.Equal("  " + ControlText.Pad(usage, ControlTools.HelpColumn) + summary, lines[index]);
+            }
         }
-        Assert.Contains("  status                          What Claude is running, and whether it needs a restart", lines);
-        Assert.Contains("  mcp                             " + ControlTools.RelaySummary, lines);
+        Assert.Equal(37, prefix);
+        var add = ControlTools.Catalog.First(tool => tool.CliUsage.StartsWith("add ", StringComparison.Ordinal));
+        Assert.Contains("  " + add.CliUsage, lines);
+        Assert.Contains(new string(' ', 37) + add.Summary, lines);
+        Assert.Contains("  connectors [--collection <name>]   List connectors and what each runs", lines);
+        Assert.Contains("  mcp                                " + ControlTools.RelaySummary, lines);
     }
 }

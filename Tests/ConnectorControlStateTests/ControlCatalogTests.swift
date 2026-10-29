@@ -91,11 +91,27 @@ final class ControlCatalogTests: XCTestCase {
         XCTAssertEqual(lines.first, ControlTools.helpUsage)
         XCTAssertEqual(lines.last, ControlTools.helpOptions)
         XCTAssertEqual(Array(lines.filter { !$0.hasPrefix(" ") }.dropFirst().dropLast()), ControlTools.helpGroups)
-        for tool in ControlTools.catalog {
-            let line = "  " + ControlText.pad(tool.cliUsage, to: max(ControlTools.helpColumn, ControlText.width(tool.cliUsage) + 2)) + tool.summary
-            XCTAssertEqual(lines.filter { $0 == line }.count, 1, tool.cliUsage)
+        // Every description starts in the same column (38, 1-based), counted in Unicode scalars.
+        let prefix = 2 + ControlTools.helpColumn
+        var rows = ControlTools.catalog.map { ($0.cliUsage, $0.summary) }
+        rows.append((ControlTools.relayUsage, ControlTools.relaySummary))
+        for (usage, summary) in rows {
+            let matches = lines.indices.filter { lines[$0].hasSuffix(summary) && lines[$0].hasPrefix("  ") }
+            XCTAssertEqual(matches.count, 1, usage)
+            let index = matches[0]
+            XCTAssertEqual(ControlText.width(lines[index]) - ControlText.width(summary), prefix, usage)
+            if ControlText.width(usage) + 4 > prefix {
+                XCTAssertEqual(lines[index - 1], "  " + usage, usage)
+                XCTAssertEqual(lines[index], String(repeating: " ", count: prefix) + summary, usage)
+            } else {
+                XCTAssertEqual(lines[index], "  " + ControlText.pad(usage, to: ControlTools.helpColumn) + summary, usage)
+            }
         }
-        XCTAssertTrue(lines.contains("  status                          What Claude is running, and whether it needs a restart"))
-        XCTAssertTrue(lines.contains("  mcp                             " + ControlTools.relaySummary))
+        XCTAssertEqual(prefix, 37)
+        let add = ControlTools.catalog.first { $0.cliUsage.hasPrefix("add ") }!
+        XCTAssertTrue(lines.contains("  " + add.cliUsage))
+        XCTAssertTrue(lines.contains(String(repeating: " ", count: 37) + add.summary))
+        XCTAssertTrue(lines.contains("  connectors [--collection <name>]   List connectors and what each runs"))
+        XCTAssertTrue(lines.contains("  mcp                                " + ControlTools.relaySummary))
     }
 }
