@@ -28,6 +28,7 @@ public sealed class VelopackUpdater : IUpdater
     private readonly Func<string, UpdateVerifier.RunningIdentity> identify;
     private readonly Func<string, string?, UpdateVerifier.RunningIdentity, Version, Version, string?> verify;
     private readonly Func<string?, UpdateVerifier.RunningIdentity, string?> verifyInstalled;
+    private readonly Action<string> log;
 
     public VelopackUpdater() : this(RepoUrl)
     {
@@ -44,14 +45,16 @@ public sealed class VelopackUpdater : IUpdater
     /// (Velopack's TestVelopackLocator in tests; null = inspect the real install layout);
     /// <paramref name="verify"/> replaces <see cref="UpdateVerifier.Verify"/> in tests,
     /// <paramref name="verifyInstalled"/> replaces <see cref="UpdateVerifier.VerifyInstalledUpdater"/>
-    /// and <paramref name="identify"/> replaces <see cref="UpdateVerifier.ExpectedIdentity"/>.
+    /// and <paramref name="identify"/> replaces <see cref="UpdateVerifier.ExpectedIdentity"/>;
+    /// <paramref name="log"/> replaces <see cref="App.Log"/>, which writes to the live data folder.
     /// </summary>
     internal VelopackUpdater(
         Func<bool, IUpdateSource> source,
         IVelopackLocator? locator,
         Func<string, string?, UpdateVerifier.RunningIdentity, Version, Version, string?>? verify = null,
         Func<string?, UpdateVerifier.RunningIdentity, string?>? verifyInstalled = null,
-        Func<string, UpdateVerifier.RunningIdentity>? identify = null)
+        Func<string, UpdateVerifier.RunningIdentity>? identify = null,
+        Action<string>? log = null)
     {
         LocatingUpdateManager? resolved = null;
         var followsPrereleases = false;
@@ -79,6 +82,7 @@ public sealed class VelopackUpdater : IUpdater
         this.identify = identify ?? UpdateVerifier.ExpectedIdentity;
         this.verify = verify ?? UpdateVerifier.Verify;
         this.verifyInstalled = verifyInstalled ?? UpdateVerifier.VerifyInstalledUpdater;
+        this.log = log ?? App.Log;
     }
 
     /// <summary>True for a preview install (prerelease version), so update checks include prereleases.</summary>
@@ -86,7 +90,17 @@ public sealed class VelopackUpdater : IUpdater
 
     /// <summary>Velopack's hooks, first thing at startup. Before an uninstall, the app's entry in Claude's config,
     /// its PATH folder and its copy of the tool go (<see cref="UninstallCleanup"/>).</summary>
-    public static void RunStartupHook() => VelopackApp.Build().OnBeforeUninstallFastCallback(_ => UninstallCleanup.Run()).Run();
+    public static void RunStartupHook() => StartupHook().Run();
+
+    /// <summary>
+    /// The hooks <see cref="RunStartupHook"/> runs. Velopack would otherwise apply, at launch, the newest package
+    /// it finds in packages\ — a package this app's check refused, or never finished checking, included. Updates
+    /// are applied only by <see cref="ApplyOnQuit"/> and <see cref="ApplyAndRestart"/>, after the check has
+    /// passed. Nothing is lost: a checked package left unapplied is found again by the next check, which
+    /// re-verifies it before offering it.
+    /// </summary>
+    internal static VelopackApp StartupHook() =>
+        VelopackApp.Build().SetAutoApplyOnStartup(false).OnBeforeUninstallFastCallback(_ => UninstallCleanup.Run());
 
     public bool IsAvailable => manager is not null;
 
@@ -134,7 +148,8 @@ public sealed class VelopackUpdater : IUpdater
     /// Before anything is staged, that Update.exe and every binary in the package must be signed by
     /// this app's own publisher (<paramref name="identity"/>) and carry the advertised version. A
     /// refused package is deleted and the previous Update.exe put back, so neither can be picked up
-    /// by a later apply or uninstall.
+    /// by a later apply or uninstall. A check that throws, for any reason, is a refusal too: the
+    /// clean-up must never be skipped by an exception the check did not expect.
     /// </summary>
     internal void VerifyDownloaded(UpdateInfo info, byte[]? knownGoodUpdater, UpdateVerifier.RunningIdentity identity)
     {
@@ -143,26 +158,60 @@ public sealed class VelopackUpdater : IUpdater
             return;
         }
         var location = manager.Location;
-        var packagePath = Path.Combine(location.PackagesDir ?? "", info.TargetFullRelease.FileName);
-        if (verify(packagePath, location.UpdateExePath, identity, NumericVersion(manager.CurrentVersion), NumericVersion(info.TargetFullRelease.Version)) is { } problem)
+        var packagePath = LocalPackagePath(location.PackagesDir, info.TargetFullRelease.FileName);
+        string? problem;
+        try
         {
-            FileSystemErrors.TryDelete(packagePath);
-            if (location.UpdateExePath is { } updateExe)
+            problem = verify(packagePath, location.UpdateExePath, identity, NumericVersion(manager.CurrentVersion), NumericVersion(info.TargetFullRelease.Version));
+        }
+        catch (Exception ex)
+        {
+            problem = UpdateVerifier.Unreadable(ex);
+        }
+        if (problem is null)
+        {
+            return;
+        }
+        FileSystemErrors.TryDelete(packagePath);
+        if (File.Exists(packagePath))
+        {
+            // Velopack no longer applies it at launch, but it must not wait in packages\ unnoticed.
+            log($"The refused update package could not be deleted: {packagePath}");
+        }
+        if (location.UpdateExePath is { } updateExe)
+        {
+            // Put back the updater that was there before the download; when there was none,
+            // the one there now came from the refused package and goes too. A failure is logged, never
+            // swallowed: the refused package's updater may still be in place.
+            try
             {
-                // Put back the updater that was there before the download; when there was none,
-                // the one there now came from the refused package and goes too.
                 if (knownGoodUpdater is not null)
                 {
-                    try { File.WriteAllBytes(updateExe, knownGoodUpdater); }
-                    catch (Exception ex) when (FileSystemErrors.IsTransient(ex)) { }
+                    File.WriteAllBytes(updateExe, knownGoodUpdater);
                 }
-                else
+                else if (File.Exists(updateExe))
                 {
-                    FileSystemErrors.TryDelete(updateExe);
+                    File.Delete(updateExe);
                 }
             }
-            throw new UpdateVerificationException(problem);
+            catch (Exception ex)
+            {
+                log($"The updater could not be put back after a refused update ({updateExe}): {ex.GetType().Name}: {ex.Message}");
+            }
         }
+        throw new UpdateVerificationException(problem);
+    }
+
+    /// <summary>
+    /// Where Velopack saves a downloaded package: its file name, with every character a file name cannot hold
+    /// replaced by "_" (Velopack's own PathUtil.GetSafeFilename, which is internal). The check must read, and a
+    /// refusal delete, exactly the file Velopack wrote.
+    /// </summary>
+    internal static string LocalPackagePath(string? packagesDir, string fileName)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var safe = string.Concat(Path.GetFileName(fileName).Select(c => Array.IndexOf(invalid, c) >= 0 ? '_' : c));
+        return Path.Combine(packagesDir ?? "", safe);
     }
 
     public void ApplyOnQuit(UpdateCheck update)

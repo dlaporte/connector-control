@@ -139,10 +139,11 @@ public static class UpdateVerifier
             }
             return VersionProblem(mainExecutable, runningVersion, feedVersion);
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or NotSupportedException)
+        catch (Exception ex)
         {
-            // Any other exception propagates; the coordinator treats that as a failed download too. Closed either way.
-            return $"The update package could not be read ({ex.Message}){NotInstalledSuffix}";
+            // Every exception is a refusal, whatever its type: one that escaped here would skip the caller's
+            // deletion of the package and its restore of the updater.
+            return Unreadable(ex);
         }
         finally
         {
@@ -252,6 +253,9 @@ public static class UpdateVerifier
         return new Version(info.FileMajorPart, info.FileMinorPart, info.FileBuildPart);
     }
 
+    /// <summary>The refusal for a package the check could not finish reading.</summary>
+    internal static string Unreadable(Exception ex) => $"The update package could not be read ({ex.Message}){NotInstalledSuffix}";
+
     private static string SizeProblem(ZipArchiveEntry entry, long actual) =>
         $"The update package entry \"{entry.FullName}\" declares {entry.Length} bytes but holds {actual}{NotInstalledSuffix}";
 
@@ -278,11 +282,20 @@ public static class UpdateVerifier
         return total;
     }
 
-    /// <summary>A path segment Windows would rewrite on extraction (trailing dot or space), an NTFS stream (colon), or a walk upward.</summary>
+    /// <summary>
+    /// A path segment Windows would rewrite on extraction (trailing dot or space), an NTFS stream (colon), a walk
+    /// upward, or a character no Windows file name can hold (NUL, control characters, <c>&lt; &gt; " | ? *</c>):
+    /// such an entry cannot be checked as written, and the name Velopack would give it is not the one checked.
+    /// </summary>
     internal static bool IsSuspiciousEntryName(string entryName)
     {
+        var invalid = Path.GetInvalidFileNameChars();
         foreach (var segment in entryName.Split('/', '\\'))
         {
+            if (segment.Contains('\0') || segment.IndexOfAny(invalid) >= 0)
+            {
+                return true;
+            }
             if (segment == "..")
             {
                 return true;

@@ -196,11 +196,26 @@ public class UpdateVerifierTests : IDisposable
         Assert.Contains("not by this app's publisher", problem);
     }
 
+    [Fact]
+    public void AProgramWhoseNameWindowsCannotCreateIsRefusedNotThrown()
+    {
+        // A NUL in an entry name made the extraction below throw past the refusal; it is refused by name now.
+        RequireSignedFramework();
+        var problem = UpdateVerifier.Verify(PackageWithBytes("lib/x\0y.exe", File.ReadAllBytes(RunningExe)), updateExePath: null, Identity, Older, FrameworkVersion);
+        Assert.NotNull(problem);
+        Assert.EndsWith(UpdateVerifier.NotInstalledSuffix, problem);
+    }
+
     [Theory]
     [InlineData("lib/app/ConnectorControl.exe.", true)]
     [InlineData("lib/app/ConnectorControl.exe ", true)]
     [InlineData("lib/app/a:b.dll", true)]
     [InlineData("lib/../ConnectorControl.exe", true)]
+    [InlineData("lib/app/x\0y.exe", true)]
+    [InlineData("lib/app/a<b.dll", true)]
+    [InlineData("lib/app/a|b.dll", true)]
+    [InlineData("lib/app/a\u0001b.dll", true)]
+    [InlineData("[Content_Types].xml", false)]
     [InlineData("lib/app/sq.version", false)]
     [InlineData("lib/app/", false)]
     [InlineData("lib/app/ConnectorControl.exe", false)]
