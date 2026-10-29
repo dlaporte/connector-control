@@ -49,7 +49,7 @@ fi
 
 echo "**Preview** build \`$VERSION\` of Connector Control for macOS and Windows, from commit ${GITHUB_SHA:0:7} (tag \`$TAG\`)."
 echo
-echo "> A preview for invited testers. It is a GitHub prerelease: the stable apps never see it and their update feeds are untouched. Both apps are code-signed (Developer ID and notarized on the Mac, Azure Artifact Signing on Windows). A Windows preview install updates itself to later previews and to the final release; a Mac preview does not, so download each new preview."
+echo "> A preview for invited testers. It is a GitHub prerelease: the stable apps never see it and their update feeds are untouched. Both apps are code-signed (Developer ID and notarized on the Mac, Azure Artifact Signing on Windows). A preview install updates itself, on both platforms, to later previews and to the final release. (A Mac preview older than preview-10 cannot: replace it with this one by hand, once.)"
 echo
 echo "### Install"
 echo

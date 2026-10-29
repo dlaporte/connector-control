@@ -771,9 +771,14 @@ Run workflow with a number (a dry run by default). A preview builds `<next>-prev
 where `<next>` is the top `## vX.Y.Z` heading of CHANGELOG.md, signs and notarizes the
 Mac app and signs the Windows installers exactly like a release, and publishes them as
 one GitHub prerelease. Stable users are unaffected: a prerelease is never
-`releases/latest`, so the Mac update feed does not change. A Windows preview install
-updates itself to later previews and to the final release; a Mac preview is offered the
-final release when it ships, and each new preview is downloaded by hand. A `preview-dry-<n>` tag builds everything and publishes nothing.
+`releases/latest`, so the stable Mac update feed does not change. A preview install
+updates itself to later previews and to the final release on both platforms: on Windows
+through Velopack, on the Mac through Sparkle's preview feed, the `appcast.xml` of the
+permanent `preview-feed` prerelease, which a preview build reads instead of the stable
+feed (`build-app.sh` picks the feed from the version). Every published preview and every
+stable release replaces that appcast, and never with an older build. Mac previews before
+preview 10 read the stable feed, so install preview 10 once by hand. A `preview-dry-<n>`
+tag builds and signs everything, the preview appcast included, and publishes nothing.
 The Mac job runs in the `signing` environment, whose deployment branch policy must allow
 `preview-*` tags and any branch previews are cut from.
 
@@ -795,9 +800,10 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
 | `scripts/generate-icon.swift` | Renders the app icon — macOS `.icns` or Windows `.ico`, chosen by the output extension. | `scripts/build-app.sh`; the `.ico` path is run by hand, on a Mac |
 | `scripts/mac/import-signing-cert.sh` | Imports the Developer ID certificate into a throwaway CI keychain. | `mac-build.yml` |
 | `scripts/mac/notarize.sh` | Submits a binary or app bundle for Apple notarization and staples the ticket. | `mac-build.yml` |
-| `scripts/mac/make-appcast.sh` | Builds and EdDSA-signs the Sparkle appcast for one release. | `mac-build.yml`, for `release.yml` only |
+| `scripts/mac/make-appcast.sh` | Builds and EdDSA-signs the Sparkle appcast for one release or preview. | `mac-build.yml` |
 | `scripts/release/changelog-section.sh` | Prints one version's CHANGELOG.md section. | `release.yml`, `scripts/release/preview-notes.sh` |
 | `scripts/release/preview-notes.sh` | Prints the release notes for a joint preview build. | `preview.yml` |
+| `scripts/release/update-preview-feed.sh` | Copies a published release's appcast onto the `preview-feed` prerelease that Mac previews update from, creating it the first time and never moving it to an older build, then checks what it serves. | `preview.yml`, `release.yml` |
 | `scripts/release/ensure-release.sh` | Creates a GitHub release, or reuses one a previous run already created. | `release.yml`, `preview.yml` |
 | `scripts/release/upload-release-assets.sh` | Uploads one build's Velopack assets to an existing release. | `release.yml`, `preview.yml` |
 | `scripts/release/verify-release.sh` | Verifies a release's draft/prerelease flags and asset set. | `release.yml`, `preview.yml` |
