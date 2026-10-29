@@ -179,6 +179,10 @@ public partial class FlyoutWindow : Window
 
     private void OnQuit(object sender, RoutedEventArgs e) => model.Quit();
 
+    private void OnClaudeOfferNotNow(object sender, RoutedEventArgs e) => model.AnswerClaudeIntegrationOffer(turnOn: false);
+
+    private void OnClaudeOfferTurnOn(object sender, RoutedEventArgs e) => model.AnswerClaudeIntegrationOffer(turnOn: true);
+
     private void OnFooter(object sender, RoutedEventArgs e) => model.FooterAction();
 
     private void OnManageEmpty(object sender, RoutedEventArgs e)

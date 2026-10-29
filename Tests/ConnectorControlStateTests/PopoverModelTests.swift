@@ -621,4 +621,47 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: document), published)
         XCTAssertEqual(state.publishError, blocked, "refusing changes nothing, the error included")
     }
+
+    // MARK: The offer
+
+    /// Shown once, in the banner slot: it waits behind an error and behind a collection's news, and
+    /// Not Now dismisses it for good without turning anything on.
+    func testTheOfferWaitsBehindOtherBannersAndNotNowDismissesIt() {
+        let h = AppStateHarness()
+        h.controlToolPath = "/x/connector-control"
+        let state = h.create()
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose(); h.dispose() }
+        XCTAssertTrue(popover.showsClaudeIntegrationOffer)
+        state.lastError = "Something failed."
+        XCTAssertFalse(popover.showsClaudeIntegrationOffer, "an error holds the slot")
+        state.lastError = nil
+        state.pendingUpdates = ["Default": CollectionDiff(added: ["jira"], removed: [], changed: [])]
+        XCTAssertFalse(popover.showsClaudeIntegrationOffer, "so does a collection's news")
+        state.pendingUpdates = [:]
+        XCTAssertTrue(popover.showsClaudeIntegrationOffer)
+        popover.answerClaudeIntegrationOffer(turnOn: false)
+        XCTAssertFalse(popover.showsClaudeIntegrationOffer)
+        XCTAssertTrue(h.settings.claudeIntegrationOfferAnswered)
+        XCTAssertFalse(h.settings.claudeIntegrationEnabled)
+    }
+
+    /// Turn On adds the entry and the banner goes; while Claude runs, Restart Required takes over. The
+    /// entry is never a row.
+    func testTurnOnTurnsItOnAndRestartRequiredFollows() throws {
+        let h = AppStateHarness()
+        h.controlToolPath = "/x/connector-control"
+        let state = h.create()
+        h.drain()
+        h.claudeRunningSince(hours: 1)
+        let popover = PopoverModel(state: state)
+        defer { popover.dispose(); h.dispose() }
+        popover.answerClaudeIntegrationOffer(turnOn: true)
+        h.drain()
+        XCTAssertFalse(popover.showsClaudeIntegrationOffer)
+        XCTAssertTrue(h.settings.claudeIntegrationEnabled)
+        XCTAssertEqual(try h.claudeServers()[ClaudeIntegration.entryName], ClaudeIntegration.entry(toolPath: "/x/connector-control"))
+        XCTAssertEqual(popover.footer, .restartRequired)
+        XCTAssertFalse(popover.rows.contains { $0.name == ClaudeIntegration.entryName })
+    }
 }
