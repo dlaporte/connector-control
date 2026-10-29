@@ -186,6 +186,18 @@ public class ControlWriteQueueTests
         Assert.Equal(["c"], performed);
     }
 
+    /// <summary>The words of a write that threw reach Claude as any other refusal's do, escaped: they can be a
+    /// system message that quotes a name, which could otherwise break the line or turn it around.</summary>
+    [Fact]
+    public void AWriteThatThrowsIsRefusedInEscapedWords()
+    {
+        using var rig = new ControlRig();
+        ControlWrites(rig, label => throw new InvalidOperationException($"{label} broke\nhere \u202Etoo"));
+        var direct = new List<ControlResult>();
+        rig.Tools.Call("switch_collection", JsonValue.Object(("collection", JsonValue.String("a"))), Claude, _ => { }, direct.Add);
+        Assert.Equal([ControlResult.Refusal(@"a broke\nhere \u{202E}too")], direct);
+    }
+
     /// <summary>
     /// The refusal is the app's sentence, never the dialog's own words: a confirmer throws only
     /// before it shows anything, so nothing was asked.

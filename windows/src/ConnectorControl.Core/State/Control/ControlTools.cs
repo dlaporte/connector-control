@@ -392,8 +392,10 @@ public sealed partial class ControlTools
     }
 
     /// <summary>A write that threw ends as one refused for the reason, unless it has already ended. C# only:
-    /// nothing in the Mac's queue can throw.</summary>
-    private void Failed(ToolCall call, Exception error) => Finish(call, ControlResult.Refusal(AppState.Friendly(error)));
+    /// nothing in the Mac's queue can throw. The reason is escaped, as every refusal the Mac gives is: a
+    /// system message can quote a name or a path, which could otherwise break the line or turn it around.</summary>
+    private void Failed(ToolCall call, Exception error) =>
+        Finish(call, ControlResult.Refusal(ControlText.Escaped(AppState.Friendly(error))));
 
     private void Deliver(ToolCall call, ControlResult result)
     {

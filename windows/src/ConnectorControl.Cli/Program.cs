@@ -26,10 +26,11 @@ internal static class Program
         }
         catch (Exception)
         {
-            // Whatever else goes wrong ends as the tool's one other failure does, in a line and not .NET's
-            // stack trace, and with the console put back by the dispose below. The Mac has no unhandled
-            // exceptions to catch: its errors are all handled where they arise. The trade-off: an unexpected
-            // error is reported as unreachable (exit 3), not with its detail; the Mac's equivalent is a trap.
+            // Platform idiom: whatever else goes wrong ends as the tool's one other failure does, in a line and
+            // not .NET's stack trace, and with the console put back by the dispose below. The Mac tool has no
+            // catch-all: Swift has no unhandled exceptions to catch, its errors are all handled where they arise,
+            // and a fault it cannot handle is a trap. The trade-off: an unexpected error is reported as
+            // unreachable (exit 3), not with its detail.
             console.UseUtf8();
             console.Write(ControlOutput.Unreachable(ControlClient.UnreachableError));
             return ControlOutput.UnreachableExit;

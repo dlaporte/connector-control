@@ -10,6 +10,10 @@ import ConnectorControlTransport
 /// comes from the shared model, so the Windows tool prints the same.
 @main
 enum ConnectorControlCLI {
+    // Platform idiom: the Windows tool wraps all of this in a catch-all that ends any unexpected exception
+    // as the unreachable line (exit 3), with its console put back. Swift has no exceptions to catch here:
+    // every error is handled where it arises, and a fault none handles is a trap, which ends the tool
+    // without that line.
     @MainActor
     static func main() {
         // A reader that has gone answers a write with EPIPE, which the tool handles, not a signal that

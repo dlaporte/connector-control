@@ -885,7 +885,9 @@ public sealed partial class ControlTools
             servers = ClaudeConfigIO.McpServers(bytes);
             ClaudeConfigIO.RequireUniqueKeys(bytes);
         }
-        catch (Exception ex) when (ex is ClaudeConfigException or IOException or UnauthorizedAccessException or JsonException)
+        // Whatever the read throws, as the Mac catches whatever its read throws: a backup that cannot be read
+        // is refused before the question in the reader's own words, never left to end the call as a fault.
+        catch (Exception ex)
         {
             return new ControlStep.Refused(ControlText.Escaped(ex.Message, [id]));
         }
