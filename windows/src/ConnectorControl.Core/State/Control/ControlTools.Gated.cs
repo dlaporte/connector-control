@@ -885,9 +885,11 @@ public sealed partial class ControlTools
             servers = ClaudeConfigIO.McpServers(bytes);
             ClaudeConfigIO.RequireUniqueKeys(bytes);
         }
-        // Whatever the read throws, as the Mac catches whatever its read throws: a backup that cannot be read
-        // is refused before the question in the reader's own words, never left to end the call as a fault.
-        catch (Exception ex)
+        // Platform idiom: whatever the read throws for the backup itself, as the Mac catches every error its read
+        // throws, so a backup that cannot be read is refused before the question in the reader's own words. A
+        // programming fault is not the backup's: it is left to end the call as a fault, and is never reported
+        // to Claude as an unreadable backup. Swift's catch receives thrown errors only, so the Mac needs no filter.
+        catch (Exception ex) when (ex is not (NullReferenceException or IndexOutOfRangeException or InvalidCastException))
         {
             return new ControlStep.Refused(ControlText.Escaped(ex.Message, [id]));
         }

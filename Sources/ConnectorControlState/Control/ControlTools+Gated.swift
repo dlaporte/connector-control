@@ -616,6 +616,8 @@ extension ControlTools {
             servers = try ClaudeConfigIO.mcpServers(in: bytes)
             try ClaudeConfigIO.requireUniqueKeys(in: bytes)
         } catch {
+            // Platform idiom: every error the read throws is the backup's; a programming fault traps rather
+            // than throws, so this needs none of the filter the Windows mirror's catch has.
             return .refused(ControlText.escaped(error.localizedDescription, naming: [id]))
         }
         let fingerprint = ContentHash.sha256(bytes)
