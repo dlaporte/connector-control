@@ -22,8 +22,8 @@ bullet once the section is about to ship.
   to make there is one only an administrator can write to, whatever the machine's umask.
 - Before you delete the app, turn off "Let Claude manage Connector Control" and Remove the
   command-line tool. Otherwise Claude keeps a connector-control connector whose tool is gone and
-  shows it as failed; the README's Uninstalling says how to take it out by hand. The Windows
-  uninstaller does both for you.
+  shows it as failed, until you remove its entry from claude_desktop_config.json by hand. The
+  Windows uninstaller does both for you.
 - A preview install updates itself to each later preview and then to the final release, as on
   Windows; see Release pipeline for the one step to take by hand.
 - Claude's config, or a backup of it, is read as Claude Desktop and Windows read it: one with a
@@ -43,8 +43,8 @@ bullet once the section is about to ship.
 - An app the command-line tool or Claude's relay starts gets the PATH you get at sign-in, not the
   terminal's or Claude's, and none of their CONNECTOR_CONTROL_ variables, so it finds the same
   npx and uvx however it was started.
-- The tool connects to the app's pipe at identification level: a program that took the pipe's
-  name first, under another account, learns who connected and can't act as you.
+- A program that took the app's pipe name first, under another account, learns who connected to
+  it and nothing more; it can't act as you.
 - An update is installed only when the programs that must be Connector Control's own are signed
   by a certificate with the running app's whole subject, not merely its organization, and a
   certificate known to be revoked is refused. When the revocation servers can't be reached the
@@ -91,14 +91,15 @@ bullet once the section is about to ship.
   when you clicked it, and Restore read the backup only once you had confirmed, so a file
   rewritten in between landed unseen.
 - A restore writes the backup as Connector Control read it, in the format every apply writes, and
-  refuses a backup that names a connector twice, which Connector Control and Claude would read
+  refuses a backup that lists the same name twice, which Connector Control and Claude would read
   differently. Before, it copied the backup byte for byte.
 - A collection file over 1 MB, a backup over 16 MB, or anything that isn't a regular file is
   refused as it is read, so a file swapped for a huge one can't stall the app.
 - In the confirmation dialog each line of what would run is drawn on its own, clipped to its own
   height, so nothing in one line can draw over another, and it is selected and copied one line at a
-  time. Up to two accent marks per letter are drawn, so Thai, Vietnamese, pointed Hebrew and
-  Arabic read as written; a third or later one, or one with no letter, shows as its code.
+  time. The block is one stop for Tab, and Up, Down, Page Up and Page Down move through its lines.
+  Up to two accent marks per letter are drawn, so Thai, Vietnamese, pointed Hebrew and Arabic read
+  as written; a third or later one, or one with no letter, shows as its code.
 - A character that draws nothing shows as its code, so a name or variable that only gained one
   doesn't read as unchanged, and right-to-left letters in a line can't reorder the arguments
   around them.
