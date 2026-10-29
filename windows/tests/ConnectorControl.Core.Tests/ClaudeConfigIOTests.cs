@@ -151,6 +151,28 @@ public class ClaudeConfigIOTests : IDisposable
         }
     }
 
+    /// <summary>A config that is not UTF-8 is refused as malformed, as the Mac refuses it, and the key check
+    /// never reads it as UTF-8: a brace inside one of its strings must not count as one.</summary>
+    [Fact]
+    public void AConfigThatIsNotUTF8IsRefusedAsMalformed()
+    {
+        Encoding[] encodings =
+        [
+            new UnicodeEncoding(bigEndian: false, byteOrderMark: false), new UnicodeEncoding(bigEndian: true, byteOrderMark: false),
+            new UnicodeEncoding(bigEndian: true, byteOrderMark: true), new UTF32Encoding(bigEndian: false, byteOrderMark: false),
+            new UTF32Encoding(bigEndian: true, byteOrderMark: false), new UTF32Encoding(bigEndian: true, byteOrderMark: true),
+        ];
+        foreach (var json in new[] { """{"k":"∀}}"}""", """{"mcpServers":{"a":{},"a":{}}}""" })
+        {
+            foreach (var encoding in encodings)
+            {
+                var data = encoding.GetPreamble().Concat(encoding.GetBytes(json)).ToArray();
+                Assert.Throws<ClaudeConfigException>(() => ClaudeConfigIO.ParseRoot(data));
+                Assert.Throws<ClaudeConfigException>(() => ClaudeConfigIO.RequireUniqueKeys(data));
+            }
+        }
+    }
+
     /// <summary>Below mcpServers' own names, and inside a string, nothing is refused: the file is written as it
     /// was parsed, so what Claude reads there is what this app read.</summary>
     [Fact]

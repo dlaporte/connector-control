@@ -492,6 +492,22 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: paths.claudeConfigURL), before, "live config must be untouched")
     }
 
+    /// A backup that is not UTF-8 is refused as malformed before the live file is touched, a repeated
+    /// name in it too: its keys are never read as UTF-8 bytes.
+    func testRestoreRefusesABackupThatIsNotUTF8() throws {
+        _ = try service.loadAndReconcile()
+        let before = try Data(contentsOf: paths.claudeConfigURL)
+        for (name, json) in [("plain.json", #"{"k":"∀}}"}"#), ("twice.json", #"{"mcpServers":{"a":{},"a":{}}}"#)] {
+            let backup = dir.appendingPathComponent(name)
+            try XCTUnwrap(json.data(using: .utf16LittleEndian)).write(to: backup)
+            XCTAssertThrowsError(try service.restoreClaudeConfig(from: backup, mergedWith: .empty)) {
+                guard case ClaudeConfigError.malformed(let detail) = $0 else { return XCTFail("wrong error: \($0)") }
+                XCTAssertTrue(detail.hasPrefix("backup \(name) is not a valid config file ("), detail)
+            }
+        }
+        XCTAssertEqual(try Data(contentsOf: paths.claudeConfigURL), before, "live config must be untouched")
+    }
+
     /// The restore writes what it parsed, not the backup's bytes: whatever parser reads the file next
     /// reads what this app read.
     func testRestoreWritesWhatItParsed() throws {

@@ -78,7 +78,10 @@ public enum ClaudeConfigIO {
                 guard open.count == 1 || (open.count == 2 && inServers) else { break }
                 // The parser's own decoding, so an escaped spelling is the text it stands for.
                 let raw = Data(bytes[start...min(index, bytes.count - 1)])
-                guard let key = (try? JSONSerialization.jsonObject(with: raw, options: .fragmentsAllowed)) as? String else { break }
+                // A key the parser cannot read back is no file parseRoot accepted: refused, never skipped.
+                guard let key = (try? JSONSerialization.jsonObject(with: raw, options: .fragmentsAllowed)) as? String else {
+                    throw ClaudeConfigError.malformed(notJSONError)
+                }
                 // Platform idiom: Swift compares strings by canonical equivalence, so a set holds one of
                 // each spelling; the Windows mirror composes each key first.
                 if open.count == 1 {
@@ -97,6 +100,8 @@ public enum ClaudeConfigIO {
                 open.append(byte)
                 expectingKey = false
             case UInt8(ascii: "}"), UInt8(ascii: "]"):
+                // A close with nothing open is no file parseRoot accepted; refused, so the scan can never trap.
+                guard !open.isEmpty else { throw ClaudeConfigError.malformed(notJSONError) }
                 open.removeLast()
                 if open.count == 1 { inServers = false }
                 expectingKey = false
@@ -112,12 +117,23 @@ public enum ClaudeConfigIO {
         }
     }
 
+    /// What JSONSerialization says of data it cannot read, for data this app refuses before it does.
+    static var notJSONError: String { CocoaError(CocoaError.Code(rawValue: 3840)).localizedDescription }
+
     /// A zero-byte payload (crash/truncation artifact) is deliberately treated
     /// like a missing file, not malformed JSON: there is nothing in it to
     /// preserve, and callers back up before writing. A non-object top level is
     /// the one shape this app can never work with, so that alone throws.
     static func parseRoot(_ data: Data) throws -> [String: Any] {
         guard !data.isEmpty else { return [:] }
+        // Platform idiom: JSONSerialization also reads UTF-16 and UTF-32, which the Windows reader, UTF-8
+        // only, refuses; refused here alike, and before `requireUniqueKeys` would read their bytes as
+        // UTF-8. Either one's byte-order mark, or a zero byte among the first four, which UTF-8 JSON
+        // never has, marks one.
+        let head = [UInt8](data.prefix(4))
+        if head.starts(with: [0xFE, 0xFF]) || head.starts(with: [0xFF, 0xFE]) || head.contains(0) {
+            throw ClaudeConfigError.malformed(notJSONError)
+        }
         let parsed: Any
         do {
             parsed = try JSONSerialization.jsonObject(with: data)

@@ -84,6 +84,19 @@ public static class ClaudeConfigIO
             CommentHandling = JsonCommentHandling.Disallow,
             AllowTrailingCommas = false,
         });
+        try
+        {
+            ReadUniqueKeys(ref reader);
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or ArgumentException)
+        {
+            // Bytes ParseRoot would refuse, UTF-16 or UTF-32 among them, refused as it refuses them, never skipped.
+            throw new ClaudeConfigException(ex.Message);
+        }
+    }
+
+    private static void ReadUniqueKeys(ref Utf8JsonReader reader)
+    {
         var serversNext = false;   // the root's mcpServers key was just read; its value comes next
         var inServers = false;     // inside the root's mcpServers object
         var rootKeys = new HashSet<string>(StringComparer.Ordinal);
@@ -154,6 +167,8 @@ public static class ClaudeConfigIO
         {
             return JsonValue.Object();
         }
+        // Platform idiom: the reader is UTF-8 only, so UTF-16 and UTF-32 fail to parse here; the Mac mirror,
+        // whose JSONSerialization reads them too, refuses them alike before it parses.
         JsonValue parsed;
         try
         {

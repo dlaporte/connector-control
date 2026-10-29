@@ -130,6 +130,23 @@ final class ClaudeConfigIOTests: XCTestCase {
         }
     }
 
+    /// A config that is not UTF-8 is refused as malformed, as the Windows reader refuses it, and the key
+    /// check never reads it as UTF-8: a brace inside one of its strings must not count as one.
+    func testAConfigThatIsNotUTF8IsRefusedAsMalformed() throws {
+        let encodings: [String.Encoding] = [.utf16LittleEndian, .utf16BigEndian, .utf16, .utf32LittleEndian, .utf32BigEndian, .utf32]
+        for json in [#"{"k":"∀}}"}"#, #"{"mcpServers":{"a":{},"a":{}}}"#] {
+            for encoding in encodings {
+                let data = try XCTUnwrap(json.data(using: encoding))
+                XCTAssertThrowsError(try ClaudeConfigIO.parseRoot(data), "\(json) \(encoding)") {
+                    guard case ClaudeConfigError.malformed = $0 else { return XCTFail("wrong error: \($0)") }
+                }
+                XCTAssertThrowsError(try ClaudeConfigIO.requireUniqueKeys(in: data), "\(json) \(encoding)") {
+                    guard case ClaudeConfigError.malformed = $0 else { return XCTFail("wrong error: \($0)") }
+                }
+            }
+        }
+    }
+
     /// Below mcpServers' own names, and inside a string, nothing is refused: the file is written as it
     /// was parsed, so what Claude reads there is what this app read.
     func testOnlyTheTopLevelAndTheServersNamesAreChecked() {

@@ -1,3 +1,4 @@
+using System.Text;
 using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests;
@@ -512,6 +513,24 @@ public class ConfigServiceTests : IDisposable
             File.WriteAllText(backup, json);
             var refused = Assert.Throws<ClaudeConfigException>(() => service.RestoreClaudeConfig(backup, MasterStore.Empty()));
             Assert.Equal($"backup {name} is not a valid config file ({ClaudeConfigIO.RepeatedKeyError})", refused.Detail);
+        }
+        // Live config must be untouched.
+        Assert.Equal(before, File.ReadAllBytes(paths.ClaudeConfigPath));
+    }
+
+    /// <summary>A backup that is not UTF-8 is refused as malformed before the live file is touched, a repeated
+    /// name in it too: its keys are never read as UTF-8 bytes.</summary>
+    [Fact]
+    public void RestoreRefusesABackupThatIsNotUTF8()
+    {
+        service.LoadAndReconcile();
+        var before = File.ReadAllBytes(paths.ClaudeConfigPath);
+        foreach (var (name, json) in new[] { ("plain.json", """{"k":"∀}}"}"""), ("twice.json", """{"mcpServers":{"a":{},"a":{}}}""") })
+        {
+            var backup = dir.File(name);
+            File.WriteAllBytes(backup, new UnicodeEncoding(bigEndian: false, byteOrderMark: false).GetBytes(json));
+            var refused = Assert.Throws<ClaudeConfigException>(() => service.RestoreClaudeConfig(backup, MasterStore.Empty()));
+            Assert.StartsWith($"backup {name} is not a valid config file (", refused.Detail, StringComparison.Ordinal);
         }
         // Live config must be untouched.
         Assert.Equal(before, File.ReadAllBytes(paths.ClaudeConfigPath));
