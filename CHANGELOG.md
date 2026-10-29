@@ -21,6 +21,20 @@ bullet once the section is about to ship.
 
 ### Both platforms
 
+- Claude integration, off until you turn it on: Connector Control can add a connector of its own,
+  connector-control, to Claude's config, so Claude can list, switch and edit your connectors. The
+  popover or flyout offers it once; the switch is in Settings ▸ Claude, where "Confirm changes Claude
+  makes to connectors" is on by default.
+- While that is on, Connector Control asks you before Claude adds, edits or deletes a connector,
+  deletes a collection, imports, subscribes, applies an update or restores a backup, with Don't
+  Allow the default; it always asks before Claude restarts itself. Turning a connector on or off and
+  switching collections don't ask: a notification says what changed, as one does for every change
+  Claude makes while confirmations are off.
+- The connector-control command-line tool ships inside the app on both platforms, for scripts and
+  MDM; `connector-control help` lists its commands. Settings ▸ Claude ▸ Command-Line Tool puts it in
+  your PATH: on a Mac a link in /usr/local/bin, with an administrator prompt when that folder isn't
+  yours; on Windows the tool's folder in your user PATH, which terminals opened afterwards see.
+
 ### Release pipeline
 
 ## v1.4.0
