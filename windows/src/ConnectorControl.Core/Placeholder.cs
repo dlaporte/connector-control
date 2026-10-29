@@ -20,6 +20,8 @@ public static class Placeholder
     /// <summary>Marker names in order of first appearance; a malformed marker (bad name, no closing brace) is plain text.</summary>
     public static IReadOnlyList<string> NamesIn(string text)
     {
+        // Platform idiom: searched by UTF-16 unit here and scalar by scalar on the Mac, which find
+        // the same braces; a Swift Character would carry a combining mark after one along with it.
         var names = new List<string>();
         var rest = text.AsSpan();
         while (true)
