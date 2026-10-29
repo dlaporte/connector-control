@@ -35,6 +35,9 @@ public class ControlMaskingTests
     private static JsonValue Local(string command, string[] args) =>
         JsonValue.Object(("command", S(command)), ("args", JsonValue.Array(args.Select(S))));
 
+    /// <summary>A config with a command and nothing else: an empty <c>args</c> array is a key of its own to the lines.</summary>
+    private static JsonValue Bare(string command) => JsonValue.Object(("command", S(command)));
+
     private static JsonValue Adding(string key, JsonValue value, JsonValue config) => config.With(key, value);
 
     private static JsonValue OAuthClient(string url, string scopes) =>
@@ -258,6 +261,31 @@ public class ControlMaskingTests
         }
     }
 
+    /// <summary>In the dialog a single value reads one way only, as an argument does: the command, a URL, a
+    /// key's text value and a variable's name are quoted, with \ and ' escaped, when they hold a space, a
+    /// quote or anything shown as an escape — so a newline and the two characters \n read apart, and a run
+    /// of spaces cannot pass for the start of another row. What Claude and the command line read is
+    /// unchanged.</summary>
+    [Fact]
+    public void TheDialogShowsASingleValueOneWayOnly()
+    {
+        var literal = Bare("""run\n""");
+        var newline = Bare("run\n");
+        Assert.Equal(["""command   run\n"""], ControlMasking.CodeLines(literal, ControlMasking.Exposure.Dialog));
+        Assert.Equal(["""command   'run\n'"""], ControlMasking.CodeLines(newline, ControlMasking.Exposure.Dialog));
+        var spaced = Adding("cwd", JsonValue.String("/srv        env   X = y"), Bare("node"));
+        Assert.Equal(["command   node", "cwd       '/srv        env   X = y'"], ControlMasking.CodeLines(spaced, ControlMasking.Exposure.Dialog));
+        var named = Adding("env", JsonValue.Object(("A B = c", JsonValue.String("v"))), Bare("node"));
+        Assert.Equal(["command   node", "env       'A B = c' = v"], ControlMasking.CodeLines(named, ControlMasking.Exposure.Dialog));
+        var address = JsonValue.Object(("url", JsonValue.String("https://h.example/a b")));
+        Assert.Equal(["type   remote", "url    'https://h.example/a b'"], ControlMasking.CodeLines(address, ControlMasking.Exposure.Dialog));
+        var keyed = Adding("a b", JsonValue.String("v"), Bare("node"));
+        Assert.Equal(["command   node", "'a b'     v"], ControlMasking.CodeLines(keyed, ControlMasking.Exposure.Dialog));
+        // The masked lines are unchanged.
+        Assert.Equal(["""command   run\n"""], ControlMasking.CodeLines(newline));
+        Assert.Equal(["""command   run\n"""], ControlMasking.CodeLines(literal));
+    }
+
     /// <summary>The dialog masks the OAuth client secret, not the client: the client info shows with only
     /// its secret, and any value under a key named for a secret, masked. Text that is not a JSON
     /// object stays masked whole, and tool output masks it whole either way.</summary>
@@ -315,7 +343,7 @@ public class ControlMaskingTests
                 Assert.False(line.Contains('\n') || line.Contains('\u202E'), $"{exposure}: {line}");
             }
         }
-        Assert.Equal(["command   node", """url       https://h.example/\u{202E}gpj.exe""", """x\nenv    v\nSAFE = ••• (set)"""],
+        Assert.Equal(["command    node", """url        'https://h.example/\u{202E}gpj.exe'""", """'x\nenv'   'v\nSAFE = ••• (set)'"""],
             ControlMasking.CodeLines(keyed, ControlMasking.Exposure.Dialog));
     }
 

@@ -41,6 +41,11 @@ final class ControlMaskingTests: XCTestCase {
         .object(["command": .string(command), "args": .array(args.map(JSONValue.string))])
     }
 
+    /// A config with a command and nothing else: an empty `args` array is a key of its own to the lines.
+    private func bare(_ command: String) -> JSONValue {
+        .object(["command": .string(command)])
+    }
+
     private func adding(_ key: String, _ value: JSONValue, to config: JSONValue) -> JSONValue {
         guard case .object(var object) = config else { return config }
         object[key] = value
@@ -216,6 +221,29 @@ final class ControlMaskingTests: XCTestCase {
         }
     }
 
+    /// In the dialog a single value reads one way only, as an argument does: the command, a URL, a
+    /// key's text value and a variable's name are quoted, with \ and ' escaped, when they hold a
+    /// space, a quote or anything shown as an escape — so a newline and the two characters \n read
+    /// apart, and a run of spaces cannot pass for the start of another row. What Claude and the
+    /// command line read is unchanged.
+    func testTheDialogShowsASingleValueOneWayOnly() {
+        let literal = bare(#"run\n"#)
+        let newline = bare("run\n")
+        XCTAssertEqual(ControlMasking.codeLines(literal, exposure: .dialog), [#"command   run\n"#])
+        XCTAssertEqual(ControlMasking.codeLines(newline, exposure: .dialog), [#"command   'run\n'"#])
+        let spaced = adding("cwd", .string("/srv        env   X = y"), to: bare("node"))
+        XCTAssertEqual(ControlMasking.codeLines(spaced, exposure: .dialog), ["command   node", "cwd       '/srv        env   X = y'"])
+        let named = adding("env", .object(["A B = c": .string("v")]), to: bare("node"))
+        XCTAssertEqual(ControlMasking.codeLines(named, exposure: .dialog), ["command   node", "env       'A B = c' = v"])
+        let address = JSONValue.object(["url": .string("https://h.example/a b")])
+        XCTAssertEqual(ControlMasking.codeLines(address, exposure: .dialog), ["type   remote", "url    'https://h.example/a b'"])
+        let keyed = adding("a b", .string("v"), to: bare("node"))
+        XCTAssertEqual(ControlMasking.codeLines(keyed, exposure: .dialog), ["command   node", "'a b'     v"],
+                       "a key that labels a row of its own is quoted too")
+        XCTAssertEqual(ControlMasking.codeLines(newline), [#"command   run\n"#], "the masked lines are unchanged")
+        XCTAssertEqual(ControlMasking.codeLines(literal), [#"command   run\n"#])
+    }
+
     /// The dialog masks the OAuth client secret, not the client: the client info shows with only
     /// its secret, and any value under a key named for a secret, masked. Text that is not a JSON
     /// object stays masked whole, and tool output masks it whole either way.
@@ -265,7 +293,7 @@ final class ControlMaskingTests: XCTestCase {
             }
         }
         XCTAssertEqual(ControlMasking.codeLines(keyed, exposure: .dialog),
-                       ["command   node", #"url       https://h.example/\u{202E}gpj.exe"#, #"x\nenv    v\nSAFE = ••• (set)"#])
+                       ["command    node", #"url        'https://h.example/\u{202E}gpj.exe'"#, #"'x\nenv'   'v\nSAFE = ••• (set)'"#])
     }
 
     func testANonStringEnvironmentOrHeaderValueReadsAsSet() {

@@ -48,62 +48,88 @@ public enum ControlText {
         return trimmed
     }
 
-    /// Text as a line shows it: a control character, and a format character that reorders or hides
-    /// text (U+00AD, U+061C, U+200B–U+200F, U+2028–U+202E, U+2060–U+2069, U+FEFF), as a visible
-    /// escape — `\n`, `\r`, `\t` or `\u{202E}` — so a value can neither break its line nor hide part
-    /// of it.
+    /// Text as a line shows it: a control character, and a character that shows as nothing or as a
+    /// blank — every Default_Ignorable code point (soft hyphen, joiners, direction marks, variation
+    /// selectors, tags…), the blank letters (U+115F, U+1160, U+2800, U+3164, U+FFA0) and the
+    /// interlinear annotation marks — as a visible escape, `\n`, `\r`, `\t` or `\u{202E}`, so a value
+    /// can neither break its line, nor hide part of it, nor pass for another.
     public static func escaped(_ text: String) -> String {
         var line = ""
         for scalar in text.unicodeScalars { line += escape(scalar) ?? String(scalar) }
         return line
     }
 
-    /// One of the app's own sentences that quotes names someone else chose: each of `names` as
-    /// `escapedName(_:)` shows it, and the rest — the sentence's own quotes included — as
-    /// `escaped(_:)` does. The longest names are replaced first, so a name that contains another is
-    /// escaped whole before the shorter one can change part of it; a name with nothing to escape
-    /// reads as itself, so a later replacement can only ever escape more, never less.
+    /// One of the app's own sentences that quotes names someone else chose, read once from the left: at
+    /// each place, the longest of `names` that starts there is shown as `escapedName(_:)` shows it, and
+    /// anything else — the sentence's own quotes included — as `escaped(_:)` does. One pass, so no
+    /// name's escape is ever read again as part of another name. Names are matched scalar by scalar, as
+    /// the Windows mirror matches them ordinally; equal lengths in ordinal order, so both platforms pick
+    /// the same name.
     public static func escaped(_ text: String, naming names: [String]) -> String {
-        var sentence = text
-        // Longest first, counted in scalars as the Windows mirror counts runes; equal lengths in
-        // ordinal order, so both platforms replace in the same order.
         let ordered = names.filter { !$0.isEmpty }.sorted { one, other in
             let a = one.unicodeScalars.count, b = other.unicodeScalars.count
             return a != b ? a > b : one.ordinallyPrecedes(other)
+        }.map { Array($0.unicodeScalars) }
+        let scalars = Array(text.unicodeScalars)
+        var line = ""
+        var index = 0
+        while index < scalars.count {
+            if let name = ordered.first(where: { index + $0.count <= scalars.count && scalars[index..<index + $0.count].elementsEqual($0) }) {
+                var view = String.UnicodeScalarView()
+                view.append(contentsOf: name)
+                line += escapedName(String(view))
+                index += name.count
+            } else {
+                line += escape(scalars[index]) ?? String(scalars[index])
+                index += 1
+            }
         }
-        // Platform idiom: replaced literally, as the Windows mirror replaces ordinally; without
-        // `.literal`, a canonically equivalent spelling of a name would be replaced too.
-        for name in ordered {
-            sentence = sentence.replacingOccurrences(of: name, with: escapedName(name), options: .literal)
-        }
-        return escaped(sentence)
+        return line
     }
 
     /// A name as the app's sentences quote it: as `escaped(_:)` shows it, with “ and ” escaped as
-    /// well, so a name can neither break its line nor close its own quotes and read as two names.
+    /// well, so a name can neither break its line nor close its own quotes and read as two names, and
+    /// a backslash doubled, as `word(_:)` doubles one, so no two names read alike.
     public static func escapedName(_ text: String) -> String {
         var name = ""
         for scalar in text.unicodeScalars {
-            name += escape(scalar) ?? (scalar == "\u{201C}" || scalar == "\u{201D}" ? hexEscape(scalar) : String(scalar))
+            switch scalar {
+            case "\\": name += "\\\\"
+            case "\u{201C}", "\u{201D}": name += hexEscape(scalar)
+            default: name += escape(scalar) ?? String(scalar)
+            }
         }
         return name
     }
 
-    // Platform idiom: one scalar at a time here, one UTF-16 unit on Windows; every character escaped
-    // is in the Basic Plane, so both escape the same ones.
+    /// A path as a dialog's footer quotes it: as `escaped(_:)` shows it, with “ and ” escaped as well so
+    /// it cannot close the app's quotes around it, and its backslashes as they are — on Windows they are
+    /// the path's own separators.
+    public static func escapedPath(_ text: String) -> String {
+        var path = ""
+        for scalar in text.unicodeScalars {
+            path += scalar == "\u{201C}" || scalar == "\u{201D}" ? hexEscape(scalar) : escape(scalar) ?? String(scalar)
+        }
+        return path
+    }
+
+    // Platform idiom: one scalar at a time here; a .NET string is UTF-16, so the Windows mirror walks
+    // the same scalars itself, and shows a lone surrogate, which only it can hold, as its code.
     /// The escape for one character, or nil for one shown as it is.
     static func escape(_ scalar: Unicode.Scalar) -> String? {
         switch scalar.value {
         case 0x0A: return "\\n"
         case 0x0D: return "\\r"
         case 0x09: return "\\t"
-        case 0x00...0x1F, 0x7F...0x9F, 0xAD, 0x061C, 0x200B...0x200F, 0x2028...0x202E, 0x2060...0x2069, 0xFEFF:
+        case 0x00...0x1F, 0x7F...0x9F, 0xAD, 0x034F, 0x061C, 0x115F, 0x1160, 0x17B4, 0x17B5, 0x180B...0x180F,
+             0x200B...0x200F, 0x2028...0x202E, 0x2060...0x206F, 0x2800, 0x3164, 0xFE00...0xFE0F, 0xFEFF, 0xFFA0,
+             0xFFF0...0xFFFB, 0x1BCA0...0x1BCA3, 0x1D173...0x1D17A, 0xE0000...0xE0FFF:
             return hexEscape(scalar)
         default: return nil
         }
     }
 
-    /// A character by its code, as `\u{202E}`: every one escaped is in the Basic Plane, so four hex digits.
+    /// A character by its code, as `\u{202E}`: at least four hex digits, five beyond the Basic Plane.
     static func hexEscape(_ scalar: Unicode.Scalar) -> String {
         let hex = String(scalar.value, radix: 16, uppercase: true)
         return "\\u{" + String(repeating: "0", count: max(0, 4 - hex.count)) + hex + "}"

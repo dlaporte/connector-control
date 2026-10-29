@@ -252,7 +252,9 @@ extension ControlTools {
             : "\(count) connectors would be copied into “\(collection)”, switched off, but any that replaces one switched on stays on:"
     }
 
-    public static func fromFooter(_ path: String) -> String { "From \(path)" }
+    /// The file an import or subscription reads, between the app's quotes so the dialog sets it apart;
+    /// `path` comes through `ControlText.escapedPath(_:)`.
+    public static func fromFooter(_ path: String) -> String { "From “\(path)”" }
 
     public static func importedText(_ count: Int, _ collection: String) -> String {
         count == 1 ? "Copied \(count) connector into “\(collection)”, switched off."
@@ -465,7 +467,7 @@ extension ControlTools {
         // A Replace keeps the switch of what it replaces, as the Import sheet's does: over a connector
         // that is on, the copy stays on and, in the collection Claude runs, changes what Claude runs.
         let replacesOn = choices.contains { $0.value == .replace && held[$0.key]?.enabled == true }
-        let from = ControlTools.fromFooter(ControlText.escaped(url.path))
+        let from = ControlTools.fromFooter(ControlText.escapedPath(url.path))
         let message = newCollection != nil ? ControlTools.importNewMessage(count, shownTarget)
             : replacesOn ? ControlTools.importReplacingMessage(count, shownTarget) : ControlTools.importMessage(count, shownTarget)
         let request = ConfirmationRequest(
@@ -519,7 +521,7 @@ extension ControlTools {
             title: ControlTools.subscribeTitle(shownAsker, file),
             message: ControlTools.subscribeMessage(shownName, count),
             code: ControlTools.documentLines(rendered, present: { _ in false }, choice: .add),
-            footer: ControlTools.fromFooter(ControlText.escaped(url.path)))
+            footer: ControlTools.fromFooter(ControlText.escapedPath(url.path)))
         // As import_document's: the bytes stand for what the question cannot show.
         return .ready(request, fingerprint: ContentHash.sha256(bytes), perform: { [self] in
             let mark = state.appliedServers

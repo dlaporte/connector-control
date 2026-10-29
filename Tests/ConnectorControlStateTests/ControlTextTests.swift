@@ -84,4 +84,44 @@ final class ControlTextTests: XCTestCase {
         XCTAssertEqual(ControlText.quotedList(["a", "b"]), "“a” and “b”")
         XCTAssertEqual(ControlText.quotedList(["a", "b", "c"]), "“a”, “b” and “c”")
     }
+
+    // MARK: What a dialog can trust
+
+    /// Every character that shows as nothing, or as a blank, shows as its code: the rest of
+    /// Default_Ignorable_Code_Point, the blank letters, the interlinear annotation marks and the tags
+    /// beyond the Basic Plane, as the controls and direction marks already did.
+    func testEveryCharacterThatShowsAsNothingIsEscaped() {
+        XCTAssertEqual(ControlText.escaped("a\u{034F}b\u{115F}c\u{3164}d\u{2800}e\u{FFA0}f\u{FFF9}g"),
+                       #"a\u{034F}b\u{115F}c\u{3164}d\u{2800}e\u{FFA0}f\u{FFF9}g"#)
+        XCTAssertEqual(ControlText.escaped("\u{1160}\u{17B4}\u{17B5}\u{180B}\u{180E}\u{180F}\u{206A}\u{206F}\u{FE00}\u{FFF0}\u{FFFB}"),
+                       #"\u{1160}\u{17B4}\u{17B5}\u{180B}\u{180E}\u{180F}\u{206A}\u{206F}\u{FE00}\u{FFF0}\u{FFFB}"#)
+        XCTAssertEqual(ControlText.escaped("tag\u{E0041}\u{E007F} \u{1BCA0}\u{1D173}\u{E0000}\u{E0100}\u{E0FFF}"),
+                       #"tag\u{E0041}\u{E007F} \u{1BCA0}\u{1D173}\u{E0000}\u{E0100}\u{E0FFF}"#,
+                       "beyond the Basic Plane an escape has five hex digits")
+        XCTAssertEqual(ControlText.escaped("❤\u{FE0F}"), #"❤\u{FE0F}"#, "a variation selector is invisible, so it shows too")
+        XCTAssertEqual(ControlText.escaped("é—👍 ok"), "é—👍 ok", "what shows as itself is left alone")
+        XCTAssertEqual(ControlText.word("a\u{3164}b"), #"'a\u{3164}b'"#, "a word holding a blank letter is quoted")
+    }
+
+    /// A name shows one way only: a backslash in it is doubled, so a name holding the text
+    /// `\u{202E}` reads apart from one holding the character.
+    func testANameShowsOneWayOnly() {
+        XCTAssertEqual(ControlText.escapedName(#"a\u{202E}"#), #"a\\u{202E}"#)
+        XCTAssertEqual(ControlText.escapedName("a\u{202E}"), #"a\u{202E}"#)
+        XCTAssertEqual(ControlText.escapedName(#"C:\tools"#), #"C:\\tools"#)
+        XCTAssertEqual(ControlText.quotedList([#"a\n"#, "a\n"]), #"“a\\n” and “a\n”"#)
+        XCTAssertEqual(ControlText.escaped("Added “x\\y”.", naming: ["x\\y"]), #"Added “x\\y”."#)
+        // One pass from the left: a shorter name holding \ cannot re-escape a longer name's escape.
+        XCTAssertEqual(ControlText.escaped("No “x\u{202E}” in “\\”.", naming: ["x\u{202E}", "\\"]), #"No “x\u{202E}” in “\\”."#)
+        XCTAssertEqual(ControlText.escaped(#"No “x\u{202E}”."#, naming: [#"x\u{202E}"#]), #"No “x\\u{202E}”."#)
+    }
+
+    /// A path keeps its own backslashes, and its curly quotes are escaped, so it can sit between the
+    /// app's quotes in a dialog's footer and be set apart there.
+    @MainActor
+    func testAPathKeepsItsBackslashesAndCannotCloseItsQuotes() {
+        XCTAssertEqual(ControlText.escapedPath(#"C:\Users\me\team “x”.json"#), #"C:\Users\me\team \u{201C}x\u{201D}.json"#)
+        XCTAssertEqual(ControlText.escapedPath("/tmp/a\nb.json"), #"/tmp/a\nb.json"#)
+        XCTAssertEqual(ControlTools.fromFooter(ControlText.escapedPath("/Users/me/team.json")), "From “/Users/me/team.json”")
+    }
 }

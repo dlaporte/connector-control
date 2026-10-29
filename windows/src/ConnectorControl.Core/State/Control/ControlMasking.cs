@@ -54,6 +54,11 @@ public static class ControlMasking
 
     public static string Assignment(string name, string value) => $"{name} = {value}";
 
+    /// <summary>One value on a line as <paramref name="exposure"/> shows it: in the dialog, quoted as an argument is when it is
+    /// not plain (<see cref="ControlText.Word"/>), so a newline and the two characters \n read apart and a run
+    /// of spaces cannot pass for a row of its own; elsewhere as it is.</summary>
+    internal static string Single(string text, Exposure exposure) => exposure == Exposure.Dialog ? ControlText.Word(text) : text;
+
     // MARK: Values
 
     /// <summary>A value that is wholly a reference — a placeholder, <c>${COLLECTION_DIR}</c>, or a <c>${NAME}</c> /
@@ -493,7 +498,7 @@ public static class ControlMasking
             .Select(key =>
                 // Raw with its key, so it never matches a field's raw under the same label (a
                 // `url` key beside mcp-remote's URL).
-                new Field(key, [(Raw(JsonValue.Array([JsonValue.String(key), properties[key]])), ValueText(key, properties[key], exposure))]))).ToList();
+                new Field(Single(key, exposure), [(Raw(JsonValue.Array([JsonValue.String(key), properties[key]])), ValueText(key, properties[key], exposure))]))).ToList();
     }
 
     /// <summary>A top-level key's value on a line, after <see cref="Leaves"/>: a string as itself, anything else as one
@@ -506,7 +511,7 @@ public static class ControlMasking
             {
                 return SecretText(value.StringValue, exposure == Exposure.Revealed);
             }
-            return exposure == Exposure.Masked ? Argument(value.StringValue) : value.StringValue;
+            return exposure == Exposure.Masked ? Argument(value.StringValue) : Single(value.StringValue, exposure);
         }
         return CompactText(Leaves(value, exposure, NamesASecret(key)));
     }
@@ -555,7 +560,7 @@ public static class ControlMasking
         var fields = new List<Field>
         {
             new(TypeLabel, [(Raw(JsonValue.Array(launcher)), RemoteBridgeType(remote.Package))]),
-            new(UrlLabel, [(Raw(JsonValue.String(remote.Url)), Url(remote.Url, exposure != Exposure.Masked))]),
+            new(UrlLabel, [(Raw(JsonValue.String(remote.Url)), Single(Url(remote.Url, exposure != Exposure.Masked), exposure))]),
         };
         var reveal = exposure == Exposure.Revealed;
         switch (remote.Auth)
@@ -566,15 +571,15 @@ public static class ControlMasking
                 break;
             case RemoteAuth.Header header:
                 fields.Add(new Field(HeadersLabel,
-                    [(Raw(JsonValue.Array([JsonValue.String(header.Name), JsonValue.String(header.Value)])), Assignment(header.Name, SecretText(header.Value, reveal)))]));
+                    [(Raw(JsonValue.Array([JsonValue.String(header.Name), JsonValue.String(header.Value)])), Assignment(Single(header.Name, exposure), SecretText(header.Value, reveal)))]));
                 break;
             case RemoteAuth.OAuthClient client:
                 fields.Add(new Field(OauthLabel,
                     [(Raw(JsonValue.Array([JsonValue.String(client.ClientId), JsonValue.String(client.ClientSecret)])),
-                        OauthClientText(client.ClientId, SecretText(client.ClientSecret, reveal)))]));
+                        OauthClientText(Single(client.ClientId, exposure), SecretText(client.ClientSecret, reveal)))]));
                 if (client.Scopes.Length > 0)
                 {
-                    fields.Add(new Field(ScopesLabel, [(Raw(JsonValue.String(client.Scopes)), client.Scopes)]));
+                    fields.Add(new Field(ScopesLabel, [(Raw(JsonValue.String(client.Scopes)), Single(client.Scopes, exposure))]));
                 }
                 break;
         }
@@ -666,7 +671,7 @@ public static class ControlMasking
         var fields = new List<Field>
         {
             new(TypeLabel, [(Raw(JsonValue.Null), CollectionsModel.RemoteType)]),
-            new(UrlLabel, [(Raw(JsonValue.String(address)), Url(address, exposure != Exposure.Masked))]),
+            new(UrlLabel, [(Raw(JsonValue.String(address)), Single(Url(address, exposure != Exposure.Masked), exposure))]),
         };
         var shown = new HashSet<string>(StringComparer.Ordinal) { "url" };
         if (config["headers"] is { Kind: JsonKind.Object } headers && headers.ObjectProperties.Count > 0)
@@ -683,7 +688,7 @@ public static class ControlMasking
         var model = FormMapper.Analyze(config).Model;
         var fields = new List<Field>
         {
-            new(CommandLabel, [(Raw(config["command"] ?? JsonValue.Null), exposure == Exposure.Masked ? Argument(model.Command) : model.Command)]),
+            new(CommandLabel, [(Raw(config["command"] ?? JsonValue.Null), exposure == Exposure.Masked ? Argument(model.Command) : Single(model.Command, exposure))]),
         };
         var shown = new HashSet<string>(StringComparer.Ordinal);
         if (config["command"] is { Kind: JsonKind.String })
@@ -730,7 +735,7 @@ public static class ControlMasking
                     shown = ControlText.Word(value.StringValue);
                 }
             }
-            return (Raw(JsonValue.Array([JsonValue.String(name), value])), Assignment(name, shown));
+            return (Raw(JsonValue.Array([JsonValue.String(name), value])), Assignment(Single(name, exposure), shown));
         }).ToList());
 
     /// <summary>The strings of an array value; nothing else.</summary>

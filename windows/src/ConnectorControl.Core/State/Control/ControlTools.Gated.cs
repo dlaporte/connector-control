@@ -333,7 +333,9 @@ public sealed partial class ControlTools
         ? $"{count} connector would be copied into “{collection}”, replacing one that is switched on, so it stays on:"
         : $"{count} connectors would be copied into “{collection}”, switched off, but any that replaces one switched on stays on:";
 
-    public static string FromFooter(string path) => $"From {path}";
+    /// <summary>The file an import or subscription reads, between the app's quotes so the dialog sets it apart;
+    /// <paramref name="path"/> comes through <see cref="ControlText.EscapedPath"/>.</summary>
+    public static string FromFooter(string path) => $"From “{path}”";
 
     public static string ImportedText(int count, string collection) => count == 1
         ? $"Copied {count} connector into “{collection}”, switched off."
@@ -533,7 +535,8 @@ public sealed partial class ControlTools
     {
         if (full.StartsWith(@"\\.\", StringComparison.Ordinal) || IsDeviceNamespace(full))
         {
-            return NotAFileError(ControlText.EscapedName(full));
+            // A path, not a name: its backslashes are its own, so it shows as Escaped shows it, never doubled.
+            return NotAFileError(ControlText.Escaped(full));
         }
         return caller is ControlCaller.Relay && (full.StartsWith(@"\\", StringComparison.Ordinal) || HasNtPrefix(full))
             ? NetworkPathError : null;
@@ -679,7 +682,7 @@ public sealed partial class ControlTools
         // A Replace keeps the switch of what it replaces, as the Import sheet's does: over a connector
         // that is on, the copy stays on and, in the collection Claude runs, changes what Claude runs.
         var replacesOn = choices.Any(choice => choice.Value == ImportChoice.Replace && held.TryGetValue(choice.Key, out var entry) && entry.Enabled);
-        var from = FromFooter(ControlText.Escaped(full));
+        var from = FromFooter(ControlText.EscapedPath(full));
         var message = newCollection is not null ? ImportNewMessage(count, shownTarget)
             : replacesOn ? ImportReplacingMessage(count, shownTarget) : ImportMessage(count, shownTarget);
         var request = new ConfirmationRequest(
@@ -750,7 +753,7 @@ public sealed partial class ControlTools
             SubscribeTitle(shownAsker, file),
             SubscribeMessage(shownName, count),
             DocumentLines(rendered, _ => false, ImportChoice.Add),
-            FromFooter(ControlText.Escaped(full)));
+            FromFooter(ControlText.EscapedPath(full)));
         // As import_document's: the bytes stand for what the question cannot show.
         return new ControlStep.Ready(request, Fingerprint: ContentHash.Sha256(bytes), Perform: () =>
         {

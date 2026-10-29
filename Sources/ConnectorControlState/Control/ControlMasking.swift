@@ -50,6 +50,13 @@ public enum ControlMasking {
 
     public static func assignment(_ name: String, _ value: String) -> String { "\(name) = \(value)" }
 
+    /// One value on a line as `exposure` shows it: in the dialog, quoted as an argument is when it is
+    /// not plain (`ControlText.word(_:)`), so a newline and the two characters \n read apart and a run
+    /// of spaces cannot pass for a row of its own; elsewhere as it is.
+    static func single(_ text: String, _ exposure: Exposure) -> String {
+        exposure == .dialog ? ControlText.word(text) : text
+    }
+
     // MARK: Values
 
     /// A value that is wholly a reference — a placeholder, `${COLLECTION_DIR}`, or a `${NAME}` /
@@ -403,7 +410,7 @@ public enum ControlMasking {
             .map { key in
                 // Raw with its key, so it never matches a field's raw under the same label (a
                 // `url` key beside mcp-remote's URL).
-                Field(label: key, values: [(raw(.array([.string(key), object[key] ?? .null])), valueText(key, object[key] ?? .null, exposure))])
+                Field(label: single(key, exposure), values: [(raw(.array([.string(key), object[key] ?? .null])), valueText(key, object[key] ?? .null, exposure))])
             }
     }
 
@@ -412,7 +419,7 @@ public enum ControlMasking {
     static func valueText(_ key: String, _ value: JSONValue, _ exposure: Exposure) -> String {
         if case .string(let text) = value {
             if namesASecret(key) { return secretText(text, reveal: exposure == .revealed) }
-            return exposure == .masked ? argument(text) : text
+            return exposure == .masked ? argument(text) : single(text, exposure)
         }
         return compactText(leaves(value, exposure, secret: namesASecret(key)))
     }
@@ -452,7 +459,7 @@ public enum ControlMasking {
         let bridge = args.firstIndex { same($0, remote.package) } ?? 0
         let launcher = [object["command"] ?? .null] + args[...bridge].map(JSONValue.string)
         var fields = [Field(label: typeLabel, values: [(raw(.array(launcher)), remoteBridgeType(remote.package))]),
-                      Field(label: urlLabel, values: [(raw(.string(remote.url)), url(remote.url, reveal: exposure != .masked))])]
+                      Field(label: urlLabel, values: [(raw(.string(remote.url)), single(url(remote.url, reveal: exposure != .masked), exposure))])]
         let reveal = exposure == .revealed
         switch remote.auth {
         case .automatic:
@@ -462,12 +469,12 @@ public enum ControlMasking {
                                 values: [(raw(.array([.string(token)])), assignment("Authorization", secretText(token, reveal: reveal)))]))
         case .header(let name, let value):
             fields.append(Field(label: headersLabel,
-                                values: [(raw(.array([.string(name), .string(value)])), assignment(name, secretText(value, reveal: reveal)))]))
+                                values: [(raw(.array([.string(name), .string(value)])), assignment(single(name, exposure), secretText(value, reveal: reveal)))]))
         case .oauthClient(let clientID, let clientSecret, let scopes):
             fields.append(Field(label: oauthLabel,
                                 values: [(raw(.array([.string(clientID), .string(clientSecret)])),
-                                          oauthClientText(clientID, secretText(clientSecret, reveal: reveal)))]))
-            if !scopes.isEmpty { fields.append(Field(label: scopesLabel, values: [(raw(.string(scopes)), scopes)])) }
+                                          oauthClientText(single(clientID, exposure), secretText(clientSecret, reveal: reveal)))]))
+            if !scopes.isEmpty { fields.append(Field(label: scopesLabel, values: [(raw(.string(scopes)), single(scopes, exposure))])) }
         }
         let signIn = signInArguments(remote.auth)
         let rest = unmodelled(Array(args.dropFirst(bridge + 2)), signIn.pairs)
@@ -531,7 +538,7 @@ public enum ControlMasking {
     static func urlView(_ object: [String: JSONValue], _ address: String,
                         _ exposure: Exposure) -> (fields: [Field], shown: Set<String>) {
         var fields = [Field(label: typeLabel, values: [(raw(.null), CollectionsModel.remoteType)]),
-                      Field(label: urlLabel, values: [(raw(.string(address)), url(address, reveal: exposure != .masked))])]
+                      Field(label: urlLabel, values: [(raw(.string(address)), single(url(address, reveal: exposure != .masked), exposure))])]
         var shown: Set<String> = ["url"]
         if case .object(let headers)? = object["headers"], !headers.isEmpty {
             fields.append(secretField(headersLabel, headers, exposure))
@@ -545,7 +552,7 @@ public enum ControlMasking {
                           _ exposure: Exposure) -> (fields: [Field], shown: Set<String>) {
         let model = FormMapper.analyze(config).model
         var fields = [Field(label: commandLabel, values: [(raw(object["command"] ?? .null),
-                                                           exposure == .masked ? argument(model.command) : model.command)])]
+                                                           exposure == .masked ? argument(model.command) : single(model.command, exposure))])]
         var shown: Set<String> = []
         if case .string? = object["command"] { shown.insert("command") }
         if !model.args.isEmpty {
@@ -575,7 +582,7 @@ public enum ControlMasking {
                 shown = compactText(value)
                 if case .string(let text) = value { shown = ControlText.word(text) }
             }
-            return (raw(.array([.string(name), value])), assignment(name, shown))
+            return (raw(.array([.string(name), value])), assignment(single(name, exposure), shown))
         })
     }
 

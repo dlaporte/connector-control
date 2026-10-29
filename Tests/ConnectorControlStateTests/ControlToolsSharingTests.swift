@@ -679,7 +679,7 @@ final class ControlToolsSharingTests: XCTestCase {
         ])
         XCTAssertEqual(requests.first?.code.first, "“" + shownConnector + "”")
         XCTAssertEqual(requests.dropFirst(2).first?.code, ["“" + shownConnector + "” · " + ReviewModel.deletedLabel])
-        XCTAssertEqual(requests.first?.footer, ControlTools.fromFooter(ControlText.escaped(url.path)))
+        XCTAssertEqual(requests.first?.footer, ControlTools.fromFooter(ControlText.escapedPath(url.path)))
         XCTAssertTrue(requests.dropFirst(4).first?.code.contains("“" + shownConnector + "”") == true, "the backup's connectors")
         XCTAssertEqual(results.prefix(4).map { $0?.text.components(separatedBy: "\n").first }, [
             ControlTools.importedText(2, shownCollection), ControlTools.subscribedText(shownTeam, shownFile),

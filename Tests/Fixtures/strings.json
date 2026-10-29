@@ -437,7 +437,7 @@
     "format": "“{0}” has no connectors."
   },
   "ControlTools.fromFooter": {
-    "format": "From {0}"
+    "format": "From “{0}”"
   },
   "ControlTools.get_connector.cliUsage": "show <name> [--reveal]",
   "ControlTools.get_connector.description": "Show one connector, with its secrets masked. Gives its command, arguments, URL and environment; environment and header values are never shown, only whether they are set. Looks in the active collection unless collection names another.",

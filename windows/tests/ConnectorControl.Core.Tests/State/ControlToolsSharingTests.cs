@@ -386,7 +386,7 @@ public class ControlToolsSharingTests
             Assert.Null(ControlTools.PathRefusal("/Users/me/x.json", caller));
             foreach (var device in new[] { @"\\?\GLOBALROOT\Device\HarddiskVolume1\x.json", @"\\?\Volume{0b6c1b57-0000-0000-0000-100000000000}\x.json", @"\\?\pipe\x", @"\??\GLOBALROOT\Device\HarddiskVolume1\x.json", @"\??\Volume{0b6c1b57-0000-0000-0000-100000000000}\x.json", @"\??\pipe\x" })
             {
-                Assert.Equal(ControlTools.NotAFileError(ControlText.EscapedName(device)), ControlTools.PathRefusal(device, caller));
+                Assert.Equal(ControlTools.NotAFileError(ControlText.Escaped(device)), ControlTools.PathRefusal(device, caller));
             }
         }
         // A drive in the long-path form is a file path to the command line; the relay is refused anything that
@@ -891,7 +891,7 @@ public class ControlToolsSharingTests
         ], requests.Take(3).Select(request => request.Message));
         Assert.Equal("“" + shownConnector + "”", requests[0].Code[0]);
         Assert.Equal(["“" + shownConnector + "” · " + ReviewModel.DeletedLabel], requests[2].Code);
-        Assert.Equal(ControlTools.FromFooter(ControlText.Escaped(path)), requests[0].Footer);
+        Assert.Equal(ControlTools.FromFooter(ControlText.EscapedPath(path)), requests[0].Footer);
         // The backup's connectors.
         Assert.Contains("“" + shownConnector + "”", requests[4].Code);
         Assert.Equal([
