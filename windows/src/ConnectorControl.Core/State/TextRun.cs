@@ -117,6 +117,9 @@ public readonly record struct TextRun(string Text, bool IsSetApart = false)
         return [.. start.SelectMany(piece => piece), .. mark, .. end.SelectMany(piece => piece)];
     }
 
+    /// <summary>An escaped name cut as <see cref="Cut"/> cuts one.</summary>
+    internal static string CutName(string name, int limit) => Join(Cut(ControlText.Scalars(name).ToList(), limit));
+
     /// <summary>An escaped name in pieces: each escape whole — a backslash and the character after it, or
     /// <c>\u{…}</c> to its closing brace — and every other scalar alone.</summary>
     internal static List<List<int>> Escapes(List<int> name)

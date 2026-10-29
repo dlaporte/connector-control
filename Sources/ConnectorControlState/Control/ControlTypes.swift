@@ -45,11 +45,13 @@ public enum ControlCaller: Equatable, Sendable {
 
     /// Who is asking, ready for a sentence: "Claude" for Claude Desktop; any other client as
     /// `callingItselfText(_:)` frames its own name, escaped, so the frame's quotes are the only raw
-    /// ones; one that gave no name as `unknownClientName`. Every question and notification that names
-    /// the asker takes this. The command-line tool is never asked or announced, and keeps the tool's name.
+    /// ones, and cut as a dialog cuts any name (`TextRun.cutName(_:limit:)`), so a name of any length
+    /// leaves room for the rest of a notification as well as of a question; one that gave no name as
+    /// `unknownClientName`. Every question and notification that names the asker takes this. The
+    /// command-line tool is never asked or announced, and keeps the tool's name.
     public var shownAsker: String {
         guard case .relay(let clientName) = self, askerName != ControlCaller.claudeName, !clientName.isEmpty else { return askerName }
-        return ControlCaller.callingItselfText(ControlText.escapedName(clientName))
+        return ControlCaller.callingItselfText(TextRun.cutName(ControlText.escapedName(clientName), limit: ConfirmationDialog.nameLimit))
     }
 }
 

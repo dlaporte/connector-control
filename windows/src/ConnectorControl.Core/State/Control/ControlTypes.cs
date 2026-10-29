@@ -55,12 +55,14 @@ public abstract record ControlCaller
     /// <summary>
     /// Who is asking, ready for a sentence: "Claude" for Claude Desktop; any other client as
     /// <see cref="CallingItselfText"/> frames its own name, escaped, so the frame's quotes are the only raw
-    /// ones; one that gave no name as <see cref="UnknownClientName"/>. Every question and notification that names
-    /// the asker takes this. The command-line tool is never asked or announced, and keeps the tool's name.
+    /// ones, and cut as a dialog cuts any name (<see cref="TextRun.CutName"/>), so a name of any length
+    /// leaves room for the rest of a notification as well as of a question; one that gave no name as
+    /// <see cref="UnknownClientName"/>. Every question and notification that names the asker takes this. The
+    /// command-line tool is never asked or announced, and keeps the tool's name.
     /// </summary>
     public string ShownAsker =>
         this is Relay relay && AskerName != ClaudeName && relay.ClientName.Length > 0
-            ? CallingItselfText(ControlText.EscapedName(relay.ClientName))
+            ? CallingItselfText(TextRun.CutName(ControlText.EscapedName(relay.ClientName), ConfirmationDialog.NameLimit))
             : AskerName;
 }
 

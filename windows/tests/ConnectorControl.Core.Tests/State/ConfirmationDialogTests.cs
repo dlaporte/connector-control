@@ -76,6 +76,24 @@ public class ConfirmationDialogTests
             .EndsWith(new string('m', 32) + TextRun.CutMark, StringComparison.Ordinal));
     }
 
+    /// <summary>The name an app gives itself is cut as any other name is, wherever it is shown: a megabyte of it
+    /// pushes neither the question nor what a notification says happened out of sight.</summary>
+    [Fact]
+    public void AnAppsOwnNameIsCutLikeAnyOtherName()
+    {
+        var name = new string('a', 1_000_000 - 3) + "end";
+        var cut = new string('a', 31) + TextRun.CutMark + new string('a', 29) + "end";
+        var asker = new ControlCaller.Relay(name).ShownAsker;
+        Assert.Equal(ControlCaller.CallingItselfText(cut), asker);
+        Assert.Equal([new TextRun("An app calling itself “"), new TextRun(cut, IsSetApart: true), new TextRun("” wants to add “"),
+                      new TextRun("x", IsSetApart: true), new TextRun("”")],
+            new ConfirmationDialog(Question(ControlTools.AddTitle(asker, "x"))).Title);
+        Assert.Equal($"An app calling itself “{cut}” added “x” to “Harvard”.", ControlTools.AddedNotification(asker, "x", "Harvard"));
+        var exact = new string('e', ConfirmationDialog.NameLimit);
+        // A name at the limit is whole.
+        Assert.Equal(ControlCaller.CallingItselfText(exact), new ControlCaller.Relay(exact).ShownAsker);
+    }
+
     /// <summary>The cut never splits a character's escape: an escape is kept whole on its side of the "…", or left
     /// out whole.</summary>
     [Fact]

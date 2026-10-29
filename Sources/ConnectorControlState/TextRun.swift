@@ -108,6 +108,11 @@ public struct TextRun: Equatable, Sendable {
         return start.flatMap { $0 } + Array(cutMark.unicodeScalars) + end.flatMap { $0 }
     }
 
+    /// An escaped name cut as `cut(_:_:)` cuts one.
+    static func cutName(_ name: String, limit: Int) -> String {
+        text(cut(Array(name.unicodeScalars), limit))
+    }
+
     /// An escaped name in pieces: each escape whole — a backslash and the character after it, or
     /// `\u{…}` to its closing brace — and every other scalar alone.
     static func escapes(_ name: [Unicode.Scalar]) -> [[Unicode.Scalar]] {

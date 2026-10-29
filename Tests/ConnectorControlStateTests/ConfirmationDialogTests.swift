@@ -68,6 +68,21 @@ final class ConfirmationDialogTests: XCTestCase {
                         .hasSuffix(String(repeating: "m", count: 32) + TextRun.cutMark))
     }
 
+    /// The name an app gives itself is cut as any other name is, wherever it is shown: a megabyte of it
+    /// pushes neither the question nor what a notification says happened out of sight.
+    func testAnAppsOwnNameIsCutLikeAnyOtherName() {
+        let name = String(repeating: "a", count: 1_000_000 - 3) + "end"
+        let cut = String(repeating: "a", count: 31) + TextRun.cutMark + String(repeating: "a", count: 29) + "end"
+        let asker = ControlCaller.relay(clientName: name).shownAsker
+        XCTAssertEqual(asker, ControlCaller.callingItselfText(cut))
+        XCTAssertEqual(ConfirmationDialog(question(ControlTools.addTitle(asker, "x"))).title,
+                       [TextRun("An app calling itself “"), TextRun(cut, isSetApart: true), TextRun("” wants to add “"),
+                        TextRun("x", isSetApart: true), TextRun("”")])
+        XCTAssertEqual(ControlTools.addedNotification(asker, "x", "Harvard"), "An app calling itself “\(cut)” added “x” to “Harvard”.")
+        let exact = String(repeating: "e", count: ConfirmationDialog.nameLimit)
+        XCTAssertEqual(ControlCaller.relay(clientName: exact).shownAsker, ControlCaller.callingItselfText(exact), "a name at the limit is whole")
+    }
+
     /// The cut never splits a character's escape: an escape is kept whole on its side of the "…", or left
     /// out whole.
     func testTheCutNeverSplitsAnEscape() {
