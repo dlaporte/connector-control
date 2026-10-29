@@ -47,6 +47,8 @@ internal sealed class TestHostDialogs : IDialogs
     }
 
     public bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown) => false;
+
+    public bool ConfirmChange(ConfirmationDialog dialog) => false;
 }
 
 internal sealed class TestHostToolProbe : IToolProbe

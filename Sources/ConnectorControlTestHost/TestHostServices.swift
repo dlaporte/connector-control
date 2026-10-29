@@ -48,6 +48,7 @@ final class TestHostDialogs: Dialogs {
                  cancelIsDefault: Bool) -> Bool { false }
     func promptForName(title: String, initial: String) -> String? { nil }
     func inform(message: String, informative: String?) {}
+    func confirmChange(_ dialog: ConfirmationDialog) -> Bool { false }
 }
 
 struct TestHostToolProbe: ToolProbing {

@@ -44,6 +44,9 @@ public sealed class WpfDialogs : IDialogs
     public bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown) =>
         UpdateDialog.Show(ResolveOwner(), newVersion, currentVersion, notesMarkdown);
 
+    // Don’t Allow, as the declining confirmer the app still uses answers.
+    public bool ConfirmChange(ConfirmationDialog dialog) => false;
+
     internal static void Present(Window dialog, Window? owner)
     {
         if (owner is { IsVisible: true })

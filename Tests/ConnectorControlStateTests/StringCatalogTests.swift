@@ -456,6 +456,12 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlRelay.restartedError"] = ControlRelay.restartedError
         actual["ControlText.listAnd"] = ControlText.listAnd
 
+        // MARK: ConfirmationDialog / TextRun
+
+        actual["ConfirmationDialog.allowButton"] = ConfirmationDialog.allowButton
+        actual["ConfirmationDialog.dontAllowButton"] = ConfirmationDialog.dontAllowButton
+        actual["TextRun.cutMark"] = TextRun.cutMark
+
         // MARK: ControlCaller / ControlSettingKey / ControlTools
 
         actual["ControlCaller.callingItselfText"] = ControlCaller.callingItselfText("X")

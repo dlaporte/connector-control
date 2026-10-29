@@ -249,6 +249,8 @@
     "format": "backup {0} has an invalid mcpServers section"
   },
   "ConfigService.malformedClaudeConfigNote": "Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.",
+  "ConfirmationDialog.allowButton": "Allow",
+  "ConfirmationDialog.dontAllowButton": "Don’t Allow",
   "ControlCaller.callingItselfText": {
     "format": "An app calling itself “{0}”"
   },
@@ -1067,6 +1069,7 @@
   "SettingsModel.versionText": {
     "format": "Version {0}"
   },
+  "TextRun.cutMark": "…",
   "ToolFamily.nodeJS.installCommand": {
     "mac": "brew install node",
     "win": "winget install OpenJS.NodeJS.LTS"

@@ -59,4 +59,7 @@ final class AlertDialogs: Dialogs {
         alert.addButton(withTitle: AlertDialogs.okTitle)
         alert.runModal()
     }
+
+    // Don’t Allow, as the declining confirmer the app still uses answers.
+    func confirmChange(_ dialog: ConfirmationDialog) -> Bool { false }
 }

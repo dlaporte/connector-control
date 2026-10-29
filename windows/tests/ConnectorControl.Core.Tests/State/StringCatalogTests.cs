@@ -465,6 +465,12 @@ public class StringCatalogTests
         actual["ControlRelay.restartedError"] = ControlRelay.RestartedError;
         actual["ControlText.listAnd"] = ControlText.ListAnd;
 
+        // MARK: ConfirmationDialog / TextRun
+
+        actual["ConfirmationDialog.allowButton"] = ConfirmationDialog.AllowButton;
+        actual["ConfirmationDialog.dontAllowButton"] = ConfirmationDialog.DontAllowButton;
+        actual["TextRun.cutMark"] = TextRun.CutMark;
+
         // MARK: ControlCaller / ControlSettingKey / ControlTools
 
         actual["ControlCaller.callingItselfText"] = ControlCaller.CallingItselfText("X");
