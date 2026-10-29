@@ -173,4 +173,15 @@ final class ClaudeConfigIOTests: XCTestCase {
         }
         XCTAssertThrowsError(try ClaudeConfigIO.parseRoot(config(70)))
     }
+
+    /// A Claude config with a trailing comma is refused as malformed, as the Windows reader and Claude
+    /// Desktop refuse it, where JSONSerialization reads one.
+    func testAConfigWithATrailingCommaIsRefusedAsMalformed() throws {
+        for text in [#"{"mcpServers":{},}"#, #"{"mcpServers":{"a":{"command":"npx","args":["x",]}}}"#] {
+            XCTAssertThrowsError(try ClaudeConfigIO.parseRoot(Data(text.utf8)), text) {
+                guard case ClaudeConfigError.malformed = $0 else { return XCTFail("wrong error: \($0)") }
+            }
+        }
+        XCTAssertNoThrow(try ClaudeConfigIO.parseRoot(Data(#"{"mcpServers":{"a":{"command":",}"}}}"#.utf8)))
+    }
 }

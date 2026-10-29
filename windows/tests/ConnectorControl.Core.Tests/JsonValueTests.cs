@@ -151,6 +151,20 @@ public class JsonValueTests
 
     /// <summary>Arrays and objects nest at most 64 deep, as the Mac mirror allows, so a document reads
     /// the same on both platforms; brackets inside a string do not count.</summary>
+    /// <summary>A comma before a closing bracket or brace is refused, as the Mac mirror refuses it; a comma or
+    /// bracket inside a string is only text.</summary>
+    [Fact]
+    public void ATrailingCommaIsRefused()
+    {
+        foreach (var text in new[] { "[1,]", """{"a":1,}""", "[1 , \n\t\r ]", "[[1,],2]", """{"a":{"b":[],},"c":1}""" })
+        {
+            Assert.ThrowsAny<JsonException>(() => JsonValue.Parse(text));
+        }
+        Assert.Equal(JsonValue.Array([JsonValue.String("a,]"), JsonValue.String(",}")]), JsonValue.Parse("""["a,]",",}"]"""));
+        Assert.Equal(JsonValue.Object(("a", JsonValue.String("x\",}"))), JsonValue.Parse("""{"a":"x\",}"}"""));
+        Assert.Equal(JsonValue.Array([JsonValue.Int(1), JsonValue.Int(2)]), JsonValue.Parse("[1, 2]"));
+    }
+
     [Fact]
     public void NestingDeeperThan64IsRefused()
     {

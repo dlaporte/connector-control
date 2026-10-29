@@ -38,6 +38,14 @@ public class ControlHelloTests
         Assert.Equal(new ControlHello(false, null), ControlHello.Unknown);
     }
 
+    /// <summary>A hello with a trailing comma is not JSON, so it is the relay, as on the Mac.</summary>
+    [Fact]
+    public void AHelloWithATrailingCommaIsTheRelay()
+    {
+        Assert.False(Parse("""{"client":"cli","version":"1.5.0",}""").IsCli);
+        Assert.Null(Parse("""{"client":"cli","version":"1.5.0",}""").Version);
+    }
+
     [Fact]
     public void AHelloThatIsNotStrictUtf8IsTheRelayEvenWhenItsJsonIsOtherwiseACommandLineHello()
     {

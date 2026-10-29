@@ -136,9 +136,12 @@ public enum ClaudeConfigIO {
         }
         // Platform idiom: the Windows reader refuses arrays and objects nested past 64, where
         // JSONSerialization reads deeper; refused here alike, as JSONValue.parse refuses them.
-        guard McpSession.nests(atMost: McpSession.maxNestingDepth, String(decoding: data, as: UTF8.self)) else {
+        let text = String(decoding: data, as: UTF8.self)
+        guard McpSession.nests(atMost: McpSession.maxNestingDepth, text) else {
             throw ClaudeConfigError.malformed(notJSONError)
         }
+        // A trailing comma, which JSONSerialization reads and Claude Desktop does not, is refused as on Windows.
+        guard !McpSession.hasTrailingComma(text) else { throw ClaudeConfigError.malformed(notJSONError) }
         let parsed: Any
         do {
             parsed = try JSONSerialization.jsonObject(with: data)

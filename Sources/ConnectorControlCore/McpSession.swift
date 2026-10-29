@@ -306,4 +306,27 @@ public final class McpSession {
         }
         return true
     }
+
+    /// Whether `text` has a comma, outside a string, followed by nothing but JSON whitespace and then a
+    /// closing bracket or brace. Platform idiom: `JSONDecoder` and `JSONSerialization` read one trailing
+    /// comma, where the Windows reader — and Claude Desktop — refuse it; refused here alike, so a line or a
+    /// file reads the same on both.
+    public nonisolated static func hasTrailingComma(_ text: String) -> Bool {
+        var inString = false
+        var escaped = false
+        var comma = false
+        for byte in text.utf8 {
+            if inString {
+                if escaped { escaped = false } else if byte == UInt8(ascii: "\\") { escaped = true } else if byte == UInt8(ascii: "\"") { inString = false }
+            } else if byte == UInt8(ascii: ",") {
+                comma = true
+            } else if byte == UInt8(ascii: "]") || byte == UInt8(ascii: "}") {
+                if comma { return true }
+            } else if ![UInt8(ascii: " "), UInt8(ascii: "\t"), UInt8(ascii: "\n"), UInt8(ascii: "\r")].contains(byte) {
+                comma = false
+                if byte == UInt8(ascii: "\"") { inString = true }
+            }
+        }
+        return false
+    }
 }

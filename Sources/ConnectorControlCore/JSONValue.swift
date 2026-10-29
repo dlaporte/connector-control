@@ -41,12 +41,17 @@ extension JSONValue: Codable {
 }
 
 public extension JSONValue {
-    /// Strict parse, refusing arrays and objects nested deeper than `McpSession.maxNestingDepth`.
+    /// Strict parse, refusing arrays and objects nested deeper than `McpSession.maxNestingDepth` and a
+    /// trailing comma (`McpSession.hasTrailingComma`).
     static func parse(_ data: Data) throws -> JSONValue {
         // Platform idiom: the Windows reader refuses nesting past 64 itself, where JSONDecoder reads
         // to 512; held to the same limit here, so a document reads, and is masked, alike on both.
-        guard McpSession.nests(atMost: McpSession.maxNestingDepth, String(decoding: data, as: UTF8.self)) else {
+        let text = String(decoding: data, as: UTF8.self)
+        guard McpSession.nests(atMost: McpSession.maxNestingDepth, text) else {
             throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "nested too deeply"))
+        }
+        guard !McpSession.hasTrailingComma(text) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "trailing comma"))
         }
         return try JSONDecoder().decode(JSONValue.self, from: data)
     }

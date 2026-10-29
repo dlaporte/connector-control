@@ -112,6 +112,17 @@ final class JSONValueTests: XCTestCase {
         XCTAssertEqual(try JSONValue.parse(Data("true".utf8)), .bool(true))
     }
 
+    /// A comma before a closing bracket or brace is refused, as the Windows reader refuses it, where
+    /// `JSONDecoder` reads one; a comma or bracket inside a string is only text.
+    func testATrailingCommaIsRefused() {
+        for text in ["[1,]", #"{"a":1,}"#, "[1 , \n\t\r ]", #"[[1,],2]"#, #"{"a":{"b":[],},"c":1}"#] {
+            XCTAssertThrowsError(try JSONValue.parse(Data(text.utf8)), text)
+        }
+        XCTAssertEqual(try JSONValue.parse(Data(#"["a,]",",}"]"#.utf8)), .array([.string("a,]"), .string(",}")]))
+        XCTAssertEqual(try JSONValue.parse(Data(#"{"a":"x\",}"}"#.utf8)), .object(["a": .string(#"x",}"#)]))
+        XCTAssertEqual(try JSONValue.parse(Data("[1, 2]".utf8)), .array([.int(1), .int(2)]))
+    }
+
     /// Arrays and objects nest at most 64 deep, as the Windows reader allows, so a document reads
     /// the same on both platforms; brackets inside a string do not count.
     func testNestingDeeperThan64IsRefused() {

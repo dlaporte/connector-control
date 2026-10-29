@@ -28,6 +28,12 @@ final class ControlHelloTests: XCTestCase {
         XCTAssertEqual(ControlHello.unknown, ControlHello(isCLI: false, version: nil))
     }
 
+    /// A hello with a trailing comma is not JSON, so it is the relay, as on Windows.
+    func testAHelloWithATrailingCommaIsTheRelay() {
+        XCTAssertFalse(parse(#"{"client":"cli","version":"1.5.0",}"#).isCLI)
+        XCTAssertNil(parse(#"{"client":"cli","version":"1.5.0",}"#).version)
+    }
+
     func testAHelloThatIsNotStrictUTF8IsTheRelayEvenWhenItsJSONIsOtherwiseACommandLineHello() {
         // A lossy decode would turn the stray byte into U+FFFD and still read a "cli" hello.
         var bytes = Data(#"{"client":"cli","version":"1.5.0","x":""#.utf8)

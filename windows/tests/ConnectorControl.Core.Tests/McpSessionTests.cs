@@ -123,6 +123,18 @@ public class McpSessionTests
         Assert.Equal([ParseError, ParseError], sent);
     }
 
+    /// <summary>A trailing comma is not JSON: a parse error, as on the Mac.</summary>
+    [Fact]
+    public void ATrailingCommaIsAParseError()
+    {
+        session.Receive("""{"jsonrpc":"2.0","id":1,"method":"ping",}""");
+        session.Receive("""{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{"a":[1,]}}""");
+        Assert.Equal([
+            """{"error":{"code":-32700,"message":"Parse error"},"id":null,"jsonrpc":"2.0"}""",
+            """{"error":{"code":-32700,"message":"Parse error"},"id":null,"jsonrpc":"2.0"}""",
+        ], sent);
+    }
+
     [Fact]
     public void MalformedJsonIsAParseError()
     {

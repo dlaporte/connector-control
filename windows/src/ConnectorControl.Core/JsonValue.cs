@@ -146,6 +146,7 @@ public sealed class JsonValue : IEquatable<JsonValue>
         var reader = new Utf8JsonReader(utf8Json, new JsonReaderOptions
         {
             CommentHandling = JsonCommentHandling.Disallow,
+            // The Mac mirror, whose JSONDecoder reads one trailing comma, refuses it itself.
             AllowTrailingCommas = false,
         });
         if (!reader.Read())

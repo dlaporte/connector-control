@@ -202,4 +202,16 @@ public class ClaudeConfigIOTests : IDisposable
         Assert.Throws<ClaudeConfigException>(() => ClaudeConfigIO.ParseRoot(Config(65)));
         Assert.Throws<ClaudeConfigException>(() => ClaudeConfigIO.ParseRoot(Config(70)));
     }
+
+    /// <summary>A Claude config with a trailing comma is refused as malformed, as Claude Desktop and the Mac mirror
+    /// refuse it.</summary>
+    [Fact]
+    public void AConfigWithATrailingCommaIsRefusedAsMalformed()
+    {
+        foreach (var text in new[] { """{"mcpServers":{},}""", """{"mcpServers":{"a":{"command":"npx","args":["x",]}}}""" })
+        {
+            Assert.Throws<ClaudeConfigException>(() => ClaudeConfigIO.ParseRoot(Encoding.UTF8.GetBytes(text)));
+        }
+        ClaudeConfigIO.ParseRoot(Encoding.UTF8.GetBytes("""{"mcpServers":{"a":{"command":",}"}}}"""));
+    }
 }
