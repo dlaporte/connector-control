@@ -101,7 +101,8 @@ public readonly record struct TextRun(string Text, bool IsSetApart = false)
     /// <summary><paramref name="name"/> no longer than <paramref name="limit"/> scalars: when it is longer, as much of its start and
     /// of its end as fit with <see cref="CutMark"/> between them, the end given the odd scalar. Names that share a long
     /// start, as a team's often do, still read apart by their ends. A name comes here escaped, and an escape is kept or
-    /// left out whole, never split into a piece that reads as something else.</summary>
+    /// left out whole, never split into a piece that reads as something else. The end never starts with a combining
+    /// mark: it would be drawn on the "…", so it goes with the character it was on.</summary>
     internal static List<int> Cut(List<int> name, int limit)
     {
         if (name.Count <= limit)
@@ -114,6 +115,7 @@ public readonly record struct TextRun(string Text, bool IsSetApart = false)
         var start = Fitting(pieces, room / 2);
         var end = Fitting(Enumerable.Reverse(pieces), room - room / 2);
         end.Reverse();
+        end = [.. end.SkipWhile(piece => piece.Count == 1 && ControlText.IsCombiningMark(piece[0]))];
         return [.. start.SelectMany(piece => piece), .. mark, .. end.SelectMany(piece => piece)];
     }
 

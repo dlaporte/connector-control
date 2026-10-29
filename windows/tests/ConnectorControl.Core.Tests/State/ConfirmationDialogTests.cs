@@ -94,6 +94,17 @@ public class ConfirmationDialogTests
         Assert.Equal(ControlCaller.CallingItselfText(exact), new ControlCaller.Relay(exact).ShownAsker);
     }
 
+    /// <summary>The end kept after the "…" never starts with a combining mark, which would be drawn on the "…" and
+    /// could pass for part of the cut; marks there are left out with the character they belonged to.</summary>
+    [Fact]
+    public void TheEndKeptAfterTheCutNeverStartsWithAMark()
+    {
+        var name = ControlText.EscapedName(new string('x', 68) + "\u0301\u0301" + new string('y', 30));
+        var shown = new ConfirmationDialog(Question(ControlTools.AddTitle("Claude", name))).Title[1].Text;
+        Assert.Equal(new string('x', 31) + TextRun.CutMark + new string('y', 30), shown);
+        Assert.False(ControlText.IsCombiningMark(ControlText.Scalars(shown).ElementAt(32)));
+    }
+
     /// <summary>The cut never splits a character's escape: an escape is kept whole on its side of the "…", or left
     /// out whole.</summary>
     [Fact]

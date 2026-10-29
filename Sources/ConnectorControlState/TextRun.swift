@@ -98,13 +98,15 @@ public struct TextRun: Equatable, Sendable {
     /// `name` no longer than `limit` scalars: when it is longer, as much of its start and of its end as
     /// fit with `cutMark` between them, the end given the odd scalar. Names that share a long start,
     /// as a team's often do, still read apart by their ends. A name comes here escaped, and an escape is
-    /// kept or left out whole, never split into a piece that reads as something else.
+    /// kept or left out whole, never split into a piece that reads as something else. The end never
+    /// starts with a combining mark: it would be drawn on the "…", so it goes with the character it was on.
     static func cut(_ name: [Unicode.Scalar], _ limit: Int) -> [Unicode.Scalar] {
         guard name.count > limit else { return name }
         let pieces = escapes(name)
         let room = limit - cutMark.unicodeScalars.count
         let start = fitting(pieces, room / 2)
         let end = fitting(pieces.reversed(), room - room / 2).reversed()
+            .drop { $0.count == 1 && ControlText.isCombiningMark($0[0]) }
         return start.flatMap { $0 } + Array(cutMark.unicodeScalars) + end.flatMap { $0 }
     }
 

@@ -83,6 +83,16 @@ final class ConfirmationDialogTests: XCTestCase {
         XCTAssertEqual(ControlCaller.relay(clientName: exact).shownAsker, ControlCaller.callingItselfText(exact), "a name at the limit is whole")
     }
 
+    /// The end kept after the "…" never starts with a combining mark, which would be drawn on the "…" and
+    /// could pass for part of the cut; marks there are left out with the character they belonged to.
+    func testTheEndKeptAfterTheCutNeverStartsWithAMark() {
+        let name = ControlText.escapedName(String(repeating: "x", count: 68) + "\u{0301}\u{0301}" + String(repeating: "y", count: 30))
+        let shown = ConfirmationDialog(question(ControlTools.addTitle("Claude", name))).title[1].text
+        XCTAssertEqual(shown, String(repeating: "x", count: 31) + TextRun.cutMark + String(repeating: "y", count: 30))
+        let after = Array(shown.unicodeScalars)[32]
+        XCTAssertFalse(ControlText.isCombiningMark(after))
+    }
+
     /// The cut never splits a character's escape: an escape is kept whole on its side of the "…", or left
     /// out whole.
     func testTheCutNeverSplitsAnEscape() {
