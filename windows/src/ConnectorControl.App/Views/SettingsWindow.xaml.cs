@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using ConnectorControl.Core;
 using ConnectorControl.Core.State;
 using Microsoft.Win32;
 using ConnectorControl.App.Services;
@@ -87,7 +88,7 @@ public partial class SettingsWindow : Window
         var arguments = Directory.Exists(dir) ? $"/select,\"{dir}\"" : $"\"{Path.GetDirectoryName(dir) ?? dir}\"";
         try
         {
-            Process.Start(new ProcessStartInfo("explorer.exe", arguments) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(SystemPrograms.Explorer, arguments) { UseShellExecute = true });
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {

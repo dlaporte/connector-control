@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
+using ConnectorControl.Core;
 using ConnectorControl.Core.State;
 
 namespace ConnectorControl.App.Views;
@@ -288,7 +289,7 @@ public partial class CollectionsWindow : Window
         }
         try
         {
-            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(SystemPrograms.Explorer, $"/select,\"{path}\"") { UseShellExecute = true });
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
         {
