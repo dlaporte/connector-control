@@ -33,9 +33,21 @@
 # into a prerelease at once before failing. Deleting the release only makes preview installs'
 # checks fail until the next preview or release recreates it.
 #
+# Operational rules this relies on:
+#   - Never delete the newest published preview release (or the stable release the feed was last
+#     copied from): the feed's enclosure points at that release's DMG, so preview installs would
+#     find an update they cannot download until the next preview or release replaces the feed.
+#   - Immutable releases must stay off for this repository: the feed is replaced in place with
+#     `gh release upload --clobber`, which an immutable preview-feed would refuse.
+#   - The "preview-feed" concurrency group holds one running and one pending job. A third
+#     contender cancels the pending one; re-running the cancelled job brings the feed up to date
+#     (the ordering check makes any re-run safe).
+#
 # After writing, the feed is fetched the way Sparkle fetches it (curl -L of the preview URL) and
 # must be byte-for-byte the appcast written, announcing this version and build, enclosing the
-# source release's DMG and carrying an EdDSA signature; releases/latest must still be a stable
+# source release's DMG and carrying an EdDSA signature on the item and the feed's own
+# sparkle-signatures block (SURequireSignedFeed refuses a feed without it); releases/latest must
+# still be a stable
 # v* release. Writes a step summary.
 #
 # Needs GH_TOKEN and GITHUB_REPOSITORY in the environment and gh, curl and cmp on PATH.
@@ -122,6 +134,9 @@ if STATE=$(gh release view "$FEED_TAG" --json isPrerelease,isDraft --jq '"\(.isP
       exit 1 ;;
     *) echo "::error::$FEED_TAG is a draft; delete it ('gh release delete $FEED_TAG --yes') and re-run to recreate it."; exit 1 ;;
   esac
+  if [ "$STATUS" = 404 ]; then
+    echo "::warning::$FEED_TAG exists but serves no appcast.xml: the feed was missing, perhaps because an earlier upload failed after --clobber deleted the old asset. Restoring it now."
+  fi
   gh release upload "$FEED_TAG" "$NEW" --clobber
   echo "Replaced $FEED_TAG's appcast.xml (was build ${CURRENT_BUILD:-none}, now $NEW_BUILD)"
 else
@@ -147,6 +162,8 @@ SERVED="$WORK/served.xml"
 grep -q "<sparkle:shortVersionString>$NEW_VERSION</sparkle:shortVersionString>" "$SERVED" || { echo "::error::the served preview feed does not announce $NEW_VERSION"; exit 1; }
 grep -q "<sparkle:version>$NEW_BUILD</sparkle:version>" "$SERVED" || { echo "::error::the served preview feed's build is not $NEW_BUILD"; exit 1; }
 grep -q 'sparkle:edSignature="[^"][^"]*"' "$SERVED" || { echo "::error::the served preview feed's item carries no EdDSA signature"; exit 1; }
+# The feed's own signature (SURequireSignedFeed): without it Sparkle rejects the whole feed.
+grep -q 'sparkle-signatures:' "$SERVED" || { echo "::error::the served preview feed carries no sparkle-signatures block"; exit 1; }
 
 [ "$(gh release view "$FEED_TAG" --json isPrerelease --jq .isPrerelease)" = true ] \
   || { echo "::error::$FEED_TAG is not a prerelease"; exit 1; }
