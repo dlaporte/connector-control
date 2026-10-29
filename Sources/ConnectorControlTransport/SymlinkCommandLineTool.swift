@@ -88,6 +88,8 @@ public final class SymlinkCommandLineTool: CommandLineTool {
             completion(ClaudeIntegration.moveToApplicationsError)
             return
         }
+        // Platform idiom: Windows refuses while its copy of the tool is missing; here the link points at the tool
+        // inside this app's own sealed bundle, which cannot be missing while the app runs.
         // Nothing to change, and no password to ask for.
         if isInstalled {
             completion(nil)

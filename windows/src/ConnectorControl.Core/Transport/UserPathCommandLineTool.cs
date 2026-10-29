@@ -11,8 +11,12 @@ namespace ConnectorControl.Core.Transport;
 /// off the UI thread: its broadcast gives every window up to a second to answer. There is no check that the app runs
 /// from where it will stay, as on the Mac: Windows installs into a fixed folder and is never transient.
 /// </summary>
-public sealed class UserPathCommandLineTool(string binDir, IUserEnvironment environment, AppHost host) : ICommandLineTool
+public sealed class UserPathCommandLineTool(string binDir, IUserEnvironment environment, AppHost host, Func<string, bool>? toolExists = null)
+    : ICommandLineTool
 {
+    /// <summary>Whether the tool's copy is there; tests stand a fake in for the file system.</summary>
+    private readonly Func<string, bool> toolExists = toolExists ?? File.Exists;
+
     private bool busy;
     private string? lastProblem;
 
@@ -43,7 +47,13 @@ public sealed class UserPathCommandLineTool(string binDir, IUserEnvironment envi
         }
     }
 
-    public void Install(Action<string?> completion) => Change(path => UserPath.Adding(path, binDir), CommandLineToolText.InstallFailedError, completion);
+    /// <summary>Refused while the tool's copy is missing — its refresh as the app starts can fail — or the folder would be
+    /// on PATH with nothing in it, and Settings would say the tool is there.</summary>
+    // Platform idiom: the Mac's link points into the app's own bundle, which cannot be missing while it runs, so
+    // the Mac checks nothing.
+    public void Install(Action<string?> completion) => Change(path => toolExists(ToolPath)
+        ? UserPath.Adding(path, binDir)
+        : throw new IOException(CommandLineToolText.MissingToolError(ToolPath)), CommandLineToolText.InstallFailedError, completion);
 
     public void Remove(Action<string?> completion) => Change(path => UserPath.Removing(path, binDir), CommandLineToolText.RemoveFailedError, completion);
 

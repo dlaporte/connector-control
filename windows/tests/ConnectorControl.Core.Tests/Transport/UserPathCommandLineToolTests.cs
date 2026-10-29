@@ -1,4 +1,5 @@
 using ConnectorControl.Core.State;
+using ConnectorControl.Core.Tests.TestSupport;
 using ConnectorControl.Core.Transport;
 
 namespace ConnectorControl.Core.Tests.Transport;
@@ -30,6 +31,10 @@ public class UserPathCommandLineToolTests
         }
     }
 
+    /// <summary>The tool over <see cref="Bin"/>, whose copy is taken to be there.</summary>
+    private static UserPathCommandLineTool Tool(IUserEnvironment environment) =>
+        new(Bin, environment, AppHost.Inline(), toolExists: _ => true);
+
     private static string? Answer(Action<Action<string?>> act)
     {
         string? said = "(no answer)";
@@ -42,7 +47,7 @@ public class UserPathCommandLineToolTests
     {
         var environment = new FakeEnvironment(@"C:\Windows");
         // An inline host runs the background work and the answer on the test's own thread.
-        var tool = new UserPathCommandLineTool(Bin, environment, AppHost.Inline());
+        var tool = Tool(environment);
         Assert.StartsWith(Bin, tool.ToolPath);
         Assert.EndsWith("connector-control.exe", tool.ToolPath);
         Assert.Null(tool.InstalledLocation);   // Windows puts a folder in the user PATH, with no one place to name
@@ -65,7 +70,7 @@ public class UserPathCommandLineToolTests
     public void AFailureIsReportedInTheAppsWords()
     {
         var environment = new FakeEnvironment(@"C:\Windows") { Failure = new UnauthorizedAccessException("Access denied.") };
-        var tool = new UserPathCommandLineTool(Bin, environment, AppHost.Inline());
+        var tool = Tool(environment);
         Assert.Equal(CommandLineToolText.InstallFailedError("Access denied."), Answer(tool.Install));
         Assert.False(tool.IsInstalled);
     }
@@ -76,7 +81,7 @@ public class UserPathCommandLineToolTests
     public void TheLastFailureStaysUntilTheNextTryAndEachStartAndEndIsAnnounced()
     {
         var environment = new FakeEnvironment(@"C:\Windows") { Failure = new UnauthorizedAccessException("Access denied.") };
-        var tool = new UserPathCommandLineTool(Bin, environment, AppHost.Inline());
+        var tool = Tool(environment);
         var changes = 0;
         tool.Changed += () => changes++;
         Assert.Equal(CommandLineToolText.InstallFailedError("Access denied."), Answer(tool.Install));
@@ -95,7 +100,7 @@ public class UserPathCommandLineToolTests
     public void RemovingWhenTheFolderIsAbsentChangesNothing()
     {
         var environment = new FakeEnvironment(@"C:\Windows");
-        var tool = new UserPathCommandLineTool(Bin, environment, AppHost.Inline());
+        var tool = Tool(environment);
         Assert.Null(Answer(tool.Remove));
         Assert.Equal(0, environment.Writes);
         Assert.Equal(@"C:\Windows", environment.Path);
@@ -105,16 +110,36 @@ public class UserPathCommandLineToolTests
     public void AnUnreadablePathIsNotInstalled()
     {
         var environment = new FakeEnvironment(@"C:\Windows") { ReadFailure = new IOException("locked") };
-        Assert.False(new UserPathCommandLineTool(Bin, environment, AppHost.Inline()).IsInstalled);
+        Assert.False(Tool(environment).IsInstalled);
     }
 
     [Fact]
     public void AnythingThatGoesWrongStillAnswers()
     {
         var environment = new FakeEnvironment(@"C:\Windows") { Failure = new InvalidOperationException("Surprise.") };
-        var tool = new UserPathCommandLineTool(Bin, environment, AppHost.Inline());
+        var tool = Tool(environment);
         Assert.Equal(CommandLineToolText.InstallFailedError("Surprise."), Answer(tool.Install));
         environment.ReadFailure = new ArgumentException("Odd.");
         Assert.Equal(CommandLineToolText.RemoveFailedError("Odd."), Answer(tool.Remove));
+    }
+
+    /// <summary>The copy in the folder is made as the app starts. When that failed, installing would put a folder with
+    /// no tool in it on PATH, and Settings would say it is there: the install is refused, saying why, and the PATH is
+    /// left alone. Without a check of its own the tool looks for the file itself.</summary>
+    [Fact]
+    public void InstallingWithoutTheToolsCopyIsRefused()
+    {
+        var environment = new FakeEnvironment(@"C:\Windows");
+        var tool = new UserPathCommandLineTool(Bin, environment, AppHost.Inline(), toolExists: _ => false);
+        Assert.Equal(CommandLineToolText.InstallFailedError(CommandLineToolText.MissingToolError(tool.ToolPath)), Answer(tool.Install));
+        Assert.Equal(0, environment.Writes);
+        Assert.False(tool.IsInstalled);
+
+        using var dir = new TempDir("cli-copy");
+        var onDisk = new UserPathCommandLineTool(dir.Path, environment, AppHost.Inline());
+        Assert.Equal(CommandLineToolText.InstallFailedError(CommandLineToolText.MissingToolError(onDisk.ToolPath)), Answer(onDisk.Install));
+        File.WriteAllText(onDisk.ToolPath, "");
+        Assert.Null(Answer(onDisk.Install));
+        Assert.True(onDisk.IsInstalled);
     }
 }

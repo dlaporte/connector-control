@@ -110,6 +110,7 @@ public class StringCatalogTests
         ["CollectionsModel.stopSyncingMessage"] = ["X"],
         ["CommandLineToolText.installFailedError"] = ["X"],
         ["CommandLineToolText.installedAtText"] = ["X"],
+        ["CommandLineToolText.missingToolError"] = ["X"],
         ["CommandLineToolText.occupiedError"] = ["X"],
         ["CommandLineToolText.removeFailedError"] = ["X"],
         ["CommandLineToolText.scriptsCaption"] = ["X"],
@@ -440,6 +441,7 @@ public class StringCatalogTests
         actual["CommandLineToolText.installButton"] = CommandLineToolText.InstallButton;
         actual["CommandLineToolText.installFailedError"] = CommandLineToolText.InstallFailedError("X");
         actual["CommandLineToolText.installedAtText"] = CommandLineToolText.InstalledAtText("X");
+        actual["CommandLineToolText.missingToolError"] = CommandLineToolText.MissingToolError("X");
         actual["CommandLineToolText.notInstalledText"] = CommandLineToolText.NotInstalledText;
         actual["CommandLineToolText.occupiedError"] = CommandLineToolText.OccupiedError("X");
         actual["CommandLineToolText.removeButton"] = CommandLineToolText.RemoveButton;

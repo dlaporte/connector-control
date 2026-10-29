@@ -70,5 +70,10 @@ public static class CommandLineToolText
 
     public static string RemoveFailedError(string reason) => $"The command-line tool couldn’t be removed: {reason}";
 
+    /// <summary>Why installing failed when the tool's copy, made as the app starts, is not there.</summary>
+    // Platform idiom: the Mac's link points at the tool inside the app's own sealed bundle, which cannot be
+    // missing while the app runs, so only Windows, whose copy lives outside the install, ever says it.
+    public static string MissingToolError(string path) => $"{path} is missing. Quit and reopen Connector Control, then try again.";
+
     public static string OccupiedError(string path) => $"{path} already exists and isn’t a link to Connector Control. Remove it, then try again.";
 }

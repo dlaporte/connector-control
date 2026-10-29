@@ -104,6 +104,7 @@ final class StringCatalogTests: XCTestCase {
         "CollectionsModel.stopSyncingMessage": ["X"],
         "CommandLineToolText.installFailedError": ["X"],
         "CommandLineToolText.installedAtText": ["X"],
+        "CommandLineToolText.missingToolError": ["X"],
         "CommandLineToolText.occupiedError": ["X"],
         "CommandLineToolText.removeFailedError": ["X"],
         "CommandLineToolText.scriptsCaption": ["X"],
@@ -431,6 +432,7 @@ final class StringCatalogTests: XCTestCase {
         actual["CommandLineToolText.installButton"] = CommandLineToolText.installButton
         actual["CommandLineToolText.installFailedError"] = CommandLineToolText.installFailedError("X")
         actual["CommandLineToolText.installedAtText"] = CommandLineToolText.installedAtText("X")
+        actual["CommandLineToolText.missingToolError"] = CommandLineToolText.missingToolError("X")
         actual["CommandLineToolText.notInstalledText"] = CommandLineToolText.notInstalledText
         actual["CommandLineToolText.occupiedError"] = CommandLineToolText.occupiedError("X")
         actual["CommandLineToolText.removeButton"] = CommandLineToolText.removeButton
