@@ -110,7 +110,7 @@ public sealed partial class ControlTools
         var definition = Catalog.FirstOrDefault(tool => tool.Name == name);
         if (definition is null)
         {
-            completion(ControlResult.Refusal(UnknownToolError(name)));
+            completion(ControlResult.Refusal(UnknownToolError(ControlText.EscapedName(name))));
             return;
         }
         if (arguments.Kind != JsonKind.Object)

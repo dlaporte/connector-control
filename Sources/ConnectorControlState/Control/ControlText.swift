@@ -27,9 +27,9 @@ public enum ControlText {
 
     /// A table: every column but the last padded to its widest cell plus the gap; the header row,
     /// when there is one, first. No line ends in spaces, whatever its last cells hold. Every cell
-    /// goes through `escaped(_:)`.
+    /// goes through `escapedName(_:)`, so a cell reads one way only.
     public static func table(header: [String]?, rows: [[String]]) -> [String] {
-        let all = ((header.map { [$0] } ?? []) + rows).map { $0.map(escaped) }
+        let all = ((header.map { [$0] } ?? []) + rows).map { $0.map(escapedName) }
         let columns = all.map(\.count).max() ?? 0
         let widths = (0..<columns).map { index in
             (all.map { index < $0.count ? width($0[index]) : 0 }.max() ?? 0) + gap
@@ -51,8 +51,7 @@ public enum ControlText {
     /// Text as a line shows it: a control character, and a character that shows as nothing or as a
     /// blank — every Default_Ignorable code point (soft hyphen, joiners, direction marks, variation
     /// selectors, tags…), the blank letters (U+115F, U+1160, U+2800, U+3164, U+FFA0), the interlinear
-    /// annotation marks and every space but the ordinary one (U+00A0, U+1680, U+2000–U+200A, U+202F,
-    /// U+205F, U+3000) — as a visible escape, `\n`, `\r`, `\t` or `\u{202E}`, so a value
+    /// annotation marks — as a visible escape, `\n`, `\r`, `\t` or `\u{202E}`, so a value
     /// can neither break its line, nor hide part of it, nor pass for another.
     public static func escaped(_ text: String) -> String {
         var line = ""
@@ -98,7 +97,7 @@ public enum ControlText {
             switch scalar {
             case "\\": name += "\\\\"
             case "\u{201C}", "\u{201D}": name += hexEscape(scalar)
-            default: name += escape(scalar) ?? String(scalar)
+            default: name += escapeShown(scalar) ?? String(scalar)
             }
         }
         return name
@@ -110,7 +109,7 @@ public enum ControlText {
     public static func escapedPath(_ text: String) -> String {
         var path = ""
         for scalar in text.unicodeScalars {
-            path += scalar == "\u{201C}" || scalar == "\u{201D}" ? hexEscape(scalar) : escape(scalar) ?? String(scalar)
+            path += scalar == "\u{201C}" || scalar == "\u{201D}" ? hexEscape(scalar) : escapeShown(scalar) ?? String(scalar)
         }
         return path
     }
@@ -123,11 +122,21 @@ public enum ControlText {
         case 0x0A: return "\\n"
         case 0x0D: return "\\r"
         case 0x09: return "\\t"
-        case 0x00...0x1F, 0x7F...0x9F, 0xA0, 0xAD, 0x034F, 0x061C, 0x115F, 0x1160, 0x1680, 0x17B4, 0x17B5, 0x180B...0x180F,
-             0x2000...0x200F, 0x2028...0x202F, 0x205F...0x206F, 0x2800, 0x3000, 0x3164, 0xFE00...0xFE0F, 0xFEFF, 0xFFA0,
+        case 0x00...0x1F, 0x7F...0x9F, 0xAD, 0x034F, 0x061C, 0x115F, 0x1160, 0x17B4, 0x17B5, 0x180B...0x180F,
+             0x200B...0x200F, 0x2028...0x202E, 0x2060...0x206F, 0x2800, 0x3164, 0xFE00...0xFE0F, 0xFEFF, 0xFFA0,
              0xFFF0...0xFFFB, 0x1BCA0...0x1BCA3, 0x1D173...0x1D17A, 0xE0000...0xE0FFF:
             return hexEscape(scalar)
         default: return nil
+        }
+    }
+
+    /// The escape for one character of a name, a key, a value or a path: as `escape(_:)`, and a space that is
+    /// not the ordinary one too (U+00A0, U+1680, U+2000–U+200A, U+202F, U+205F, U+3000), which could pass for
+    /// it there. Free text keeps them: a localized system message sets its punctuation off with one.
+    static func escapeShown(_ scalar: Unicode.Scalar) -> String? {
+        switch scalar.value {
+        case 0xA0, 0x1680, 0x2000...0x200A, 0x202F, 0x205F, 0x3000: return hexEscape(scalar)
+        default: return escape(scalar)
         }
     }
 
@@ -141,13 +150,13 @@ public enum ControlText {
     /// space, no ' and nothing `escaped(_:)` escapes — else between single quotes, with \ and '
     /// escaped inside as well, so no two argument lists read alike.
     public static func word(_ text: String) -> String {
-        if !text.isEmpty, !text.unicodeScalars.contains(where: { isSpace($0) || $0 == "'" || escape($0) != nil }) { return text }
+        if !text.isEmpty, !text.unicodeScalars.contains(where: { isSpace($0) || $0 == "'" || escapeShown($0) != nil }) { return text }
         var word = "'"
         for scalar in text.unicodeScalars {
             switch scalar {
             case "\\": word += "\\\\"
             case "'": word += "\\'"
-            default: word += escape(scalar) ?? String(scalar)
+            default: word += escapeShown(scalar) ?? String(scalar)
             }
         }
         return word + "'"

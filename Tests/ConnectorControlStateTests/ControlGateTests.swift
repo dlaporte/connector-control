@@ -70,4 +70,10 @@ final class ControlGateTests: XCTestCase {
         ]))
         XCTAssertEqual(ControlResult.refusal("no"), ControlResult(structured: .object(["error": .string("no")]), text: "no", isError: true))
     }
+
+    /// The tool name a refusal echoes is Claude's own text, so it shows as a name does.
+    func testAnUnknownToolShowsItsNameOneWayOnly() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        XCTAssertEqual(rig.call("bad\n\\name"), .refusal(ControlTools.unknownToolError(#"bad\n\\name"#)))
+    }
 }

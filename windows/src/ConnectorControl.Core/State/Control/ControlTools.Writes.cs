@@ -79,7 +79,7 @@ public sealed partial class ControlTools
             case "apply_update": return ApplyUpdate(arguments, caller.AskerName);
             case "restore_backup": return RestoreBackup(arguments, caller.AskerName);
             case "restart_claude": return RestartClaude(caller.AskerName);
-            default: return new ControlStep.Refused(UnknownToolError(name));
+            default: return new ControlStep.Refused(UnknownToolError(ControlText.EscapedName(name)));
         }
     }
 
@@ -91,17 +91,17 @@ public sealed partial class ControlTools
 
     /// <summary>A sentence about a file that leads with the file's name unquoted, as <c>AppState.SourceUnreadableError</c>
     /// words it: the name as <see cref="ControlText.EscapedName"/> shows it, then the rest through
-    /// <see cref="ControlText.Escaped(string, IReadOnlyList{string})"/>, for the quoted names it may echo. A name found
-    /// only between the app's quotes would pass here as itself.</summary>
-    internal static string Shown(string text, string file)
+    /// <see cref="ControlText.Escaped(string, IReadOnlyList{string})"/>, for the quoted names it may echo,
+    /// <paramref name="names"/> among them. A name found only between the app's quotes would pass here as itself.</summary>
+    internal static string Shown(string text, string file, IReadOnlyList<string>? names = null)
     {
         var lead = ControlText.Scalars(file).ToList();
         var scalars = ControlText.Scalars(text).ToList();
         if (lead.Count == 0 || !scalars.Take(lead.Count).SequenceEqual(lead))
         {
-            return ControlText.Escaped(text, [file]);
+            return ControlText.Escaped(text, [file, .. names ?? []]);
         }
-        return ControlText.EscapedName(file) + ControlText.Escaped(string.Concat(scalars.Skip(lead.Count).Select(ControlText.Text)), [file]);
+        return ControlText.EscapedName(file) + ControlText.Escaped(string.Concat(scalars.Skip(lead.Count).Select(ControlText.Text)), [file, .. names ?? []]);
     }
 
     /// <summary>A write's answer: what happened, then what follows for the collection Claude runs. A write

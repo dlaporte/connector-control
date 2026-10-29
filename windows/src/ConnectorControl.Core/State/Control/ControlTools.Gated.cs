@@ -701,7 +701,7 @@ public sealed partial class ControlTools
             }
             if (state.ImportCopies(full, target, choices) is { } error)
             {
-                return Refused(error, [Path.GetFileName(full), target]);
+                return new ControlOutcome(ControlResult.Refusal(Shown(error, Path.GetFileName(full), [target])), null);
             }
             var answer = replacesOn ? ImportedReplacingText(count, shownTarget) : ImportedText(count, shownTarget);
             return Done([answer], [("collection", JsonValue.String(target)), ("count", JsonValue.Int(count))],
@@ -761,7 +761,7 @@ public sealed partial class ControlTools
             var mark = state.AppliedServers;
             if (state.Subscribe(full, arguments.String("name")) is { } refusal)
             {
-                return Refused(refusal, [Path.GetFileName(full), name]);
+                return new ControlOutcome(ControlResult.Refusal(Shown(refusal, Path.GetFileName(full), [name])), null);
             }
             return Done([SubscribedText(shownName, file), ArrivedOffText(count)],
                 [("collection", JsonValue.String(name)), ("count", JsonValue.Int(count))],

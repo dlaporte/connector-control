@@ -777,4 +777,23 @@ final class ControlToolsSharingTests: XCTestCase {
         XCTAssertTrue(pending.text.hasPrefix(shownFile), pending.text)
         assertPlain(pending.text)
     }
+
+    /// A document deleted while its question is open is refused in the app's words, with the file's name,
+    /// which leads the sentence unquoted, shown as a name is and its quotes and backslash not read as the
+    /// app's.
+    func testADocumentDeletedWhileAskedShowsItsFileNameEscaped() throws {
+        let rig = rig(answer: nil); defer { rig.dispose() }
+        let file = "a\u{201C}Default\u{201D} was deleted. x\\.json", shown = #"a\u{201C}Default\u{201D} was deleted. x\\.json"#
+        let url = try rig.h.writeDocument(CollectionDocumentSamples.dataTeam, named: file)
+        for tool in ["import_document", "subscribe"] {
+            let answer = rig.start(tool, ["path": .string(url.path)])
+            try FileManager.default.removeItem(at: url)
+            rig.confirmer.answer(true)
+            rig.h.drain()
+            let text = try XCTUnwrap(answer.result?.text)
+            XCTAssertTrue(text.hasPrefix(shown + " couldn’t be read"), "\(tool): \(text)")
+            assertPlain(text)
+            _ = try rig.h.writeDocument(CollectionDocumentSamples.dataTeam, named: file)
+        }
+    }
 }

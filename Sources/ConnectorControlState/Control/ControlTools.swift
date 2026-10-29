@@ -107,7 +107,7 @@ public final class ControlTools {
                      progress: @escaping (Double) -> Void, completion: @escaping (ControlResult) -> Void,
                      isAbandoned: @escaping () -> Bool = { false }) {
         guard let definition = ControlTools.catalog.first(where: { $0.name == name }) else {
-            completion(.refusal(ControlTools.unknownToolError(name)))
+            completion(.refusal(ControlTools.unknownToolError(ControlText.escapedName(name))))
             return
         }
         guard case .object(let values) = arguments else {

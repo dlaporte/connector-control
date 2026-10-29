@@ -164,12 +164,24 @@ final class ControlTextTests: XCTestCase {
         XCTAssertEqual(inputs.count, 3021, "the generator's own count, the same on both platforms")
     }
 
-    /// A character that shows as a blank is escaped too: the no-break and other spaces beside the
-    /// ordinary one.
-    func testEveryBlankSpaceIsEscaped() {
-        XCTAssertEqual(ControlText.escaped("a\u{00A0}b\u{1680}c\u{2000}d\u{200A}e\u{202F}f\u{205F}g\u{3000}h"),
-                       #"a\u{00A0}b\u{1680}c\u{2000}d\u{200A}e\u{202F}f\u{205F}g\u{3000}h"#)
+    /// A space-like character is escaped wherever a name, a value or a path is shown, since there it could
+    /// pass for the ordinary space, but not in free text, where a localized system message sets
+    /// punctuation off with one.
+    func testBlankSpacesAreEscapedInNamesAndValuesOnly() {
+        let spaces = "a\u{00A0}b\u{1680}c\u{2000}d\u{200A}e\u{202F}f\u{205F}g\u{3000}h"
+        let shown = #"a\u{00A0}b\u{1680}c\u{2000}d\u{200A}e\u{202F}f\u{205F}g\u{3000}h"#
+        XCTAssertEqual(ControlText.escapedName(spaces), shown)
+        XCTAssertEqual(ControlText.escapedPath(spaces), shown)
+        XCTAssertEqual(ControlText.word(spaces), "'" + shown + "'")
         XCTAssertEqual(ControlText.escaped("a b"), "a b", "the ordinary space shows as itself")
-        XCTAssertEqual(ControlText.word("a\u{00A0}b"), #"'a\u{00A0}b'"#)
+        let french = "Impossible\u{202F}: le fichier\u{00A0}est absent"
+        XCTAssertEqual(ControlText.escaped(french), french, "free text keeps its spaces")
+        XCTAssertEqual(ControlText.escaped("Erreur\u{00A0}: “a\u{00A0}b”", naming: ["a\u{00A0}b"]), "Erreur\u{00A0}: “" + #"a\u{00A0}b"# + "”",
+                       "only the name is escaped")
+    }
+
+    /// A table shows a cell as a name is shown, one way only: the text `\u{202E}` and the character differ.
+    func testATableShowsACellOneWayOnly() {
+        XCTAssertEqual(ControlText.table(header: nil, rows: [[#"a\u{202E}"#], ["a\u{202E}"]]), [#"a\\u{202E}"#, #"a\u{202E}"#])
     }
 }

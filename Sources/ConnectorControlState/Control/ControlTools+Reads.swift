@@ -74,7 +74,7 @@ extension ControlTools {
         case "get_settings":
             done(currentSettings())
         default:
-            done(.refusal(ControlTools.unknownToolError(name)))
+            done(.refusal(ControlTools.unknownToolError(ControlText.escapedName(name))))
         }
     }
 

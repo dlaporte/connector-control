@@ -482,7 +482,7 @@ extension ControlTools {
                 return ControlTools.refused(error, naming: [newCollection])
             }
             if let error = state.importCopies(documentAt: url.path, into: target, choices: choices) {
-                return ControlTools.refused(error, naming: [url.lastPathComponent, target])
+                return ControlOutcome(result: .refusal(ControlTools.shown(error, leadingWith: url.lastPathComponent, naming: [target])), notification: nil)
             }
             let answer = replacesOn ? ControlTools.importedReplacingText(count, shownTarget)
                 : ControlTools.importedText(count, shownTarget)
@@ -526,7 +526,7 @@ extension ControlTools {
         return .ready(request, fingerprint: ContentHash.sha256(bytes), perform: { [self] in
             let mark = state.appliedServers
             if let error = state.subscribe(documentAt: url.path, as: arguments.string("name")) {
-                return ControlTools.refused(error, naming: [url.lastPathComponent, name])
+                return ControlOutcome(result: .refusal(ControlTools.shown(error, leadingWith: url.lastPathComponent, naming: [name])), notification: nil)
             }
             return done([ControlTools.subscribedText(shownName, file), ControlTools.arrivedOffText(count)],
                         ["collection": .string(name), "count": .int(count)],

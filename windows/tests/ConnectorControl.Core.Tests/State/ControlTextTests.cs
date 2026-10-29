@@ -180,7 +180,7 @@ public class ControlTextTests
     [Fact]
     public void DifferentNamesNeverShowAlike()
     {
-        string[] tokens = ["\u201C", "\u201D", "\\", "\u202E", "a", "\\u202E", "\\\\"];
+        string[] tokens = ["\u201C", "\u201D", "\\", "\u202E", "a", "\\u{202E}", "\\\\"];
         ulong state = 20261028;
         int Next()
         {
@@ -207,14 +207,29 @@ public class ControlTextTests
         Assert.Equal(3021, inputs.Count);
     }
 
-    /// <summary>A character that shows as a blank is escaped too: the no-break and other spaces beside the
-    /// ordinary one.</summary>
+    /// <summary>A space-like character is escaped wherever a name, a value or a path is shown, since there it could
+    /// pass for the ordinary space, but not in free text, where a localized system message sets
+    /// punctuation off with one.</summary>
     [Fact]
-    public void EveryBlankSpaceIsEscaped()
+    public void BlankSpacesAreEscapedInNamesAndValuesOnly()
     {
-        Assert.Equal("""a\u{00A0}b\u{1680}c\u{2000}d\u{200A}e\u{202F}f\u{205F}g\u{3000}h""",
-            ControlText.Escaped("a\u00A0b\u1680c\u2000d\u200Ae\u202Ff\u205Fg\u3000h"));
+        const string spaces = "a\u00A0b\u1680c\u2000d\u200Ae\u202Ff\u205Fg\u3000h";
+        const string shown = """a\u{00A0}b\u{1680}c\u{2000}d\u{200A}e\u{202F}f\u{205F}g\u{3000}h""";
+        Assert.Equal(shown, ControlText.EscapedName(spaces));
+        Assert.Equal(shown, ControlText.EscapedPath(spaces));
+        Assert.Equal("'" + shown + "'", ControlText.Word(spaces));
         Assert.Equal("a b", ControlText.Escaped("a b"));
-        Assert.Equal("""'a\u{00A0}b'""", ControlText.Word("a\u00A0b"));
+        // Free text keeps its spaces.
+        const string french = "Impossible\u202F: le fichier\u00A0est absent";
+        Assert.Equal(french, ControlText.Escaped(french));
+        // Only the name is escaped.
+        Assert.Equal("Erreur\u00A0: “" + """a\u{00A0}b""" + "”", ControlText.Escaped("Erreur\u00A0: “a\u00A0b”", ["a\u00A0b"]));
+    }
+
+    /// <summary>A table shows a cell as a name is shown, one way only: the text <c>\u{202E}</c> and the character differ.</summary>
+    [Fact]
+    public void ATableShowsACellOneWayOnly()
+    {
+        Assert.Equal(["""a\\u{202E}""", """a\u{202E}"""], ControlText.Table(null, [["""a\u{202E}"""], ["a\u202E"]]));
     }
 }

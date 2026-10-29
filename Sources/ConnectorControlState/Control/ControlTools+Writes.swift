@@ -70,7 +70,7 @@ extension ControlTools {
         case "apply_update": return applyUpdate(arguments, caller.askerName)
         case "restore_backup": return restoreBackup(arguments, caller.askerName)
         case "restart_claude": return restartClaude(caller.askerName)
-        default: return .refused(ControlTools.unknownToolError(name))
+        default: return .refused(ControlTools.unknownToolError(ControlText.escapedName(name)))
         }
     }
 
@@ -82,13 +82,14 @@ extension ControlTools {
 
     /// A sentence about a file that leads with the file's name unquoted, as `AppState.sourceUnreadableError`
     /// words it: the name as `escapedName(_:)` shows it, then the rest through `ControlText.escaped(_:naming:)`,
-    /// for the quoted names it may echo. A name found only between the app's quotes would pass here as itself.
-    static func shown(_ text: String, leadingWith file: String) -> String {
+    /// for the quoted names it may echo, `names` among them. A name found only between the app's quotes would
+    /// pass here as itself.
+    static func shown(_ text: String, leadingWith file: String, naming names: [String] = []) -> String {
         let lead = Array(file.unicodeScalars), scalars = Array(text.unicodeScalars)
-        guard !lead.isEmpty, scalars.starts(with: lead) else { return ControlText.escaped(text, naming: [file]) }
+        guard !lead.isEmpty, scalars.starts(with: lead) else { return ControlText.escaped(text, naming: [file] + names) }
         var rest = String.UnicodeScalarView()
         rest.append(contentsOf: scalars[lead.count...])
-        return ControlText.escapedName(file) + ControlText.escaped(String(rest), naming: [file])
+        return ControlText.escapedName(file) + ControlText.escaped(String(rest), naming: [file] + names)
     }
 
     /// A write's answer: what happened, then what follows for the collection Claude runs. A write

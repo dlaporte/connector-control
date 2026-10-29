@@ -85,7 +85,7 @@ public sealed partial class ControlTools
                 done(CurrentSettings());
                 break;
             default:
-                done(ControlResult.Refusal(UnknownToolError(name)));
+                done(ControlResult.Refusal(UnknownToolError(ControlText.EscapedName(name))));
                 break;
         }
     }

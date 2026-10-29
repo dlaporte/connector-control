@@ -33,11 +33,11 @@ public static class ControlText
 
     /// <summary>A table: every column but the last padded to its widest cell plus the gap; the header row,
     /// when there is one, first. No line ends in spaces, whatever its last cells hold. Every cell
-    /// goes through <see cref="Escaped(string)"/>.</summary>
+    /// goes through <see cref="EscapedName"/>, so a cell reads one way only.</summary>
     public static IReadOnlyList<string> Table(IReadOnlyList<string>? header, IReadOnlyList<IReadOnlyList<string>> rows)
     {
         var all = (header is null ? [] : new List<IReadOnlyList<string>> { header }).Concat(rows)
-            .Select(cells => (IReadOnlyList<string>)cells.Select(Escaped).ToList()).ToList();
+            .Select(cells => (IReadOnlyList<string>)cells.Select(EscapedName).ToList()).ToList();
         var columns = all.Count == 0 ? 0 : all.Max(cells => cells.Count);
         var widths = Enumerable.Range(0, columns)
             .Select(index => all.Max(cells => index < cells.Count ? Width(cells[index]) : 0) + Gap)
@@ -59,8 +59,7 @@ public static class ControlText
     /// <summary>Text as a line shows it: a control character, and a character that shows as nothing or as a
     /// blank — every Default_Ignorable code point (soft hyphen, joiners, direction marks, variation
     /// selectors, tags…), the blank letters (U+115F, U+1160, U+2800, U+3164, U+FFA0), the interlinear
-    /// annotation marks and every space but the ordinary one (U+00A0, U+1680, U+2000–U+200A, U+202F,
-    /// U+205F, U+3000) — as a visible escape, <c>\n</c>, <c>\r</c>, <c>\t</c> or <c>\u{202E}</c>, so a value
+    /// annotation marks — as a visible escape, <c>\n</c>, <c>\r</c>, <c>\t</c> or <c>\u{202E}</c>, so a value
     /// can neither break its line, nor hide part of it, nor pass for another.</summary>
     public static string Escaped(string text)
     {
@@ -120,7 +119,7 @@ public static class ControlText
             {
                 Backslash => "\\\\",
                 OpeningQuote or ClosingQuote => HexEscape(scalar),
-                _ => Escape(scalar) ?? Text(scalar),
+                _ => EscapeShown(scalar) ?? Text(scalar),
             });
         }
         return name.ToString();
@@ -134,7 +133,7 @@ public static class ControlText
         var path = new StringBuilder();
         foreach (var scalar in Scalars(text))
         {
-            path.Append(scalar is OpeningQuote or ClosingQuote ? HexEscape(scalar) : Escape(scalar) ?? Text(scalar));
+            path.Append(scalar is OpeningQuote or ClosingQuote ? HexEscape(scalar) : EscapeShown(scalar) ?? Text(scalar));
         }
         return path.ToString();
     }
@@ -173,14 +172,23 @@ public static class ControlText
         '\n' => "\\n",
         '\r' => "\\r",
         '\t' => "\\t",
-        <= 0x1F or (>= 0x7F and <= 0x9F) or 0xA0 or 0xAD or 0x034F or 0x061C or 0x115F or 0x1160 or 0x1680 or 0x17B4 or 0x17B5
-            or (>= 0x180B and <= 0x180F) or (>= 0x2000 and <= 0x200F) or (>= 0x2028 and <= 0x202F)
-            or (>= 0x205F and <= 0x206F) or 0x2800 or 0x3000 or 0x3164 or (>= 0xFE00 and <= 0xFE0F) or 0xFEFF or 0xFFA0
+        <= 0x1F or (>= 0x7F and <= 0x9F) or 0xAD or 0x034F or 0x061C or 0x115F or 0x1160 or 0x17B4 or 0x17B5
+            or (>= 0x180B and <= 0x180F) or (>= 0x200B and <= 0x200F) or (>= 0x2028 and <= 0x202E)
+            or (>= 0x2060 and <= 0x206F) or 0x2800 or 0x3164 or (>= 0xFE00 and <= 0xFE0F) or 0xFEFF or 0xFFA0
             or (>= 0xFFF0 and <= 0xFFFB) or (>= 0x1BCA0 and <= 0x1BCA3) or (>= 0x1D173 and <= 0x1D17A)
             or (>= 0xE0000 and <= 0xE0FFF) => HexEscape(scalar),
         // Platform idiom: a lone surrogate, which a Swift string cannot hold, shows as its code.
         >= 0xD800 and <= 0xDFFF => HexEscape(scalar),
         _ => null,
+    };
+
+    /// <summary>The escape for one character of a name, a key, a value or a path: as <see cref="Escape"/>, and a space
+    /// that is not the ordinary one too (U+00A0, U+1680, U+2000–U+200A, U+202F, U+205F, U+3000), which could pass for
+    /// it there. Free text keeps them: a localized system message sets its punctuation off with one.</summary>
+    internal static string? EscapeShown(int scalar) => scalar switch
+    {
+        0xA0 or 0x1680 or (>= 0x2000 and <= 0x200A) or 0x202F or 0x205F or 0x3000 => HexEscape(scalar),
+        _ => Escape(scalar),
     };
 
     /// <summary>A character by its code, as <c>\u{202E}</c>: at least four hex digits, five beyond the Basic Plane.</summary>
@@ -192,7 +200,7 @@ public static class ControlText
     public static string Word(string text)
     {
         var scalars = Scalars(text).ToList();
-        if (scalars.Count > 0 && !scalars.Any(scalar => IsSpace(scalar) || scalar == Apostrophe || Escape(scalar) is not null))
+        if (scalars.Count > 0 && !scalars.Any(scalar => IsSpace(scalar) || scalar == Apostrophe || EscapeShown(scalar) is not null))
         {
             return text;
         }
@@ -203,7 +211,7 @@ public static class ControlText
             {
                 Backslash => "\\\\",
                 Apostrophe => "\\'",
-                _ => Escape(scalar) ?? Text(scalar),
+                _ => EscapeShown(scalar) ?? Text(scalar),
             });
         }
         return word.Append('\'').ToString();

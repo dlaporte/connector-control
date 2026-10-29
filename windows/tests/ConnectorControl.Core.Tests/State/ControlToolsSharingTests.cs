@@ -1017,4 +1017,24 @@ public class ControlToolsSharingTests
         Assert.StartsWith(shownFile, pending.Text, StringComparison.Ordinal);
         AssertPlain(pending.Text);
     }
+
+    /// <summary>A document deleted while its question is open is refused in the app's words, with the file's name,
+    /// which leads the sentence unquoted, shown as a name is and its quotes not read as the app's.</summary>
+    [Fact]
+    public void ADocumentDeletedWhileAskedShowsItsFileNameEscaped()
+    {
+        using var rig = Rig(answer: null);
+        const string file = "a\u201CDefault\u201D was deleted. x.json", shown = """a\u{201C}Default\u{201D} was deleted. x.json""";
+        foreach (var tool in new[] { "import_document", "subscribe" })
+        {
+            var path = rig.H.WriteDocument(CollectionDocumentSamples.DataTeam, file);
+            var answer = rig.Start(tool, Args(("path", Text(path))));
+            File.Delete(path);
+            rig.Confirmer.Answer(true);
+            rig.H.Drain();
+            Assert.NotNull(answer.Result);
+            Assert.StartsWith(shown + " couldn\u2019t be read", answer.Result.Text, StringComparison.Ordinal);
+            AssertPlain(answer.Result.Text);
+        }
+    }
 }

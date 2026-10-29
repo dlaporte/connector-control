@@ -90,4 +90,12 @@ public class ControlGateTests
             ("isError", JsonValue.Bool(false))), result.McpResult);
         Assert.Equal(new ControlResult(JsonValue.Object(("error", JsonValue.String("no"))), "no", true), ControlResult.Refusal("no"));
     }
+
+    /// <summary>The tool name a refusal echoes is Claude's own text, so it shows as a name does.</summary>
+    [Fact]
+    public void AnUnknownToolShowsItsNameOneWayOnly()
+    {
+        using var rig = new ControlRig();
+        Assert.Equal(ControlResult.Refusal(ControlTools.UnknownToolError("""bad\n\\name""")), rig.Call("bad\n\\name"));
+    }
 }
