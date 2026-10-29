@@ -149,6 +149,14 @@ public enum ControlText {
         }
     }
 
+    /// `text` with every combining mark left out: what a line's own letters need room for, apart from
+    /// any marks stacked on them, which the line's box clips rather than makes room for.
+    public static func withoutMarks(_ text: String) -> String {
+        var view = String.UnicodeScalarView()
+        view.append(contentsOf: text.unicodeScalars.filter { !isCombiningMark($0) })
+        return String(view)
+    }
+
     /// The combining marks: each is drawn over, under or around the character before it, and several on
     /// one character are drawn stacked, as high or as deep as they go. Every nonspacing and enclosing mark
     /// (Mn and Me) of the table below, the same as the Windows mirror's, so neither platform leans on its

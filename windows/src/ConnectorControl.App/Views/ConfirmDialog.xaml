@@ -7,10 +7,12 @@
         Width="440">
   <views:DialogWindow.Resources>
     <!-- One line of what would run: read-only but selectable, so it can be copied; never wrapped; left to right; and
-         clipped to its own box, which the dialog sets to one line's height, so combining marks stacked on a line,
-         however tall, can never draw over the line above or below. No border, background or padding of its own:
-         the lines sit in the block's box, touching. The colours are the Fluent theme's text box ones, as the
-         Watermarked style restores them, since this style replaces the theme's rather than building on it. -->
+         clipped to its own box, so combining marks stacked on a line, however tall, can never draw over the line
+         above or below. The box is one line of the code face tall, and its padding, which the dialog sets, is the
+         room a taller fallback face's letters need above and below it. The content host is a Decorator, not a
+         ScrollViewer, so nothing inside clips the line at its own line height: only the box does. No border or
+         background of its own: the lines sit in the block's box, touching. The colours are the Fluent theme's
+         text box ones, as the Watermarked style restores them, since this style replaces the theme's. -->
     <Style x:Key="CodeLine" TargetType="TextBox">
       <Setter Property="Foreground" Value="{DynamicResource TextControlForeground}" />
       <Setter Property="SelectionBrush" Value="{DynamicResource TextControlSelectionHighlightColor}" />
@@ -22,6 +24,7 @@
       <Setter Property="IsReadOnly" Value="True" />
       <Setter Property="IsReadOnlyCaretVisible" Value="False" />
       <Setter Property="AcceptsReturn" Value="False" />
+      <Setter Property="AcceptsTab" Value="False" />
       <Setter Property="TextWrapping" Value="NoWrap" />
       <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
       <Setter Property="FontSize" Value="12" />
@@ -31,8 +34,7 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="TextBox">
-            <ScrollViewer x:Name="PART_ContentHost" Focusable="False" Padding="0"
-                          HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" />
+            <Decorator x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
           </ControlTemplate>
         </Setter.Value>
       </Setter>
@@ -43,9 +45,11 @@
     <TextBlock x:Name="InformativeText" Style="{StaticResource CaptionText}" FontSize="13" Margin="0,8,0,0" FlowDirection="LeftToRight" />
     <!-- What would run, for a change Claude asks for: a CodeLine box a line, as the Mac draws a label a line. Each line
          is one line here and the block scrolls sideways rather than wrap: a long value can never pass for a row of
-         its own. A line is selected and copied on its own. The lines are one stop for Tab. Platform idiom: 200
-         device-independent pixels, as the Mac's block is 200 points, the same height at the same scale. Return
-         is left to the dialog, so it answers Don’t Allow even while a line holds the keyboard, as on the Mac. -->
+         its own. A line is selected and copied on its own. The block is one stop for Tab, the line the keyboard was
+         last on, and Up, Down, Page Up and Page Down move between its lines (OnCodeLineKey), as on the Mac.
+         Platform idiom: 200 device-independent pixels, as the Mac's block is 200 points, the same height at the
+         same scale. Return is left to the dialog, so it answers Don’t Allow even while a line holds the keyboard,
+         as it does on the Mac. -->
     <Border x:Name="CodeText" Visibility="Collapsed" Margin="0,10,0,0" MaxHeight="200" FlowDirection="LeftToRight" BorderThickness="1"
             BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" Background="{DynamicResource LayerFillColorDefaultBrush}">
       <ScrollViewer x:Name="CodeScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Padding="4,6" Focusable="False">

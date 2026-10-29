@@ -49,6 +49,14 @@ public sealed class ConfirmationDialog : IEquatable<ConfirmationDialog>
     public IReadOnlyList<string> ShownCode =>
         Code.Select(line => HasRightToLeft(line) ? "\u202D" + line + "\u202C" : line).ToList();
 
+    /// <summary>How much room a code line's box adds above, or below, what the code face itself needs there: as much as
+    /// <paramref name="needed"/>, the most the block's lines need there, their marks left out (<see cref="ControlText.WithoutMarks"/>),
+    /// goes past <paramref name="own"/>, the code face's own, in whole points; at most half of <paramref name="lineHeight"/>.
+    /// Chinese, Arabic, Devanagari or Thai, drawn in a fallback face taller than the code face, is drawn whole, and
+    /// still no line's box, which clips what it holds, grows without bound.</summary>
+    public static double ExtraRoom(double needed, double own, double lineHeight) =>
+        Math.Min(Math.Max(0, Math.Ceiling(needed - own)), Math.Ceiling(lineHeight / 2));
+
     /// <summary>Whether <paramref name="line"/> holds a character of the blocks where the strong right-to-left letters
     /// are — Hebrew, Arabic, Syriac, Thaana, NKo and the rest to U+08FF, their presentation forms, and their
     /// ranges beyond the Basic Plane. Explicit ranges, the same as the Mac mirror's, so neither platform leans

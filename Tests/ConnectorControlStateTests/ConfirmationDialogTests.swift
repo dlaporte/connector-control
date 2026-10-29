@@ -182,6 +182,18 @@ final class ConfirmationDialogTests: XCTestCase {
         XCTAssertEqual(ControlText.escaped("\u{202D}x\u{202C}"), #"\u{202D}x\u{202C}"#, "a line can hold neither, so none can end the wrapper early")
     }
 
+    /// A code line's box grows past the code face's own line only as far as the line's letters, drawn in a
+    /// fallback face, need: its marks are left out of the measure, and it never grows more than half a line
+    /// above or below, so the box stays bounded whatever a line holds.
+    func testACodeLineGrowsOnlyForLettersAndOnlyHalfALine() {
+        XCTAssertEqual(ControlText.withoutMarks("  + l\u{1DD8}\u{1DD8} \u{0E17}\u{0E35}\u{0E48} cafe\u{0301}"), "  + l \u{0E17} cafe")
+        XCTAssertEqual(ControlText.withoutMarks("\u{0939}\u{093F}\u{0928}\u{094D}"), "\u{0939}\u{093F}\u{0928}", "a spacing mark stays")
+        XCTAssertEqual(ConfirmationDialog.extraRoom(needed: 10.6, own: 10.6, lineHeight: 14), 0)
+        XCTAssertEqual(ConfirmationDialog.extraRoom(needed: 9, own: 10.6, lineHeight: 14), 0, "never less than the face's own")
+        XCTAssertEqual(ConfirmationDialog.extraRoom(needed: 11.9, own: 10.6, lineHeight: 14), 2, "whole points, rounded up")
+        XCTAssertEqual(ConfirmationDialog.extraRoom(needed: 40, own: 10.6, lineHeight: 14), 7, "at most half a line")
+    }
+
     /// Text is compared scalar by scalar, as the Windows mirror compares it ordinally: a name composed
     /// another way is another name.
     func testRunsAndDialogsCompareTextScalarByScalar() {

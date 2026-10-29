@@ -206,6 +206,21 @@ public static class ControlText
         _ => null,
     };
 
+    /// <summary><paramref name="text"/> with every combining mark left out: what a line's own letters need room for, apart
+    /// from any marks stacked on them, which the line's box clips rather than makes room for.</summary>
+    public static string WithoutMarks(string text)
+    {
+        var letters = new StringBuilder();
+        foreach (var scalar in Scalars(text))
+        {
+            if (!IsCombiningMark(scalar))
+            {
+                letters.Append(Text(scalar));
+            }
+        }
+        return letters.ToString();
+    }
+
     /// <summary>The combining marks: each is drawn over, under or around the character before it, and several on
     /// one character are drawn stacked, as high or as deep as they go. Every nonspacing and enclosing mark
     /// (Mn and Me) of the table below, the same as the Mac mirror's, so neither platform leans on its

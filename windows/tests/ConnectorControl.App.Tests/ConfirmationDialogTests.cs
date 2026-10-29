@@ -4,6 +4,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
@@ -224,6 +225,161 @@ public class ConfirmationDialogTests
             }
         });
     }
+
+    /// <summary>A line's box is as tall as the code face needs, and grows only for the letters of another script drawn
+    /// in a taller fallback face: never for marks, and never past half a line more above and below. The room is
+    /// the box's padding, so the line's text sits clear of the box's edges.</summary>
+    [Fact]
+    public void ALineBoxGrowsForTallerScriptsButNotForMarks()
+    {
+        WpfApp.Invoke(() =>
+        {
+            double Height(params string[] code)
+            {
+                var dialog = new ConfirmDialog(new ConfirmationDialog(new ConfirmationRequest("t", "", code, null)));
+                try
+                {
+                    ShowOffScreen(dialog);
+                    return Lines(dialog)[0].ActualHeight;
+                }
+                finally
+                {
+                    dialog.Close();
+                }
+            }
+            var plain = Height("url", "plain");
+            Assert.True(plain > 0);
+            Assert.Equal(plain, Height("url", "  + l\u1DD8\u1DD8", "  + g\u034D\u034D")); // marks never make a line taller
+            var tall = Height("  + \u0939\u093F\u0928\u094D\u0926\u0940");
+            Assert.True(tall > plain, "Devanagari's fallback face needs more room than the code face");
+            Assert.True(tall <= plain + 2 * Math.Ceiling(plain / 2), "bounded");
+        });
+    }
+
+    /// <summary>Ordinary text in scripts the code face does not have — Chinese, Arabic, Devanagari, Thai — is drawn whole:
+    /// its ink stays clear of its box's edges. A line of stacked marks is cut off by its own box, and the line
+    /// beside it stays blank.</summary>
+    [Fact]
+    public void OrdinaryTextInOtherScriptsIsNotClippedAndMarksNeverReachTheNextLine()
+    {
+        var stack = "  + l\u1DD8\u1DD8 g\u034D\u034D";
+        var request = new ConfirmationRequest("t", "", ["  + \u6F22\u5B57", "  + \u0627\u0644\u0639\u0631\u0628\u064A\u0629",
+            "  + \u0939\u093F\u0928\u094D\u0926\u0940", "  + \u0E17\u0E35\u0E48", stack, " ", stack], null);
+        WpfApp.Invoke(() =>
+        {
+            var dialog = new ConfirmDialog(new ConfirmationDialog(request));
+            try
+            {
+                ShowOffScreen(dialog);
+                var lines = Lines(dialog);
+                Assert.Equal(7, lines.Count);
+                for (var index = 0; index < 4; index++)
+                {
+                    var rows = InkRows(lines[index]);
+                    Assert.NotEmpty(rows);
+                    Assert.True(rows.Min() > 0, $"line {index}'s ink clears its box's top");
+                    Assert.True(rows.Max() < lines[index].ActualHeight - 1, $"line {index}'s ink clears its box's bottom");
+                }
+                // The blank line between two stacks, drawn as the panel draws it, holds no ink.
+                var panel = InkRowsOf(dialog.CodeLines);
+                var top = Top(lines[5], dialog);
+                Assert.DoesNotContain(panel, row => row >= top && row < top + lines[5].ActualHeight);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    /// <summary>The rows of <paramref name="line"/>, in its own device-independent pixels, that hold any ink.</summary>
+    private static List<double> InkRows(FrameworkElement line) => InkRowsOf(line);
+
+    /// <summary>The rows of <paramref name="element"/>, as drawn with its clip, that hold any ink.</summary>
+    private static List<double> InkRowsOf(FrameworkElement element)
+    {
+        var dpi = VisualTreeHelper.GetDpi(element);
+        var width = Math.Max(1, (int)Math.Ceiling(element.ActualWidth * dpi.DpiScaleX));
+        var height = Math.Max(1, (int)Math.Ceiling(element.ActualHeight * dpi.DpiScaleY));
+        var bitmap = new RenderTargetBitmap(width, height, dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
+        var visual = new DrawingVisual();
+        using (var context = visual.RenderOpen())
+        {
+            context.DrawRectangle(new VisualBrush(element), null, new Rect(0, 0, element.ActualWidth, element.ActualHeight));
+        }
+        bitmap.Render(visual);
+        var pixels = new byte[width * height * 4];
+        bitmap.CopyPixels(pixels, width * 4, 0);
+        var rows = new List<double>();
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                if (pixels[(y * width + x) * 4 + 3] > 12)
+                {
+                    rows.Add(y / dpi.DpiScaleY);
+                    break;
+                }
+            }
+        }
+        return rows;
+    }
+
+    /// <summary>The block is one stop for Tab, as one text box was, and Up and Down move the keyboard to the line above
+    /// or below, Page Up and Page Down a block's height of lines, each scrolling the line it reaches into view. A
+    /// line takes neither Return nor Tab, so Return still answers Don’t Allow.</summary>
+    [Fact]
+    public void TheBlockIsOneTabStopAndUpAndDownMoveBetweenLines()
+    {
+        var request = new ConfirmationRequest("t", "", Enumerable.Range(0, 40).Select(index => $"line {index}").ToList(), null);
+        WpfApp.Invoke(() =>
+        {
+            var dialog = new ConfirmDialog(new ConfirmationDialog(request));
+            try
+            {
+                ShowOffScreen(dialog);
+                Assert.Equal(KeyboardNavigationMode.Once, KeyboardNavigation.GetTabNavigation(dialog.CodeLines));
+                var lines = Lines(dialog);
+                Assert.All(lines, line =>
+                {
+                    Assert.True(line.IsTabStop);
+                    Assert.False(line.AcceptsReturn);
+                    Assert.False(line.AcceptsTab);
+                });
+                // The keyboard still starts on Don’t Allow.
+                Assert.Same(dialog.CancelButton, FocusManager.GetFocusedElement(dialog));
+                lines[0].Focus();
+                Press(lines[0], Key.Down);
+                Assert.Same(lines[1], FocusManager.GetFocusedElement(dialog));
+                Press(lines[1], Key.Up);
+                Assert.Same(lines[0], FocusManager.GetFocusedElement(dialog));
+                Press(lines[0], Key.Up);
+                Assert.Same(lines[0], FocusManager.GetFocusedElement(dialog)); // the first line stays put
+                Press(lines[0], Key.PageDown);
+                var paged = Assert.IsType<TextBox>(FocusManager.GetFocusedElement(dialog));
+                var index = lines.IndexOf(paged);
+                Assert.True(index > 1, "a page is more than a line");
+                dialog.UpdateLayout();
+                var top = paged.TranslatePoint(new Point(0, 0), dialog.CodeScroll).Y;
+                Assert.True(top >= 0 && top + paged.ActualHeight <= dialog.CodeScroll.ViewportHeight + 1,
+                    "the line the keyboard moved to is scrolled into view");
+                for (var step = 0; step < 60; step++)
+                {
+                    Press((TextBox)FocusManager.GetFocusedElement(dialog), Key.Down);
+                }
+                Assert.Same(lines[^1], FocusManager.GetFocusedElement(dialog)); // the last line stays put
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    /// <summary>A key pressed on <paramref name="line"/>, as the keyboard sends it first.</summary>
+    private static void Press(TextBox line, Key key) =>
+        line.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(line)!, 0, key)
+            { RoutedEvent = Keyboard.PreviewKeyDownEvent });
 
     /// <summary>Closing the window without a button is Don’t Allow.</summary>
     [Fact]

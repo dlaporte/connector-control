@@ -69,17 +69,20 @@ public partial class ConfirmDialog : DialogWindow
     }
 
     /// <summary>What would run, a box a line, as the Mac lays it out: each line is its own left-to-right line, drawn in
-    /// the order it is stored (<see cref="ConfirmationDialog.ShownCode"/>), one line tall and clipped to that, so no
-    /// combining marks stacked on a line, however tall, can draw over the line above or below; at most two are drawn
-    /// on a character (<see cref="ControlText"/>), so a stack cut off by the clip cannot hide the line's own text
-    /// either. Removed lines take the theme's critical colour and added ones its success colour; a theme without
-    /// one leaves the line in the box's own, and its "−" or "+" still says what it does. No line wraps, and only a
-    /// line wider than the block gives it something to scroll to. Every line is within ControlTools.ShownLineLimit,
-    /// as the tools refuse a question with a longer one before asking it, so none reaches the 9,600 UTF-16 code
-    /// units at which WPF breaks any line of text.</summary>
+    /// the order it is stored (<see cref="ConfirmationDialog.ShownCode"/>), in a box that clips it, so no combining marks
+    /// stacked on a line, however tall, can draw over the line above or below; at most two are drawn on a character
+    /// (<see cref="ControlText"/>), so a stack cut off by the clip cannot hide the line's own text either. Every box is as
+    /// tall as the code face's line, and taller only as far as the block's letters in another script, drawn in a
+    /// taller fallback face, need (<see cref="ConfirmationDialog.ExtraRoom"/>): that room is the box's padding, so Chinese,
+    /// Arabic, Devanagari and Thai are drawn whole. Removed lines take the theme's critical colour and added ones its
+    /// success colour; a theme without one leaves the line in the box's own, and its "−" or "+" still says what it
+    /// does. No line wraps, and only a line wider than the block gives it something to scroll to. Every line is
+    /// within ControlTools.ShownLineLimit, as the tools refuse a question with a longer one before asking it, so
+    /// none reaches the 9,600 UTF-16 code units at which WPF breaks any line of text.</summary>
     private void FillCode(ConfirmationDialog question)
     {
         var shown = question.ShownCode;
+        var lines = new List<TextBox>();
         for (var index = 0; index < shown.Count; index++)
         {
             var line = new TextBox { Style = (Style)FindResource("CodeLine"), Text = shown[index] };
@@ -92,21 +95,72 @@ public partial class ConfirmDialog : DialogWindow
                     line.SetResourceReference(Control.ForegroundProperty, "SystemFillColorSuccessBrush");
                     break;
             }
-            line.Height = LineHeight(line);
+            line.PreviewKeyDown += OnCodeLineKey;
+            line.GotKeyboardFocus += (_, _) => line.BringIntoView();
+            lines.Add(line);
+        }
+        if (lines.Count == 0)
+        {
+            return;
+        }
+        // One line's height from the face alone; the room past it from the letters alone, never the marks.
+        var own = Formatted("Xg", lines[0]);
+        var lineHeight = Math.Ceiling(own.Height);
+        double above = 0, below = 0;
+        foreach (var text in shown)
+        {
+            var needed = Formatted(ControlText.WithoutMarks(text), lines[0]);
+            above = Math.Max(above, ConfirmationDialog.ExtraRoom(needed.Baseline, own.Baseline, lineHeight));
+            below = Math.Max(below, ConfirmationDialog.ExtraRoom(needed.Height - needed.Baseline, own.Height - own.Baseline, lineHeight));
+        }
+        foreach (var line in lines)
+        {
+            line.Height = lineHeight + above + below;
+            line.Padding = new Thickness(0, above, 0, below);
             CodeLines.Children.Add(line);
         }
     }
 
-    /// <summary>One line's height in <paramref name="line"/>'s face and size, at this window's scale: from the face alone,
-    /// never from what the line holds, so marks cannot make a line taller.</summary>
-    private double LineHeight(TextBox line)
+    /// <summary><paramref name="text"/> as <paramref name="line"/>'s face, size and formatting mode lay it out at this window's
+    /// scale, in whatever fallback faces draw it: its height and baseline are the faces' own, not the ink.</summary>
+    private FormattedText Formatted(string text, TextBox line)
     {
         var typeface = new Typeface(line.FontFamily, line.FontStyle, line.FontWeight, line.FontStretch);
         var culture = line.Language.GetSpecificCulture();
         var mode = TextOptions.GetTextFormattingMode(line);
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
-        return Math.Ceiling(new FormattedText("Xg", culture, FlowDirection.LeftToRight, typeface, line.FontSize, Brushes.Black,
-            null, mode, pixelsPerDip).Height);
+        return new FormattedText(text.Length == 0 ? " " : text, culture, FlowDirection.LeftToRight, typeface, line.FontSize, Brushes.Black,
+            null, mode, pixelsPerDip);
+    }
+
+    /// <summary>The keyboard in the code block, as on the Mac: Up and Down move it to the line above or below, Page Up and
+    /// Page Down a block's height of lines, each scrolling the line it reaches into view; Left, Right, Home and End are
+    /// the line's own. The line it reaches is the block's one stop for Tab, which the panel's Once navigation keeps.</summary>
+    private void OnCodeLineKey(object sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox line)
+        {
+            return;
+        }
+        var lines = CodeLines.Children.OfType<TextBox>().ToList();
+        var index = lines.IndexOf(line);
+        var page = Math.Max(1, (int)(CodeScroll.ViewportHeight / Math.Max(1, line.ActualHeight)) - 1);
+        var step = e.Key switch
+        {
+            Key.Up => -1,
+            Key.Down => 1,
+            Key.PageUp => -page,
+            Key.PageDown => page,
+            _ => 0,
+        };
+        if (step == 0 || index < 0)
+        {
+            return;
+        }
+        var target = lines[Math.Clamp(index + step, 0, lines.Count - 1)];
+        target.Focus();
+        target.BringIntoView();
+        e.Handled = true;
     }
 
     /// <summary>True when the primary button was chosen.</summary>

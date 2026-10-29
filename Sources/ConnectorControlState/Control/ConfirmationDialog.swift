@@ -37,6 +37,15 @@ public struct ConfirmationDialog: Equatable, Sendable {
         code.map { ConfirmationDialog.hasRightToLeft($0) ? "\u{202D}" + $0 + "\u{202C}" : $0 }
     }
 
+    /// How much room a code line's box adds above, or below, what the code face itself needs there: as much as
+    /// `needed`, the most the block's lines need there, their marks left out (`ControlText.withoutMarks`), goes
+    /// past `own`, the code face's own, in whole points; at most half of `lineHeight`. Chinese, Arabic,
+    /// Devanagari or Thai, drawn in a fallback face taller than the code face, is drawn whole, and still no
+    /// line's box, which clips what it holds, grows without bound.
+    public static func extraRoom(needed: Double, own: Double, lineHeight: Double) -> Double {
+        min(max(0, (needed - own).rounded(.up)), (lineHeight / 2).rounded(.up))
+    }
+
     /// Whether `line` holds a character of the blocks where the strong right-to-left letters are —
     /// Hebrew, Arabic, Syriac, Thaana, NKo and the rest to U+08FF, their presentation forms, and their
     /// ranges beyond the Basic Plane. Explicit ranges, the same as the Windows mirror's, so neither

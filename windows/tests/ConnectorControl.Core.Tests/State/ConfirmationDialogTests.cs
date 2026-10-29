@@ -210,6 +210,20 @@ public class ConfirmationDialogTests
         Assert.Equal(@"\u{202D}x\u{202C}", ControlText.Escaped("\u202Dx\u202C"));
     }
 
+    /// <summary>A code line's box grows past the code face's own line only as far as the line's letters, drawn in a
+    /// fallback face, need: its marks are left out of the measure, and it never grows more than half a line
+    /// above or below, so the box stays bounded whatever a line holds.</summary>
+    [Fact]
+    public void ACodeLineGrowsOnlyForLettersAndOnlyHalfALine()
+    {
+        Assert.Equal("  + l \u0E17 cafe", ControlText.WithoutMarks("  + l\u1DD8\u1DD8 \u0E17\u0E35\u0E48 cafe\u0301"));
+        Assert.Equal("\u0939\u093F\u0928", ControlText.WithoutMarks("\u0939\u093F\u0928\u094D")); // a spacing mark stays
+        Assert.Equal(0, ConfirmationDialog.ExtraRoom(10.6, 10.6, 14));
+        Assert.Equal(0, ConfirmationDialog.ExtraRoom(9, 10.6, 14)); // never less than the face's own
+        Assert.Equal(2, ConfirmationDialog.ExtraRoom(11.9, 10.6, 14)); // whole points, rounded up
+        Assert.Equal(7, ConfirmationDialog.ExtraRoom(40, 10.6, 14)); // at most half a line
+    }
+
     /// <summary>Text is compared ordinally, as the Mac mirror compares it scalar by scalar: a name composed
     /// another way is another name.</summary>
     [Fact]
