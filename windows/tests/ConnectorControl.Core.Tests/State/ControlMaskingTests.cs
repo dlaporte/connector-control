@@ -788,4 +788,35 @@ public class ControlMaskingTests
         AssertHidden(["P#ssw0rd", "ssw0rd"], Local("psql", ["postgres://admin:P#ssw0rd@db/x"]));
         AssertHidden(["pa/ss"], JsonValue.Object(("url", S("https://user:pa/ss@host/x"))));
     }
+
+    /// <summary>A variable whose value names code to run shows in full in the confirmation dialog even when
+    /// its name reads as a secret's (<c>GIT_ASKPASS</c> holds "pass"), so the person allowing sees what
+    /// would run; what Claude reads still masks it, as every environment value.</summary>
+    [Fact]
+    public void AVariableThatRunsAProgramShowsInTheDialogAndStaysMaskedForClaude()
+    {
+        var env = new Dictionary<string, JsonValue>
+        {
+            ["GIT_ASKPASS"] = S("/tmp/evil.sh"), ["ssh_askpass"] = S("/tmp/a.sh"), ["SSH_ASKPASS_REQUIRE"] = S("force"),
+            ["GIT_CONFIG_KEY_0"] = S("core.sshCommand"), ["API_TOKEN"] = S("tok123"),
+        };
+        var config = JsonValue.Object(("command", S("git-mcp")), ("env", JsonValue.Object(env)));
+        var dialog = ControlMasking.CodeLines(config, ControlMasking.Exposure.Dialog);
+        foreach (var line in new[] { "GIT_ASKPASS = /tmp/evil.sh", "GIT_CONFIG_KEY_0 = core.sshCommand", "SSH_ASKPASS_REQUIRE = force",
+                     "ssh_askpass = /tmp/a.sh", "API_TOKEN = ••• (set)" })
+        {
+            Assert.True(dialog.Any(shown => shown.EndsWith(line, StringComparison.Ordinal)), line);
+        }
+        Assert.Contains(ControlMasking.ChangeLines(JsonValue.Object(("command", S("git-mcp"))), config, ControlMasking.Exposure.Dialog),
+            shown => shown.EndsWith("GIT_ASKPASS = /tmp/evil.sh", StringComparison.Ordinal));
+        var remote = Remote([], new Dictionary<string, JsonValue> { ["GIT_ASKPASS"] = S("/tmp/evil.sh") });
+        Assert.Contains(ControlMasking.CodeLines(remote, ControlMasking.Exposure.Dialog),
+            shown => shown.EndsWith("GIT_ASKPASS = /tmp/evil.sh", StringComparison.Ordinal));
+        var masked = string.Join("\n", ControlMasking.CodeLines(config).Concat(ControlMasking.CodeLines(remote)));
+        foreach (var value in new[] { "/tmp/evil.sh", "/tmp/a.sh", "force", "core.sshCommand", "tok123" })
+        {
+            Assert.DoesNotContain(value, masked, StringComparison.Ordinal);
+        }
+        Assert.Equal(S("set"), ControlMasking.MaskedConfig(config).ValueAt(new JsonPointer(["env", "GIT_ASKPASS"])));
+    }
 }

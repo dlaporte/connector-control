@@ -24,7 +24,8 @@ public static class ControlMasking
 {
     /// <summary>How much a line renderer shows. <c>Masked</c>: what Claude and the command-line tool see.
     /// <c>Dialog</c>: the confirmation dialogs, whose text never goes back to Claude — the command,
-    /// arguments, URL and environment values in full, with a variable named for a secret, header
+    /// arguments, URL and environment values in full, with a variable named for a secret (unless it
+    /// names a program to run), header
     /// values, the OAuth client secret and every value under a key named for a secret still masked.
     /// <c>Revealed</c>: everything as written, for the command-line tool's <c>show --reveal</c>.</summary>
     public enum Exposure { Masked, Dialog, Revealed }
@@ -790,7 +791,8 @@ public static class ControlMasking
     /// not a string is set, and shows as JSON only when revealed. The dialog shows a value of
     /// <paramref name="shownInDialog"/> values — the environment's, since a variable can change what runs
     /// (<c>NODE_OPTIONS</c>, <c>PATH</c>, <c>LD_PRELOAD</c>) — as written, a string quoted as an argument is and
-    /// anything else as JSON, unless its variable is named for a secret; a header's stays masked.</summary>
+    /// anything else as JSON, unless its variable is named for a secret and names no program to
+    /// run; a header's stays masked.</summary>
     private static Field SecretField(string label, IReadOnlyDictionary<string, JsonValue> values, Exposure exposure,
                                      bool shownInDialog = false) =>
         new(label, values.Keys.Order(StringComparer.Ordinal).Select(name =>
@@ -801,7 +803,10 @@ public static class ControlMasking
             {
                 shown = SecretText(value.StringValue, exposure == Exposure.Revealed);
             }
-            if (exposure == Exposure.Dialog && shownInDialog && !CredentialHeuristics.NamesASecret(name))
+            // A variable that names code to run shows although its name reads as a secret's
+            // (`GIT_ASKPASS` holds "pass"): the person allowing must see what would run.
+            if (exposure == Exposure.Dialog && shownInDialog
+                && (!CredentialHeuristics.NamesASecret(name) || CredentialHeuristics.NamesAProgramToRun(name)))
             {
                 shown = CompactText(value);
                 if (value.Kind == JsonKind.String)

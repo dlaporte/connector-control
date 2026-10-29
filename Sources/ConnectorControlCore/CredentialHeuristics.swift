@@ -54,6 +54,26 @@ public enum CredentialHeuristics {
 
     private static let secretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"]
 
+    /// Whether an environment variable's value names code to run: a program (`GIT_ASKPASS`,
+    /// `GIT_SSH_COMMAND`, any `*_ASKPASS`), git configuration that can name one (`GIT_CONFIG_*`), a
+    /// library or module loaded first (`LD_PRELOAD`, `NODE_OPTIONS`, `JAVA_TOOL_OPTIONS`) or a
+    /// script a shell or interpreter runs first (`BASH_ENV`, `PYTHONSTARTUP`). Whatever its case,
+    /// since Windows reads names so. The confirmation dialog shows such a value in full even when
+    /// its name reads as a secret's: it is code that would run, which the person allowing must see.
+    public static func namesAProgramToRun(_ name: String) -> Bool {
+        // Platform idiom: lowered unit by unit, as namesASecret lowers, to match ToLowerInvariant.
+        let lowered = loweredUnits(name)
+        return programNames.contains { lowered.elementsEqual($0.utf16) }
+            || lowered.starts(with: "git_config_".utf16)
+            || lowered.reversed().starts(with: "_askpass".utf16.reversed())
+    }
+
+    private static let programNames = [
+        "ssh_askpass_require", "git_ssh", "git_ssh_command", "git_exec_path", "node_options", "ld_preload",
+        "dyld_insert_libraries", "pythonstartup", "bash_env", "env", "perl5opt", "rubyopt", "java_tool_options",
+        "_java_options",
+    ]
+
     /// Whether `value` takes its secret from somewhere else rather than holding it: one or more
     /// `${NAME}` or `$NAME` references — an environment variable, a `${CC_NEEDS:NAME}` placeholder —
     /// with, beside them, at most one word of letters, an authentication scheme such as `Bearer`.

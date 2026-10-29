@@ -222,4 +222,16 @@ final class ControlToolsReadTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(rig.call("list_connectors")?.text).contains(#"a\\b"#))
         XCTAssertTrue(try XCTUnwrap(rig.call("list_collections")?.text).contains(#"c\\d"#))
     }
+
+    /// A variable that names a program to run shows in full only in the confirmation dialog; what
+    /// Claude reads of it is that it is set.
+    func testGetConnectorMasksAVariableThatRunsAProgram() throws {
+        let rig = ControlRig(); defer { rig.dispose() }
+        let entry = MCPEntry(config: .object(["command": .string("git-mcp"), "env": .object(["GIT_ASKPASS": .string("/tmp/evil.sh")])]))
+        XCTAssertNil(rig.state.upsert(name: "git", entry: entry, renamedFrom: nil))
+        let shown = try XCTUnwrap(rig.call("get_connector", ["name": .string("git")]))
+        XCTAssertFalse(shown.text.contains("/tmp/evil.sh"))
+        XCTAssertFalse(shown.structured.compactLine().contains("evil"))
+        XCTAssertEqual(shown.structured.value(at: JSONPointer(["config", "env", "GIT_ASKPASS"])), .string("set"))
+    }
 }

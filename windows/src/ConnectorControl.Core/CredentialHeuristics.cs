@@ -48,6 +48,30 @@ public static class CredentialHeuristics
     private static readonly string[] SecretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"];
 
     /// <summary>
+    /// Whether an environment variable's value names code to run: a program (<c>GIT_ASKPASS</c>,
+    /// <c>GIT_SSH_COMMAND</c>, any <c>*_ASKPASS</c>), git configuration that can name one (<c>GIT_CONFIG_*</c>), a
+    /// library or module loaded first (<c>LD_PRELOAD</c>, <c>NODE_OPTIONS</c>, <c>JAVA_TOOL_OPTIONS</c>) or a
+    /// script a shell or interpreter runs first (<c>BASH_ENV</c>, <c>PYTHONSTARTUP</c>). Whatever its case,
+    /// since Windows reads names so. The confirmation dialog shows such a value in full even when
+    /// its name reads as a secret's: it is code that would run, which the person allowing must see.
+    /// </summary>
+    public static bool NamesAProgramToRun(string name)
+    {
+        // Platform idiom: ToLowerInvariant lowers unit by unit here, as the Mac mirror lowers to match it.
+        var lowered = name.ToLowerInvariant();
+        return ProgramNames.Contains(lowered, StringComparer.Ordinal)
+            || lowered.StartsWith("git_config_", StringComparison.Ordinal)
+            || lowered.EndsWith("_askpass", StringComparison.Ordinal);
+    }
+
+    private static readonly string[] ProgramNames =
+    [
+        "ssh_askpass_require", "git_ssh", "git_ssh_command", "git_exec_path", "node_options", "ld_preload",
+        "dyld_insert_libraries", "pythonstartup", "bash_env", "env", "perl5opt", "rubyopt", "java_tool_options",
+        "_java_options",
+    ];
+
+    /// <summary>
     /// Whether <paramref name="value"/> takes its secret from somewhere else rather than holding it: one
     /// or more <c>${NAME}</c> or <c>$NAME</c> references — an environment variable, a
     /// <c>${CC_NEEDS:NAME}</c> placeholder — with, beside them, at most one word of letters, an

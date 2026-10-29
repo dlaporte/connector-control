@@ -46,4 +46,22 @@ public class CredentialHeuristicsTests
         Assert.False(CredentialHeuristics.LooksLikeCredential(new string('1', 31) + "\U0001D538"));
         Assert.True(CredentialHeuristics.LooksLikeRandomToken("AbcdefghijKLMNOPQ1\U0001F600"));   // 20 units
     }
+
+    /// <summary>Variables whose value names code to run, whatever their case.</summary>
+    [Fact]
+    public void NamesAProgramToRun()
+    {
+        foreach (var name in new[] { "GIT_ASKPASS", "SSH_ASKPASS", "SSH_ASKPASS_REQUIRE", "SUDO_ASKPASS", "MY_TOOL_ASKPASS", "git_askpass",
+                     "GIT_SSH", "GIT_SSH_COMMAND", "GIT_EXEC_PATH", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0",
+                     "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "NODE_OPTIONS", "Node_Options", "LD_PRELOAD", "DYLD_INSERT_LIBRARIES",
+                     "PYTHONSTARTUP", "BASH_ENV", "ENV", "env", "PERL5OPT", "RUBYOPT", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS" })
+        {
+            Assert.True(CredentialHeuristics.NamesAProgramToRun(name), name);
+        }
+        foreach (var name in new[] { "GITHUB_TOKEN", "API_KEY", "PASSWORD", "ASKPASS_HINT", "GIT_CONFIG", "ENVIRONMENT", "MY_ENV", "PATH", "NODE_ENV",
+                     "LD_PRELOAD_X", "GIT_SSH_X" })
+        {
+            Assert.False(CredentialHeuristics.NamesAProgramToRun(name), name);
+        }
+    }
 }

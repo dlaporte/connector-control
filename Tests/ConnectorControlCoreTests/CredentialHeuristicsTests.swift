@@ -39,4 +39,18 @@ final class CredentialHeuristicsTests: XCTestCase {
                        "a letter beyond the Basic Plane is two surrogate units, neither a letter")
         XCTAssertTrue(CredentialHeuristics.looksLikeRandomToken("AbcdefghijKLMNOPQ1\u{1F600}"), "20 units")
     }
+
+    /// Variables whose value names code to run, whatever their case.
+    func testNamesAProgramToRun() {
+        for name in ["GIT_ASKPASS", "SSH_ASKPASS", "SSH_ASKPASS_REQUIRE", "SUDO_ASKPASS", "MY_TOOL_ASKPASS", "git_askpass",
+                     "GIT_SSH", "GIT_SSH_COMMAND", "GIT_EXEC_PATH", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0",
+                     "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "NODE_OPTIONS", "Node_Options", "LD_PRELOAD", "DYLD_INSERT_LIBRARIES",
+                     "PYTHONSTARTUP", "BASH_ENV", "ENV", "env", "PERL5OPT", "RUBYOPT", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS"] {
+            XCTAssertTrue(CredentialHeuristics.namesAProgramToRun(name), name)
+        }
+        for name in ["GITHUB_TOKEN", "API_KEY", "PASSWORD", "ASKPASS_HINT", "GIT_CONFIG", "ENVIRONMENT", "MY_ENV", "PATH", "NODE_ENV",
+                     "LD_PRELOAD_X", "GIT_SSH_X"] {
+            XCTAssertFalse(CredentialHeuristics.namesAProgramToRun(name), name)
+        }
+    }
 }

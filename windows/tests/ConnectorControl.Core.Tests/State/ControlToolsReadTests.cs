@@ -294,4 +294,20 @@ public class ControlToolsReadTests
         Assert.Contains("""a\\b""", rig.Call("list_connectors")?.Text, StringComparison.Ordinal);
         Assert.Contains("""c\\d""", rig.Call("list_collections")?.Text, StringComparison.Ordinal);
     }
+
+    /// <summary>A variable that names a program to run shows in full only in the confirmation dialog; what
+    /// Claude reads of it is that it is set.</summary>
+    [Fact]
+    public void GetConnectorMasksAVariableThatRunsAProgram()
+    {
+        using var rig = new ControlRig();
+        var entry = new McpEntry(JsonValue.Object(("command", JsonValue.String("git-mcp")),
+            ("env", JsonValue.Object(("GIT_ASKPASS", JsonValue.String("/tmp/evil.sh"))))));
+        Assert.Null(rig.State.Upsert("git", entry, null));
+        var shown = rig.Call("get_connector", Args(("name", JsonValue.String("git"))));
+        Assert.NotNull(shown);
+        Assert.DoesNotContain("/tmp/evil.sh", shown.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("evil", shown.Structured.CompactLine(), StringComparison.Ordinal);
+        Assert.Equal(JsonValue.String("set"), At(shown.Structured, "config", "env", "GIT_ASKPASS"));
+    }
 }

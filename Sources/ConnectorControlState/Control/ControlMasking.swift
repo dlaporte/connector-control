@@ -20,7 +20,8 @@ import Foundation
 public enum ControlMasking {
     /// How much a line renderer shows. `masked`: what Claude and the command-line tool see.
     /// `dialog`: the confirmation dialogs, whose text never goes back to Claude — the command,
-    /// arguments, URL and environment values in full, with a variable named for a secret, header
+    /// arguments, URL and environment values in full, with a variable named for a secret (unless it
+    /// names a program to run), header
     /// values, the OAuth client secret and every value under a key named for a secret still masked.
     /// `revealed`: everything as written, for the command-line tool's `show --reveal`.
     public enum Exposure: Sendable { case masked, dialog, revealed }
@@ -618,14 +619,18 @@ public enum ControlMasking {
     /// not a string is set, and shows as JSON only when revealed. The dialog shows a value of
     /// `shownInDialog` values — the environment's, since a variable can change what runs
     /// (`NODE_OPTIONS`, `PATH`, `LD_PRELOAD`) — as written, a string quoted as an argument is and
-    /// anything else as JSON, unless its variable is named for a secret; a header's stays masked.
+    /// anything else as JSON, unless its variable is named for a secret and names no program to
+    /// run; a header's stays masked.
     static func secretField(_ label: String, _ values: [String: JSONValue], _ exposure: Exposure,
                             shownInDialog: Bool = false) -> Field {
         Field(label: label, values: values.keys.sorted { $0.ordinallyPrecedes($1) }.map { name in
             let value = values[name] ?? .null
             var shown = exposure == .revealed ? compactText(value) : setText
             if case .string(let text) = value { shown = secretText(text, reveal: exposure == .revealed) }
-            if exposure == .dialog, shownInDialog, !CredentialHeuristics.namesASecret(name) {
+            // A variable that names code to run shows although its name reads as a secret's
+            // (`GIT_ASKPASS` holds "pass"): the person allowing must see what would run.
+            if exposure == .dialog, shownInDialog,
+               !CredentialHeuristics.namesASecret(name) || CredentialHeuristics.namesAProgramToRun(name) {
                 shown = compactText(value)
                 if case .string(let text) = value { shown = ControlText.word(text) }
             }

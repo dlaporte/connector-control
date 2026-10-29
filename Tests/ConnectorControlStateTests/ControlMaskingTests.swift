@@ -662,4 +662,29 @@ final class ControlMaskingTests: XCTestCase {
         try assertHidden(["P#ssw0rd", "ssw0rd"], in: local("psql", ["postgres://admin:P#ssw0rd@db/x"]))
         try assertHidden(["pa/ss"], in: .object(["url": .string("https://user:pa/ss@host/x")]))
     }
+
+    /// A variable whose value names code to run shows in full in the confirmation dialog even when
+    /// its name reads as a secret's (`GIT_ASKPASS` holds "pass"), so the person allowing sees what
+    /// would run; what Claude reads still masks it, as every environment value.
+    func testAVariableThatRunsAProgramShowsInTheDialogAndStaysMaskedForClaude() {
+        let env: [String: JSONValue] = [
+            "GIT_ASKPASS": .string("/tmp/evil.sh"), "ssh_askpass": .string("/tmp/a.sh"), "SSH_ASKPASS_REQUIRE": .string("force"),
+            "GIT_CONFIG_KEY_0": .string("core.sshCommand"), "API_TOKEN": .string("tok123"),
+        ]
+        let config = JSONValue.object(["command": .string("git-mcp"), "env": .object(env)])
+        let dialog = ControlMasking.codeLines(config, exposure: .dialog)
+        for line in ["GIT_ASKPASS = /tmp/evil.sh", "GIT_CONFIG_KEY_0 = core.sshCommand", "SSH_ASKPASS_REQUIRE = force",
+                     "ssh_askpass = /tmp/a.sh", "API_TOKEN = ••• (set)"] {
+            XCTAssertTrue(dialog.contains { $0.hasSuffix(line) }, line)
+        }
+        XCTAssertTrue(ControlMasking.changeLines(from: .object(["command": .string("git-mcp")]), to: config, exposure: .dialog)
+            .contains { $0.hasSuffix("GIT_ASKPASS = /tmp/evil.sh") })
+        let remote = remote([], env: ["GIT_ASKPASS": .string("/tmp/evil.sh")])
+        XCTAssertTrue(ControlMasking.codeLines(remote, exposure: .dialog).contains { $0.hasSuffix("GIT_ASKPASS = /tmp/evil.sh") })
+        let masked = (ControlMasking.codeLines(config) + ControlMasking.codeLines(remote)).joined(separator: "\n")
+        for value in ["/tmp/evil.sh", "/tmp/a.sh", "force", "core.sshCommand", "tok123"] {
+            XCTAssertFalse(masked.contains(value), value)
+        }
+        XCTAssertEqual(ControlMasking.maskedConfig(config).value(at: JSONPointer(["env", "GIT_ASKPASS"])), .string("set"))
+    }
 }
