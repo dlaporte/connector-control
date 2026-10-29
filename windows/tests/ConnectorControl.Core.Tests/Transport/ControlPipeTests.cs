@@ -92,6 +92,37 @@ public class ControlPipeTests
         }
     }
 
+    /// <summary>A server that impersonates the tool gets a token that can only identify it, never act as it: so
+    /// a pipe another account made first under the app's name learns who connected and nothing more.</summary>
+    [Fact]
+    public void TheServerCanOnlyIdentifyTheClientNeverActAsIt()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
+        var name = "ConnectorControl-test-" + Guid.NewGuid().ToString("N");
+        using var server = ControlPipe.CreateServer(name, first: true);
+        var connecting = Accepting(server);
+        var client = ControlPipe.TryConnect(name, TimeSpan.FromSeconds(5));
+        Assert.NotNull(client);
+        Assert.True(Done(connecting, Wait.Eventually));
+        try
+        {
+            // Windows lets a server impersonate only once it has read from the pipe.
+            Assert.True(client.Write([(byte)'\n']));
+            Assert.Equal(1, server.Read(new byte[1], 0, 1));
+            TokenImpersonationLevel? level = null;
+            server.RunAsClient(() =>
+            {
+                using var token = WindowsIdentity.GetCurrent(TokenAccessLevels.Query);
+                level = token.ImpersonationLevel;
+            });
+            Assert.Equal(TokenImpersonationLevel.Identification, level);
+        }
+        finally
+        {
+            client.Close();
+        }
+    }
+
     [Fact]
     public void RequestsAreAnsweredEachUnderItsOwnId()
     {

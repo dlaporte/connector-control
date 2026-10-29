@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Security.Principal;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 
@@ -69,11 +70,15 @@ public static class ControlPipe
     private static extern bool GetNamedPipeClientComputerName(SafePipeHandle pipe, StringBuilder clientComputerName, uint clientComputerNameLength);
 
     /// <summary>Connects to the app's pipe, waiting up to <paramref name="timeout"/> for a free instance;
-    /// null when nothing this user owns answers in time.</summary>
+    /// null when nothing this user owns answers in time. The server may only identify the client, never act as
+    /// it: <see cref="PipeOptions.CurrentUserOnly"/> checks the pipe's owner only once the connection is made,
+    /// and a pipe another account made first under the app's name could otherwise impersonate this user in
+    /// that moment. The handle is not inherited, so a program the tool starts holds no connection.</summary>
     [SupportedOSPlatform("windows")]
     public static IControlStream? TryConnect(string name, TimeSpan timeout)
     {
-        var client = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        var client = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly,
+            TokenImpersonationLevel.Identification, HandleInheritability.None);
         try
         {
             client.Connect((int)timeout.TotalMilliseconds);
