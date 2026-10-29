@@ -207,7 +207,12 @@ final class SymlinkCommandLineToolTests: XCTestCase {
         XCTAssertEqual(SymlinkCommandLineTool.removeScript, ["on run argv", "do shell script \(SymlinkCommandLineTool.removeShell)"
             + " with prompt (item 3 of argv) with administrator privileges", "end run"])
         let fileManager = FileManager.default
+        // Whatever umask the shell inherits — an administrator's may be 000 — the folder it makes is 0755, never
+        // one anybody can write on everyone's PATH. osascript inherits this process's umask.
+        let umask = Darwin.umask(0)
         XCTAssertEqual(try run(SymlinkCommandLineTool.installShell, [tool, link, bin.path, prompt]).0, 0)
+        _ = Darwin.umask(umask)
+        XCTAssertEqual(try fileManager.attributesOfItem(atPath: bin.path)[.posixPermissions] as? Int, 0o755)
         XCTAssertEqual(try fileManager.destinationOfSymbolicLink(atPath: link), tool, "the link is made byte for byte")
         XCTAssertEqual(try run(SymlinkCommandLineTool.installShell, [tool, link, bin.path, prompt]).0, 0, "again, over the link")
         XCTAssertEqual(try fileManager.destinationOfSymbolicLink(atPath: link), tool)

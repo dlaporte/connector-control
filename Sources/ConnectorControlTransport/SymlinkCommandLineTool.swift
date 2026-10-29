@@ -19,8 +19,10 @@ public final class SymlinkCommandLineTool: CommandLineTool {
     /// What the install script says when a file that is not a link holds the link's path.
     static let occupiedMarker = "connector-control-occupied"
     /// The shell command as an AppleScript expression, apart from the privileges it runs with: tests run it
-    /// on its own, so none of them can ever ask for a password.
-    static let installShell = #""if [ -L " & quoted form of (item 2 of argv) & " ]; then /bin/ln -sfn " & quoted form of (item 1 of argv) & " " & quoted form of (item 2 of argv) & "; elif [ -e " & quoted form of (item 2 of argv) & " ]; then echo \#(occupiedMarker) >&2; exit 3; else /bin/mkdir -p " & quoted form of (item 3 of argv) & " && /bin/ln -s " & quoted form of (item 1 of argv) & " " & quoted form of (item 2 of argv) & "; fi""#
+    /// on its own, so none of them can ever ask for a password. `umask 022` first: `mkdir -p` may make
+    /// /usr/local and /usr/local/bin, as root, and a permissive umask in the elevated shell would leave a
+    /// folder on everyone's PATH that anybody can write.
+    static let installShell = #""umask 022; if [ -L " & quoted form of (item 2 of argv) & " ]; then /bin/ln -sfn " & quoted form of (item 1 of argv) & " " & quoted form of (item 2 of argv) & "; elif [ -e " & quoted form of (item 2 of argv) & " ]; then echo \#(occupiedMarker) >&2; exit 3; else /bin/mkdir -p " & quoted form of (item 3 of argv) & " && /bin/ln -s " & quoted form of (item 1 of argv) & " " & quoted form of (item 2 of argv) & "; fi""#
     /// The tool, the link, the link's folder and the prompt are the run handler's items 1 to 4. A link is repointed
     /// with `ln -sfn`; where nothing is, a plain `ln -s`, which refuses at once if a file appears there after the
     /// check. Only a file that is swapped in for an existing link between the `-L` test and `ln -sfn` can be
