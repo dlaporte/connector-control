@@ -205,4 +205,12 @@ final class ControlToolsReadTests: XCTestCase {
         XCTAssertEqual(rig.call("get_connector", ["name": .string(name), "collection": .string(name)]),
                        .refusal("There’s no connector named “\(shown)” in “\(shown)”."))
     }
+
+    /// The heading of a connector names it and its collection as every other sentence does.
+    func testAConnectorsHeadingShowsItsNamesAsEscapes() throws {
+        let rig = ControlRig(); defer { rig.dispose() }
+        XCTAssertNil(rig.state.upsert(name: "n\u{202E}x\\y", entry: github, renamedFrom: nil))
+        let shown = try XCTUnwrap(rig.call("get_connector", ["name": .string("n\u{202E}x\\y")]))
+        XCTAssertEqual(shown.text.components(separatedBy: "\n").first, #"n\u{202E}x\\y · Default · on"#)
+    }
 }

@@ -759,4 +759,22 @@ final class ControlToolsSharingTests: XCTestCase {
         for body in rig.h.notifier.sent.map(\.body) { assertPlain(body) }
         XCTAssertTrue(rig.confirmer.requests.isEmpty)
     }
+
+    /// What the read tools and the restore echo from the system or from a file's own sentence reaches the
+    /// command line's terminal: a name in it shows as an escape, whichever tool says it.
+    func testWhatAnErrorEchoesShowsAsEscapes() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let id = "claude_desktop_config.zz-\u{202E}broken.json", file = "t\u{202E}\u{201D}.json", shownFile = #"t\u{202E}\u{201D}.json"#
+        try Data("{".utf8).write(to: rig.h.backupsDir.appendingPathComponent(id))
+        let unreadable = try XCTUnwrap(rig.call("restore_backup", ["id": .string(id)]))
+        XCTAssertTrue(unreadable.isError)
+        assertPlain(unreadable.text)
+        let source = try rig.h.subscribe(rig.state, to: CollectionDocumentSamples.dataTeam, at: "source/" + file, as: "Team")
+        try Data("{".utf8).write(to: source)
+        rig.state.refreshSource(for: "Team")
+        let pending = try XCTUnwrap(rig.call("get_pending_update", ["collection": .string("Team")]))
+        XCTAssertTrue(pending.isError)
+        XCTAssertTrue(pending.text.hasPrefix(shownFile), pending.text)
+        assertPlain(pending.text)
+    }
 }

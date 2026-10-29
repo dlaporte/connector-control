@@ -995,4 +995,26 @@ public class ControlToolsSharingTests
         }
         Assert.Empty(rig.Confirmer.Requests);
     }
+
+    /// <summary>What the read tools and the restore echo from the system or from a file's own sentence reaches the
+    /// command line's terminal: a name in it shows as an escape, whichever tool says it.</summary>
+    [Fact]
+    public void WhatAnErrorEchoesShowsAsEscapes()
+    {
+        using var rig = Rig();
+        const string id = "claude_desktop_config.zz-\u202Ebroken.json", file = "t\u202E\u201D.json", shownFile = """t\u{202E}\u{201D}.json""";
+        File.WriteAllText(Path.Combine(rig.H.BackupsDir, id), "{");
+        var unreadable = rig.Call("restore_backup", Args(("id", Text(id))));
+        Assert.NotNull(unreadable);
+        Assert.True(unreadable.IsError);
+        AssertPlain(unreadable.Text);
+        var source = rig.H.Subscribe(rig.State, CollectionDocumentSamples.DataTeam, "source/" + file, "Team");
+        File.WriteAllText(source, "{");
+        rig.State.RefreshSource("Team");
+        var pending = rig.Call("get_pending_update", Args(("collection", Text("Team"))));
+        Assert.NotNull(pending);
+        Assert.True(pending.IsError);
+        Assert.StartsWith(shownFile, pending.Text, StringComparison.Ordinal);
+        AssertPlain(pending.Text);
+    }
 }

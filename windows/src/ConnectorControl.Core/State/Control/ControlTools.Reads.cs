@@ -248,7 +248,7 @@ public sealed partial class ControlTools
         {
             return ControlResult.Refusal(NoConnectorError(shownName, shownCollection));
         }
-        var heading = Detail(Detail(name, collection), entry.Enabled ? OnWord : OffWord);
+        var heading = Detail(Detail(shownName, shownCollection), entry.Enabled ? OnWord : OffWord);
         var structured = JsonValue.Object(
             ("name", JsonValue.String(name)),
             ("collection", JsonValue.String(collection)),
@@ -299,7 +299,9 @@ public sealed partial class ControlTools
         }
         if (state.SourceErrors.TryGetValue(collection, out var problem))
         {
-            return ControlResult.Refusal(problem);
+            // The problem names the document's file, unquoted.
+            var file = state.SourceBinding(collection)?.Path is { } source ? Path.GetFileName(source) : null;
+            return ControlResult.Refusal(file is null ? ControlText.Escaped(problem) : Shown(problem, file));
         }
         var diff = state.PendingUpdates.GetValueOrDefault(collection);
         var structured = JsonValue.Object(
@@ -325,7 +327,7 @@ public sealed partial class ControlTools
         }
         catch (Exception error)
         {
-            return ControlResult.Refusal(AppState.Friendly(error));
+            return ControlResult.Refusal(ControlText.Escaped(AppState.Friendly(error)));
         }
         var backupsDir = state.Service.Paths.BackupsDir;
         var rows = new List<IReadOnlyList<string>>();

@@ -272,4 +272,15 @@ public class ControlToolsReadTests
         Assert.Equal(ControlResult.Refusal($"There’s no connector named “{shown}” in “{shown}”."),
             rig.Call("get_connector", Args(("name", JsonValue.String(name)), ("collection", JsonValue.String(name)))));
     }
+
+    /// <summary>The heading of a connector names it and its collection as every other sentence does.</summary>
+    [Fact]
+    public void AConnectorsHeadingShowsItsNamesAsEscapes()
+    {
+        using var rig = new ControlRig();
+        Assert.Null(rig.State.Upsert("n\u202Ex\\y", Github, null));
+        var shown = rig.Call("get_connector", Args(("name", JsonValue.String("n\u202Ex\\y"))));
+        Assert.NotNull(shown);
+        Assert.Equal("""n\u{202E}x\\y · Default · on""", shown.Text.Split('\n')[0]);
+    }
 }

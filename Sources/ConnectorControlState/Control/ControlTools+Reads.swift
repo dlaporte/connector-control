@@ -215,7 +215,7 @@ extension ControlTools {
         let shownName = ControlText.escapedName(name), shownCollection = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refusal(MasterStore.noCollectionError(shownCollection)) }
         guard let entry = held.mcps[name] else { return .refusal(ControlTools.noConnectorError(shownName, shownCollection)) }
-        let heading = ControlTools.detail(ControlTools.detail(name, collection),
+        let heading = ControlTools.detail(ControlTools.detail(shownName, shownCollection),
                                           entry.enabled ? ControlTools.onWord : ControlTools.offWord)
         let structured: JSONValue = .object([
             "name": .string(name),
@@ -248,7 +248,11 @@ extension ControlTools {
         let shown = ControlText.escapedName(collection)
         guard state.store.collections[collection] != nil else { return .refusal(MasterStore.noCollectionError(shown)) }
         guard state.isSynced(collection) else { return .refusal(ControlTools.notSubscribedError(shown)) }
-        if let problem = state.sourceErrors[collection] { return .refusal(problem) }
+        if let problem = state.sourceErrors[collection] {
+            // The problem names the document's file, unquoted.
+            let file = state.sourceBinding(of: collection)?.path.map { URL(fileURLWithPath: $0).lastPathComponent }
+            return .refusal(file.map { ControlTools.shown(problem, leadingWith: $0) } ?? ControlText.escaped(problem))
+        }
         let diff = state.pendingUpdates[collection]
         let structured: JSONValue = .object([
             "collection": .string(collection),
@@ -271,7 +275,7 @@ extension ControlTools {
         do {
             urls = try backupURLs()
         } catch {
-            return .refusal(AppState.friendly(error))
+            return .refusal(ControlText.escaped(AppState.friendly(error)))
         }
         let backupsDir = state.service.paths.backupsDirURL
         var rows: [[String]] = []
