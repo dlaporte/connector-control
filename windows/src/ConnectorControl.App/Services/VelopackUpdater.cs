@@ -29,13 +29,18 @@ public sealed class VelopackUpdater : IUpdater
     private readonly Func<string, string?, UpdateVerifier.RunningIdentity, string, string, string?> verify;
     private readonly Func<string?, UpdateVerifier.RunningIdentity, string?> verifyInstalled;
     private readonly Action<string> log;
+    private readonly string? savedUpdaterPath;
+
+    /// <summary>Where, in the app's data folder, the installed Update.exe is saved while an update is checked.</summary>
+    public const string SavedUpdaterFileName = "Update.exe.before-update";
 
     public VelopackUpdater() : this(RepoUrl)
     {
     }
 
     public VelopackUpdater(string repoUrl)
-        : this(prerelease => new GithubSource(repoUrl, null, prerelease), locator: null)
+        : this(prerelease => new GithubSource(repoUrl, null, prerelease), locator: null,
+            savedUpdaterPath: Path.Combine(ServiceFactory.DefaultDataDir, SavedUpdaterFileName))
     {
     }
 
@@ -46,7 +51,9 @@ public sealed class VelopackUpdater : IUpdater
     /// <paramref name="verify"/> replaces <see cref="UpdateVerifier.Verify"/> in tests,
     /// <paramref name="verifyInstalled"/> replaces <see cref="UpdateVerifier.VerifyInstalledUpdater"/>
     /// and <paramref name="identify"/> replaces <see cref="UpdateVerifier.ExpectedIdentity"/>;
-    /// <paramref name="log"/> replaces <see cref="App.Log"/>, which writes to the live data folder.
+    /// <paramref name="log"/> replaces <see cref="App.Log"/>, which writes to the live data folder;
+    /// <paramref name="savedUpdaterPath"/> is where the installed Update.exe is saved during a check (null: kept in
+    /// memory only, as tests that never reach a download want).
     /// </summary>
     internal VelopackUpdater(
         Func<bool, IUpdateSource> source,
@@ -54,8 +61,10 @@ public sealed class VelopackUpdater : IUpdater
         Func<string, string?, UpdateVerifier.RunningIdentity, string, string, string?>? verify = null,
         Func<string?, UpdateVerifier.RunningIdentity, string?>? verifyInstalled = null,
         Func<string, UpdateVerifier.RunningIdentity>? identify = null,
-        Action<string>? log = null)
+        Action<string>? log = null,
+        string? savedUpdaterPath = null)
     {
+        this.savedUpdaterPath = savedUpdaterPath;
         LocatingUpdateManager? resolved = null;
         var followsPrereleases = false;
         try
@@ -133,15 +142,112 @@ public sealed class VelopackUpdater : IUpdater
             ?? throw new UpdateVerificationException("This app's own location is unknown, so an update cannot be checked" + UpdateVerifier.NotInstalledSuffix);
         // The running app's identity is read once per download and decides both checks below.
         var identity = identify(runningExe);
-        // Velopack may run the installed Update.exe during a download; it must already be ours,
-        // and a copy of it is kept so a refused package cannot leave its own updater behind.
+        var knownGoodUpdater = PrepareInstalledUpdater(identity);
+        await manager.DownloadUpdatesAsync(info, cancelToken: cancellationToken).ConfigureAwait(false);
+        FinishCheck(info, knownGoodUpdater, identity);
+    }
+
+    /// <summary>
+    /// Before a download. Velopack may run the installed Update.exe during it, so it must already be ours. If it is
+    /// not, and a copy saved by an earlier check is there, that check never finished — the app was quit or ended
+    /// while it ran, after Velopack had put the package's Update.exe in place — so the saved one is put back, every
+    /// package in packages\ (none of which that check passed) is deleted, and that is logged; then the installed one
+    /// is checked again. Once it passes, it is read and saved to disk, staged, so a check that is interrupted in its
+    /// turn can be recovered the same way. Returns the bytes to restore if this check refuses the package.
+    /// </summary>
+    internal byte[]? PrepareInstalledUpdater(UpdateVerifier.RunningIdentity identity)
+    {
+        var location = manager!.Location;
         if (verifyInstalled(location.UpdateExePath, identity) is { } installedProblem)
         {
-            throw new UpdateVerificationException(installedProblem);
+            if (!RestoreSavedUpdater(location) || verifyInstalled(location.UpdateExePath, identity) is not null)
+            {
+                throw new UpdateVerificationException(installedProblem);
+            }
         }
         var knownGoodUpdater = location.UpdateExePath is { } updateExe && File.Exists(updateExe) ? File.ReadAllBytes(updateExe) : null;
-        await manager.DownloadUpdatesAsync(info, cancelToken: cancellationToken).ConfigureAwait(false);
-        VerifyDownloaded(info, knownGoodUpdater, identity);
+        SaveUpdater(knownGoodUpdater);
+        return knownGoodUpdater;
+    }
+
+    /// <summary>The package check, then the saved Update.exe goes: the check ended, in acceptance or refusal, and the
+    /// restore it was kept for has happened or is not needed. Anything else that ends it keeps the copy for next time.</summary>
+    internal void FinishCheck(UpdateInfo info, byte[]? knownGoodUpdater, UpdateVerifier.RunningIdentity identity)
+    {
+        try
+        {
+            VerifyDownloaded(info, knownGoodUpdater, identity);
+        }
+        catch (UpdateVerificationException)
+        {
+            DeleteSavedUpdater();
+            throw;
+        }
+        DeleteSavedUpdater();
+    }
+
+    /// <summary>Writes <paramref name="updater"/> beside its final name, then moves it there, so the saved copy is never
+    /// half-written. No updater installed, or no place to save it: any older copy goes, so it cannot be restored over a
+    /// newer one. A save that fails is logged; the check still has the copy in memory.</summary>
+    private void SaveUpdater(byte[]? updater)
+    {
+        if (savedUpdaterPath is null)
+        {
+            return;
+        }
+        if (updater is null)
+        {
+            DeleteSavedUpdater();
+            return;
+        }
+        var staged = savedUpdaterPath + ".partial";
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(savedUpdaterPath)!);
+            File.WriteAllBytes(staged, updater);
+            File.Move(staged, savedUpdaterPath, overwrite: true);
+        }
+        catch (Exception ex)
+        {
+            FileSystemErrors.TryDelete(staged);
+            log($"The installed updater could not be saved before an update ({savedUpdaterPath}): {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private void DeleteSavedUpdater()
+    {
+        if (savedUpdaterPath is not null)
+        {
+            FileSystemErrors.TryDelete(savedUpdaterPath);
+        }
+    }
+
+    /// <summary>Puts the saved Update.exe back and deletes every package left in packages\; true when it did.</summary>
+    private bool RestoreSavedUpdater(Velopack.Locators.IVelopackLocator location)
+    {
+        if (savedUpdaterPath is null || !File.Exists(savedUpdaterPath) || location.UpdateExePath is not { } updateExe)
+        {
+            return false;
+        }
+        try
+        {
+            File.Copy(savedUpdaterPath, updateExe, overwrite: true);
+        }
+        catch (Exception ex)
+        {
+            log($"The updater saved before an interrupted update could not be put back ({updateExe}): {ex.GetType().Name}: {ex.Message}");
+            return false;
+        }
+        if (location.PackagesDir is { } packages && Directory.Exists(packages))
+        {
+            foreach (var package in Directory.EnumerateFiles(packages, "*.nupkg").Concat(Directory.EnumerateFiles(packages, "*.partial")))
+            {
+                FileSystemErrors.TryDelete(package);
+            }
+        }
+        DeleteSavedUpdater();
+        log($"An update check was interrupted: the updater saved before it was put back at {updateExe}, and the packages it had not passed were deleted.");
+        return true;
     }
 
     /// <summary>

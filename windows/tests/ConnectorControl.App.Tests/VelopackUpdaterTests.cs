@@ -284,6 +284,88 @@ public class VelopackUpdaterTests
         Assert.Contains(logged, line => line.Contains("location is unknown", StringComparison.Ordinal));
     }
 
+    /// <summary>An install whose check was cut short: Velopack had already put the package's Update.exe in place,
+    /// and the copy saved before the download is in the (temporary) data folder.</summary>
+    private static (VelopackUpdater Updater, string UpdateExe, string Saved, List<string> Logged) Interrupted(TempDir packages, TempDir data)
+    {
+        var updateExe = packages.File("Update.exe");
+        var saved = data.File(VelopackUpdater.SavedUpdaterFileName);
+        var logged = new List<string>();
+        var locator = new TestVelopackLocator("ConnectorControl", "1.3.1", packages.Path, appDir: null, rootDir: null, updateExe: updateExe, channel: "win-x64");
+        var updater = new VelopackUpdater(_ => new RecordingSource(), locator,
+            verify: (_, _, _, _, _) => "refused",
+            verifyInstalled: (path, _) => path is not null && File.Exists(path) && File.ReadAllText(path) == "ours" ? null : "The installed Update.exe is not validly signed",
+            log: logged.Add, savedUpdaterPath: saved);
+        return (updater, updateExe, saved, logged);
+    }
+
+    [Fact]
+    public void AnInterruptedCheckIsRecoveredFromTheSavedUpdater()
+    {
+        // Quit while the check ran: the package's Update.exe stayed, and the in-memory copy was gone. Without the copy
+        // on disk every later download would be refused for an updater nothing could put back.
+        using var packages = new TempDir("vpk");
+        using var data = new TempDir("ccdata");
+        var (updater, updateExe, saved, logged) = Interrupted(packages, data);
+        File.WriteAllText(updateExe, "from the package");
+        File.WriteAllText(saved, "ours");
+        var unchecked_ = packages.File(Asset().FileName);
+        File.WriteAllText(unchecked_, "never checked");
+
+        var bytes = updater.PrepareInstalledUpdater(TestIdentity);
+
+        Assert.Equal("ours", File.ReadAllText(updateExe));
+        Assert.Equal("ours"u8.ToArray(), bytes);
+        Assert.False(File.Exists(unchecked_), "a package the interrupted check never passed is deleted");
+        Assert.Equal("ours", File.ReadAllText(saved));   // saved again for this check
+        Assert.Contains(logged, line => line.Contains("interrupted", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AForeignUpdaterWithNoSavedCopyStillStopsTheDownload()
+    {
+        using var packages = new TempDir("vpk");
+        using var data = new TempDir("ccdata");
+        var (updater, updateExe, saved, _) = Interrupted(packages, data);
+        File.WriteAllText(updateExe, "from the package");
+        var ex = Assert.Throws<UpdateVerificationException>(() => updater.PrepareInstalledUpdater(TestIdentity));
+        Assert.Contains("installed Update.exe", ex.Message);
+        Assert.Equal("from the package", File.ReadAllText(updateExe));
+        Assert.False(File.Exists(saved));
+    }
+
+    [Fact]
+    public void TheInstalledUpdaterIsSavedBeforeTheDownloadAndDroppedWhenTheCheckEnds()
+    {
+        using var packages = new TempDir("vpk");
+        using var data = new TempDir("ccdata");
+        var (updater, updateExe, saved, _) = Interrupted(packages, data);
+        File.WriteAllText(updateExe, "ours");
+        var bytes = updater.PrepareInstalledUpdater(TestIdentity);
+        Assert.Equal("ours", File.ReadAllText(saved));
+        Assert.False(File.Exists(saved + ".partial"), "the copy is staged, then moved into place");
+
+        // The check refuses (the test verifier always does): the updater is put back and the saved copy goes.
+        File.WriteAllText(updateExe, "from the package");
+        File.WriteAllText(packages.File(Asset().FileName), "package");
+        Assert.Throws<UpdateVerificationException>(() => updater.FinishCheck(new UpdateInfo(Asset(), isDowngrade: false), bytes, TestIdentity));
+        Assert.Equal("ours", File.ReadAllText(updateExe));
+        Assert.False(File.Exists(saved));
+    }
+
+    [Fact]
+    public void AnAcceptedCheckDropsTheSavedUpdaterToo()
+    {
+        using var packages = new TempDir("vpk");
+        using var data = new TempDir("ccdata");
+        var saved = data.File(VelopackUpdater.SavedUpdaterFileName);
+        File.WriteAllText(saved, "ours");
+        var locator = new TestVelopackLocator("ConnectorControl", "1.3.1", packages.Path, appDir: null, rootDir: null, updateExe: packages.File("Update.exe"), channel: "win-x64");
+        var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (_, _, _, _, _) => null, verifyInstalled: (_, _) => null, log: _ => { }, savedUpdaterPath: saved);
+        updater.FinishCheck(new UpdateInfo(Asset(), isDowngrade: false), knownGoodUpdater: null, TestIdentity);
+        Assert.False(File.Exists(saved));
+    }
+
     [Fact]
     public void ADownloadedPackageIsNeverAppliedAtStartupWithoutTheCheck()
     {
