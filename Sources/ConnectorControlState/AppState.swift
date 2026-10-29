@@ -459,11 +459,17 @@ public final class AppState: ObservableObject {
     /// `data`, when given, is the backup's content as the caller read it, so what is restored is what
     /// the caller checked.
     public func restoreClaudeConfig(from backup: URL, data: Data? = nil) throws {
-        if let refusal = restoreRefusal(for: backup) { throw refusal }
+        try restoreClaudeConfig(from: backup, data: data,
+                                recorded: BackupCollections.collection(of: backup, in: service.paths.backupsDirURL))
+    }
+
+    /// `restoreClaudeConfig(from:data:)` with the collection the backup's record names, as the caller
+    /// read it (nil for no record), so the refusal and the collection it goes back into follow what
+    /// the caller asked about, not the record as it is by then.
+    public func restoreClaudeConfig(from backup: URL, data: Data?, recorded: String?) throws {
+        if let refusal = restoreRefusal(forRecorded: recorded) { throw refusal }
         var target = store
-        if let recorded = BackupCollections.collection(of: backup, in: service.paths.backupsDirURL) {
-            target.activeCollection = recorded
-        }
+        if let recorded { target.activeCollection = recorded }
         // Every apply backed Claude's file up with ${COLLECTION_DIR} resolved where the store holds
         // it (`collectionDirectory(of:)`): against a synced collection's document folder, or this
         // machine's publish folder. A connector that renders just as the backup does keeps its
@@ -495,7 +501,14 @@ public final class AppState: ObservableObject {
     /// holds that collection's own rendered state, what Claude ran from it, so restoring it there is
     /// consistent with the subscription, and it goes back as any other.
     public func restoreRefusal(for backup: URL) -> RestoreError? {
-        if let recorded = BackupCollections.collection(of: backup, in: service.paths.backupsDirURL) {
+        restoreRefusal(forRecorded: BackupCollections.collection(of: backup, in: service.paths.backupsDirURL))
+    }
+
+    /// `restoreRefusal(for:)` with the collection the backup's record names, as the caller read it
+    /// (nil for no record). Platform idiom: a label tells this from `restoreRefusal(for:)`; the
+    /// Windows mirror, where both would take a string, names it `RestoreRefusalForRecorded`.
+    public func restoreRefusal(forRecorded recorded: String?) -> RestoreError? {
+        if let recorded {
             return store.collections[recorded] == nil ? .collectionGone(recorded) : nil
         }
         return isSynced(activeCollection) ? .subscribedActive(activeCollection) : nil

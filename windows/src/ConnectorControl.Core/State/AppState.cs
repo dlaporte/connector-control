@@ -632,14 +632,22 @@ public sealed class AppState : ObservableObject, IDisposable
     /// restored is what the caller checked.
     /// </para>
     /// </summary>
-    public void RestoreClaudeConfig(string backupPath, byte[]? data = null)
+    public void RestoreClaudeConfig(string backupPath, byte[]? data = null) =>
+        RestoreClaudeConfig(backupPath, data, BackupCollections.CollectionOf(backupPath, Service.Paths.BackupsDir));
+
+    /// <summary>
+    /// <see cref="RestoreClaudeConfig(string, byte[])"/> with the collection the backup's record names, as
+    /// the caller read it (null for no record), so the refusal and the collection it goes back into
+    /// follow what the caller asked about, not the record as it is by then.
+    /// </summary>
+    public void RestoreClaudeConfig(string backupPath, byte[]? data, string? recorded)
     {
-        if (RestoreRefusal(backupPath) is { } refusal)
+        if (RestoreRefusalForRecorded(recorded) is { } refusal)
         {
             throw refusal;
         }
         var target = Store.Clone();
-        if (BackupCollections.CollectionOf(backupPath, Service.Paths.BackupsDir) is { } recorded)
+        if (recorded is not null)
         {
             target.ActiveCollection = recorded;
         }
@@ -672,9 +680,17 @@ public sealed class AppState : ObservableObject, IDisposable
     /// collection is different: it holds that collection's own rendered state, what Claude ran from
     /// it, so restoring it there is consistent with the subscription, and it goes back as any other.
     /// </summary>
-    public Exception? RestoreRefusal(string backupPath)
+    public Exception? RestoreRefusal(string backupPath) =>
+        RestoreRefusalForRecorded(BackupCollections.CollectionOf(backupPath, Service.Paths.BackupsDir));
+
+    /// <summary>
+    /// <see cref="RestoreRefusal"/> with the collection the backup's record names, as the caller read it
+    /// (null for no record). Platform idiom: its name tells it from <see cref="RestoreRefusal"/>, which
+    /// also takes a string; the Mac mirror tells them apart by a label, <c>restoreRefusal(forRecorded:)</c>.
+    /// </summary>
+    public Exception? RestoreRefusalForRecorded(string? recorded)
     {
-        if (BackupCollections.CollectionOf(backupPath, Service.Paths.BackupsDir) is { } recorded)
+        if (recorded is not null)
         {
             return Store.Collections.ContainsKey(recorded) ? null : new RestoreCollectionGoneException(recorded);
         }

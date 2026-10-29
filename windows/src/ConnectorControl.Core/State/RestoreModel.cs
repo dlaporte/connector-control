@@ -85,9 +85,23 @@ public sealed class RestoreModel : ObservableObject
         }
         // A restore AppState would refuse says why at once, rather than after a confirmation it
         // could never honour.
-        if (state.RestoreRefusal(backup) is { } refusal)
+        var recorded = BackupCollections.CollectionOf(backup, state.Service.Paths.BackupsDir);
+        if (state.RestoreRefusalForRecorded(recorded) is { } refusal)
         {
             RestoreError = refusal.Message;
+            return false;
+        }
+        // What the confirmation is asked about: the backup's record and content as read here, so what
+        // is restored is the backup as it was when the user was asked. One that cannot be read says so
+        // at once, as a refusal does: there is nothing to ask about.
+        byte[] data;
+        try
+        {
+            data = File.ReadAllBytes(backup);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            RestoreError = ex.Message;
             return false;
         }
         if (!dialogs.Confirm(ConfirmMessage(Path.GetFileName(backup)), null, RestoreButton, destructive: true))
@@ -96,7 +110,7 @@ public sealed class RestoreModel : ObservableObject
         }
         try
         {
-            state.RestoreClaudeConfig(backup);
+            state.RestoreClaudeConfig(backup, data, recorded);
             CloseRequested?.Invoke();
             return true;
         }

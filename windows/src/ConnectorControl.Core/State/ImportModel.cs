@@ -173,6 +173,9 @@ public sealed class ImportModel : ObservableObject
 
     private readonly AppState state;
     private readonly RenderedCollection? rendered;
+    /// <summary>The document as the sheet read it, and its bytes: what the user reviewed is what Import
+    /// lands, whatever the file holds by then.</summary>
+    private readonly (CollectionDocument Document, byte[] Data, string Path)? loaded;
     private Mode mode = Mode.AddToCollection;
     private string targetCollection;
     private string? newCollectionName;
@@ -190,7 +193,7 @@ public sealed class ImportModel : ObservableObject
         this.state = state;
         Path = path;
         var full = System.IO.Path.GetFullPath(path);
-        var (document, _, failure) = AppState.ReadDocument(full);
+        var (document, data, failure) = AppState.ReadDocument(full);
         // The target picker is filled either way, so a sheet that cannot read its document still
         // shows the collection the user was in.
         var locals = state.LocalCollectionNames;
@@ -204,13 +207,14 @@ public sealed class ImportModel : ObservableObject
                 ? state.ActiveCollection
                 : locals.Count > 0 ? locals[0] : string.Empty;
         }
-        if (document is null)
+        if (document is null || data is null)
         {
             LoadError = failure;
             DocumentName = System.IO.Path.GetFileName(full);
             syncName = string.Empty;
             return;
         }
+        loaded = (document, data, full);
         DocumentName = document.Name;
         Author = document.Author;
         rendered = document.Render();
@@ -452,13 +456,14 @@ public sealed class ImportModel : ObservableObject
 
     private string? Land()
     {
-        if (LoadError is not null)
+        // Nothing was loaded exactly when there is a load error to say.
+        if (loaded is not { } held)
         {
             return LoadError;
         }
         if (ImportMode == Mode.KeepInSync)
         {
-            return state.Subscribe(Path, SyncName);
+            return state.Subscribe(held.Document, held.Data, held.Path, SyncName);
         }
         var choices = new Dictionary<string, ImportChoice>(StringComparer.Ordinal);
         foreach (var row in Rows)
@@ -467,21 +472,13 @@ public sealed class ImportModel : ObservableObject
         }
         if (newCollectionName is { } name)
         {
-            // The document is read again before anything is made. A file moved, deleted or
-            // rewritten while the sheet was open would otherwise leave an empty collection behind,
-            // and a second Import would be refused because that collection exists.
-            var (document, _, unreadable) = AppState.ReadDocument(System.IO.Path.GetFullPath(Path));
-            if (document is null)
-            {
-                return unreadable;
-            }
             if (state.AddEmptyCollection(name) is { } error)
             {
                 return error;
             }
-            return state.ImportCopies(Path, name, choices);
+            return state.ImportCopies(held.Document, held.Path, name, choices);
         }
-        return state.ImportCopies(Path, TargetCollection, choices);
+        return state.ImportCopies(held.Document, held.Path, TargetCollection, choices);
     }
 
     /// <summary>

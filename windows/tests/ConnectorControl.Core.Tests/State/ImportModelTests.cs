@@ -138,13 +138,10 @@ public class ImportModelTests
         Assert.Equal([false, true, false, false], again.Rows.Select(r => r.Present));
     }
 
-    /// <summary>
-    /// A document that cannot be read by the time Import is pressed makes nothing: the new
-    /// collection is not left behind empty, and a second Import says why again rather than that
-    /// the collection exists.
-    /// </summary>
+    /// <summary>What the user reviewed in the sheet is what lands: a document deleted while the sheet was
+    /// open still arrives in a new collection, and nothing is left behind empty.</summary>
     [Fact]
-    public void ANewCollectionIsNotMadeWhenTheDocumentCannotBeReadAtImport()
+    public void ANewCollectionLandsWhatTheSheetLoadedEvenOnceTheFileIsGone()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -155,15 +152,32 @@ public class ImportModelTests
         Assert.Equal(ImportModel.Target.NewCollection, model.ImportTarget);
 
         File.Delete(path);
-        var unreadable = AppState.ReadDocument(Path.GetFullPath(path)).Failure;
-        Assert.NotNull(unreadable);
-        Assert.Equal(unreadable, model.Perform());
-        Assert.Equal(unreadable, model.Failure);
-        // Nothing is made for copies that cannot land.
-        Assert.False(state.Store.Collections.ContainsKey("Fresh"));
-        // A retry says why again, not that Fresh exists.
-        Assert.Equal(unreadable, model.Perform());
-        Assert.False(state.Store.Collections.ContainsKey("Fresh"));
+        Assert.Null(model.Perform());
+        Assert.Equal(["dbt", "github", "ledger", "notion"], state.Store.Collections["Fresh"].Mcps.Keys.Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>A document rewritten while the sheet was open lands as the sheet showed it, copied or kept in sync.</summary>
+    [Fact]
+    public void ImportLandsWhatTheSheetLoadedNotTheFileAsItIsNow()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.WriteDocument(CollectionDocumentSamples.DataTeam, Path.Combine("shared", "data-team.json"));
+        var loaded = File.ReadAllBytes(path);
+        var copies = new ImportModel(state, path);
+        var synced = new ImportModel(state, path) { ImportMode = ImportModel.Mode.KeepInSync };
+        var sample = CollectionDocumentSamples.DataTeam;
+        var swapped = new CollectionDocument(sample.Name, sample.Author, sample.Origin, sample.Exported,
+            new Dictionary<string, CollectionDocument.Connector>(StringComparer.Ordinal) { ["swapped"] = sample.Connectors["github"] });
+        AppStateHarness.WriteDocumentAt(swapped, path);
+
+        Assert.Null(copies.Perform());
+        Assert.True(state.Store.Collections["Default"].Mcps.ContainsKey("github"));
+        Assert.False(state.Store.Collections["Default"].Mcps.ContainsKey("swapped"));
+        Assert.Null(synced.Perform());
+        Assert.Equal(["dbt", "github", "ledger", "notion"], state.Store.Collections["Data team"].Mcps.Keys.Order(StringComparer.Ordinal));
+        // The binding records what landed, so the file as it is now shows as an update.
+        Assert.Equal(ContentHash.Sha256(loaded), state.CollectionsCache.Synced["Data team"].LastHash);
     }
 
     /// <summary>

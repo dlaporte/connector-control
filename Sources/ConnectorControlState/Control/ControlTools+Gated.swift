@@ -602,7 +602,9 @@ extension ControlTools {
         guard let backup = urls.first(where: { ControlMasking.same($0.lastPathComponent, id) }) else {
             return .refused(ControlTools.noBackupError(shownID))
         }
-        if let refusal = state.restoreRefusal(for: backup) { return .refused(ControlTools.restoreRefusalText(refusal)) }
+        // The backup's record, read once: the refusal, the question and the restore all follow it.
+        let recorded = BackupCollections.collection(of: backup, in: state.service.paths.backupsDirURL)
+        if let refusal = state.restoreRefusal(forRecorded: recorded) { return .refused(ControlTools.restoreRefusalText(refusal)) }
         // A backup that is not a config file is refused now rather than after the question, in the
         // reader's own words, as the Restore sheet shows a failed restore's. Its bytes stand for what
         // the question, which lists only names, cannot show.
@@ -617,7 +619,7 @@ extension ControlTools {
         }
         let fingerprint = ContentHash.sha256(bytes)
         // AppState's rule: back into the collection the backup was taken from, else the active one.
-        let target = BackupCollections.collection(of: backup, in: state.service.paths.backupsDirURL) ?? state.activeCollection
+        let target = recorded ?? state.activeCollection
         let shownTarget = ControlText.escapedName(target)
         let into = target == state.activeCollection ? ControlTools.restoreIntoText(shownTarget) : ControlTools.restoreActivatingText(shownTarget)
         // Connector Control's own entry is the app's, not a connector the backup brings back.
@@ -629,7 +631,7 @@ extension ControlTools {
         return .ready(request, fingerprint: fingerprint, perform: { [self] in
             let mark = state.appliedServers
             do {
-                try state.restoreClaudeConfig(from: backup, data: bytes)
+                try state.restoreClaudeConfig(from: backup, data: bytes, recorded: recorded)
             } catch let refusal as RestoreError {
                 return ControlOutcome(result: .refusal(ControlTools.restoreRefusalText(refusal)), notification: nil)
             } catch {

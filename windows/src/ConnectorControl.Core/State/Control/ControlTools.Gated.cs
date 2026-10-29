@@ -867,7 +867,9 @@ public sealed partial class ControlTools
         {
             return new ControlStep.Refused(NoBackupError(shownId));
         }
-        if (state.RestoreRefusal(backup) is { } refusal)
+        // The backup's record, read once: the refusal, the question and the restore all follow it.
+        var recorded = BackupCollections.CollectionOf(backup, state.Service.Paths.BackupsDir);
+        if (state.RestoreRefusalForRecorded(recorded) is { } refusal)
         {
             return new ControlStep.Refused(RestoreRefusalText(refusal));
         }
@@ -888,7 +890,7 @@ public sealed partial class ControlTools
         }
         var fingerprint = ContentHash.Sha256(bytes);
         // AppState's rule: back into the collection the backup was taken from, else the active one.
-        var target = BackupCollections.CollectionOf(backup, state.Service.Paths.BackupsDir) ?? state.ActiveCollection;
+        var target = recorded ?? state.ActiveCollection;
         var shownTarget = ControlText.EscapedName(target);
         var into = target == state.ActiveCollection ? RestoreIntoText(shownTarget) : RestoreActivatingText(shownTarget);
         // Connector Control's own entry is the app's, not a connector the backup brings back.
@@ -900,7 +902,7 @@ public sealed partial class ControlTools
             var mark = state.AppliedServers;
             try
             {
-                state.RestoreClaudeConfig(backup, bytes);
+                state.RestoreClaudeConfig(backup, bytes, recorded);
             }
             catch (Exception ex) when (ex is RestoreCollectionGoneException or RestoreSubscribedException)
             {

@@ -2171,6 +2171,26 @@ public class AppStateCollectionsTests
         Assert.Equal(team, s.CollectionsCache.LastAppliedCollection);
     }
 
+    /// <summary>The collection a restore goes back into follows the record its caller read, not the record as
+    /// it is by then: one read as having none goes into the active collection.</summary>
+    [Fact]
+    public void ARestoreFollowsTheRecordItsCallerRead()
+    {
+        using var h = new AppStateHarness();
+        using var s = h.Create();
+        Assert.Null(s.CreateActiveCopy("Gone"));
+        Assert.Null(s.Upsert("gone-only", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("g")))), null, "Gone"));
+        s.Apply();
+        s.SwitchCollection("Default");   // backs up what Gone put in Claude's file, recorded as Gone's
+        var backup = s.Service.Backups.Backups("claude_desktop_config")[0];
+        Assert.Null(s.DeleteCollection("Gone"));
+        Assert.IsType<RestoreCollectionGoneException>(s.RestoreRefusal(backup));
+        Assert.Null(s.RestoreRefusalForRecorded(null));
+        s.RestoreClaudeConfig(backup, null, null);
+        Assert.Equal("Default", s.ActiveCollection);
+        Assert.True(s.Store.Collections["Default"].Mcps.ContainsKey("gone-only"));
+    }
+
     [Fact]
     public void ARestoreOfABackupWhoseCollectionIsGoneIsRefused()
     {

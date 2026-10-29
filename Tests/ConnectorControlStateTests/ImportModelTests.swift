@@ -116,10 +116,9 @@ final class ImportModelTests: XCTestCase {
         XCTAssertEqual(again.rows.map(\.present), [false, true, false, false])
     }
 
-    /// A document that cannot be read by the time Import is pressed makes nothing: the new
-    /// collection is not left behind empty, and a second Import says why again rather than that
-    /// the collection exists.
-    func testANewCollectionIsNotMadeWhenTheDocumentCannotBeReadAtImport() throws {
+    /// What the user reviewed in the sheet is what lands: a document deleted while the sheet was open
+    /// still arrives in a new collection, and nothing is left behind empty.
+    func testANewCollectionLandsWhatTheSheetLoadedEvenOnceTheFileIsGone() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let url = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "shared/data-team.json")
@@ -129,12 +128,30 @@ final class ImportModelTests: XCTestCase {
         XCTAssertEqual(model.target, .newCollection)
 
         try FileManager.default.removeItem(at: url)
-        let unreadable = try XCTUnwrap(AppState.readDocument(at: url.standardizedFileURL).failure)
-        XCTAssertEqual(model.perform(), unreadable)
-        XCTAssertEqual(model.failure, unreadable)
-        XCTAssertNil(state.store.collections["Fresh"], "nothing is made for copies that cannot land")
-        XCTAssertEqual(model.perform(), unreadable, "a retry says why again, not that Fresh exists")
-        XCTAssertNil(state.store.collections["Fresh"])
+        XCTAssertNil(model.perform())
+        XCTAssertEqual(state.store.collections["Fresh"]?.mcps.keys.sorted(), ["dbt", "github", "ledger", "notion"])
+    }
+
+    /// A document rewritten while the sheet was open lands as the sheet showed it, copied or kept in sync.
+    func testImportLandsWhatTheSheetLoadedNotTheFileAsItIsNow() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try h.writeDocument(CollectionDocumentSamples.dataTeam, named: "shared/data-team.json")
+        let loaded = try Data(contentsOf: url)
+        let copies = ImportModel(state: state, path: url.path)
+        let synced = ImportModel(state: state, path: url.path)
+        synced.mode = .keepInSync
+        var swapped = CollectionDocumentSamples.dataTeam
+        swapped.connectors = ["swapped": try XCTUnwrap(swapped.connectors["github"])]
+        try h.writeDocument(swapped, at: url)
+
+        XCTAssertNil(copies.perform())
+        XCTAssertNotNil(state.store.collections["Default"]?.mcps["github"])
+        XCTAssertNil(state.store.collections["Default"]?.mcps["swapped"])
+        XCTAssertNil(synced.perform())
+        XCTAssertEqual(state.store.collections["Data team"]?.mcps.keys.sorted(), ["dbt", "github", "ledger", "notion"])
+        XCTAssertEqual(state.collectionsCache.synced["Data team"]?.lastHash, ContentHash.sha256(loaded),
+                       "the binding records what landed, so the file as it is now shows as an update")
     }
 
     /// A New Collection name that trims to nothing is refused as Copy to ▸ New Collection refuses

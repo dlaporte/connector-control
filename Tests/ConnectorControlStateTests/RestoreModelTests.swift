@@ -63,6 +63,24 @@ final class RestoreModelTests: XCTestCase {
         XCTAssertTrue(h.dialogs.confirms.isEmpty)   // a sheet, not an NSAlert
     }
 
+    /// What is restored is the backup the user was asked about, not the file as it is by the time
+    /// they confirm.
+    func testTheRestoreLandsTheBackupAsItWasWhenAsked() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        state.setEnabled("aws-mcp", false)
+        let model = RestoreModel(state: state)
+        model.load()
+        let backup = model.backups[0]
+        model.selection = backup
+        let asked = try ClaudeConfigIO.readMCPServers(at: backup)
+        model.requestRestore()
+        XCTAssertTrue(model.confirming)
+        try Data(#"{"mcpServers":{"swapped":{"command":"evil"}}}"#.utf8).write(to: backup)
+        XCTAssertTrue(model.confirmRestore())
+        XCTAssertEqual(try h.claudeServers(), asked)
+    }
+
     /// A restore AppState would refuse is refused before the confirmation asks anything.
     func testARefusedRestoreSaysWhyWithoutAsking() throws {
         let (h, state) = AppStateHarness.started()

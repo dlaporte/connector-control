@@ -1855,6 +1855,25 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(s.collectionsCache.lastAppliedCollection, team)
     }
 
+    /// The collection a restore goes back into follows the record its caller read, not the record as
+    /// it is by then: one read as having none goes into the active collection.
+    func testARestoreFollowsTheRecordItsCallerRead() throws {
+        let (h, s) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(s.createActiveCopy(named: "Gone"))
+        XCTAssertNil(s.upsert(name: "gone-only", entry: MCPEntry(enabled: true, config: .object(["command": .string("g")])),
+                              renamedFrom: nil, in: "Gone"))
+        s.apply()
+        s.switchCollection(to: "Default")   // backs up what Gone put in Claude's file, recorded as Gone's
+        let backup = try XCTUnwrap(try s.service.backups.backups(series: "claude_desktop_config").first)
+        XCTAssertNil(s.deleteCollection(named: "Gone"))
+        XCTAssertEqual(s.restoreRefusal(for: backup), .collectionGone("Gone"))
+        XCTAssertNil(s.restoreRefusal(forRecorded: nil))
+        try s.restoreClaudeConfig(from: backup, data: nil, recorded: nil)
+        XCTAssertEqual(s.activeCollection, "Default")
+        XCTAssertNotNil(s.store.collections["Default"]?.mcps["gone-only"])
+    }
+
     func testARestoreOfABackupWhoseCollectionIsGoneIsRefused() throws {
         let (h, s) = AppStateHarness.started()
         defer { h.dispose() }

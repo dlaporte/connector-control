@@ -49,6 +49,24 @@ public class RestoreModelTests
         Assert.Null(model.RestoreError);
     }
 
+    /// <summary>What is restored is the backup the user was asked about, not the file as it is by the time
+    /// they confirm.</summary>
+    [Fact]
+    public void TheRestoreLandsTheBackupAsItWasWhenAsked()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        state.SetEnabled("aws-mcp", false);
+        var model = new RestoreModel(state, h.Dialogs);
+        model.Load();
+        var backup = model.Backups[0];
+        model.Selection = backup;
+        var asked = ClaudeConfigIO.ReadMcpServers(backup);
+        h.Dialogs.DuringConfirm = () => File.WriteAllText(backup, """{"mcpServers":{"swapped":{"command":"evil"}}}""");
+        Assert.True(model.Restore());
+        Assert.Equal(asked, h.ClaudeServers());
+    }
+
     /// <summary>A restore AppState would refuse is refused before the confirmation asks anything.</summary>
     [Fact]
     public void ARefusedRestoreSaysWhyWithoutAsking()
