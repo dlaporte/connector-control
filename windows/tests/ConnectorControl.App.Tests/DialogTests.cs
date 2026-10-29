@@ -45,6 +45,8 @@ public class DialogTests
             Assert.Same(dialog.TryFindResource("AccentButtonStyle"), dialog.CancelButton.Style);
             // Even with the keyboard on Delete: a focused button would otherwise take Return itself.
             Assert.False(KeyboardNavigation.GetAcceptsReturn(dialog.PrimaryButton));
+            // The keyboard starts on Keep, as it does on the Mac.
+            Assert.Same(dialog.CancelButton, FocusManager.GetFocusedElement(dialog));
             // Every other question keeps Return on its primary.
             var usual = new ConfirmDialog("Restart Claude Desktop now?", null, "Restart", "Cancel", destructive: false);
             Assert.True(usual.PrimaryButton.IsDefault);

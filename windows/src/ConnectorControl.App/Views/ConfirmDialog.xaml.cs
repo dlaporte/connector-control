@@ -33,7 +33,9 @@ public partial class ConfirmDialog : DialogWindow
         // Return presses the cancel button wherever the keyboard is, and the primary answers only a
         // click: a focused button takes Return itself, so the primary is told not to — Tab, or a press
         // dragged off it, can leave the keyboard there. The accent goes with the default, and a
-        // destructive primary keeps its red. Escape stays on Cancel.
+        // destructive primary keeps its red. Escape stays on Cancel. The keyboard starts on the cancel
+        // button, as it does on the Mac: the window gives it to the element its focus scope names when it
+        // is first activated.
         if (cancelIsDefault)
         {
             PrimaryButton.IsDefault = false;
@@ -44,6 +46,7 @@ public partial class ConfirmDialog : DialogWindow
                 PrimaryButton.ClearValue(StyleProperty);
             }
             CancelButton.SetResourceReference(StyleProperty, "AccentButtonStyle");
+            FocusManager.SetFocusedElement(this, CancelButton);
         }
     }
 
@@ -67,9 +70,6 @@ public partial class ConfirmDialog : DialogWindow
         CodeText.Visibility = question.Code.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         TextRuns.Fill(FooterText, question.Footer ?? []);
         FooterText.Visibility = question.Footer is null ? Visibility.Collapsed : Visibility.Visible;
-        // The keyboard starts on Don’t Allow, as it does on the Mac: the window gives it to the element its
-        // focus scope names when it is first activated.
-        FocusManager.SetFocusedElement(this, CancelButton);
     }
 
     /// <summary>What would run, a paragraph a line, as the Mac lays it out: each line is its own left-to-right
