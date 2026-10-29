@@ -218,10 +218,14 @@ public class ConfirmationDialogTests
     {
         Assert.Equal("  + l \u0E17 cafe", ControlText.WithoutMarks("  + l\u1DD8\u1DD8 \u0E17\u0E35\u0E48 cafe\u0301"));
         Assert.Equal("\u0939\u093F\u0928", ControlText.WithoutMarks("\u0939\u093F\u0928\u094D")); // a spacing mark stays
-        Assert.Equal(0, ConfirmationDialog.ExtraRoom(10.6, 10.6, 14));
-        Assert.Equal(0, ConfirmationDialog.ExtraRoom(9, 10.6, 14)); // never less than the face's own
-        Assert.Equal(2, ConfirmationDialog.ExtraRoom(11.9, 10.6, 14)); // whole points, rounded up
-        Assert.Equal(7, ConfirmationDialog.ExtraRoom(40, 10.6, 14)); // at most half a line
+        string[] plain = ["url", "  − https://a.example/mcp", "  + TOKEN = \u2022\u2022\u2022 (set)", "caf\u00E9 na\u00EFve \u0394\u0416"];
+        Assert.Equal(0, ConfirmationDialog.ExtraRoom(plain, 14)); // Latin, Greek, Cyrillic and the app's own signs need none
+        Assert.Equal(0, ConfirmationDialog.ExtraRoom(["  + l\u1DD8\u1DD8 g\u034D\u034D", "a\u0591\u0951"], 14)); // marks never make room
+        foreach (var other in new[] { "\u6F22\u5B57", "\u0627\u0644", "\u0939\u093F", "\u0E17\u0E35\u0E48", "\u05D0", "\u1EC1", "\uAC00", "\U0001F600" })
+        {
+            Assert.Equal(4, ConfirmationDialog.ExtraRoom(["url", "  + " + other], 14)); // a quarter of a line, rounded up
+        }
+        Assert.Equal(4, ConfirmationDialog.ExtraRoom(["\u0E17"], 13));
     }
 
     /// <summary>Text is compared ordinally, as the Mac mirror compares it scalar by scalar: a name composed

@@ -56,16 +56,15 @@ final class ConfirmationAccessoryTests: XCTestCase {
         XCTAssertEqual(block.fields[0].textColor, .labelColor)
     }
 
-    /// A line's box is as tall as the code face needs, and grows only for the letters of another script drawn
-    /// in a taller fallback face: never for marks, and never past half a line more above and below.
-    func testALineBoxGrowsForTallerScriptsButNotForMarks() {
+    /// Marks never make a line's box taller, and whatever a line holds its box stays within a line and a half,
+    /// whichever fallback faces this Mac has.
+    func testMarksNeverMakeALineTallerAndTheBoxStaysBounded() {
         let plain = block(["url", "plain"]).boxes.first?.frame.height ?? 0
         XCTAssertGreaterThan(plain, 0)
-        XCTAssertEqual(block(["url", "  + l\u{1DD8}\u{1DD8}", "  + g\u{034D}\u{034D}"]).boxes.first?.frame.height, plain,
-                       "marks never make a line taller")
-        let tall = block(["  + \u{0939}\u{093F}\u{0928}\u{094D}\u{0926}\u{0940}"]).boxes.first?.frame.height ?? 0
-        XCTAssertGreaterThan(tall, plain, "Devanagari's fallback face needs more room than the code face")
-        XCTAssertLessThanOrEqual(tall, plain + 2 * (plain / 2).rounded(.up), "bounded")
+        let marked = block(["url", "  + l\u{1DD8}\u{1DD8}", "  + g\u{034D}\u{034D}"]).boxes.first?.frame.height ?? 0
+        XCTAssertEqual(marked, plain, "marks never make a line taller: \(marked) against \(plain)")
+        let other = block(["  + \u{0939}\u{093F}\u{0928}\u{094D}\u{0926}\u{0940}"]).boxes.first?.frame.height ?? 0
+        XCTAssertLessThanOrEqual(other, plain * 1.5 + 1, "bounded: \(other) against \(plain)")
     }
 
     /// Ordinary text in scripts the code face does not have — Chinese, Arabic, Devanagari, Thai — is drawn whole:
@@ -81,8 +80,9 @@ final class ConfirmationAccessoryTests: XCTestCase {
         for (index, box) in block.boxes.prefix(4).enumerated() {
             let rows = ink.filter { box.frame.minY..<box.frame.maxY ~= $0 }
             XCTAssertFalse(rows.isEmpty, "line \(index) is drawn")
-            XCTAssertGreaterThan(rows.min() ?? 0, box.frame.minY, "line \(index)'s ink clears its box's top")
-            XCTAssertLessThan(rows.max() ?? .infinity, box.frame.maxY - 1, "line \(index)'s ink clears its box's bottom")
+            let measured = "ink \(rows.min() ?? -1)–\(rows.max() ?? -1), box \(box.frame.minY)–\(box.frame.maxY)"
+            XCTAssertGreaterThan(rows.min() ?? 0, box.frame.minY, "line \(index)'s ink clears its box's top: \(measured)")
+            XCTAssertLessThan(rows.max() ?? .infinity, box.frame.maxY - 1, "line \(index)'s ink clears its box's bottom: \(measured)")
             // All of the line's ink is there: as tall as the faces draw it, not cut to the label's own frame.
             let field = block.fields[index]
             let ink = CTLineGetImageBounds(CTLineCreateWithAttributedString(NSAttributedString(string: field.stringValue,

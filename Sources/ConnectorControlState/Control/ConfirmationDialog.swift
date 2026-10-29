@@ -37,13 +37,28 @@ public struct ConfirmationDialog: Equatable, Sendable {
         code.map { ConfirmationDialog.hasRightToLeft($0) ? "\u{202D}" + $0 + "\u{202C}" : $0 }
     }
 
-    /// How much room a code line's box adds above, or below, what the code face itself needs there: as much as
-    /// `needed`, the most the block's lines need there, their marks left out (`ControlText.withoutMarks`), goes
-    /// past `own`, the code face's own, in whole points; at most half of `lineHeight`. Chinese, Arabic,
-    /// Devanagari or Thai, drawn in a fallback face taller than the code face, is drawn whole, and still no
-    /// line's box, which clips what it holds, grows without bound.
-    public static func extraRoom(needed: Double, own: Double, lineHeight: Double) -> Double {
-        min(max(0, (needed - own).rounded(.up)), (lineHeight / 2).rounded(.up))
+    /// How much room every code line's box adds above and below the code face's own line of `lineHeight`: a
+    /// quarter of a line, rounded up, when any of `lines` holds a letter of a script the code face may not
+    /// have (`holdsOtherScript`), drawn in a fallback face that can reach past the code face's line — Chinese,
+    /// Arabic, Devanagari, Thai and the like — and none otherwise, so Latin text reads as tightly as ever. The
+    /// room is fixed rather than measured: the Windows text engine reports a fallback face's letters with the
+    /// code face's own line metrics, so neither platform can measure it alike, and a fixed room is the same on
+    /// both. Marks never make room, so a line's box, which clips what it holds, stays bounded.
+    public static func extraRoom(for lines: [String], lineHeight: Double) -> Double {
+        lines.contains(where: holdsOtherScript) ? (lineHeight / 4).rounded(.up) : 0
+    }
+
+    /// Whether `line`, its combining marks left out (`ControlText.withoutMarks`), holds a character of the blocks
+    /// beyond the code face's Latin, Greek and Cyrillic and the app's own signs: Hebrew onward to Greek Extended,
+    /// CJK through Hangul, the compatibility and presentation forms, the fullwidth forms, and everything beyond
+    /// the Basic Plane. Explicit ranges, the same as the Windows mirror's.
+    static func holdsOtherScript(_ line: String) -> Bool {
+        ControlText.withoutMarks(line).unicodeScalars.contains { scalar in
+            switch scalar.value {
+            case 0x0590...0x1FFF, 0x2E80...0xD7FF, 0xF900...0xFDFF, 0xFE70...0xFEFF, 0xFF00...0xFFEF, 0x10000...0x10FFFF: return true
+            default: return false
+            }
+        }
     }
 
     /// Whether `line` holds a character of the blocks where the strong right-to-left letters are —

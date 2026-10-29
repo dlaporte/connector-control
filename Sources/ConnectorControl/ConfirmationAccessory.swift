@@ -59,8 +59,8 @@ enum ConfirmationAccessory {
     /// What would run: each line in a selectable label of its own, in a box of its own that clips it, so
     /// combining marks stacked on a line, however tall, can never draw over the line above or below; at
     /// most two are drawn on a character (`ControlText`), so a stack cut off by the clip cannot hide the
-    /// line's own text either. Every box is as tall as the code face's line, and taller only as far as the
-    /// block's letters in another script, drawn in a taller fallback face, need (`ConfirmationDialog.extraRoom`),
+    /// line's own text either. Every box is as tall as the code face's line, with fixed room above and below
+    /// when the block holds letters of another script, drawn in a fallback face (`ConfirmationDialog.extraRoom`),
     /// so Chinese, Arabic, Devanagari and Thai are drawn whole. One line of it is one line here, so the block
     /// scrolls sideways rather than wrap, and a long value can never pass for a row of its own. The block is
     /// one stop for Tab, as one text view was, and Up and Down move between its lines (`CodeLines`); a
@@ -77,16 +77,10 @@ enum ConfirmationAccessory {
         let fields = dialog.shownCode.enumerated().map { index, line in
             codeLine(line, font: font, color: color(dialog.codeKinds[index]))
         }
-        // One line's height from the face alone; the room past it from the letters alone, never the marks.
+        // One line's height from the face alone, never from what a line holds; the room the shared rule gives.
         let lineHeight = ceil(codeLine("Xg", font: font, color: .labelColor).intrinsicContentSize.height)
-        let own = typographicBounds("Xg", font: font)
-        var above: CGFloat = 0, below: CGFloat = 0
-        for line in dialog.shownCode {
-            let needed = typographicBounds(ControlText.withoutMarks(line), font: font)
-            above = max(above, ConfirmationDialog.extraRoom(needed: needed.ascent, own: own.ascent, lineHeight: lineHeight))
-            below = max(below, ConfirmationDialog.extraRoom(needed: needed.descent, own: own.descent, lineHeight: lineHeight))
-        }
-        let rowHeight = lineHeight + above + below
+        let room = ConfirmationDialog.extraRoom(for: dialog.shownCode, lineHeight: lineHeight)
+        let rowHeight = lineHeight + 2 * room
         let lineWidth = ceil(fields.map(\.intrinsicContentSize.width).max() ?? 0)
         let document = CodeDocument(frame: NSRect(x: 0, y: 0, width: lineWidth + 2 * codeInset.width,
                                                   height: CGFloat(fields.count) * rowHeight + 2 * codeInset.height))
@@ -96,7 +90,7 @@ enum ConfirmationAccessory {
                                                 width: lineWidth, height: rowHeight))
             box.clipsToBounds = true
             // The label draws past its own frame, into the room above and below it; its box is the clip.
-            field.frame = NSRect(x: 0, y: above, width: lineWidth, height: lineHeight)
+            field.frame = NSRect(x: 0, y: room, width: lineWidth, height: lineHeight)
             field.clipsToBounds = false
             field.delegate = lines
             field.lines = lines
@@ -113,15 +107,6 @@ enum ConfirmationAccessory {
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.heightAnchor.constraint(equalToConstant: min(codeHeight, document.frame.height + 4 + scroller)).isActive = true
         return scroll
-    }
-
-    /// How far `text` reaches above and below its baseline in `font` and whatever fallback faces draw it: the
-    /// faces' own ascent and descent, not the ink.
-    static func typographicBounds(_ text: String, font: NSFont) -> (ascent: CGFloat, descent: CGFloat) {
-        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: font]))
-        var ascent: CGFloat = 0, descent: CGFloat = 0, leading: CGFloat = 0
-        _ = CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
-        return (ascent, descent)
     }
 
     /// The room between the block's border and its lines.

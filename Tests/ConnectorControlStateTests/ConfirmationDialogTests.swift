@@ -188,10 +188,14 @@ final class ConfirmationDialogTests: XCTestCase {
     func testACodeLineGrowsOnlyForLettersAndOnlyHalfALine() {
         XCTAssertEqual(ControlText.withoutMarks("  + l\u{1DD8}\u{1DD8} \u{0E17}\u{0E35}\u{0E48} cafe\u{0301}"), "  + l \u{0E17} cafe")
         XCTAssertEqual(ControlText.withoutMarks("\u{0939}\u{093F}\u{0928}\u{094D}"), "\u{0939}\u{093F}\u{0928}", "a spacing mark stays")
-        XCTAssertEqual(ConfirmationDialog.extraRoom(needed: 10.6, own: 10.6, lineHeight: 14), 0)
-        XCTAssertEqual(ConfirmationDialog.extraRoom(needed: 9, own: 10.6, lineHeight: 14), 0, "never less than the face's own")
-        XCTAssertEqual(ConfirmationDialog.extraRoom(needed: 11.9, own: 10.6, lineHeight: 14), 2, "whole points, rounded up")
-        XCTAssertEqual(ConfirmationDialog.extraRoom(needed: 40, own: 10.6, lineHeight: 14), 7, "at most half a line")
+        let plain = ["url", "  − https://a.example/mcp", "  + TOKEN = \u{2022}\u{2022}\u{2022} (set)", "caf\u{E9} na\u{EF}ve \u{0394}\u{0416}"]
+        XCTAssertEqual(ConfirmationDialog.extraRoom(for: plain, lineHeight: 14), 0, "Latin, Greek, Cyrillic and the app's own signs need none")
+        XCTAssertEqual(ConfirmationDialog.extraRoom(for: ["  + l\u{1DD8}\u{1DD8} g\u{034D}\u{034D}", "a\u{0591}\u{0951}"], lineHeight: 14), 0,
+                       "marks never make room, wherever their block is")
+        for other in ["\u{6F22}\u{5B57}", "\u{0627}\u{0644}", "\u{0939}\u{093F}", "\u{0E17}\u{0E35}\u{0E48}", "\u{05D0}", "\u{1EC1}", "\u{AC00}", "\u{1F600}"] {
+            XCTAssertEqual(ConfirmationDialog.extraRoom(for: ["url", "  + " + other], lineHeight: 14), 4, "a quarter of a line, rounded up")
+        }
+        XCTAssertEqual(ConfirmationDialog.extraRoom(for: ["\u{0E17}"], lineHeight: 13), 4)
     }
 
     /// Text is compared scalar by scalar, as the Windows mirror compares it ordinally: a name composed

@@ -226,11 +226,10 @@ public class ConfirmationDialogTests
         });
     }
 
-    /// <summary>A line's box is as tall as the code face needs, and grows only for the letters of another script drawn
-    /// in a taller fallback face: never for marks, and never past half a line more above and below. The room is
-    /// the box's padding, so the line's text sits clear of the box's edges.</summary>
+    /// <summary>Marks never make a line's box taller, and whatever a line holds its box stays within a line and a half,
+    /// whichever fallback faces this PC has. The room is the box's padding, so the line's text sits clear of its edges.</summary>
     [Fact]
-    public void ALineBoxGrowsForTallerScriptsButNotForMarks()
+    public void MarksNeverMakeALineTallerAndTheBoxStaysBounded()
     {
         WpfApp.Invoke(() =>
         {
@@ -249,10 +248,10 @@ public class ConfirmationDialogTests
             }
             var plain = Height("url", "plain");
             Assert.True(plain > 0);
-            Assert.Equal(plain, Height("url", "  + l\u1DD8\u1DD8", "  + g\u034D\u034D")); // marks never make a line taller
-            var tall = Height("  + \u0939\u093F\u0928\u094D\u0926\u0940");
-            Assert.True(tall > plain, "Devanagari's fallback face needs more room than the code face");
-            Assert.True(tall <= plain + 2 * Math.Ceiling(plain / 2), "bounded");
+            var marked = Height("url", "  + l\u1DD8\u1DD8", "  + g\u034D\u034D");
+            Assert.True(marked == plain, $"marks never make a line taller: {marked} against {plain}");
+            var other = Height("  + \u0939\u093F\u0928\u094D\u0926\u0940");
+            Assert.True(other <= plain * 1.5 + 1, $"bounded: {other} against {plain}");
         });
     }
 
@@ -277,8 +276,9 @@ public class ConfirmationDialogTests
                 {
                     var rows = InkRows(lines[index]);
                     Assert.NotEmpty(rows);
-                    Assert.True(rows.Min() > 0, $"line {index}'s ink clears its box's top");
-                    Assert.True(rows.Max() < lines[index].ActualHeight - 1, $"line {index}'s ink clears its box's bottom");
+                    var measured = $"ink {rows.Min()}–{rows.Max()}, box 0–{lines[index].ActualHeight}, padding {lines[index].Padding}";
+                    Assert.True(rows.Min() > 0, $"line {index}'s ink clears its box's top: {measured}");
+                    Assert.True(rows.Max() < lines[index].ActualHeight - 1, $"line {index}'s ink clears its box's bottom: {measured}");
                 }
                 // The blank line between two stacks, drawn as the panel draws it, holds no ink.
                 var panel = InkRowsOf(dialog.CodeLines);
@@ -305,7 +305,20 @@ public class ConfirmationDialogTests
         var visual = new DrawingVisual();
         using (var context = visual.RenderOpen())
         {
-            context.DrawRectangle(new VisualBrush(element), null, new Rect(0, 0, element.ActualWidth, element.ActualHeight));
+            // The element's own coordinates, one to one: a brush left to its defaults stretches the content's bounds
+            // over the rectangle, which would move the rows it reports.
+            var area = new Rect(0, 0, element.ActualWidth, element.ActualHeight);
+            var brush = new VisualBrush(element)
+            {
+                Stretch = Stretch.None,
+                AlignmentX = AlignmentX.Left,
+                AlignmentY = AlignmentY.Top,
+                ViewboxUnits = BrushMappingMode.Absolute,
+                Viewbox = area,
+                ViewportUnits = BrushMappingMode.Absolute,
+                Viewport = area,
+            };
+            context.DrawRectangle(brush, null, area);
         }
         bitmap.Render(visual);
         var pixels = new byte[width * height * 4];
@@ -358,22 +371,40 @@ public class ConfirmationDialogTests
                 Press(lines[0], Key.PageDown);
                 var paged = Assert.IsType<TextBox>(FocusManager.GetFocusedElement(dialog));
                 var index = lines.IndexOf(paged);
-                Assert.True(index > 1, "a page is more than a line");
-                dialog.UpdateLayout();
+                Assert.True(index > 1, $"a page is more than a line: moved to {index}");
+                // The scroll viewer queues the move into view and makes it in a later layout pass, as it would
+                // between two key presses: let the dispatcher run that pass before measuring.
+                Settle(dialog);
                 var top = paged.TranslatePoint(new Point(0, 0), dialog.CodeScroll).Y;
                 Assert.True(top >= 0 && top + paged.ActualHeight <= dialog.CodeScroll.ViewportHeight + 1,
-                    "the line the keyboard moved to is scrolled into view");
+                    $"the line the keyboard moved to is scrolled into view: line {index} at {top}, {paged.ActualHeight} tall, " +
+                    $"viewport {dialog.CodeScroll.ViewportHeight} at offset {dialog.CodeScroll.VerticalOffset}");
                 for (var step = 0; step < 60; step++)
                 {
                     Press((TextBox)FocusManager.GetFocusedElement(dialog), Key.Down);
                 }
                 Assert.Same(lines[^1], FocusManager.GetFocusedElement(dialog)); // the last line stays put
+                Settle(dialog);
+                var last = lines[^1].TranslatePoint(new Point(0, 0), dialog.CodeScroll).Y;
+                Assert.True(last >= 0 && last + lines[^1].ActualHeight <= dialog.CodeScroll.ViewportHeight + 1,
+                    $"the last line is scrolled into view: at {last}, viewport {dialog.CodeScroll.ViewportHeight}");
             }
             finally
             {
                 dialog.Close();
             }
         });
+    }
+
+    /// <summary>Runs <paramref name="dialog"/>'s layout and its dispatcher until idle, twice: a scroll viewer makes a queued
+    /// move into view in one layout pass and lays out the scrolled content in the next.</summary>
+    private static void Settle(ConfirmDialog dialog)
+    {
+        for (var pass = 0; pass < 2; pass++)
+        {
+            dialog.UpdateLayout();
+            dialog.Dispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle);
+        }
     }
 
     /// <summary>A key pressed on <paramref name="line"/>, as the keyboard sends it first.</summary>

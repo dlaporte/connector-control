@@ -72,8 +72,8 @@ public partial class ConfirmDialog : DialogWindow
     /// the order it is stored (<see cref="ConfirmationDialog.ShownCode"/>), in a box that clips it, so no combining marks
     /// stacked on a line, however tall, can draw over the line above or below; at most two are drawn on a character
     /// (<see cref="ControlText"/>), so a stack cut off by the clip cannot hide the line's own text either. Every box is as
-    /// tall as the code face's line, and taller only as far as the block's letters in another script, drawn in a
-    /// taller fallback face, need (<see cref="ConfirmationDialog.ExtraRoom"/>): that room is the box's padding, so Chinese,
+    /// tall as the code face's line, with fixed room above and below when the block holds letters of another script,
+    /// drawn in a fallback face (<see cref="ConfirmationDialog.ExtraRoom"/>): that room is the box's padding, so Chinese,
     /// Arabic, Devanagari and Thai are drawn whole. Removed lines take the theme's critical colour and added ones its
     /// success colour; a theme without one leaves the line in the box's own, and its "−" or "+" still says what it
     /// does. No line wraps, and only a line wider than the block gives it something to scroll to. Every line is
@@ -103,26 +103,19 @@ public partial class ConfirmDialog : DialogWindow
         {
             return;
         }
-        // One line's height from the face alone; the room past it from the letters alone, never the marks.
-        var own = Formatted("Xg", lines[0]);
-        var lineHeight = Math.Ceiling(own.Height);
-        double above = 0, below = 0;
-        foreach (var text in shown)
-        {
-            var needed = Formatted(ControlText.WithoutMarks(text), lines[0]);
-            above = Math.Max(above, ConfirmationDialog.ExtraRoom(needed.Baseline, own.Baseline, lineHeight));
-            below = Math.Max(below, ConfirmationDialog.ExtraRoom(needed.Height - needed.Baseline, own.Height - own.Baseline, lineHeight));
-        }
+        // One line's height from the face alone, never from what a line holds; the room the shared rule gives.
+        var lineHeight = Math.Ceiling(Formatted("Xg", lines[0]).Height);
+        var room = ConfirmationDialog.ExtraRoom(shown, lineHeight);
         foreach (var line in lines)
         {
-            line.Height = lineHeight + above + below;
-            line.Padding = new Thickness(0, above, 0, below);
+            line.Height = lineHeight + 2 * room;
+            line.Padding = new Thickness(0, room, 0, room);
             CodeLines.Children.Add(line);
         }
     }
 
     /// <summary><paramref name="text"/> as <paramref name="line"/>'s face, size and formatting mode lay it out at this window's
-    /// scale, in whatever fallback faces draw it: its height and baseline are the faces' own, not the ink.</summary>
+    /// scale: its height is the face's line.</summary>
     private FormattedText Formatted(string text, TextBox line)
     {
         var typeface = new Typeface(line.FontFamily, line.FontStyle, line.FontWeight, line.FontStretch);

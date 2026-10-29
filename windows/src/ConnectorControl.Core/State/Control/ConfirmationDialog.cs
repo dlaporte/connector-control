@@ -49,13 +49,23 @@ public sealed class ConfirmationDialog : IEquatable<ConfirmationDialog>
     public IReadOnlyList<string> ShownCode =>
         Code.Select(line => HasRightToLeft(line) ? "\u202D" + line + "\u202C" : line).ToList();
 
-    /// <summary>How much room a code line's box adds above, or below, what the code face itself needs there: as much as
-    /// <paramref name="needed"/>, the most the block's lines need there, their marks left out (<see cref="ControlText.WithoutMarks"/>),
-    /// goes past <paramref name="own"/>, the code face's own, in whole points; at most half of <paramref name="lineHeight"/>.
-    /// Chinese, Arabic, Devanagari or Thai, drawn in a fallback face taller than the code face, is drawn whole, and
-    /// still no line's box, which clips what it holds, grows without bound.</summary>
-    public static double ExtraRoom(double needed, double own, double lineHeight) =>
-        Math.Min(Math.Max(0, Math.Ceiling(needed - own)), Math.Ceiling(lineHeight / 2));
+    /// <summary>How much room every code line's box adds above and below the code face's own line of <paramref name="lineHeight"/>:
+    /// a quarter of a line, rounded up, when any of <paramref name="lines"/> holds a letter of a script the code face may not
+    /// have (<see cref="HoldsOtherScript"/>), drawn in a fallback face that can reach past the code face's line — Chinese,
+    /// Arabic, Devanagari, Thai and the like — and none otherwise, so Latin text reads as tightly as ever. The room is
+    /// fixed rather than measured: WPF reports a fallback face's letters with the code face's own line metrics, so
+    /// neither platform can measure it alike, and a fixed room is the same on both. Marks never make room, so a
+    /// line's box, which clips what it holds, stays bounded.</summary>
+    public static double ExtraRoom(IReadOnlyList<string> lines, double lineHeight) =>
+        lines.Any(HoldsOtherScript) ? Math.Ceiling(lineHeight / 4) : 0;
+
+    /// <summary>Whether <paramref name="line"/>, its combining marks left out (<see cref="ControlText.WithoutMarks"/>), holds a
+    /// character of the blocks beyond the code face's Latin, Greek and Cyrillic and the app's own signs: Hebrew onward
+    /// to Greek Extended, CJK through Hangul, the compatibility and presentation forms, the fullwidth forms, and
+    /// everything beyond the Basic Plane. Explicit ranges, the same as the Mac mirror's.</summary>
+    internal static bool HoldsOtherScript(string line) => ControlText.Scalars(ControlText.WithoutMarks(line)).Any(scalar =>
+        scalar is (>= 0x0590 and <= 0x1FFF) or (>= 0x2E80 and <= 0xD7FF) or (>= 0xF900 and <= 0xFDFF) or (>= 0xFE70 and <= 0xFEFF)
+            or (>= 0xFF00 and <= 0xFFEF) or (>= 0x10000 and <= 0x10FFFF));
 
     /// <summary>Whether <paramref name="line"/> holds a character of the blocks where the strong right-to-left letters
     /// are — Hebrew, Arabic, Syriac, Thaana, NKo and the rest to U+08FF, their presentation forms, and their
