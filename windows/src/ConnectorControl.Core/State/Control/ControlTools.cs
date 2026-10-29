@@ -253,7 +253,17 @@ public sealed partial class ControlTools
                             // tick that finds the call answered and does nothing.
                             call.Asking = true;
                             StartWaiting(call);
-                            confirmer.Confirm(request, allowed => Answered(call, request, ready.Fingerprint, allowed));
+                            try
+                            {
+                                confirmer.Confirm(request, allowed => Answered(call, request, ready.Fingerprint, allowed));
+                            }
+                            catch (Exception)
+                            {
+                                // A confirmer throws only before it shows anything, so nothing was asked: the
+                                // call is refused with the sentence that says so, never with the dialog's own
+                                // words, which the Mac never has to give.
+                                Finish(call, ControlResult.Refusal(NoQuestionError));
+                            }
                             break;
                     }
                     break;

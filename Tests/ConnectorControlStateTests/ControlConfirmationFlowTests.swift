@@ -54,7 +54,7 @@ final class ControlConfirmationFlowTests: XCTestCase {
     func testAnAnnouncementShowsNamesAsEscapes() {
         let rig = ControlRig(confirm: false); defer { rig.dispose() }
         let collection = "Work\n\u{202E}z", shownCollection = #"Work\n\u{202E}z"#
-        let caller = ControlCaller.relay(clientName: "Cursor\n\u{202E}d"), shownAsker = #"Cursor\n\u{202E}d"#
+        let caller = ControlCaller.relay(clientName: "Cursor\n\u{202E}d"), shownAsker = ControlCaller.callingItselfText(#"Cursor\n\u{202E}d"#)
         XCTAssertNil(rig.state.addEmptyCollection(named: collection))
         let target: [String: JSONValue] = ["collection": .string(collection)]
         _ = rig.call("add_connector", target.merging(["name": .string("a\nb"), "config": config]) { $1 }, as: caller)
@@ -78,7 +78,7 @@ final class ControlConfirmationFlowTests: XCTestCase {
         let rig = ControlRig(); defer { rig.dispose() }
         rig.confirmer.scripted = true
         _ = rig.call("add_connector", add("x"), as: .relay(clientName: "Cursor"))
-        XCTAssertEqual(rig.confirmer.requests.last?.title, ControlTools.addTitle("Cursor", "x"))
+        XCTAssertEqual(rig.confirmer.requests.last?.title, ControlTools.addTitle(ControlCaller.callingItselfText("Cursor"), "x"))
     }
 
     func testAWaitingCallReportsProgressThenSaysItIsWaitingAndALateAllowStillApplies() throws {

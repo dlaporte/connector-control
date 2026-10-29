@@ -119,7 +119,7 @@ public class ControlRecordingTests
     public void Impersonation()
     {
         using var rig = Check("impersonation").Rig;
-        Assert.Equal([ControlTools.AddTitle("connector-control", "notion")], rig.Confirmer.Requests.Select(request => request.Title));
+        Assert.Equal([ControlTools.AddTitle(ControlCaller.CallingItselfText("connector-control"), "notion")], rig.Confirmer.Requests.Select(request => request.Title));
         Assert.False(rig.State.Store.Mcps.ContainsKey("notion"));
         Assert.True(rig.H.Settings.ClaudeIntegrationEnabled);
     }

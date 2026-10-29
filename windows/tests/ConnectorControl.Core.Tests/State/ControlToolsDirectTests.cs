@@ -50,7 +50,7 @@ public class ControlToolsDirectTests
             Assert.Equal(
                 [
                     ControlTools.TurnedOffNotification("Claude", "aws-mcp"),
-                    ControlTools.TurnedOnNotification("Cursor", "aws-mcp"),
+                    ControlTools.TurnedOnNotification(ControlCaller.CallingItselfText("Cursor"), "aws-mcp"),
                     ControlTools.SwitchedNotification("Claude", """Work\n\u{202E}z"""),
                 ],
                 rig.H.Notifier.Sent.Select(sent => sent.Body));

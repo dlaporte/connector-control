@@ -57,6 +57,21 @@ public class ControlGateTests
         Assert.Equal(ControlCaller.UnknownClientName, new ControlCaller.Relay("").AskerName);
     }
 
+    /// <summary>
+    /// A client names itself, so any name but Claude Desktop's is shown as a claim: framed, escaped,
+    /// and never taken for Claude or for the command-line tool, which is never asked.
+    /// </summary>
+    [Fact]
+    public void AnyOtherClientIsShownAsTheNameItGaveItself()
+    {
+        Assert.Equal("Claude", new ControlCaller.Relay("claude-ai").ShownAsker);
+        Assert.Equal("Claude", new ControlCaller.Relay("local-agent-mode-connector-control").ShownAsker);
+        Assert.Equal("An app calling itself “Cursor”", new ControlCaller.Relay("Cursor").ShownAsker);
+        Assert.Equal("An app calling itself “connector-control”", new ControlCaller.Relay("connector-control").ShownAsker);
+        Assert.Equal("""An app calling itself “Cur\u{201D}sor\n”""", new ControlCaller.Relay("Cur”sor\n").ShownAsker);
+        Assert.Equal(ControlCaller.UnknownClientName, new ControlCaller.Relay("").ShownAsker);
+    }
+
     [Fact]
     public void ArgumentsAreCheckedAgainstTheSchemaBeforeAnythingRuns()
     {

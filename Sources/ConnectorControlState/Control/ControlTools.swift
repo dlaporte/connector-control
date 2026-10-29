@@ -212,6 +212,7 @@ public final class ControlTools {
                 call.asking = true
                 startWaiting(call)
                 confirmer.confirm(request) { [weak self] allowed in self?.answered(call, request, fingerprint, allowed) }
+                // The Windows mirror refuses a confirmer that throws with noQuestionError; a Swift confirmer cannot throw.
             }
         }
     }

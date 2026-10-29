@@ -120,6 +120,7 @@ public class StringCatalogTests
         ["ControlCommandLine.unknownOptionError"] = ["X"],
         ["ControlCommandLine.usageError"] = ["X"],
         ["ControlCommandLine.versionLine"] = ["X"],
+        ["ControlCaller.callingItselfText"] = ["X"],
         ["ControlMasking.assignment"] = ["X", "Y"],
         ["ControlMasking.oauthClientText"] = ["X", "Y"],
         ["ControlMasking.remoteBridgeType"] = ["X"],
@@ -466,6 +467,7 @@ public class StringCatalogTests
 
         // MARK: ControlCaller / ControlSettingKey / ControlTools
 
+        actual["ControlCaller.callingItselfText"] = ControlCaller.CallingItselfText("X");
         actual["ControlCaller.claudeName"] = ControlCaller.ClaudeName;
         actual["ControlCaller.unknownClientName"] = ControlCaller.UnknownClientName;
         actual["ControlSettingKey.automaticUpdates"] = ControlSettingKey.AutomaticUpdates;

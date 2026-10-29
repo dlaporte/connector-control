@@ -88,7 +88,7 @@ final class ControlRecordingTests: XCTestCase {
     /// A relay that gives the command-line tool's own name is still the relay.
     func testImpersonation() throws {
         let rig = try check("impersonation").rig; defer { rig.dispose() }
-        XCTAssertEqual(rig.confirmer.requests.map(\.title), [ControlTools.addTitle("connector-control", "notion")])
+        XCTAssertEqual(rig.confirmer.requests.map(\.title), [ControlTools.addTitle(ControlCaller.callingItselfText("connector-control"), "notion")])
         XCTAssertNil(rig.state.store.mcps["notion"])
         XCTAssertTrue(rig.h.settings.claudeIntegrationEnabled)
     }

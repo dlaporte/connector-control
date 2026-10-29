@@ -249,6 +249,9 @@
     "format": "backup {0} has an invalid mcpServers section"
   },
   "ConfigService.malformedClaudeConfigNote": "Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.",
+  "ControlCaller.callingItselfText": {
+    "format": "An app calling itself “{0}”"
+  },
   "ControlCaller.claudeName": "Claude",
   "ControlCaller.unknownClientName": "Another app",
   "ControlClient.droppedError": "Connector Control closed the connection before answering.",

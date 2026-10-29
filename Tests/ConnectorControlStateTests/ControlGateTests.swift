@@ -43,6 +43,18 @@ final class ControlGateTests: XCTestCase {
         XCTAssertEqual(ControlCaller.relay(clientName: "").askerName, ControlCaller.unknownClientName)
     }
 
+    /// A client names itself, so any name but Claude Desktop's is shown as a claim: framed, escaped,
+    /// and never taken for Claude or for the command-line tool, which is never asked.
+    func testAnyOtherClientIsShownAsTheNameItGaveItself() {
+        XCTAssertEqual(ControlCaller.relay(clientName: "claude-ai").shownAsker, "Claude")
+        XCTAssertEqual(ControlCaller.relay(clientName: "local-agent-mode-connector-control").shownAsker, "Claude")
+        XCTAssertEqual(ControlCaller.relay(clientName: "Cursor").shownAsker, "An app calling itself “Cursor”")
+        XCTAssertEqual(ControlCaller.relay(clientName: "connector-control").shownAsker,
+                       "An app calling itself “connector-control”")
+        XCTAssertEqual(ControlCaller.relay(clientName: "Cur”sor\n").shownAsker, #"An app calling itself “Cur\u{201D}sor\n”"#)
+        XCTAssertEqual(ControlCaller.relay(clientName: "").shownAsker, ControlCaller.unknownClientName)
+    }
+
     func testArgumentsAreCheckedAgainstTheSchemaBeforeAnythingRuns() {
         let rig = ControlRig(); defer { rig.dispose() }
         XCTAssertEqual(rig.call("get_connector"), .refusal(ControlTools.missingArgumentError("name")))

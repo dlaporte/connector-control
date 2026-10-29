@@ -12,8 +12,9 @@ namespace ConnectorControl.Core.State;
 ///
 /// The question, the answer and the announcement name connectors, collections and the asker as
 /// others chose them — Claude names connectors, creates and renames collections without asking, and
-/// any client names itself — so every name goes through <see cref="ControlText.EscapedName"/>: none can
-/// break a line, reorder or hide text, or close its own quotes.
+/// any client names itself — so every name goes through <see cref="ControlText.EscapedName"/>, and the asker arrives as
+/// <see cref="ControlCaller.ShownAsker"/>, escaped and framed already: none can break a line, reorder or hide text,
+/// or close its own quotes.
 ///
 /// Mirror: Sources/ConnectorControlState/Control/ControlTools+Gated.swift
 /// </summary>
@@ -23,19 +24,19 @@ public sealed partial class ControlTools
     public const string ConfigShapeError = "A connector’s config needs a “command” or a “url”.";
     public const string NothingToChangeError = "Give a new config, a new name, or both.";
 
-    public static string AddTitle(string asker, string name) => $"{asker} wants to add “{name}”";
+    public static string AddTitle(string shownAsker, string name) => $"{shownAsker} wants to add “{name}”";
 
     public static string AddActiveMessage(string collection, string state) => $"It would join “{collection}”, the collection Claude is running, switched {state}, and run:";
 
     public static string AddMessage(string collection, string state) => $"It would join “{collection}”, switched {state}, and run:";
 
-    public static string ChangeTitle(string asker, string name) => $"{asker} wants to change “{name}”";
+    public static string ChangeTitle(string shownAsker, string name) => $"{shownAsker} wants to change “{name}”";
 
     public static string ChangeActiveMessage(string collection) => $"In “{collection}”, the collection Claude is running:";
 
     public static string ChangeMessage(string collection) => $"In “{collection}”:";
 
-    public static string DeleteTitle(string asker, string names) => $"{asker} wants to delete {names}";
+    public static string DeleteTitle(string shownAsker, string names) => $"{shownAsker} wants to delete {names}";
 
     public static string DeleteActiveMessage(string collection) => $"From “{collection}”, the collection Claude is running. A copy remains in Backups.";
 
@@ -53,13 +54,13 @@ public sealed partial class ControlTools
 
     public static string UnchangedError(string name) => $"“{name}” already has that config.";
 
-    public static string AddedNotification(string asker, string name, string collection) => $"{asker} added “{name}” to “{collection}”.";
+    public static string AddedNotification(string shownAsker, string name, string collection) => $"{shownAsker} added “{name}” to “{collection}”.";
 
-    public static string ChangedNotification(string asker, string name, string collection) => $"{asker} changed “{name}” in “{collection}”.";
+    public static string ChangedNotification(string shownAsker, string name, string collection) => $"{shownAsker} changed “{name}” in “{collection}”.";
 
-    public static string RenamedNotification(string asker, string old, string @new) => $"{asker} renamed “{old}” to “{@new}”.";
+    public static string RenamedNotification(string shownAsker, string old, string @new) => $"{shownAsker} renamed “{old}” to “{@new}”.";
 
-    public static string DeletedNotification(string asker, string names, string collection) => $"{asker} deleted {names} from “{collection}”.";
+    public static string DeletedNotification(string shownAsker, string names, string collection) => $"{shownAsker} deleted {names} from “{collection}”.";
 
     /// <summary>What the editor's JSON view refuses on Save, for a config that arrives as JSON: anything but
     /// an object with a <c>command</c> or a <c>url</c>, and a canonical mcp-remote line without a valid URL.
@@ -106,7 +107,7 @@ public sealed partial class ControlTools
     /// <summary>The collection a connector tool works in: the one named, else the active one.</summary>
     internal string TargetCollection(ControlArguments arguments) => arguments.String("collection") ?? state.ActiveCollection;
 
-    private ControlStep AddConnector(ControlArguments arguments, string asker)
+    private ControlStep AddConnector(ControlArguments arguments, string shownAsker)
     {
         var collection = TargetCollection(arguments);
         var shownCollection = ControlText.EscapedName(collection);
@@ -140,7 +141,6 @@ public sealed partial class ControlTools
         var on = arguments.Bool("enabled") ?? true;
         var word = on ? OnWord : OffWord;
         var active = collection == state.ActiveCollection;
-        var shownAsker = ControlText.EscapedName(asker);
         var request = new ConfirmationRequest(
             AddTitle(shownAsker, shownName),
             active ? AddActiveMessage(shownCollection, word) : AddMessage(shownCollection, word),
@@ -167,7 +167,7 @@ public sealed partial class ControlTools
         });
     }
 
-    private ControlStep UpdateConnector(ControlArguments arguments, string asker)
+    private ControlStep UpdateConnector(ControlArguments arguments, string shownAsker)
     {
         var collection = TargetCollection(arguments);
         var shownCollection = ControlText.EscapedName(collection);
@@ -220,7 +220,6 @@ public sealed partial class ControlTools
         }
         var changes = ControlMasking.ChangeLines(current.Config, after, ControlMasking.Exposure.Dialog);
         var active = collection == state.ActiveCollection;
-        var shownAsker = ControlText.EscapedName(asker);
         IReadOnlyList<string> names = renamed ? [ControlMasking.NameLabel, ControlMasking.RemovedPrefix + shownName, ControlMasking.AddedPrefix + shownNewName] : [];
         var request = new ConfirmationRequest(
             ChangeTitle(shownAsker, shownName),
@@ -253,7 +252,7 @@ public sealed partial class ControlTools
         });
     }
 
-    private ControlStep DeleteConnectors(ControlArguments arguments, string asker)
+    private ControlStep DeleteConnectors(ControlArguments arguments, string shownAsker)
     {
         var collection = TargetCollection(arguments);
         var shownCollection = ControlText.EscapedName(collection);
@@ -285,7 +284,6 @@ public sealed partial class ControlTools
         var listed = ControlText.QuotedList(names);
         var active = collection == state.ActiveCollection;
         var reachesClaude = active && names.Any(name => held.Mcps.GetValueOrDefault(name)?.Enabled == true);
-        var shownAsker = ControlText.EscapedName(asker);
         var request = new ConfirmationRequest(
             DeleteTitle(shownAsker, listed),
             active ? DeleteActiveMessage(shownCollection) : DeleteMessage(shownCollection),
@@ -311,13 +309,13 @@ public sealed partial class ControlTools
     public const string IntoOrNewCollectionError = "Give “into” or “newCollection”, not both.";
     public const string NetworkPathError = "Only the command-line tool can read a file on a network share or through a device path. Copy it to this PC first.";
 
-    public static string DeleteCollectionTitle(string asker, string collection) => $"{asker} wants to delete the collection “{collection}”";
+    public static string DeleteCollectionTitle(string shownAsker, string collection) => $"{shownAsker} wants to delete the collection “{collection}”";
 
     public static string DeletedCollectionText(string collection) => $"Deleted the collection “{collection}”.";
 
-    public static string DeletedCollectionNotification(string asker, string collection) => $"{asker} deleted the collection “{collection}”.";
+    public static string DeletedCollectionNotification(string shownAsker, string collection) => $"{shownAsker} deleted the collection “{collection}”.";
 
-    public static string ImportTitle(string asker, string file) => $"{asker} wants to import “{file}”";
+    public static string ImportTitle(string shownAsker, string file) => $"{shownAsker} wants to import “{file}”";
 
     public static string ImportMessage(int count, string collection) => count == 1
         ? $"{count} connector would be copied into “{collection}”, switched off:"
@@ -347,9 +345,9 @@ public sealed partial class ControlTools
         ? $"Copied {count} connector into “{collection}”; it replaced one that was switched on, so it stays on."
         : $"Copied {count} connectors into “{collection}”, switched off, but any that replaced one switched on stays on.";
 
-    public static string ImportedNotification(string asker, int count, string collection) => count == 1
-        ? $"{asker} copied {count} connector into “{collection}”."
-        : $"{asker} copied {count} connectors into “{collection}”.";
+    public static string ImportedNotification(string shownAsker, int count, string collection) => count == 1
+        ? $"{shownAsker} copied {count} connector into “{collection}”."
+        : $"{shownAsker} copied {count} connectors into “{collection}”.";
 
     public static string NothingToImportError(string file) => $"Nothing in “{file}” would come across.";
 
@@ -357,7 +355,7 @@ public sealed partial class ControlTools
 
     public static string DocumentTooLargeError(string file) => $"“{file}” is over 1 MB, too large for a collection file.";
 
-    public static string SubscribeTitle(string asker, string file) => $"{asker} wants to subscribe to “{file}”";
+    public static string SubscribeTitle(string shownAsker, string file) => $"{shownAsker} wants to subscribe to “{file}”";
 
     public static string SubscribeMessage(string collection, int count) => count == 1
         ? $"A new collection, “{collection}”, would follow this file, read-only. Its {count} connector arrives switched off:"
@@ -368,17 +366,17 @@ public sealed partial class ControlTools
     public static string ArrivedOffText(int count) =>
         count == 1 ? $"{count} connector arrived switched off." : $"{count} connectors arrived switched off.";
 
-    public static string SubscribedNotification(string asker, string file, string collection) => $"{asker} subscribed to “{file}” as “{collection}”.";
+    public static string SubscribedNotification(string shownAsker, string file, string collection) => $"{shownAsker} subscribed to “{file}” as “{collection}”.";
 
-    public static string ApplyUpdateTitle(string asker, string collection) => $"{asker} wants to update “{collection}”";
+    public static string ApplyUpdateTitle(string shownAsker, string collection) => $"{shownAsker} wants to update “{collection}”";
 
     public static string AppliedUpdateText(string collection) => $"Applied the update to “{collection}”.";
 
-    public static string AppliedUpdateNotification(string asker, string collection) => $"{asker} applied the update to “{collection}”.";
+    public static string AppliedUpdateNotification(string shownAsker, string collection) => $"{shownAsker} applied the update to “{collection}”.";
 
     public static string NoUpdateError(string collection) => $"“{collection}” has no update waiting.";
 
-    public static string RestoreTitle(string asker, string id) => $"{asker} wants to restore “{id}”";
+    public static string RestoreTitle(string shownAsker, string id) => $"{shownAsker} wants to restore “{id}”";
 
     public static string RestoreIntoText(string collection) => $"Its connectors go back into “{collection}”:";
 
@@ -386,11 +384,11 @@ public sealed partial class ControlTools
 
     public static string RestoredText(string id) => $"Restored “{id}”.";
 
-    public static string RestoredNotification(string asker, string id) => $"{asker} restored “{id}”.";
+    public static string RestoredNotification(string shownAsker, string id) => $"{shownAsker} restored “{id}”.";
 
     public static string NoBackupError(string id) => $"There’s no backup named “{id}”.";
 
-    public static string RestartTitle(string asker) => $"{asker} wants to restart Claude Desktop";
+    public static string RestartTitle(string shownAsker) => $"{shownAsker} wants to restart Claude Desktop";
 
     /// <summary>A connector as a question lists it: its name in quotes, through <see cref="ControlText.QuotedList"/>
     /// — so no name can close its quotes, break its line, or pass for a line of what a connector
@@ -451,7 +449,7 @@ public sealed partial class ControlTools
     /// <summary>The collection's own Delete: the window's question, refused first for what the window
     /// refuses. A subscribed collection's file is never touched, nor a published one's — the window
     /// asks whether that one goes too, and nothing here asks twice, so it stays, as Keep leaves it.</summary>
-    private ControlStep DeleteCollection(ControlArguments arguments, string asker)
+    private ControlStep DeleteCollection(ControlArguments arguments, string shownAsker)
     {
         var collection = arguments.String("collection") ?? "";
         var shown = ControlText.EscapedName(collection);
@@ -489,7 +487,6 @@ public sealed partial class ControlTools
         {
             sentences.Add(CollectionsModel.DeleteCheckedInformative);
         }
-        var shownAsker = ControlText.EscapedName(asker);
         var request = new ConfirmationRequest(DeleteCollectionTitle(shownAsker, shown), string.Join(" ", sentences), [],
             active ? TakesEffectFooter : null);
         return new ControlStep.Ready(request, () =>
@@ -679,7 +676,7 @@ public sealed partial class ControlTools
         {
             return new ControlStep.Refused(NothingToImportError(file));
         }
-        var shownAsker = ControlText.EscapedName(caller.AskerName);
+        var shownAsker = caller.ShownAsker;
         // A Replace keeps the switch of what it replaces, as the Import sheet's does: over a connector
         // that is on, the copy stays on and, in the collection Claude runs, changes what Claude runs.
         var replacesOn = choices.Any(choice => choice.Value == ImportChoice.Replace && held.TryGetValue(choice.Key, out var entry) && entry.Enabled);
@@ -749,7 +746,7 @@ public sealed partial class ControlTools
         var shownName = ControlText.EscapedName(name);
         var rendered = document.Render();
         var count = rendered.Connectors.Count;
-        var shownAsker = ControlText.EscapedName(caller.AskerName);
+        var shownAsker = caller.ShownAsker;
         var request = new ConfirmationRequest(
             SubscribeTitle(shownAsker, file),
             SubscribeMessage(shownName, count),
@@ -770,7 +767,7 @@ public sealed partial class ControlTools
         });
     }
 
-    private ControlStep ApplyUpdate(ControlArguments arguments, string asker)
+    private ControlStep ApplyUpdate(ControlArguments arguments, string shownAsker)
     {
         var collection = arguments.String("collection") ?? "";
         var shown = ControlText.EscapedName(collection);
@@ -818,7 +815,6 @@ public sealed partial class ControlTools
             }
         }
         var active = collection == state.ActiveCollection;
-        var shownAsker = ControlText.EscapedName(asker);
         var request = new ConfirmationRequest(ApplyUpdateTitle(shownAsker, shown),
             PendingUpdateText(shown, ChangesText(diff)),
             code, active ? TakesEffectFooter : null);
@@ -849,7 +845,7 @@ public sealed partial class ControlTools
 
     /// <summary>The Restore sheet's restore, by an id <c>list_backups</c> gave, refused first for what the
     /// sheet refuses; the question says which connectors come back, and into which collection.</summary>
-    private ControlStep RestoreBackup(ControlArguments arguments, string asker)
+    private ControlStep RestoreBackup(ControlArguments arguments, string shownAsker)
     {
         var id = arguments.String("id") ?? "";
         var shownId = ControlText.EscapedName(id);
@@ -892,7 +888,6 @@ public sealed partial class ControlTools
         var into = target == state.ActiveCollection ? RestoreIntoText(shownTarget) : RestoreActivatingText(shownTarget);
         // Connector Control's own entry is the app's, not a connector the backup brings back.
         var names = servers.Keys.Where(name => name != ClaudeIntegration.EntryName).Order(StringComparer.Ordinal);
-        var shownAsker = ControlText.EscapedName(asker);
         var request = new ConfirmationRequest(RestoreTitle(shownAsker, shownId), RestoreModel.Caption + " " + into,
             names.Select(name => ConnectorHeading(name)).ToList(), TakesEffectFooter);
         return new ControlStep.Ready(request, Fingerprint: fingerprint, Perform: () =>
@@ -927,10 +922,10 @@ public sealed partial class ControlTools
     /// Restart button is. Either way it is <c>PerformRestartClaudeAsync</c>, not the in-app button's
     /// <c>RestartClaudeAsync</c>: the gate has asked already, or need not, and the app's own "confirm
     /// before restarting" question would ask a second time.</summary>
-    private ControlStep RestartClaude(string asker)
+    private ControlStep RestartClaude(string shownAsker)
     {
         var request = new ConfirmationRequest(
-            asker == ControlCaller.ClaudeName ? RestartItselfTitle : RestartTitle(ControlText.EscapedName(asker)),
+            shownAsker == ControlCaller.ClaudeName ? RestartItselfTitle : RestartTitle(shownAsker),
             RestartMessage, [], null);
         return new ControlStep.Ready(request, () =>
         {

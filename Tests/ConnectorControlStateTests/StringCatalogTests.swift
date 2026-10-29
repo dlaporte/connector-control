@@ -114,6 +114,7 @@ final class StringCatalogTests: XCTestCase {
         "ControlCommandLine.unknownOptionError": ["X"],
         "ControlCommandLine.usageError": ["X"],
         "ControlCommandLine.versionLine": ["X"],
+        "ControlCaller.callingItselfText": ["X"],
         "ControlMasking.assignment": ["X", "Y"],
         "ControlMasking.oauthClientText": ["X", "Y"],
         "ControlMasking.remoteBridgeType": ["X"],
@@ -457,6 +458,7 @@ final class StringCatalogTests: XCTestCase {
 
         // MARK: ControlCaller / ControlSettingKey / ControlTools
 
+        actual["ControlCaller.callingItselfText"] = ControlCaller.callingItselfText("X")
         actual["ControlCaller.claudeName"] = ControlCaller.claudeName
         actual["ControlCaller.unknownClientName"] = ControlCaller.unknownClientName
         actual["ControlSettingKey.automaticUpdates"] = ControlSettingKey.automaticUpdates

@@ -71,7 +71,7 @@ public class ControlConfirmationFlowTests
         using var rig = new ControlRig(confirm: false);
         const string collection = "Work\n\u202Ez", shownCollection = """Work\n\u{202E}z""";
         var caller = new ControlCaller.Relay("Cursor\n\u202Ed");
-        const string shownAsker = """Cursor\n\u{202E}d""";
+        var shownAsker = ControlCaller.CallingItselfText("""Cursor\n\u{202E}d""");
         Assert.Null(rig.State.AddEmptyCollection(collection));
         var target = ("collection", JsonValue.String(collection));
         rig.Call("add_connector", JsonValue.Object(target, ("name", JsonValue.String("a\nb")), ("config", Config)), caller);
@@ -99,7 +99,7 @@ public class ControlConfirmationFlowTests
         using var rig = new ControlRig();
         rig.Confirmer.Scripted = true;
         rig.Call("add_connector", Add("x"), new ControlCaller.Relay("Cursor"));
-        Assert.Equal(ControlTools.AddTitle("Cursor", "x"), rig.Confirmer.Requests[^1].Title);
+        Assert.Equal(ControlTools.AddTitle(ControlCaller.CallingItselfText("Cursor"), "x"), rig.Confirmer.Requests[^1].Title);
     }
 
     [Fact]

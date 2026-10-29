@@ -289,7 +289,7 @@ public class ControlToolsGatedTests
         const string collection = "Work\n\u202Ez", shownCollection = """Work\n\u{202E}z""";
         const string name = "a\nb\u202Ec", shownName = """a\nb\u{202E}c""";
         var caller = new ControlCaller.Relay("Cursor\n\u202Ed");
-        const string shownAsker = """Cursor\n\u{202E}d""";
+        var shownAsker = ControlCaller.CallingItselfText("""Cursor\n\u{202E}d""");
         Assert.Null(rig.State.AddEmptyCollection(collection));
         ControlResult?[] results =
         [

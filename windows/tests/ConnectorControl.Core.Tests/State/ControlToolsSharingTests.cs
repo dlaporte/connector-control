@@ -788,7 +788,7 @@ public class ControlToolsSharingTests
         Assert.Single(rig.Confirmer.Requests);
         rig.Confirmer.Scripted = true;
         rig.Call("restart_claude", caller: new ControlCaller.Relay("Cursor"));
-        Assert.Equal(ControlTools.RestartTitle("Cursor"), rig.Confirmer.Requests[^1].Title);
+        Assert.Equal(ControlTools.RestartTitle(ControlCaller.CallingItselfText("Cursor")), rig.Confirmer.Requests[^1].Title);
         RunDelays(rig);
         Assert.Equal(2, rig.H.Claude.RestartCalls);
         // A restart is asked about, never announced.
@@ -850,7 +850,7 @@ public class ControlToolsSharingTests
     {
         using var rig = Rig();
         var caller = new ControlCaller.Relay("Cursor\n\u202Ed");
-        const string shownAsker = """Cursor\n\u{202E}d""";
+        var shownAsker = ControlCaller.CallingItselfText("""Cursor\n\u{202E}d""");
         const string collection = "Work\n\u202Ez", shownCollection = """Work\n\u{202E}z""";
         const string connector = "a\nb\u202Ec", shownConnector = """a\nb\u{202E}c""";
         // Neither platform takes a line break in a file name; both take these.
@@ -962,7 +962,7 @@ public class ControlToolsSharingTests
     {
         using var rig = new ControlRig(confirm: false);
         var caller = new ControlCaller.Relay("Cursor\n\u202Ed");
-        const string shownAsker = """Cursor\n\u{202E}d""";
+        var shownAsker = ControlCaller.CallingItselfText("""Cursor\n\u{202E}d""");
         const string collection = "Work\n\u202Ez", shownCollection = """Work\n\u{202E}z""";
         const string file = "t\u202E\u201D.json", shownFile = """t\u{202E}\u{201D}.json""";
         const string team = "Team\n\u202Ey", shownTeam = """Team\n\u{202E}y""";

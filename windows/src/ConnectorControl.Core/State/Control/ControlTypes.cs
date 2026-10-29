@@ -44,6 +44,23 @@ public abstract record ControlCaller
             return relay.ClientName.Length == 0 ? UnknownClientName : relay.ClientName;
         }
     }
+
+    /// <summary>
+    /// A client that is not Claude Desktop, by the name it gave itself: it chose that name, so it is
+    /// framed as a claim, and nobody takes it for this app's own tool or for a product the app vouches for.
+    /// </summary>
+    public static string CallingItselfText(string name) => $"An app calling itself “{name}”";
+
+    /// <summary>
+    /// Who is asking, ready for a sentence: "Claude" for Claude Desktop; any other client as
+    /// <see cref="CallingItselfText"/> frames its own name, escaped, so the frame's quotes are the only raw
+    /// ones; one that gave no name as <see cref="UnknownClientName"/>. Every question and notification that names
+    /// the asker takes this. The command-line tool is never asked or announced, and keeps the tool's name.
+    /// </summary>
+    public string ShownAsker =>
+        this is Relay relay && AskerName != ClaudeName && relay.ClientName.Length > 0
+            ? CallingItselfText(ControlText.EscapedName(relay.ClientName))
+            : AskerName;
 }
 
 /// <summary>

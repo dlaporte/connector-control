@@ -593,7 +593,7 @@ final class ControlToolsSharingTests: XCTestCase {
         XCTAssertEqual(rig.confirmer.requests.count, 1)
         rig.confirmer.scripted = true
         _ = rig.call("restart_claude", as: .relay(clientName: "Cursor"))
-        XCTAssertEqual(rig.confirmer.requests.last?.title, ControlTools.restartTitle("Cursor"))
+        XCTAssertEqual(rig.confirmer.requests.last?.title, ControlTools.restartTitle(ControlCaller.callingItselfText("Cursor")))
         runDelays(rig)
         XCTAssertEqual(rig.h.claude.restartCalls, 2)
         XCTAssertTrue(rig.h.notifier.sent.isEmpty, "a restart is asked about, never announced")
@@ -638,7 +638,7 @@ final class ControlToolsSharingTests: XCTestCase {
     /// or hide text, or close its quotes.
     func testNamesCannotForgeTheseQuestionsOrTheirAnswers() throws {
         let rig = rig(); defer { rig.dispose() }
-        let caller = ControlCaller.relay(clientName: "Cursor\n\u{202E}d"), shownAsker = #"Cursor\n\u{202E}d"#
+        let caller = ControlCaller.relay(clientName: "Cursor\n\u{202E}d"), shownAsker = ControlCaller.callingItselfText(#"Cursor\n\u{202E}d"#)
         let collection = "Work\n\u{202E}z", shownCollection = #"Work\n\u{202E}z"#
         let connector = "a\nb\u{202E}c", shownConnector = #"a\nb\u{202E}c"#
         // Neither platform takes a line break in a file name; both take these.
@@ -728,7 +728,7 @@ final class ControlToolsSharingTests: XCTestCase {
     /// The announcements, for changes nobody was asked about, name everything as the questions do.
     func testAnAnnouncementShowsNamesAsEscapes() throws {
         let rig = ControlRig(confirm: false); defer { rig.dispose() }
-        let caller = ControlCaller.relay(clientName: "Cursor\n\u{202E}d"), shownAsker = #"Cursor\n\u{202E}d"#
+        let caller = ControlCaller.relay(clientName: "Cursor\n\u{202E}d"), shownAsker = ControlCaller.callingItselfText(#"Cursor\n\u{202E}d"#)
         let collection = "Work\n\u{202E}z", shownCollection = #"Work\n\u{202E}z"#
         let file = "t\u{202E}\u{201D}.json", shownFile = #"t\u{202E}\u{201D}.json"#
         let team = "Team\n\u{202E}y", shownTeam = #"Team\n\u{202E}y"#

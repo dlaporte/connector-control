@@ -12,26 +12,27 @@ import ConnectorControlCore
 ///
 /// The question, the answer and the announcement name connectors, collections and the asker as
 /// others chose them — Claude names connectors, creates and renames collections without asking, and
-/// any client names itself — so every name goes through `ControlText.escapedName(_:)`: none can
-/// break a line, reorder or hide text, or close its own quotes.
+/// any client names itself — so every name goes through `ControlText.escapedName(_:)`, and the asker arrives as
+/// `ControlCaller.shownAsker`, escaped and framed already: none can break a line, reorder or hide text,
+/// or close its own quotes.
 extension ControlTools {
     public static let takesEffectFooter = "Takes effect when Claude restarts."
     public static let configShapeError = "A connector’s config needs a “command” or a “url”."
     public static let nothingToChangeError = "Give a new config, a new name, or both."
 
-    public static func addTitle(_ asker: String, _ name: String) -> String { "\(asker) wants to add “\(name)”" }
+    public static func addTitle(_ shownAsker: String, _ name: String) -> String { "\(shownAsker) wants to add “\(name)”" }
 
     public static func addActiveMessage(_ collection: String, _ state: String) -> String { "It would join “\(collection)”, the collection Claude is running, switched \(state), and run:" }
 
     public static func addMessage(_ collection: String, _ state: String) -> String { "It would join “\(collection)”, switched \(state), and run:" }
 
-    public static func changeTitle(_ asker: String, _ name: String) -> String { "\(asker) wants to change “\(name)”" }
+    public static func changeTitle(_ shownAsker: String, _ name: String) -> String { "\(shownAsker) wants to change “\(name)”" }
 
     public static func changeActiveMessage(_ collection: String) -> String { "In “\(collection)”, the collection Claude is running:" }
 
     public static func changeMessage(_ collection: String) -> String { "In “\(collection)”:" }
 
-    public static func deleteTitle(_ asker: String, _ names: String) -> String { "\(asker) wants to delete \(names)" }
+    public static func deleteTitle(_ shownAsker: String, _ names: String) -> String { "\(shownAsker) wants to delete \(names)" }
 
     public static func deleteActiveMessage(_ collection: String) -> String { "From “\(collection)”, the collection Claude is running. A copy remains in Backups." }
 
@@ -49,13 +50,13 @@ extension ControlTools {
 
     public static func unchangedError(_ name: String) -> String { "“\(name)” already has that config." }
 
-    public static func addedNotification(_ asker: String, _ name: String, _ collection: String) -> String { "\(asker) added “\(name)” to “\(collection)”." }
+    public static func addedNotification(_ shownAsker: String, _ name: String, _ collection: String) -> String { "\(shownAsker) added “\(name)” to “\(collection)”." }
 
-    public static func changedNotification(_ asker: String, _ name: String, _ collection: String) -> String { "\(asker) changed “\(name)” in “\(collection)”." }
+    public static func changedNotification(_ shownAsker: String, _ name: String, _ collection: String) -> String { "\(shownAsker) changed “\(name)” in “\(collection)”." }
 
-    public static func renamedNotification(_ asker: String, _ old: String, _ new: String) -> String { "\(asker) renamed “\(old)” to “\(new)”." }
+    public static func renamedNotification(_ shownAsker: String, _ old: String, _ new: String) -> String { "\(shownAsker) renamed “\(old)” to “\(new)”." }
 
-    public static func deletedNotification(_ asker: String, _ names: String, _ collection: String) -> String { "\(asker) deleted \(names) from “\(collection)”." }
+    public static func deletedNotification(_ shownAsker: String, _ names: String, _ collection: String) -> String { "\(shownAsker) deleted \(names) from “\(collection)”." }
 
     /// What the editor's JSON view refuses on Save, for a config that arrives as JSON: anything but
     /// an object with a `command` or a `url`, and a canonical mcp-remote line without a valid URL.
@@ -99,7 +100,7 @@ extension ControlTools {
         arguments.string("collection") ?? state.activeCollection
     }
 
-    func addConnector(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
+    func addConnector(_ arguments: ControlArguments, _ shownAsker: String) -> ControlStep {
         let collection = targetCollection(arguments)
         let shownCollection = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shownCollection)) }
@@ -114,7 +115,6 @@ extension ControlTools {
         let on = arguments.bool("enabled") ?? true
         let word = on ? ControlTools.onWord : ControlTools.offWord
         let active = collection == state.activeCollection
-        let shownAsker = ControlText.escapedName(asker)
         let request = ConfirmationRequest(
             title: ControlTools.addTitle(shownAsker, shownName),
             message: active ? ControlTools.addActiveMessage(shownCollection, word) : ControlTools.addMessage(shownCollection, word),
@@ -137,7 +137,7 @@ extension ControlTools {
         })
     }
 
-    func updateConnector(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
+    func updateConnector(_ arguments: ControlArguments, _ shownAsker: String) -> ControlStep {
         let collection = targetCollection(arguments)
         let shownCollection = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shownCollection)) }
@@ -162,7 +162,6 @@ extension ControlTools {
         guard renamed || reconfigured else { return .refused(ControlTools.unchangedError(shownName)) }
         let changes = ControlMasking.changeLines(from: current.config, to: after, exposure: .dialog)
         let active = collection == state.activeCollection
-        let shownAsker = ControlText.escapedName(asker)
         let names = renamed ? [ControlMasking.nameLabel, ControlMasking.removedPrefix + shownName, ControlMasking.addedPrefix + shownNewName] : []
         let request = ConfirmationRequest(
             title: ControlTools.changeTitle(shownAsker, shownName),
@@ -188,7 +187,7 @@ extension ControlTools {
         })
     }
 
-    func deleteConnectors(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
+    func deleteConnectors(_ arguments: ControlArguments, _ shownAsker: String) -> ControlStep {
         let collection = targetCollection(arguments)
         let shownCollection = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shownCollection)) }
@@ -203,7 +202,6 @@ extension ControlTools {
         let listed = ControlText.quotedList(names)
         let active = collection == state.activeCollection
         let reachesClaude = active && names.contains { held.mcps[$0]?.enabled == true }
-        let shownAsker = ControlText.escapedName(asker)
         let request = ConfirmationRequest(
             title: ControlTools.deleteTitle(shownAsker, listed),
             message: active ? ControlTools.deleteActiveMessage(shownCollection) : ControlTools.deleteMessage(shownCollection),
@@ -227,13 +225,13 @@ extension ControlTools {
     public static let restartingText = "Restarting Claude Desktop."
     public static let intoOrNewCollectionError = "Give “into” or “newCollection”, not both."
 
-    public static func deleteCollectionTitle(_ asker: String, _ collection: String) -> String { "\(asker) wants to delete the collection “\(collection)”" }
+    public static func deleteCollectionTitle(_ shownAsker: String, _ collection: String) -> String { "\(shownAsker) wants to delete the collection “\(collection)”" }
 
     public static func deletedCollectionText(_ collection: String) -> String { "Deleted the collection “\(collection)”." }
 
-    public static func deletedCollectionNotification(_ asker: String, _ collection: String) -> String { "\(asker) deleted the collection “\(collection)”." }
+    public static func deletedCollectionNotification(_ shownAsker: String, _ collection: String) -> String { "\(shownAsker) deleted the collection “\(collection)”." }
 
-    public static func importTitle(_ asker: String, _ file: String) -> String { "\(asker) wants to import “\(file)”" }
+    public static func importTitle(_ shownAsker: String, _ file: String) -> String { "\(shownAsker) wants to import “\(file)”" }
 
     public static func importMessage(_ count: Int, _ collection: String) -> String {
         count == 1 ? "\(count) connector would be copied into “\(collection)”, switched off:"
@@ -268,9 +266,9 @@ extension ControlTools {
             : "Copied \(count) connectors into “\(collection)”, switched off, but any that replaced one switched on stays on."
     }
 
-    public static func importedNotification(_ asker: String, _ count: Int, _ collection: String) -> String {
-        count == 1 ? "\(asker) copied \(count) connector into “\(collection)”."
-            : "\(asker) copied \(count) connectors into “\(collection)”."
+    public static func importedNotification(_ shownAsker: String, _ count: Int, _ collection: String) -> String {
+        count == 1 ? "\(shownAsker) copied \(count) connector into “\(collection)”."
+            : "\(shownAsker) copied \(count) connectors into “\(collection)”."
     }
 
     public static func nothingToImportError(_ file: String) -> String { "Nothing in “\(file)” would come across." }
@@ -279,7 +277,7 @@ extension ControlTools {
 
     public static func documentTooLargeError(_ file: String) -> String { "“\(file)” is over 1 MB, too large for a collection file." }
 
-    public static func subscribeTitle(_ asker: String, _ file: String) -> String { "\(asker) wants to subscribe to “\(file)”" }
+    public static func subscribeTitle(_ shownAsker: String, _ file: String) -> String { "\(shownAsker) wants to subscribe to “\(file)”" }
 
     public static func subscribeMessage(_ collection: String, _ count: Int) -> String {
         count == 1 ? "A new collection, “\(collection)”, would follow this file, read-only. Its \(count) connector arrives switched off:"
@@ -292,17 +290,17 @@ extension ControlTools {
         count == 1 ? "\(count) connector arrived switched off." : "\(count) connectors arrived switched off."
     }
 
-    public static func subscribedNotification(_ asker: String, _ file: String, _ collection: String) -> String { "\(asker) subscribed to “\(file)” as “\(collection)”." }
+    public static func subscribedNotification(_ shownAsker: String, _ file: String, _ collection: String) -> String { "\(shownAsker) subscribed to “\(file)” as “\(collection)”." }
 
-    public static func applyUpdateTitle(_ asker: String, _ collection: String) -> String { "\(asker) wants to update “\(collection)”" }
+    public static func applyUpdateTitle(_ shownAsker: String, _ collection: String) -> String { "\(shownAsker) wants to update “\(collection)”" }
 
     public static func appliedUpdateText(_ collection: String) -> String { "Applied the update to “\(collection)”." }
 
-    public static func appliedUpdateNotification(_ asker: String, _ collection: String) -> String { "\(asker) applied the update to “\(collection)”." }
+    public static func appliedUpdateNotification(_ shownAsker: String, _ collection: String) -> String { "\(shownAsker) applied the update to “\(collection)”." }
 
     public static func noUpdateError(_ collection: String) -> String { "“\(collection)” has no update waiting." }
 
-    public static func restoreTitle(_ asker: String, _ id: String) -> String { "\(asker) wants to restore “\(id)”" }
+    public static func restoreTitle(_ shownAsker: String, _ id: String) -> String { "\(shownAsker) wants to restore “\(id)”" }
 
     public static func restoreIntoText(_ collection: String) -> String { "Its connectors go back into “\(collection)”:" }
 
@@ -310,11 +308,11 @@ extension ControlTools {
 
     public static func restoredText(_ id: String) -> String { "Restored “\(id)”." }
 
-    public static func restoredNotification(_ asker: String, _ id: String) -> String { "\(asker) restored “\(id)”." }
+    public static func restoredNotification(_ shownAsker: String, _ id: String) -> String { "\(shownAsker) restored “\(id)”." }
 
     public static func noBackupError(_ id: String) -> String { "There’s no backup named “\(id)”." }
 
-    public static func restartTitle(_ asker: String) -> String { "\(asker) wants to restart Claude Desktop" }
+    public static func restartTitle(_ shownAsker: String) -> String { "\(shownAsker) wants to restart Claude Desktop" }
 
     /// A connector as a question lists it: its name in quotes, through `ControlText.quotedList(_:)`
     /// — so no name can close its quotes, break its line, or pass for a line of what a connector
@@ -359,7 +357,7 @@ extension ControlTools {
     /// The collection's own Delete: the window's question, refused first for what the window
     /// refuses. A subscribed collection's file is never touched, nor a published one's — the window
     /// asks whether that one goes too, and nothing here asks twice, so it stays, as Keep leaves it.
-    func deleteCollection(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
+    func deleteCollection(_ arguments: ControlArguments, _ shownAsker: String) -> ControlStep {
         let collection = arguments.string("collection") ?? ""
         let shown = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shown)) }
@@ -379,7 +377,6 @@ extension ControlTools {
             sentences.append(ControlTools.publishedFileStaysText)
         }
         if count > 0 { sentences.append(CollectionsModel.deleteCheckedInformative) }
-        let shownAsker = ControlText.escapedName(asker)
         let request = ConfirmationRequest(title: ControlTools.deleteCollectionTitle(shownAsker, shown),
                                           message: sentences.joined(separator: " "), code: [],
                                           footer: active ? ControlTools.takesEffectFooter : nil)
@@ -463,7 +460,7 @@ extension ControlTools {
         for name in rendered.connectors.keys { choices[name] = held[name] == nil ? .add : clash }
         let count = choices.values.filter { $0 != .skip }.count
         guard count > 0 else { return .refused(ControlTools.nothingToImportError(file)) }
-        let shownAsker = ControlText.escapedName(caller.askerName)
+        let shownAsker = caller.shownAsker
         // A Replace keeps the switch of what it replaces, as the Import sheet's does: over a connector
         // that is on, the copy stays on and, in the collection Claude runs, changes what Claude runs.
         let replacesOn = choices.contains { $0.value == .replace && held[$0.key]?.enabled == true }
@@ -516,7 +513,7 @@ extension ControlTools {
         let shownName = ControlText.escapedName(name)
         let rendered = document.render()
         let count = rendered.connectors.count
-        let shownAsker = ControlText.escapedName(caller.askerName)
+        let shownAsker = caller.shownAsker
         let request = ConfirmationRequest(
             title: ControlTools.subscribeTitle(shownAsker, file),
             message: ControlTools.subscribeMessage(shownName, count),
@@ -535,7 +532,7 @@ extension ControlTools {
         })
     }
 
-    func applyUpdate(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
+    func applyUpdate(_ arguments: ControlArguments, _ shownAsker: String) -> ControlStep {
         let collection = arguments.string("collection") ?? ""
         let shown = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shown)) }
@@ -563,7 +560,6 @@ extension ControlTools {
             }
         }
         let active = collection == state.activeCollection
-        let shownAsker = ControlText.escapedName(asker)
         let request = ConfirmationRequest(title: ControlTools.applyUpdateTitle(shownAsker, shown),
                                           message: ControlTools.pendingUpdateText(shown, ControlTools.changesText(diff)),
                                           code: code, footer: active ? ControlTools.takesEffectFooter : nil)
@@ -589,7 +585,7 @@ extension ControlTools {
 
     /// The Restore sheet's restore, by an id `list_backups` gave, refused first for what the sheet
     /// refuses; the question says which connectors come back, and into which collection.
-    func restoreBackup(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
+    func restoreBackup(_ arguments: ControlArguments, _ shownAsker: String) -> ControlStep {
         let id = arguments.string("id") ?? ""
         let shownID = ControlText.escapedName(id)
         let urls: [URL]
@@ -621,7 +617,6 @@ extension ControlTools {
         let into = target == state.activeCollection ? ControlTools.restoreIntoText(shownTarget) : ControlTools.restoreActivatingText(shownTarget)
         // Connector Control's own entry is the app's, not a connector the backup brings back.
         let names = servers.keys.filter { $0 != ClaudeIntegration.entryName }.sorted { $0.ordinallyPrecedes($1) }
-        let shownAsker = ControlText.escapedName(asker)
         let request = ConfirmationRequest(title: ControlTools.restoreTitle(shownAsker, shownID),
                                           message: RestoreModel.caption + " " + into,
                                           code: names.map { ControlTools.connectorHeading($0) },
@@ -652,9 +647,9 @@ extension ControlTools {
     /// Restart button is. Either way it is `performRestartClaude()`, not the in-app button's
     /// `restartClaude()`: the gate has asked already, or need not, and the app's own "confirm
     /// before restarting" question would ask a second time.
-    func restartClaude(_ asker: String) -> ControlStep {
+    func restartClaude(_ shownAsker: String) -> ControlStep {
         let request = ConfirmationRequest(
-            title: asker == ControlCaller.claudeName ? ControlTools.restartItselfTitle : ControlTools.restartTitle(ControlText.escapedName(asker)),
+            title: shownAsker == ControlCaller.claudeName ? ControlTools.restartItselfTitle : ControlTools.restartTitle(shownAsker),
             message: ControlTools.restartMessage, code: [], footer: nil)
         return .ready(request, perform: { [self] in
             // Claude hears the answer first: the restart quits it, and the relay with it. One still

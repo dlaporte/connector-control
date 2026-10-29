@@ -27,11 +27,11 @@ extension ControlTools {
 
     public static func switchedText(_ collection: String) -> String { "Switched to “\(collection)”." }
 
-    public static func turnedOnNotification(_ asker: String, _ name: String) -> String { "\(asker) turned on “\(name)”." }
+    public static func turnedOnNotification(_ shownAsker: String, _ name: String) -> String { "\(shownAsker) turned on “\(name)”." }
 
-    public static func turnedOffNotification(_ asker: String, _ name: String) -> String { "\(asker) turned off “\(name)”." }
+    public static func turnedOffNotification(_ shownAsker: String, _ name: String) -> String { "\(shownAsker) turned off “\(name)”." }
 
-    public static func switchedNotification(_ asker: String, _ collection: String) -> String { "\(asker) switched to “\(collection)”." }
+    public static func switchedNotification(_ shownAsker: String, _ collection: String) -> String { "\(shownAsker) switched to “\(collection)”." }
 
     public static func createdText(_ collection: String) -> String { "Created “\(collection)”." }
 
@@ -54,22 +54,22 @@ extension ControlTools {
     func prepare(_ name: String, _ arguments: ControlArguments, _ caller: ControlCaller) -> ControlStep {
         if let prepareOverride { return prepareOverride(name, arguments, caller) }
         switch name {
-        case "set_connector_enabled": return setEnabled(arguments, caller.askerName)
-        case "switch_collection": return switchCollection(arguments, caller.askerName)
+        case "set_connector_enabled": return setEnabled(arguments, caller.shownAsker)
+        case "switch_collection": return switchCollection(arguments, caller.shownAsker)
         case "create_collection": return createCollection(arguments)
         case "rename_collection": return renameCollection(arguments)
         case "duplicate_collection": return duplicateCollection(arguments)
         case "refresh_subscription": return refreshSubscription(arguments)
         case "set_setting": return setSetting(arguments, caller)
-        case "add_connector": return addConnector(arguments, caller.askerName)
-        case "update_connector": return updateConnector(arguments, caller.askerName)
-        case "delete_connectors": return deleteConnectors(arguments, caller.askerName)
-        case "delete_collection": return deleteCollection(arguments, caller.askerName)
+        case "add_connector": return addConnector(arguments, caller.shownAsker)
+        case "update_connector": return updateConnector(arguments, caller.shownAsker)
+        case "delete_connectors": return deleteConnectors(arguments, caller.shownAsker)
+        case "delete_collection": return deleteCollection(arguments, caller.shownAsker)
         case "import_document": return importDocument(arguments, caller)
         case "subscribe": return subscribeDocument(arguments, caller)
-        case "apply_update": return applyUpdate(arguments, caller.askerName)
-        case "restore_backup": return restoreBackup(arguments, caller.askerName)
-        case "restart_claude": return restartClaude(caller.askerName)
+        case "apply_update": return applyUpdate(arguments, caller.shownAsker)
+        case "restore_backup": return restoreBackup(arguments, caller.shownAsker)
+        case "restart_claude": return restartClaude(caller.shownAsker)
         default: return .refused(ControlTools.unknownToolError(ControlText.escapedName(name)))
         }
     }
@@ -129,7 +129,7 @@ extension ControlTools {
             announces: announcing && applied)
     }
 
-    func setEnabled(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
+    func setEnabled(_ arguments: ControlArguments, _ shownAsker: String) -> ControlStep {
         let name = arguments.string("name") ?? ""
         let on = arguments.bool("enabled") ?? true
         // The active collection only, as the popover's switches act: it is the one Claude runs.
@@ -141,7 +141,6 @@ extension ControlTools {
         return .ready(nil, perform: { [self] in
             let mark = state.appliedServers
             state.setEnabled(name, on)
-            let shownAsker = ControlText.escapedName(asker)
             return done([on ? ControlTools.turnedOnText(shownName, shownCollection) : ControlTools.turnedOffText(shownName, shownCollection)],
                         ["collection": .string(collection), "name": .string(name), "enabled": .bool(on)],
                         touching: collection, since: mark,
@@ -152,7 +151,7 @@ extension ControlTools {
         })
     }
 
-    func switchCollection(_ arguments: ControlArguments, _ asker: String) -> ControlStep {
+    func switchCollection(_ arguments: ControlArguments, _ shownAsker: String) -> ControlStep {
         let collection = arguments.string("collection") ?? ""
         // AppState ignores an unknown name in silence, as the chip menu can never offer one;
         // a caller that typed it hears why nothing happened.
@@ -163,7 +162,7 @@ extension ControlTools {
             state.switchCollection(to: collection)
             return done([ControlTools.switchedText(shown)], ["activeCollection": .string(collection)],
                         touching: nil, since: mark, restart: ControlTools.restartToApplyText,
-                        notification: ControlTools.switchedNotification(ControlText.escapedName(asker), shown), announcing: true)
+                        notification: ControlTools.switchedNotification(shownAsker, shown), announcing: true)
         })
     }
 

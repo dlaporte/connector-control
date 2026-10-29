@@ -27,7 +27,7 @@ final class ControlToolHostTests: XCTestCase {
         let (session, sent) = connect(rig, isCLI: false, client: "Cursor")
         session.receive(#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"add_connector","arguments":{"name":"x","config":{"command":"node"}}}}"#)
         rig.h.drain()
-        XCTAssertEqual(rig.confirmer.requests.last?.title, ControlTools.addTitle("Cursor", "x"))
+        XCTAssertEqual(rig.confirmer.requests.last?.title, ControlTools.addTitle(ControlCaller.callingItselfText("Cursor"), "x"))
         XCTAssertTrue(sent().last?.contains(#""isError":false"#) ?? false)
     }
 
@@ -65,7 +65,7 @@ final class ControlToolHostTests: XCTestCase {
         XCTAssertEqual(session.clientName, "connector-control")
         session.receive(#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"add_connector","arguments":{"name":"x","config":{"command":"node"}}}}"#)
         rig.h.drain()
-        XCTAssertEqual(rig.confirmer.requests.map(\.title), [ControlTools.addTitle("connector-control", "x")])
+        XCTAssertEqual(rig.confirmer.requests.map(\.title), [ControlTools.addTitle(ControlCaller.callingItselfText("connector-control"), "x")])
         XCTAssertNil(rig.state.store.mcps["x"])
         XCTAssertTrue(sent().last?.contains(#""isError":true"#) ?? false)
     }

@@ -230,7 +230,7 @@ final class ControlToolsGatedTests: XCTestCase {
         let rig = rig(); defer { rig.dispose() }
         let collection = "Work\n\u{202E}z", shownCollection = #"Work\n\u{202E}z"#
         let name = "a\nb\u{202E}c", shownName = #"a\nb\u{202E}c"#
-        let caller = ControlCaller.relay(clientName: "Cursor\n\u{202E}d"), shownAsker = #"Cursor\n\u{202E}d"#
+        let caller = ControlCaller.relay(clientName: "Cursor\n\u{202E}d"), shownAsker = ControlCaller.callingItselfText(#"Cursor\n\u{202E}d"#)
         XCTAssertNil(rig.state.addEmptyCollection(named: collection))
         let target: [String: JSONValue] = ["collection": .string(collection)]
         let results = [

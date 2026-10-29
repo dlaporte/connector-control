@@ -37,6 +37,19 @@ public enum ControlCaller: Equatable, Sendable {
             return clientName.isEmpty ? ControlCaller.unknownClientName : clientName
         }
     }
+
+    /// A client that is not Claude Desktop, by the name it gave itself: it chose that name, so it is
+    /// framed as a claim, and nobody takes it for this app's own tool or for a product the app vouches for.
+    public static func callingItselfText(_ name: String) -> String { "An app calling itself “\(name)”" }
+
+    /// Who is asking, ready for a sentence: "Claude" for Claude Desktop; any other client as
+    /// `callingItselfText(_:)` frames its own name, escaped, so the frame's quotes are the only raw
+    /// ones; one that gave no name as `unknownClientName`. Every question and notification that names
+    /// the asker takes this. The command-line tool is never asked or announced, and keeps the tool's name.
+    public var shownAsker: String {
+        guard case .relay(let clientName) = self, askerName != ControlCaller.claudeName, !clientName.isEmpty else { return askerName }
+        return ControlCaller.callingItselfText(ControlText.escapedName(clientName))
+    }
 }
 
 /// How a tool is guarded when Claude calls it: reads and direct changes run; a gated change asks

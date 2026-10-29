@@ -31,11 +31,11 @@ public sealed partial class ControlTools
 
     public static string SwitchedText(string collection) => $"Switched to “{collection}”.";
 
-    public static string TurnedOnNotification(string asker, string name) => $"{asker} turned on “{name}”.";
+    public static string TurnedOnNotification(string shownAsker, string name) => $"{shownAsker} turned on “{name}”.";
 
-    public static string TurnedOffNotification(string asker, string name) => $"{asker} turned off “{name}”.";
+    public static string TurnedOffNotification(string shownAsker, string name) => $"{shownAsker} turned off “{name}”.";
 
-    public static string SwitchedNotification(string asker, string collection) => $"{asker} switched to “{collection}”.";
+    public static string SwitchedNotification(string shownAsker, string collection) => $"{shownAsker} switched to “{collection}”.";
 
     public static string CreatedText(string collection) => $"Created “{collection}”.";
 
@@ -63,22 +63,22 @@ public sealed partial class ControlTools
         }
         switch (name)
         {
-            case "set_connector_enabled": return SetEnabled(arguments, caller.AskerName);
-            case "switch_collection": return SwitchCollection(arguments, caller.AskerName);
+            case "set_connector_enabled": return SetEnabled(arguments, caller.ShownAsker);
+            case "switch_collection": return SwitchCollection(arguments, caller.ShownAsker);
             case "create_collection": return CreateCollection(arguments);
             case "rename_collection": return RenameCollection(arguments);
             case "duplicate_collection": return DuplicateCollection(arguments);
             case "refresh_subscription": return RefreshSubscription(arguments);
             case "set_setting": return SetSetting(arguments, caller);
-            case "add_connector": return AddConnector(arguments, caller.AskerName);
-            case "update_connector": return UpdateConnector(arguments, caller.AskerName);
-            case "delete_connectors": return DeleteConnectors(arguments, caller.AskerName);
-            case "delete_collection": return DeleteCollection(arguments, caller.AskerName);
+            case "add_connector": return AddConnector(arguments, caller.ShownAsker);
+            case "update_connector": return UpdateConnector(arguments, caller.ShownAsker);
+            case "delete_connectors": return DeleteConnectors(arguments, caller.ShownAsker);
+            case "delete_collection": return DeleteCollection(arguments, caller.ShownAsker);
             case "import_document": return ImportDocument(arguments, caller);
             case "subscribe": return SubscribeDocument(arguments, caller);
-            case "apply_update": return ApplyUpdate(arguments, caller.AskerName);
-            case "restore_backup": return RestoreBackup(arguments, caller.AskerName);
-            case "restart_claude": return RestartClaude(caller.AskerName);
+            case "apply_update": return ApplyUpdate(arguments, caller.ShownAsker);
+            case "restore_backup": return RestoreBackup(arguments, caller.ShownAsker);
+            case "restart_claude": return RestartClaude(caller.ShownAsker);
             default: return new ControlStep.Refused(UnknownToolError(ControlText.EscapedName(name)));
         }
     }
@@ -153,7 +153,7 @@ public sealed partial class ControlTools
             Announces: announcing && applied);
     }
 
-    private ControlStep SetEnabled(ControlArguments arguments, string asker)
+    private ControlStep SetEnabled(ControlArguments arguments, string shownAsker)
     {
         var name = arguments.String("name") ?? "";
         var on = arguments.Bool("enabled") ?? true;
@@ -168,7 +168,6 @@ public sealed partial class ControlTools
         {
             var mark = state.AppliedServers;
             state.SetEnabled(name, on);
-            var shownAsker = ControlText.EscapedName(asker);
             return Done([on ? TurnedOnText(shownName, shownCollection) : TurnedOffText(shownName, shownCollection)],
                 [("collection", JsonValue.String(collection)), ("name", JsonValue.String(name)), ("enabled", JsonValue.Bool(on))],
                 collection, mark, on ? RestartToUseText : RestartToApplyText,
@@ -177,7 +176,7 @@ public sealed partial class ControlTools
         });
     }
 
-    private ControlStep SwitchCollection(ControlArguments arguments, string asker)
+    private ControlStep SwitchCollection(ControlArguments arguments, string shownAsker)
     {
         var collection = arguments.String("collection") ?? "";
         // AppState ignores an unknown name in silence, as the chip menu can never offer one;
@@ -193,7 +192,7 @@ public sealed partial class ControlTools
             state.SwitchCollection(collection);
             return Done([SwitchedText(shown)], [("activeCollection", JsonValue.String(collection))],
                 null, mark, RestartToApplyText,
-                notification: SwitchedNotification(ControlText.EscapedName(asker), shown), announcing: true);
+                notification: SwitchedNotification(shownAsker, shown), announcing: true);
         });
     }
 

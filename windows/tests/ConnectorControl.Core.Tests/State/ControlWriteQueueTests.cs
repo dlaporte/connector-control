@@ -186,6 +186,10 @@ public class ControlWriteQueueTests
         Assert.Equal(["c"], performed);
     }
 
+    /// <summary>
+    /// The refusal is the app's sentence, never the dialog's own words: a confirmer throws only
+    /// before it shows anything, so nothing was asked.
+    /// </summary>
     [Fact]
     public void ADialogThatThrowsRefusesTheCallOnceAndTheNextStillRuns()
     {
@@ -195,7 +199,7 @@ public class ControlWriteQueueTests
         var answers = new List<ControlResult>();
         rig.Tools.Call("add_connector", JsonValue.Object(("name", JsonValue.String("a")), ("config", JsonValue.Object())),
             Claude, _ => { }, answers.Add);
-        Assert.Equal([ControlResult.Refusal("no dialog")], answers);
+        Assert.Equal([ControlResult.Refusal(ControlTools.NoQuestionError)], answers);
         // The wait's tick, set before the question was put, finds the call answered and says nothing more.
         Assert.Equal([TimeSpan.FromSeconds(ControlTools.ProgressInterval)], rig.H.Delays.Pending.Select(pending => pending.Delay));
         rig.H.Delays.RunNext();

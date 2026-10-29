@@ -35,7 +35,7 @@ final class ControlToolsDirectTests: XCTestCase {
             XCTAssertEqual(rig.call("switch_collection", ["collection": .string(work)])?.isError, false)
             XCTAssertEqual(rig.h.notifier.sent.map(\.body), [
                 ControlTools.turnedOffNotification("Claude", "aws-mcp"),
-                ControlTools.turnedOnNotification("Cursor", "aws-mcp"),
+                ControlTools.turnedOnNotification(ControlCaller.callingItselfText("Cursor"), "aws-mcp"),
                 ControlTools.switchedNotification("Claude", #"Work\n\u{202E}z"#),
             ], "confirm:\(confirm)")
             XCTAssertTrue(rig.confirmer.requests.isEmpty, "confirm:\(confirm)")

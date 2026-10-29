@@ -33,7 +33,7 @@ public class ControlToolHostTests
         var (session, sent) = Connect(rig, isCli: false, client: "Cursor");
         session.Receive("""{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"add_connector","arguments":{"name":"x","config":{"command":"node"}}}}""");
         rig.H.Drain();
-        Assert.Equal(ControlTools.AddTitle("Cursor", "x"), rig.Confirmer.Requests.LastOrDefault()?.Title);
+        Assert.Equal(ControlTools.AddTitle(ControlCaller.CallingItselfText("Cursor"), "x"), rig.Confirmer.Requests.LastOrDefault()?.Title);
         Assert.Contains("\"isError\":false", sent.LastOrDefault() ?? "");
     }
 
@@ -77,7 +77,7 @@ public class ControlToolHostTests
         Assert.Equal("connector-control", session.ClientName);
         session.Receive("""{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"add_connector","arguments":{"name":"x","config":{"command":"node"}}}}""");
         rig.H.Drain();
-        Assert.Equal([ControlTools.AddTitle("connector-control", "x")], rig.Confirmer.Requests.Select(request => request.Title));
+        Assert.Equal([ControlTools.AddTitle(ControlCaller.CallingItselfText("connector-control"), "x")], rig.Confirmer.Requests.Select(request => request.Title));
         Assert.False(rig.State.Store.Mcps.ContainsKey("x"));
         Assert.Contains("\"isError\":true", sent.LastOrDefault() ?? "");
     }
