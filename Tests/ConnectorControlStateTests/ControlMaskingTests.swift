@@ -687,4 +687,13 @@ final class ControlMaskingTests: XCTestCase {
         }
         XCTAssertEqual(ControlMasking.maskedConfig(config).value(at: JSONPointer(["env", "GIT_ASKPASS"])), .string("set"))
     }
+
+    /// An argument that reads as a secret whole (`Bearer x`, a token with spaces) stays masked
+    /// whole: splitting it would show the token beside the scheme word.
+    func testAnArgumentThatReadsAsASecretWholeStaysMaskedWhole() throws {
+        XCTAssertEqual(ControlMasking.argument("Bearer abc123"), ControlMasking.mask)
+        XCTAssertEqual(ControlMasking.arguments(["--headers", "X-Team", "Bearer abc123"]), ["--headers", "X-Team", ControlMasking.mask])
+        XCTAssertEqual(ControlMasking.argument("Bearer ${TOKEN}"), "Bearer ${TOKEN}")
+        try assertHidden(["abc123"], in: local("node", ["s.js", "Bearer abc123"]))
+    }
 }

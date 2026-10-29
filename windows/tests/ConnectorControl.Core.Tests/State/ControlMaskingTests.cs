@@ -819,4 +819,15 @@ public class ControlMaskingTests
         }
         Assert.Equal(S("set"), ControlMasking.MaskedConfig(config).ValueAt(new JsonPointer(["env", "GIT_ASKPASS"])));
     }
+
+    /// <summary>An argument that reads as a secret whole (<c>Bearer x</c>, a token with spaces) stays masked
+    /// whole: splitting it would show the token beside the scheme word.</summary>
+    [Fact]
+    public void AnArgumentThatReadsAsASecretWholeStaysMaskedWhole()
+    {
+        Assert.Equal(ControlMasking.Mask, ControlMasking.Argument("Bearer abc123"));
+        Assert.Equal(["--headers", "X-Team", ControlMasking.Mask], ControlMasking.Arguments(["--headers", "X-Team", "Bearer abc123"]));
+        Assert.Equal("Bearer ${TOKEN}", ControlMasking.Argument("Bearer ${TOKEN}"));
+        AssertHidden(["abc123"], Local("node", ["s.js", "Bearer abc123"]));
+    }
 }

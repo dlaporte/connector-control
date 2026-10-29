@@ -232,11 +232,8 @@ public static class ControlMasking
             return piece.After.Length == 0 || RefersElsewhere(piece.After) ? pair : piece.Before + "=" + Mask;
         }));
 
-    /// <summary>One argument on its own: a shell line word by word through <see cref="ShellLine"/>, a URL through
-    /// <see cref="Url"/>, a value that is wholly a reference as written, <c>name=value</c> with the value masked
-    /// when the name is a secret's (<c>--api-key=…</c>, Docker's <c>-e API_KEY=…</c>), and "•••" for
-    /// anything that reads as a credential or a random token — a "name" that does is part of the
-    /// token, so the whole word is masked.</summary>
+    /// <summary>One argument on its own: JSON through <see cref="JsonArgument"/>, a shell line word by word through
+    /// <see cref="ShellLine"/> unless it reads as a secret whole, and anything else through <see cref="Word"/>.</summary>
     public static string Argument(string arg, bool reveal = false)
     {
         if (reveal)
@@ -247,12 +244,23 @@ public static class ControlMasking
         {
             return json;
         }
-        // Before the URL: a shell line holding a URL is more than the URL, and the URL's rules
-        // would pass every word before its scheme through as written.
-        if (ShellLine(arg) is { } line)
+        var whole = Word(arg);
+        // The shell line takes the place of the URL's rules, which would pass every word before
+        // the scheme through as written; a line that reads as a secret whole (`Bearer x`) stays
+        // masked whole.
+        if (!Same(whole, Mask) && ShellLine(arg) is { } line)
         {
             return line;
         }
+        return whole;
+    }
+
+    /// <summary>An argument as one word: a URL through <see cref="Url"/>, a value that is wholly a reference as
+    /// written, <c>name=value</c> with the value masked when the name is a secret's (<c>--api-key=…</c>,
+    /// Docker's <c>-e API_KEY=…</c>), and "•••" for anything that reads as a credential or a random
+    /// token — a "name" that does is part of the token, so the whole word is masked.</summary>
+    internal static string Word(string arg)
+    {
         if (Cut(arg, "://") is not null)
         {
             return Url(arg);
@@ -307,9 +315,9 @@ public static class ControlMasking
     /// <summary>An argument holding whitespace — a shell line for <c>sh -c</c> or <c>cmd /c</c>, or a whole command
     /// line written as the command — masked as <see cref="Arguments(IReadOnlyList{string}, bool)"/> masks the words a shell would pass,
     /// so a flag named for a secret among them hides the word after it as it would in <c>args</c>. The
-    /// split drops the line's quotes, so a line none of whose words changed reads as written, and
-    /// one that did is rejoined with each word quoted as the dialog quotes an argument. Null for an
-    /// argument with no whitespace.</summary>
+    /// split drops the line's quotes, so a line is rejoined, with each word quoted as the dialog
+    /// quotes an argument, only when one of its words changed. Null for an argument with no
+    /// whitespace, or none of whose words changed.</summary>
     internal static string? ShellLine(string arg)
     {
         if (!arg.Any(char.IsWhiteSpace))
@@ -318,7 +326,7 @@ public static class ControlMasking
         }
         var words = CollectionsModel.ShellWords(arg);
         var shown = Arguments(words, Exposure.Masked);
-        return words.Zip(shown).All(pair => Same(pair.First, pair.Second)) ? arg : ControlText.Words(shown);
+        return words.Zip(shown).All(pair => Same(pair.First, pair.Second)) ? null : ControlText.Words(shown);
     }
 
     /// <summary>An argument list: each through <see cref="Argument"/>, and also the value after a flag named for a
