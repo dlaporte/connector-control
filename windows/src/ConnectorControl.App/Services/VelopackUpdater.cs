@@ -80,9 +80,10 @@ public sealed class VelopackUpdater : IUpdater
         FollowsPrereleases = followsPrereleases;
         VersionDisplay = manager?.CurrentVersion?.ToString() ?? AppVersion.DevelopmentBuild;
         this.identify = identify ?? UpdateVerifier.ExpectedIdentity;
-        this.verify = verify ?? UpdateVerifier.Verify;
-        this.verifyInstalled = verifyInstalled ?? UpdateVerifier.VerifyInstalledUpdater;
-        this.log = log ?? App.Log;
+        var logTo = log ?? App.Log;
+        this.log = logTo;
+        this.verify = verify ?? ((package, updateExe, running, current, feed) => UpdateVerifier.Verify(package, updateExe, running, current, feed, logTo));
+        this.verifyInstalled = verifyInstalled ?? ((updateExe, running) => UpdateVerifier.VerifyInstalledUpdater(updateExe, running, logTo));
     }
 
     /// <summary>True for a preview install (prerelease version), so update checks include prereleases.</summary>

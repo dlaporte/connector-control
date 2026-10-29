@@ -113,7 +113,7 @@ internal static partial class PackageVerificationCommand
     private static string? ProductionVerify(string packagePath, string? updateExePath, string runningVersion, string feedVersion)
     {
         var identity = UpdateVerifier.ExpectedIdentity(Environment.ProcessPath!);
-        return UpdateVerifier.Verify(packagePath, updateExePath, identity, runningVersion, feedVersion);
+        return UpdateVerifier.Verify(packagePath, updateExePath, identity, runningVersion, feedVersion, App.Log);
     }
 
     /// <summary>

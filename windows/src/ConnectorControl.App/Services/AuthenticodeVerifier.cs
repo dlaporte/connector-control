@@ -51,13 +51,20 @@ public static class AuthenticodeVerifier
     /// The identity of <paramref name="exePath"/>'s signer once WinVerifyTrust has accepted the
     /// signature and its chain; otherwise a user-facing problem naming the file. Shared by the
     /// Claude launch check and the update-package check; only the update check asks for
-    /// <paramref name="checkRevocation"/>.
+    /// <paramref name="checkRevocation"/>. There a revoked certificate refuses, and a revocation status that cannot be
+    /// determined (<see cref="Revocation.Classify"/>) is told to <paramref name="revocationUndetermined"/> and the file
+    /// judged again without revocation, exactly as before revocation was checked at all.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    public static SignerResult SignerSubject(string exePath, bool checkRevocation = false)
+    public static SignerResult SignerSubject(string exePath, bool checkRevocation = false, Action<string>? revocationUndetermined = null)
     {
         var name = Path.GetFileName(exePath);
         var status = VerifyTrust(exePath, checkRevocation);
+        if (checkRevocation && Revocation.Classify(status) == Revocation.Outcome.Undetermined)
+        {
+            revocationUndetermined?.Invoke($"Whether {name}'s signing certificate is revoked could not be checked (0x{status:X8}); it was judged without that check.");
+            status = VerifyTrust(exePath, checkRevocation: false);
+        }
         if (status != 0)
         {
             return new SignerResult(null, $"{name} does not carry a valid code signature (0x{status:X8}).", status == TrustENoSignature);
@@ -148,9 +155,11 @@ public static class AuthenticodeVerifier
                 dwStateAction = WtdStateActionIgnore,
                 // Claude's launch: no revocation fetch. A restart click must not wait on the network, and a
                 // revoked Anthropic certificate is not the threat there (a stranger's exe is). An update:
-                // revocation is checked, fetching what it needs — the machine is online to download it anyway,
-                // and a revoked signing certificate is exactly what must not install. A check that cannot
-                // reach the revocation servers refuses the update rather than skipping the check.
+                // revocation is checked along the chain below the root, fetching what it needs, not cache-only —
+                // a cache-only check would answer "could not determine" on any machine that has not seen the
+                // certificate lately. Revoked comes back as CERT_E_REVOKED and refuses; a revocation that could
+                // not be determined comes back as CERT_E_REVOCATION_FAILURE (or the chain's own OFFLINE / NO_CHECK
+                // codes), which SignerSubject turns into a second, revocation-off check, never a refusal.
                 dwProvFlags = checkRevocation ? WtdRevocationCheckChainExcludeRoot : WtdRevocationCheckNone | WtdCacheOnlyUrlRetrieval,
             };
             data = Marshal.AllocHGlobal(Marshal.SizeOf<WintrustData>());

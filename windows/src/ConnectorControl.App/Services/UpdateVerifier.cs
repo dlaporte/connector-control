@@ -63,7 +63,8 @@ public static class UpdateVerifier
     /// inert there anyway. A running app whose signature cannot be validated refuses: that is the
     /// machine, not the build, and an unverifiable identity must not become "accept everything".
     /// </summary>
-    public static string? Verify(string packagePath, string? updateExePath, RunningIdentity identity, string runningVersion, string feedVersion)
+    public static string? Verify(string packagePath, string? updateExePath, RunningIdentity identity, string runningVersion, string feedVersion,
+        Action<string>? log = null)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -74,7 +75,7 @@ public static class UpdateVerifier
             return subjectProblem;
         }
         if (updateExePath is not null && File.Exists(updateExePath)
-            && VerifyFile(updateExePath, expected, "Update.exe", mustBeOurs: true) is { } updaterProblem)
+            && VerifyFile(updateExePath, expected, "Update.exe", mustBeOurs: true, log) is { } updaterProblem)
         {
             return updaterProblem;
         }
@@ -122,7 +123,7 @@ public static class UpdateVerifier
                 {
                     return SizeProblem(entry, actual);
                 }
-                if (VerifyFile(extracted, expected, name + " inside the update", MustBeOurs(name)) is { } problem)
+                if (VerifyFile(extracted, expected, name + " inside the update", MustBeOurs(name), log) is { } problem)
                 {
                     return problem;
                 }
@@ -158,7 +159,7 @@ public static class UpdateVerifier
     /// Before anything is downloaded: Velopack would run the INSTALLED Update.exe to apply a delta,
     /// so it must already be ours. Null when it is (or when there is no identity to compare against).
     /// </summary>
-    public static string? VerifyInstalledUpdater(string? updateExePath, RunningIdentity identity)
+    public static string? VerifyInstalledUpdater(string? updateExePath, RunningIdentity identity, Action<string>? log = null)
     {
         if (!OperatingSystem.IsWindows() || updateExePath is null || !File.Exists(updateExePath))
         {
@@ -168,7 +169,7 @@ public static class UpdateVerifier
         {
             return problem;
         }
-        return VerifyFile(updateExePath, expected, "The installed Update.exe", mustBeOurs: true);
+        return VerifyFile(updateExePath, expected, "The installed Update.exe", mustBeOurs: true, log);
     }
 
     /// <summary>
@@ -212,12 +213,13 @@ public static class UpdateVerifier
     /// <summary>
     /// Null when <paramref name="path"/> is validly signed, revocation included, by <paramref name="expectedSubject"/>
     /// — every attribute of it, not just the O= another certificate could share — or, when it need not be ours, by an
-    /// organization in <see cref="TrustedOrganizations"/>; else why not.
+    /// organization in <see cref="TrustedOrganizations"/>; else why not. A revocation status that could not be
+    /// determined is said to <paramref name="log"/> and does not refuse (<see cref="Revocation"/>).
     /// </summary>
     [SupportedOSPlatform("windows")]
-    internal static string? VerifyFile(string path, string expectedSubject, string displayName, bool mustBeOurs)
+    internal static string? VerifyFile(string path, string expectedSubject, string displayName, bool mustBeOurs, Action<string>? log = null)
     {
-        var signer = AuthenticodeVerifier.SignerSubject(path, checkRevocation: true);
+        var signer = AuthenticodeVerifier.SignerSubject(path, checkRevocation: true, log);
         if (signer.Identity is not { } identity)
         {
             return $"{displayName} is not validly signed{NotInstalledSuffix}";
