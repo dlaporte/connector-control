@@ -88,6 +88,10 @@ public static class UpdateVerifier
             string? mainExecutable = null;
             foreach (var entry in zip.Entries)
             {
+                if (HasInvalidCharacter(entry.FullName))
+                {
+                    return $"The update package contains an entry named \"{Shown(entry.FullName)}\", with a character no Windows file name can hold{NotInstalledSuffix}";
+                }
                 if (IsSuspiciousEntryName(entry.FullName))
                 {
                     return $"The update package contains an entry named \"{entry.FullName}\", which Windows would rename on extraction{NotInstalledSuffix}";
@@ -282,6 +286,18 @@ public static class UpdateVerifier
     private static string SizeProblem(ZipArchiveEntry entry, long actual) =>
         $"The update package entry \"{entry.FullName}\" declares {entry.Length} bytes but holds {actual}{NotInstalledSuffix}";
 
+    /// <summary>A path segment holding a character no Windows file name can: NUL, a control character, or one of
+    /// <c>&lt; &gt; : " | ? *</c> (<see cref="Path.GetInvalidFileNameChars"/> on Windows, which includes NUL).</summary>
+    internal static bool HasInvalidCharacter(string entryName)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        return entryName.Split('/', '\\').Any(segment => segment.IndexOfAny(invalid) >= 0);
+    }
+
+    /// <summary>An entry name as a refusal can show it: control characters, NUL among them, as \uXXXX.</summary>
+    private static string Shown(string entryName) =>
+        string.Concat(entryName.Select(c => char.IsControl(c) ? $"\\u{(int)c:X4}" : c.ToString()));
+
     /// <summary>Reads up to the first two bytes of <paramref name="stream"/> into <paramref name="magic"/>; a shorter stream returns the shorter count.</summary>
     private static int ReadMagic(Stream stream, Span<byte> magic) => stream.ReadAtLeast(magic, 2, throwOnEndOfStream: false);
 
@@ -312,13 +328,12 @@ public static class UpdateVerifier
     /// </summary>
     internal static bool IsSuspiciousEntryName(string entryName)
     {
-        var invalid = Path.GetInvalidFileNameChars();
+        if (HasInvalidCharacter(entryName))
+        {
+            return true;
+        }
         foreach (var segment in entryName.Split('/', '\\'))
         {
-            if (segment.Contains('\0') || segment.IndexOfAny(invalid) >= 0)
-            {
-                return true;
-            }
             if (segment == "..")
             {
                 return true;

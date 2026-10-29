@@ -220,6 +220,9 @@ public class UpdateVerifierTests : IDisposable
         RequireSignedFramework();
         var problem = UpdateVerifier.Verify(PackageWithBytes("lib/x\0y.exe", File.ReadAllBytes(RunningExe)), updateExePath: null, Identity, Older, FrameworkVersion);
         Assert.NotNull(problem);
+        Assert.Contains("lib/x\\u0000y.exe", problem);
+        Assert.Contains("no Windows file name can hold", problem);
+        Assert.DoesNotContain("rename", problem);
         Assert.EndsWith(UpdateVerifier.NotInstalledSuffix, problem);
     }
 
