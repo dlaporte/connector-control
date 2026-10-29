@@ -131,6 +131,56 @@ public class ControlTextTests
         Assert.Equal("""a\u{D800}b""", ControlText.Escaped("a\uD800b"));
     }
 
+    /// <summary>A combining mark is drawn over the character before it, and marks stacked on one character are
+    /// drawn over the lines above and below it: so only the first mark on a character is drawn, and a
+    /// further one, or one with no character before it, shows as its code, wherever text is shown.</summary>
+    [Fact]
+    public void OnlyOneCombiningMarkIsDrawnOnACharacter()
+    {
+        var stack = "_" + string.Concat(Enumerable.Repeat("\u0305\u033F", 9));
+        var one = "_\u0305" + @"\u{033F}" + string.Concat(Enumerable.Repeat(@"\u{0305}\u{033F}", 8));
+        var attack = string.Concat(Enumerable.Repeat(stack, 46));
+        var shown = string.Concat(Enumerable.Repeat(one, 46));
+        Assert.Equal(shown, ControlText.Escaped(attack));
+        Assert.Equal(shown, ControlText.EscapedName(attack));
+        Assert.Equal(shown, ControlText.EscapedValue(attack));
+        Assert.Equal(shown, ControlText.EscapedPath(attack));
+        Assert.Equal("'" + shown + "'", ControlText.Word(attack));
+        Assert.Equal($"Added “{shown}” and {one}.", ControlText.Escaped($"Added “{attack}” and {stack}.", [attack]));
+        Assert.Equal(["K   " + one], ControlText.Labelled([("K", stack)]));
+        Assert.Equal([one], ControlText.Table(null, [[stack]]));
+        // A mark with no character before it at all.
+        Assert.Equal(@"\u{0301}a", ControlText.Escaped("\u0301a"));
+        Assert.Equal(@"\u{0301}a", ControlText.EscapedName("\u0301a"));
+        Assert.Equal(@"'\u{0301}a'", ControlText.Word("\u0301a"));
+        Assert.Equal("'a\u0301" + @"\u{0301}'", ControlText.Word("a\u0301\u0301")); // a word with a stacked mark is quoted
+        // Every range, at both its ends: the same list the Mac mirror holds.
+        int[] ends = [0x0300, 0x036F, 0x0483, 0x0489, 0x0591, 0x05BD, 0x0610, 0x061A, 0x064B, 0x065F, 0x0670,
+                      0x06D6, 0x06DC, 0x06DF, 0x06E4, 0x06E7, 0x06E8, 0x06EA, 0x06ED, 0x0E31, 0x0E34, 0x0E3A,
+                      0x0E47, 0x0E4E, 0x1AB0, 0x1AFF, 0x1DC0, 0x1DFF, 0x20D0, 0x20FF, 0xFE20, 0xFE2F];
+        foreach (var value in ends)
+        {
+            var mark = char.ConvertFromUtf32(value);
+            Assert.Equal("a" + mark + ControlText.HexEscape(value), ControlText.Escaped("a" + mark + mark));
+        }
+        Assert.Equal("a\u0E30\u0E30", ControlText.Escaped("a\u0E30\u0E30")); // a letter between the ranges is no mark
+    }
+
+    /// <summary>Text with one mark on a character reads as it always has: accented letters composed either way,
+    /// and pointed Hebrew.</summary>
+    [Fact]
+    public void OneMarkOnACharacterReadsAsItIs()
+    {
+        foreach (var text in new[] { "cafe\u0301", "caf\u00E9", "\u05E9\u05B8\u05DC\u05D5\u05B9\u05DD", "x\u20D7" })
+        {
+            Assert.Equal(text, ControlText.Escaped(text));
+            Assert.Equal(text, ControlText.EscapedName(text));
+            Assert.Equal(text, ControlText.EscapedValue(text));
+            Assert.Equal(text, ControlText.EscapedPath(text));
+            Assert.Equal(text, ControlText.Word(text)); // one word, unquoted
+        }
+    }
+
     /// <summary>A name shows one way only: a backslash in it is doubled, so a name holding the text
     /// <c>\u{202E}</c> reads apart from one holding the character.</summary>
     [Fact]

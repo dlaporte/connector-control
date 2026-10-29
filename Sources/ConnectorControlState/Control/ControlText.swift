@@ -52,10 +52,12 @@ public enum ControlText {
     /// blank — every Default_Ignorable code point (soft hyphen, joiners, direction marks, variation
     /// selectors, tags…), the blank letters (U+115F, U+1160, U+2800, U+3164, U+FFA0), the interlinear
     /// annotation marks — as a visible escape, `\n`, `\r`, `\t` or `\u{202E}`, so a value
-    /// can neither break its line, nor hide part of it, nor pass for another.
+    /// can neither break its line, nor hide part of it, nor pass for another. A combining mark with no
+    /// character of its own to sit on shows as its code too (see `Marks`).
     public static func escaped(_ text: String) -> String {
         var line = ""
-        for scalar in text.unicodeScalars { line += escape(scalar) ?? String(scalar) }
+        var marks = Marks()
+        for scalar in text.unicodeScalars { line += marks.bare(scalar) ? hexEscape(scalar) : escape(scalar) ?? String(scalar) }
         return line
     }
 
@@ -76,12 +78,15 @@ public enum ControlText {
         let scalars = Array(text.unicodeScalars)
         var line = ""
         var index = 0
+        var marks = Marks()
         while index < scalars.count {
             if let found = ordered.first(where: { index + $0.quoted.count <= scalars.count && scalars[index..<index + $0.quoted.count].elementsEqual($0.quoted) }) {
                 line += "\u{201C}" + escapedName(found.name) + "\u{201D}"
                 index += found.quoted.count
+                // The closing quote is a character a mark after it sits on.
+                marks = Marks(after: "\u{201D}")
             } else {
-                line += escape(scalars[index]) ?? String(scalars[index])
+                line += marks.bare(scalars[index]) ? hexEscape(scalars[index]) : escape(scalars[index]) ?? String(scalars[index])
                 index += 1
             }
         }
@@ -93,11 +98,13 @@ public enum ControlText {
     /// a backslash doubled, as `word(_:)` doubles one, so no two names read alike.
     public static func escapedName(_ text: String) -> String {
         var name = ""
+        var marks = Marks()
         for scalar in text.unicodeScalars {
+            let bare = marks.bare(scalar)
             switch scalar {
             case "\\": name += "\\\\"
             case "\u{201C}", "\u{201D}": name += hexEscape(scalar)
-            default: name += escapeShown(scalar) ?? String(scalar)
+            default: name += bare ? hexEscape(scalar) : escapeShown(scalar) ?? String(scalar)
             }
         }
         return name
@@ -107,7 +114,8 @@ public enum ControlText {
     /// there it could pass for the ordinary space. Backslashes stay as they are: a value may be a path.
     public static func escapedValue(_ text: String) -> String {
         var value = ""
-        for scalar in text.unicodeScalars { value += escapeShown(scalar) ?? String(scalar) }
+        var marks = Marks()
+        for scalar in text.unicodeScalars { value += marks.bare(scalar) ? hexEscape(scalar) : escapeShown(scalar) ?? String(scalar) }
         return value
     }
 
@@ -116,8 +124,10 @@ public enum ControlText {
     /// the path's own separators.
     public static func escapedPath(_ text: String) -> String {
         var path = ""
+        var marks = Marks()
         for scalar in text.unicodeScalars {
-            path += scalar == "\u{201C}" || scalar == "\u{201D}" ? hexEscape(scalar) : escapeShown(scalar) ?? String(scalar)
+            let bare = marks.bare(scalar)
+            path += scalar == "\u{201C}" || scalar == "\u{201D}" || bare ? hexEscape(scalar) : escapeShown(scalar) ?? String(scalar)
         }
         return path
     }
@@ -138,6 +148,43 @@ public enum ControlText {
         }
     }
 
+    /// The combining marks: each is drawn over the character before it, and several on one character
+    /// are drawn stacked, as high or as deep as they go, over the lines above and below. Explicit ranges,
+    /// the same as the Windows mirror's, so neither platform leans on its own Unicode tables.
+    static func isCombiningMark(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x0300...0x036F, 0x0483...0x0489, 0x0591...0x05BD, 0x0610...0x061A, 0x064B...0x065F, 0x0670,
+             0x06D6...0x06DC, 0x06DF...0x06E4, 0x06E7...0x06E8, 0x06EA...0x06ED, 0x0E31, 0x0E34...0x0E3A,
+             0x0E47...0x0E4E, 0x1AB0...0x1AFF, 0x1DC0...0x1DFF, 0x20D0...0x20FF, 0xFE20...0xFE2F:
+            return true
+        default: return false
+        }
+    }
+
+    /// The rule for combining marks as a text is read from its start: the first mark on a character is
+    /// drawn, and a mark that follows another mark, or that starts the text, shows as its code. So at
+    /// most one mark is drawn on any character, and none can be stacked high enough to paint over the
+    /// lines around it. Accented letters, composed or not, read as they are.
+    struct Marks {
+        /// Whether the scalar read last was a mark, or none has been read: a mark here would have no
+        /// character of its own to sit on.
+        private var afterMark: Bool
+
+        /// At a text's start, where a mark has nothing before it.
+        init() { afterMark = true }
+
+        /// Just after `scalar`, whatever it was shown as.
+        init(after scalar: Unicode.Scalar) { afterMark = ControlText.isCombiningMark(scalar) }
+
+        /// Reads `scalar`, the text's next, and says whether it is a mark with no character of its own,
+        /// which shows as its code.
+        mutating func bare(_ scalar: Unicode.Scalar) -> Bool {
+            let mark = ControlText.isCombiningMark(scalar)
+            defer { afterMark = mark }
+            return mark && afterMark
+        }
+    }
+
     /// The escape for one character of a name, a key, a value or a path: as `escape(_:)`, and a space that is
     /// not the ordinary one too (U+00A0, U+1680, U+2000–U+200A, U+202F, U+205F, U+3000), which could pass for
     /// it there. Free text keeps them: a localized system message sets its punctuation off with one.
@@ -155,16 +202,21 @@ public enum ControlText {
     }
 
     /// One argument of a command line: as written when it reads as one word — not empty, with no
-    /// space, no ' and nothing `escaped(_:)` escapes — else between single quotes, with \ and '
+    /// space, no ' and nothing `escapedValue(_:)` escapes — else between single quotes, with \ and '
     /// escaped inside as well, so no two argument lists read alike.
     public static func word(_ text: String) -> String {
-        if !text.isEmpty, !text.unicodeScalars.contains(where: { isSpace($0) || $0 == "'" || escapeShown($0) != nil }) { return text }
+        var reading = Marks()
+        if !text.isEmpty, !text.unicodeScalars.contains(where: { reading.bare($0) || isSpace($0) || $0 == "'" || escapeShown($0) != nil }) {
+            return text
+        }
         var word = "'"
+        var marks = Marks()
         for scalar in text.unicodeScalars {
+            let bare = marks.bare(scalar)
             switch scalar {
             case "\\": word += "\\\\"
             case "'": word += "\\'"
-            default: word += escapeShown(scalar) ?? String(scalar)
+            default: word += bare ? hexEscape(scalar) : escapeShown(scalar) ?? String(scalar)
             }
         }
         return word + "'"

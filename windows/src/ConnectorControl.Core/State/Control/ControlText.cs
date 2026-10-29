@@ -60,13 +60,15 @@ public static class ControlText
     /// blank — every Default_Ignorable code point (soft hyphen, joiners, direction marks, variation
     /// selectors, tags…), the blank letters (U+115F, U+1160, U+2800, U+3164, U+FFA0), the interlinear
     /// annotation marks — as a visible escape, <c>\n</c>, <c>\r</c>, <c>\t</c> or <c>\u{202E}</c>, so a value
-    /// can neither break its line, nor hide part of it, nor pass for another.</summary>
+    /// can neither break its line, nor hide part of it, nor pass for another. A combining mark with no
+    /// character of its own to sit on shows as its code too (see <see cref="Marks"/>).</summary>
     public static string Escaped(string text)
     {
         var line = new StringBuilder();
+        var marks = new Marks();
         foreach (var scalar in Scalars(text))
         {
-            line.Append(Escape(scalar) ?? Text(scalar));
+            line.Append(marks.Bare(scalar) ? HexEscape(scalar) : Escape(scalar) ?? Text(scalar));
         }
         return line.ToString();
     }
@@ -88,6 +90,7 @@ public static class ControlText
         var scalars = Scalars(text).ToList();
         var line = new StringBuilder();
         var index = 0;
+        var marks = new Marks();
         while (index < scalars.Count)
         {
             var at = index;
@@ -97,10 +100,12 @@ public static class ControlText
             {
                 line.Append('\u201C').Append(EscapedName(found.Name)).Append('\u201D');
                 index += found.Quoted.Count;
+                // The closing quote is a character a mark after it sits on.
+                marks = new Marks(ClosingQuote);
             }
             else
             {
-                line.Append(Escape(scalars[index]) ?? Text(scalars[index]));
+                line.Append(marks.Bare(scalars[index]) ? HexEscape(scalars[index]) : Escape(scalars[index]) ?? Text(scalars[index]));
                 index++;
             }
         }
@@ -113,13 +118,15 @@ public static class ControlText
     public static string EscapedName(string text)
     {
         var name = new StringBuilder();
+        var marks = new Marks();
         foreach (var scalar in Scalars(text))
         {
+            var bare = marks.Bare(scalar);
             name.Append(scalar switch
             {
                 Backslash => "\\\\",
                 OpeningQuote or ClosingQuote => HexEscape(scalar),
-                _ => EscapeShown(scalar) ?? Text(scalar),
+                _ => bare ? HexEscape(scalar) : EscapeShown(scalar) ?? Text(scalar),
             });
         }
         return name.ToString();
@@ -130,9 +137,10 @@ public static class ControlText
     public static string EscapedValue(string text)
     {
         var value = new StringBuilder();
+        var marks = new Marks();
         foreach (var scalar in Scalars(text))
         {
-            value.Append(EscapeShown(scalar) ?? Text(scalar));
+            value.Append(marks.Bare(scalar) ? HexEscape(scalar) : EscapeShown(scalar) ?? Text(scalar));
         }
         return value.ToString();
     }
@@ -143,9 +151,11 @@ public static class ControlText
     public static string EscapedPath(string text)
     {
         var path = new StringBuilder();
+        var marks = new Marks();
         foreach (var scalar in Scalars(text))
         {
-            path.Append(scalar is OpeningQuote or ClosingQuote ? HexEscape(scalar) : EscapeShown(scalar) ?? Text(scalar));
+            var bare = marks.Bare(scalar);
+            path.Append(scalar is OpeningQuote or ClosingQuote || bare ? HexEscape(scalar) : EscapeShown(scalar) ?? Text(scalar));
         }
         return path.ToString();
     }
@@ -194,6 +204,42 @@ public static class ControlText
         _ => null,
     };
 
+    /// <summary>The combining marks: each is drawn over the character before it, and several on one character
+    /// are drawn stacked, as high or as deep as they go, over the lines above and below. Explicit ranges,
+    /// the same as the Mac mirror's, so neither platform leans on its own Unicode tables.</summary>
+    internal static bool IsCombiningMark(int scalar) => scalar is (>= 0x0300 and <= 0x036F) or (>= 0x0483 and <= 0x0489)
+        or (>= 0x0591 and <= 0x05BD) or (>= 0x0610 and <= 0x061A) or (>= 0x064B and <= 0x065F) or 0x0670
+        or (>= 0x06D6 and <= 0x06DC) or (>= 0x06DF and <= 0x06E4) or (>= 0x06E7 and <= 0x06E8) or (>= 0x06EA and <= 0x06ED)
+        or 0x0E31 or (>= 0x0E34 and <= 0x0E3A) or (>= 0x0E47 and <= 0x0E4E) or (>= 0x1AB0 and <= 0x1AFF)
+        or (>= 0x1DC0 and <= 0x1DFF) or (>= 0x20D0 and <= 0x20FF) or (>= 0xFE20 and <= 0xFE2F);
+
+    /// <summary>The rule for combining marks as a text is read from its start: the first mark on a character is
+    /// drawn, and a mark that follows another mark, or that starts the text, shows as its code. So at
+    /// most one mark is drawn on any character, and none can be stacked high enough to paint over the
+    /// lines around it. Accented letters, composed or not, read as they are.</summary>
+    internal struct Marks
+    {
+        /// <summary>Whether the scalar read last was a mark, or none has been read: a mark here would have no
+        /// character of its own to sit on.</summary>
+        private bool afterMark;
+
+        /// <summary>At a text's start, where a mark has nothing before it.</summary>
+        public Marks() => afterMark = true;
+
+        /// <summary>Just after <paramref name="scalar"/>, whatever it was shown as.</summary>
+        public Marks(int scalar) => afterMark = IsCombiningMark(scalar);
+
+        /// <summary>Reads <paramref name="scalar"/>, the text's next, and says whether it is a mark with no character of
+        /// its own, which shows as its code.</summary>
+        public bool Bare(int scalar)
+        {
+            var mark = IsCombiningMark(scalar);
+            var bare = mark && afterMark;
+            afterMark = mark;
+            return bare;
+        }
+    }
+
     /// <summary>The escape for one character of a name, a key, a value or a path: as <see cref="Escape"/>, and a space
     /// that is not the ordinary one too (U+00A0, U+1680, U+2000–U+200A, U+202F, U+205F, U+3000), which could pass for
     /// it there. Free text keeps them: a localized system message sets its punctuation off with one.</summary>
@@ -207,23 +253,26 @@ public static class ControlText
     internal static string HexEscape(int scalar) => $"\\u{{{scalar:X4}}}";
 
     /// <summary>One argument of a command line: as written when it reads as one word — not empty, with no
-    /// space, no ' and nothing <see cref="Escaped(string)"/> escapes — else between single quotes, with \ and '
+    /// space, no ' and nothing <see cref="EscapedValue"/> escapes — else between single quotes, with \ and '
     /// escaped inside as well, so no two argument lists read alike.</summary>
     public static string Word(string text)
     {
         var scalars = Scalars(text).ToList();
-        if (scalars.Count > 0 && !scalars.Any(scalar => IsSpace(scalar) || scalar == Apostrophe || EscapeShown(scalar) is not null))
+        var reading = new Marks();
+        if (scalars.Count > 0 && !scalars.Any(scalar => reading.Bare(scalar) || IsSpace(scalar) || scalar == Apostrophe || EscapeShown(scalar) is not null))
         {
             return text;
         }
         var word = new StringBuilder("'");
+        var marks = new Marks();
         foreach (var scalar in scalars)
         {
+            var bare = marks.Bare(scalar);
             word.Append(scalar switch
             {
                 Backslash => "\\\\",
                 Apostrophe => "\\'",
-                _ => EscapeShown(scalar) ?? Text(scalar),
+                _ => bare ? HexEscape(scalar) : EscapeShown(scalar) ?? Text(scalar),
             });
         }
         return word.Append('\'').ToString();
