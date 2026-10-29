@@ -85,10 +85,12 @@ public class ControlClientTests
     public void AnElevatedToolStartsNothingAndSaysWhy()
     {
         var seen = new Seen();
+        var epoch = seen.Clock;
         var client = new ControlClient(() => { seen.Attempts++; return null; }, () => { seen.Launches++; return true; },
-            () => seen.Announced++, elevated: true);
+            () => seen.Announced++, wait => seen.Clock += wait, () => seen.Clock, elevated: true);
         Assert.Equal(ControlClient.Failure.Elevated, Assert.Throws<ControlClient.UnreachableException>(() => client.Connect()).Reason);
         Assert.Equal([1, 0, 0], [seen.Attempts, seen.Launches, seen.Announced]);
+        Assert.Equal(epoch, seen.Clock);
         Assert.Equal(ControlClient.ElevatedError, ControlClient.Message(ControlClient.Failure.Elevated));
     }
 

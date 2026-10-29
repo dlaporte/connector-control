@@ -478,9 +478,11 @@ public class ControlRelayRunnerTests
     public void AnElevatedRelayStartsNothingAndTellsClaudeWhy()
     {
         var launches = 0;
+        // A clock of the test's own, so a guard that let the app start would fail at once, not after the wait.
+        var clock = TimeSpan.Zero;
         var claude = new Claude();
         var (_, exit) = Run(claude, new ControlClient(() => null, () => { Interlocked.Increment(ref launches); return true; },
-            announce: null, elevated: true));
+            announce: null, wait => clock += wait, () => clock, elevated: true));
         var asserted = false;
         try
         {
@@ -490,6 +492,7 @@ public class ControlRelayRunnerTests
             Assert.Equal([McpSession.ErrorLine(McpSession.InternalErrorCode, ControlClient.ElevatedError, JsonValue.Int(1))],
                 claude.AnswersTo(1));
             Assert.Equal(0, Volatile.Read(ref launches));
+            Assert.Equal(TimeSpan.Zero, clock);
             asserted = true;
         }
         finally

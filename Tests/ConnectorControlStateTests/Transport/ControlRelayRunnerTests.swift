@@ -266,9 +266,12 @@ final class ControlRelayRunnerTests: XCTestCase {
     /// the app it started, and tells Claude why in place of its handshake's answer.
     func testAnElevatedRelayStartsNothingAndTellsClaudeWhy() {
         let launched = Box<Bool>()
+        // A clock of the test's own, so a guard that let the app start would fail at once, not after the wait.
+        let seen = ControlClientTests.Seen()
         let claude = Claude()
         let (_, exit) = run(claude, ControlClient(connectOnce: { nil }, launch: { launched.set(true); return true },
-                                                  announce: nil, elevated: true))
+                                                  announce: nil, sleep: { seen.clock += $0 }, now: { seen.clock },
+                                                  elevated: true))
         defer { end(claude, exit, nil) }
         claude.say(initialize)
         XCTAssertTrue(until(nil) { exit.value != nil && claude.answers()[.int(1)] != nil })
@@ -276,6 +279,7 @@ final class ControlRelayRunnerTests: XCTestCase {
         XCTAssertEqual(claude.answers()[.int(1)],
                        [McpSession.errorLine(code: McpSession.internalErrorCode, message: ControlClient.elevatedError, id: .int(1))])
         XCTAssertNil(launched.value, "nothing was started")
+        XCTAssertEqual(seen.clock, 0, "no wait for an app that was never started")
     }
 
     /// The app answers a call and goes; the relay, not yet having read that answer, fails to write the

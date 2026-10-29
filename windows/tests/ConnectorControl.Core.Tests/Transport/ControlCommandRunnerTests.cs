@@ -137,13 +137,16 @@ public class ControlCommandRunnerTests
     {
         var launches = 0;
         var announced = 0;
+        var clock = TimeSpan.Zero;
         foreach (var json in new[] { false, true })
         {
-            var client = new ControlClient(() => null, () => { launches++; return true; }, () => announced++, elevated: true);
+            var client = new ControlClient(() => null, () => { launches++; return true; }, () => announced++,
+                wait => clock += wait, () => clock, elevated: true);
             Assert.Equal(new ControlOutput(null, ControlClient.ElevatedError, ControlOutput.UnreachableExit),
                 ControlCommandRunner.Run("get_status", JsonValue.Object(), json, "1.5.0", client, () => Assert.Fail("nothing ran")));
         }
         Assert.Equal([0, 0], [launches, announced]);
+        Assert.Equal(TimeSpan.Zero, clock);
         Assert.Equal(3, ControlOutput.UnreachableExit);
     }
 }

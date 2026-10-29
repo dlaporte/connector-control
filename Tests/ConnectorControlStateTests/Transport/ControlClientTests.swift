@@ -66,9 +66,11 @@ final class ControlClientTests: XCTestCase {
     func testAnElevatedToolStartsNothingAndSaysWhy() {
         let seen = Seen()
         let client = ControlClient(connectOnce: { seen.attempts += 1; return nil }, launch: { seen.launches += 1; return true },
-                                   announce: { seen.announced += 1 }, elevated: true)
+                                   announce: { seen.announced += 1 }, sleep: { seen.clock += $0 }, now: { seen.clock },
+                                   elevated: true)
         XCTAssertThrowsError(try client.connect()) { XCTAssertEqual($0 as? ControlClient.Failure, .elevated) }
         XCTAssertEqual([seen.attempts, seen.launches, seen.announced], [1, 0, 0])
+        XCTAssertEqual(seen.clock, 0, "no wait for an app that was never started")
         XCTAssertEqual(ControlClient.Failure.elevated.message, ControlClient.elevatedError)
     }
 

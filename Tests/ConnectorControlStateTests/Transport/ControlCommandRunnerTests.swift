@@ -114,12 +114,14 @@ final class ControlCommandRunnerTests: XCTestCase {
         let seen = ControlClientTests.Seen()
         for json in [false, true] {
             let client = ControlClient(connectOnce: { nil }, launch: { seen.launches += 1; return true },
-                                       announce: { seen.announced += 1 }, elevated: true)
+                                       announce: { seen.announced += 1 }, sleep: { seen.clock += $0 }, now: { seen.clock },
+                                       elevated: true)
             XCTAssertEqual(ControlCommandRunner.run(tool: "get_status", arguments: .object([:]), json: json, version: "1.5.0",
                                                     client: client, notice: { XCTFail("nothing ran") }),
                            ControlOutput(stdout: nil, stderr: ControlClient.elevatedError, exitCode: ControlOutput.unreachableExit))
         }
         XCTAssertEqual([seen.launches, seen.announced], [0, 0])
+        XCTAssertEqual(seen.clock, 0, "no wait for an app that was never started")
         XCTAssertEqual(ControlOutput.unreachableExit, 3)
     }
 }

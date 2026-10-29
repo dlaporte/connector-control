@@ -69,10 +69,11 @@ public static class ClaudeIntegrationCleanup
     }
 
     /// <summary>Everything the uninstaller takes away, as <see cref="ClaudeIntegrationCleanup"/> says. The app's record
-    /// of itself goes first, so nothing starts the app again. Each config is backed up into the app's backups folder
-    /// first, keeping as many backups as the person chose. The copy goes before the PATH entry: Velopack ends the
-    /// hook after 30 seconds, and the PATH change waits on every window's answer to its broadcast. Each step stands alone: one that fails is said to <paramref name="failed"/> — the
-    /// app's log — and never keeps another from running, since nobody will see the failure and this runs once.</summary>
+    /// of itself is deleted before anything else, so nothing starts the app again. Each config is backed up into the
+    /// app's backups folder before it is changed, keeping as many backups as the person chose. The copy goes before
+    /// the PATH entry: Velopack ends the hook after 30 seconds, and the PATH change waits on every window's answer to
+    /// its broadcast. Each step stands alone: one that fails is said to <paramref name="failed"/> — the app's log — and
+    /// never keeps another from running, since nobody will see the failure and this runs once.</summary>
     public static void Uninstall(PathContext paths, PathOverrides overrides, string dataDir, IUserEnvironment environment, int keepCount, Action<string>? failed = null) =>
         Uninstall(paths, overrides, dataDir, environment, keepCount, failed, ControlToolCopy.Remove, ClaudeConfigIO.Write);
 
