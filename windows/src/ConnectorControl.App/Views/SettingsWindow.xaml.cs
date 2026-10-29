@@ -10,8 +10,8 @@ using ConnectorControl.App.Services;
 
 namespace ConnectorControl.App.Views;
 
-/// <summary>Single instance, 480×560, three tabs (the Claude tab scrolls); autostart and the command-line tool
-/// re-read whenever the window activates.</summary>
+/// <summary>Single instance, 480×560, three tabs (the Claude tab scrolls), every row in one shape as on the Mac;
+/// autostart and the command-line tool re-read whenever the window activates.</summary>
 public partial class SettingsWindow : Window
 {
     private readonly AppState state;
@@ -38,6 +38,12 @@ public partial class SettingsWindow : Window
             {
                 var icon = await Task.Run(() => ClaudeIconLoader.Load(services.ClaudeInstall.Detect()));
                 ClaudeTabItem.Header = TabHeader("", icon, SettingsModel.ClaudeTab);
+                // The Claude App group's first row shows the same icon, as the Mac's shows the app's.
+                if (icon is not null)
+                {
+                    ClaudeAppIcon.Source = icon;
+                    ClaudeAppIcon.Visibility = Visibility.Visible;
+                }
             }
             catch (Exception)
             {

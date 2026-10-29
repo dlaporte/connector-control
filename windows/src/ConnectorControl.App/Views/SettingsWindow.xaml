@@ -7,13 +7,50 @@
         Title="Settings"
         Width="480" Height="560" ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
         Background="{DynamicResource ApplicationBackgroundBrush}">
+  <!-- Every row has one shape, as on the Mac: what it is on the left with an optional note under it, the control on
+       the right. Every group has a heading above its box; a note about the whole group is a footer under it. -->
   <Window.Resources>
-    <Style x:Key="ToggleRow" TargetType="Grid">
-      <Setter Property="Margin" Value="0,0,0,8" />
+    <Style x:Key="GroupSection" TargetType="StackPanel">
+      <Setter Property="Margin" Value="0,0,0,14" />
     </Style>
-    <Style x:Key="PathText" TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-      <Setter Property="Margin" Value="0,0,0,8" />
-      <Setter Property="TextWrapping" Value="Wrap" />
+    <Style x:Key="GroupHeader" TargetType="TextBlock" BasedOn="{StaticResource SectionTitle}">
+      <Setter Property="Margin" Value="2,0,0,6" />
+    </Style>
+    <!-- The Mac grouped form's box: the card's colours, with each row padding itself. -->
+    <Style x:Key="Group" TargetType="Border" BasedOn="{StaticResource Card}">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0" />
+    </Style>
+    <Style x:Key="Row" TargetType="Border">
+      <Setter Property="Padding" Value="12,8" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+    </Style>
+    <!-- Every row after a group's first has a line above it. -->
+    <Style x:Key="NextRow" TargetType="Border" BasedOn="{StaticResource Row}">
+      <Setter Property="BorderThickness" Value="0,1,0,0" />
+    </Style>
+    <Style x:Key="RowText" TargetType="StackPanel">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,0,12,0" />
+    </Style>
+    <Style x:Key="RowControls" TargetType="StackPanel">
+      <Setter Property="Grid.Column" Value="1" />
+      <Setter Property="Orientation" Value="Horizontal" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style x:Key="RowSwitch" TargetType="ToggleButton" BasedOn="{StaticResource Switch}">
+      <Setter Property="Grid.Column" Value="1" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style x:Key="GroupFooter" TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+      <Setter Property="Margin" Value="2,5,0,0" />
+    </Style>
+    <Style x:Key="FolderGlyph" TargetType="TextBlock">
+      <Setter Property="Text" Value="&#xE8B7;" />
+      <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,0,6,0" />
     </Style>
   </Window.Resources>
   <TabControl x:Name="Tabs" Margin="8">
@@ -21,48 +58,107 @@
     <TabItem x:Name="GeneralTabItem">
       <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
         <StackPanel>
-          <Border Style="{StaticResource Card}">
-            <StackPanel>
-              <Grid Style="{StaticResource ToggleRow}">
-                <TextBlock Text="{x:Static state:SettingsModel.LaunchAtStartupTitle}" VerticalAlignment="Center" />
-                <ToggleButton Style="{StaticResource Switch}" HorizontalAlignment="Right" IsChecked="{Binding LaunchAtStartup}" />
-              </Grid>
-              <TextBlock Text="{Binding LoginItemNote}" Style="{StaticResource CaptionText}" Visibility="{Binding HasLoginItemNote, Converter={StaticResource Vis}}" />
-            </StackPanel>
-          </Border>
-          <Border Style="{StaticResource Card}">
-            <StackPanel>
-              <Grid Style="{StaticResource ToggleRow}">
-                <TextBlock Text="{x:Static state:SettingsModel.ConfirmRestartTitle}" VerticalAlignment="Center" />
-                <ToggleButton Style="{StaticResource Switch}" HorizontalAlignment="Right" IsChecked="{Binding ConfirmBeforeRestart}" />
-              </Grid>
-              <Grid>
-                <TextBlock Text="{x:Static state:SettingsModel.ConfirmQuitTitle}" VerticalAlignment="Center" />
-                <ToggleButton Style="{StaticResource Switch}" HorizontalAlignment="Right" IsChecked="{Binding ConfirmBeforeQuit}" />
-              </Grid>
-            </StackPanel>
-          </Border>
-          <Border Style="{StaticResource Card}">
-            <StackPanel>
-              <Grid Style="{StaticResource ToggleRow}">
-                <TextBlock Text="{x:Static state:SettingsModel.NotifyTitle}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,48,0" />
-                <ToggleButton Style="{StaticResource Switch}" HorizontalAlignment="Right" VerticalAlignment="Top" IsChecked="{Binding NotifyExternalChanges}" />
-              </Grid>
-            </StackPanel>
-          </Border>
-          <Border Style="{StaticResource Card}">
-            <StackPanel>
-              <TextBlock Text="{x:Static state:SettingsModel.UpdatesHeader}" Style="{StaticResource SectionTitle}" />
-              <Grid Style="{StaticResource ToggleRow}">
-                <TextBlock Text="{x:Static state:SettingsModel.AutoUpdateTitle}" VerticalAlignment="Center" />
-                <ToggleButton Style="{StaticResource Switch}" HorizontalAlignment="Right" IsChecked="{Binding AutoUpdate}" IsEnabled="{Binding UpdatesEnabled}" />
-              </Grid>
-              <Grid>
-                <TextBlock Text="{Binding VersionText}" Style="{StaticResource CaptionText}" FontSize="13" VerticalAlignment="Center" />
-                <Button Content="{x:Static state:SettingsModel.CheckForUpdatesTitle}" HorizontalAlignment="Right" IsEnabled="{Binding UpdatesEnabled}" Click="OnCheckForUpdates" />
-              </Grid>
-            </StackPanel>
-          </Border>
+          <StackPanel Style="{StaticResource GroupSection}">
+            <TextBlock Text="{x:Static state:SettingsModel.StartupHeader}" Style="{StaticResource GroupHeader}" />
+            <Border Style="{StaticResource Group}">
+              <Border Style="{StaticResource Row}">
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                  <StackPanel Style="{StaticResource RowText}">
+                    <TextBlock Text="{x:Static state:SettingsModel.LaunchAtStartupTitle}" TextWrapping="Wrap" />
+                    <TextBlock x:Name="LoginItemNote" Text="{Binding LoginItemNote}" Visibility="{Binding HasLoginItemNote, Converter={StaticResource Vis}}">
+                      <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding LoginItemNoteIsWarning}" Value="True">
+                              <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </TextBlock.Style>
+                    </TextBlock>
+                  </StackPanel>
+                  <ToggleButton x:Name="LaunchAtStartupSwitch" Style="{StaticResource RowSwitch}" IsChecked="{Binding LaunchAtStartup}"
+                                AutomationProperties.Name="{x:Static state:SettingsModel.LaunchAtStartupTitle}"
+                                AutomationProperties.HelpText="{Binding LoginItemNote}" />
+                </Grid>
+              </Border>
+            </Border>
+          </StackPanel>
+          <StackPanel Style="{StaticResource GroupSection}">
+            <TextBlock Text="{x:Static state:SettingsModel.ConfirmationsHeader}" Style="{StaticResource GroupHeader}" />
+            <Border Style="{StaticResource Group}">
+              <StackPanel>
+                <Border Style="{StaticResource Row}">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <StackPanel Style="{StaticResource RowText}">
+                      <TextBlock Text="{x:Static state:SettingsModel.ConfirmRestartTitle}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ToggleButton Style="{StaticResource RowSwitch}" IsChecked="{Binding ConfirmBeforeRestart}"
+                                  AutomationProperties.Name="{x:Static state:SettingsModel.ConfirmRestartTitle}" />
+                  </Grid>
+                </Border>
+                <Border Style="{StaticResource NextRow}">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <StackPanel Style="{StaticResource RowText}">
+                      <TextBlock Text="{x:Static state:SettingsModel.ConfirmQuitTitle}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ToggleButton Style="{StaticResource RowSwitch}" IsChecked="{Binding ConfirmBeforeQuit}"
+                                  AutomationProperties.Name="{x:Static state:SettingsModel.ConfirmQuitTitle}" />
+                  </Grid>
+                </Border>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+          <StackPanel Style="{StaticResource GroupSection}">
+            <TextBlock Text="{x:Static state:SettingsModel.NotificationsHeader}" Style="{StaticResource GroupHeader}" />
+            <Border Style="{StaticResource Group}">
+              <Border Style="{StaticResource Row}">
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                  <StackPanel Style="{StaticResource RowText}">
+                    <TextBlock Text="{x:Static state:SettingsModel.NotifyTitle}" TextWrapping="Wrap" />
+                    <TextBlock Text="{x:Static state:SettingsModel.NotifyCaption}" Style="{StaticResource CaptionText}" />
+                  </StackPanel>
+                  <ToggleButton x:Name="NotifySwitch" Style="{StaticResource RowSwitch}" IsChecked="{Binding NotifyExternalChanges}"
+                                AutomationProperties.Name="{x:Static state:SettingsModel.NotifyTitle}"
+                                AutomationProperties.HelpText="{x:Static state:SettingsModel.NotifyCaption}" />
+                </Grid>
+              </Border>
+            </Border>
+          </StackPanel>
+          <StackPanel Style="{StaticResource GroupSection}">
+            <TextBlock Text="{x:Static state:SettingsModel.UpdatesHeader}" Style="{StaticResource GroupHeader}" />
+            <Border Style="{StaticResource Group}">
+              <StackPanel>
+                <Border Style="{StaticResource Row}">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <StackPanel Style="{StaticResource RowText}">
+                      <TextBlock Text="{x:Static state:SettingsModel.AutoUpdateTitle}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ToggleButton Style="{StaticResource RowSwitch}" IsChecked="{Binding AutoUpdate}" IsEnabled="{Binding UpdatesEnabled}"
+                                  AutomationProperties.Name="{x:Static state:SettingsModel.AutoUpdateTitle}" />
+                  </Grid>
+                </Border>
+                <Border Style="{StaticResource NextRow}">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <StackPanel Style="{StaticResource RowText}">
+                      <TextBlock x:Name="VersionLine" Text="{Binding VersionText}" TextWrapping="Wrap" />
+                      <TextBlock x:Name="UpdatesCaption" Text="{Binding UpdatesCaption}" Style="{StaticResource CaptionText}"
+                                 Visibility="{Binding HasUpdatesCaption, Converter={StaticResource Vis}}" />
+                    </StackPanel>
+                    <StackPanel Style="{StaticResource RowControls}">
+                      <Button Content="{x:Static state:SettingsModel.CheckForUpdatesTitle}" IsEnabled="{Binding UpdatesEnabled}" Click="OnCheckForUpdates" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </StackPanel>
+            </Border>
+          </StackPanel>
         </StackPanel>
       </ScrollViewer>
     </TabItem>
@@ -71,33 +167,66 @@
     <TabItem x:Name="StorageTabItem">
       <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
         <StackPanel>
-          <Border Style="{StaticResource Card}">
-            <StackPanel>
-              <TextBlock Text="{x:Static state:SettingsModel.MasterListHeader}" Style="{StaticResource SectionTitle}" />
-              <TextBlock Text="{Binding StoreDirPath}" Style="{StaticResource PathText}" />
-              <StackPanel Orientation="Horizontal">
-                <Button Content="{x:Static state:SettingsModel.ChooseTitle}" Click="OnChooseStoreDir" />
-                <Button Content="{x:Static state:SettingsModel.UseDefaultTitle}" Margin="8,0,0,0" IsEnabled="{Binding CanUseDefaultStore}" Click="OnUseDefaultStore" />
+          <StackPanel Style="{StaticResource GroupSection}">
+            <TextBlock Text="{x:Static state:SettingsModel.MasterListHeader}" Style="{StaticResource GroupHeader}" />
+            <Border Style="{StaticResource Group}">
+              <Border Style="{StaticResource Row}">
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                  <StackPanel Style="{StaticResource RowText}">
+                    <StackPanel Orientation="Horizontal">
+                      <TextBlock Style="{StaticResource FolderGlyph}" />
+                      <TextBlock x:Name="StoreDirName" Text="{Binding StoreDirName}" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <TextBlock x:Name="StoreDirParent" Text="{Binding StoreDirParent}" Style="{StaticResource CaptionText}" />
+                  </StackPanel>
+                  <StackPanel Style="{StaticResource RowControls}">
+                    <Button Content="{x:Static state:SettingsModel.UseDefaultTitle}" IsEnabled="{Binding CanUseDefaultStore}" Click="OnUseDefaultStore" />
+                    <Button Content="{x:Static state:SettingsModel.ChooseButtonTitle}" Margin="6,0,0,0" Click="OnChooseStoreDir" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </Border>
+            <TextBlock Text="{x:Static state:SettingsModel.MasterListFooter}" Style="{StaticResource GroupFooter}" />
+          </StackPanel>
+          <StackPanel Style="{StaticResource GroupSection}">
+            <TextBlock Text="{x:Static state:SettingsModel.BackupsHeader}" Style="{StaticResource GroupHeader}" />
+            <Border Style="{StaticResource Group}">
+              <StackPanel>
+                <Border Style="{StaticResource Row}">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <StackPanel Style="{StaticResource RowText}">
+                      <TextBlock Text="{x:Static state:SettingsModel.BackupsTitle}" TextWrapping="Wrap" />
+                      <TextBlock Text="{x:Static state:SettingsModel.BackupsCaption}" Style="{StaticResource CaptionText}" />
+                    </StackPanel>
+                    <StackPanel Style="{StaticResource RowControls}">
+                      <TextBlock x:Name="KeepCount" Text="{Binding BackupKeepCount}" MinWidth="24" TextAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0" />
+                      <Button Content="−" MinWidth="32" Click="OnDecrementKeepCount" />
+                      <Button Content="+" MinWidth="32" Margin="4,0,0,0" Click="OnIncrementKeepCount" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+                <Border Style="{StaticResource NextRow}">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <StackPanel Style="{StaticResource RowText}">
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource FolderGlyph}" />
+                        <TextBlock x:Name="BackupsDirName" Text="{Binding BackupsDirName}" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                      <TextBlock x:Name="BackupsDirParent" Text="{Binding BackupsDirParent}" Style="{StaticResource CaptionText}" />
+                    </StackPanel>
+                    <StackPanel Style="{StaticResource RowControls}">
+                      <Button Content="{x:Static state:SettingsModel.ShowInExplorerTitle}" Click="OnShowInExplorer" />
+                      <Button Content="{x:Static state:SettingsModel.RestoreButtonTitle}" Margin="6,0,0,0" Click="OnRestore" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
               </StackPanel>
-            </StackPanel>
-          </Border>
-          <Border Style="{StaticResource Card}">
-            <StackPanel>
-              <TextBlock Text="{x:Static state:SettingsModel.BackupsHeader}" Style="{StaticResource SectionTitle}" />
-              <TextBlock Text="{x:Static state:SettingsModel.BackupsCaption}" Style="{StaticResource PathText}" />
-              <Grid Margin="0,0,0,8">
-                <TextBlock Text="{Binding KeepCountLabel}" VerticalAlignment="Center" />
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                  <Button Content="−" MinWidth="32" Click="OnDecrementKeepCount" />
-                  <Button Content="+" MinWidth="32" Margin="4,0,0,0" Click="OnIncrementKeepCount" />
-                </StackPanel>
-              </Grid>
-              <StackPanel Orientation="Horizontal">
-                <Button Content="{x:Static state:SettingsModel.ShowInExplorerTitle}" Click="OnShowInExplorer" />
-                <Button Content="{x:Static state:RestoreModel.RestoreTitle}" Margin="8,0,0,0" Click="OnRestore" />
-              </StackPanel>
-            </StackPanel>
-          </Border>
+            </Border>
+            <TextBlock Text="{x:Static state:SettingsModel.BackupsFooter}" Style="{StaticResource GroupFooter}" />
+          </StackPanel>
         </StackPanel>
       </ScrollViewer>
     </TabItem>
@@ -106,107 +235,160 @@
     <TabItem x:Name="ClaudeTabItem">
       <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
         <StackPanel>
-          <Border Style="{StaticResource Card}">
-            <StackPanel>
-              <TextBlock Text="{x:Static state:SettingsModel.ClaudeAppHeader}" Style="{StaticResource SectionTitle}" />
-              <TextBlock Text="{Binding InstallKindText}" Style="{StaticResource PathText}" />
-              <TextBlock Text="{x:Static state:SettingsModel.ConfigPathLabel}" FontWeight="SemiBold" FontSize="12" Margin="0,4,0,2" />
-              <TextBlock Text="{Binding ClaudeConfigPath}" Style="{StaticResource PathText}" />
-              <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                <Button Content="{x:Static state:SettingsModel.ChooseTitle}" Click="OnChooseClaudeConfig" />
-                <Button Content="{x:Static state:SettingsModel.UseDefaultTitle}" Margin="8,0,0,0" IsEnabled="{Binding CanUseDefaultClaudeConfig}" Click="OnUseDefaultClaudeConfig" />
+          <!-- Claude App: Windows has no app to point at but an install, so its rows are how Claude is installed, the
+               config file and the launch target, each path as its row's note. -->
+          <StackPanel Style="{StaticResource GroupSection}">
+            <TextBlock Text="{x:Static state:SettingsModel.ClaudeAppHeader}" Style="{StaticResource GroupHeader}" />
+            <Border Style="{StaticResource Group}">
+              <StackPanel>
+                <Border Style="{StaticResource Row}">
+                  <StackPanel Orientation="Horizontal">
+                    <Image x:Name="ClaudeAppIcon" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center" Visibility="Collapsed" />
+                    <TextBlock x:Name="InstallKind" Text="{Binding InstallKindText}" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Border>
+                <Border Style="{StaticResource NextRow}">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <StackPanel Style="{StaticResource RowText}">
+                      <TextBlock Text="{x:Static state:SettingsModel.ConfigPathLabel}" TextWrapping="Wrap" />
+                      <TextBlock Text="{Binding ClaudeConfigPath}" Style="{StaticResource CaptionText}" />
+                    </StackPanel>
+                    <StackPanel Style="{StaticResource RowControls}">
+                      <Button Content="{x:Static state:SettingsModel.UseDefaultTitle}" IsEnabled="{Binding CanUseDefaultClaudeConfig}" Click="OnUseDefaultClaudeConfig" />
+                      <Button Content="{x:Static state:SettingsModel.ChooseButtonTitle}" Margin="6,0,0,0" Click="OnChooseClaudeConfig" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+                <Border Style="{StaticResource NextRow}">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <StackPanel Style="{StaticResource RowText}">
+                      <TextBlock Text="{x:Static state:SettingsModel.LaunchTargetLabel}" TextWrapping="Wrap" />
+                      <TextBlock Text="{Binding LaunchTargetText}" Style="{StaticResource CaptionText}" />
+                    </StackPanel>
+                    <StackPanel Style="{StaticResource RowControls}">
+                      <Button Content="{x:Static state:SettingsModel.UseDefaultTitle}" IsEnabled="{Binding CanUseDefaultLaunchTarget}" Click="OnUseDefaultLaunchTarget" />
+                      <Button Content="{x:Static state:SettingsModel.ChooseButtonTitle}" Margin="6,0,0,0" Click="OnChooseLaunchTarget" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
               </StackPanel>
-              <TextBlock Text="{x:Static state:SettingsModel.LaunchTargetLabel}" FontWeight="SemiBold" FontSize="12" Margin="0,4,0,2" />
-              <TextBlock Text="{Binding LaunchTargetText}" Style="{StaticResource PathText}" />
-              <StackPanel Orientation="Horizontal">
-                <Button Content="{x:Static state:SettingsModel.ChooseTitle}" Click="OnChooseLaunchTarget" />
-                <Button Content="{x:Static state:SettingsModel.UseDefaultTitle}" Margin="8,0,0,0" IsEnabled="{Binding CanUseDefaultLaunchTarget}" Click="OnUseDefaultLaunchTarget" />
+            </Border>
+          </StackPanel>
+          <!-- Claude Integration: each switch and its title dim together while it cannot change; under each title its
+               note, or the amber note that says why, at full opacity; the second switch keeps its value, dimmed, its
+               note hidden, while the first is off; the endpoint's problem in a row of its own. Each switch's name is
+               its title alone and its note is its help text: Narrator reads it after the name, as VoiceOver reads
+               the Mac switch's hint. -->
+          <StackPanel Style="{StaticResource GroupSection}">
+            <TextBlock Text="{x:Static state:SettingsModel.ClaudeIntegrationHeader}" Style="{StaticResource GroupHeader}" />
+            <Border Style="{StaticResource Group}">
+              <StackPanel>
+                <Border Style="{StaticResource Row}">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <StackPanel Style="{StaticResource RowText}">
+                      <TextBlock x:Name="IntegrationTitle" Text="{x:Static state:SettingsModel.ClaudeIntegrationTitle}" TextWrapping="Wrap"
+                                 Opacity="{Binding ClaudeIntegrationTitleOpacity}" />
+                      <TextBlock x:Name="IntegrationCaption" Text="{Binding ClaudeIntegrationCaptionText}">
+                        <TextBlock.Style>
+                          <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding ClaudeIntegrationCaptionIsWarning}" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </TextBlock.Style>
+                      </TextBlock>
+                    </StackPanel>
+                    <ToggleButton x:Name="IntegrationSwitch" Style="{StaticResource RowSwitch}"
+                                  IsChecked="{Binding ClaudeIntegrationEnabled}" IsEnabled="{Binding CanChangeClaudeIntegration}"
+                                  AutomationProperties.Name="{x:Static state:SettingsModel.ClaudeIntegrationTitle}"
+                                  AutomationProperties.HelpText="{Binding ClaudeIntegrationCaptionText}" />
+                  </Grid>
+                </Border>
+                <Border Style="{StaticResource NextRow}">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <StackPanel Style="{StaticResource RowText}">
+                      <TextBlock x:Name="ConfirmChangesTitle" Text="{x:Static state:SettingsModel.ConfirmClaudeChangesTitle}" TextWrapping="Wrap"
+                                 Opacity="{Binding ConfirmClaudeChangesTitleOpacity}" />
+                      <TextBlock x:Name="ConfirmChangesCaption" Text="{Binding ConfirmClaudeChangesCaption}"
+                                 Visibility="{Binding HasConfirmClaudeChangesCaption, Converter={StaticResource Vis}}">
+                        <TextBlock.Style>
+                          <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding ConfirmClaudeChangesCaptionIsWarning}" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </TextBlock.Style>
+                      </TextBlock>
+                    </StackPanel>
+                    <ToggleButton x:Name="ConfirmChangesSwitch" Style="{StaticResource RowSwitch}"
+                                  IsChecked="{Binding ConfirmClaudeChanges}" IsEnabled="{Binding CanChangeConfirmClaudeChanges}"
+                                  AutomationProperties.Name="{x:Static state:SettingsModel.ConfirmClaudeChangesTitle}"
+                                  AutomationProperties.HelpText="{Binding ConfirmClaudeChangesCaption}" />
+                  </Grid>
+                </Border>
+                <!-- Plain amber text with no glyph, unlike a tool note's caution mark, and like every note in these
+                     two groups not selectable: the Mac draws them the same way, so both read alike. -->
+                <Border Style="{StaticResource NextRow}" Visibility="{Binding HasControlEndpointProblem, Converter={StaticResource Vis}}">
+                  <TextBlock x:Name="EndpointProblem" Text="{Binding ControlEndpointProblem}" Style="{StaticResource CautionText}"
+                             Visibility="{Binding HasControlEndpointProblem, Converter={StaticResource Vis}}" />
+                </Border>
               </StackPanel>
-            </StackPanel>
-          </Border>
-          <!-- Claude Integration: the switch and its title, which dim together while a clash or a transient app
-               keeps it off; under them the caption, or the amber note that says why, at full opacity; the
-               checkbox kept (dimmed, caption hidden) while the switch is off; the endpoint's problem. -->
-          <Border Style="{StaticResource Card}">
-            <StackPanel>
-              <TextBlock Text="{x:Static state:SettingsModel.ClaudeIntegrationHeader}" Style="{StaticResource SectionTitle}" />
-              <!-- Each control's name is its title alone, so its caption, or the amber note that says why, is its help
-                   text: Narrator reads it after the name, as VoiceOver reads the Mac's switch hint and checkbox label. -->
-              <Grid Style="{StaticResource ToggleRow}">
-                <StackPanel Margin="0,0,48,0">
-                  <TextBlock x:Name="IntegrationTitle" Text="{x:Static state:SettingsModel.ClaudeIntegrationTitle}" TextWrapping="Wrap"
-                             Opacity="{Binding ClaudeIntegrationTitleOpacity}" />
-                  <TextBlock x:Name="IntegrationCaption" Text="{Binding ClaudeIntegrationCaptionText}">
-                    <TextBlock.Style>
-                      <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                        <Style.Triggers>
-                          <DataTrigger Binding="{Binding ClaudeIntegrationCaptionIsWarning}" Value="True">
-                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                          </DataTrigger>
-                        </Style.Triggers>
-                      </Style>
-                    </TextBlock.Style>
-                  </TextBlock>
-                </StackPanel>
-                <ToggleButton x:Name="IntegrationSwitch" Style="{StaticResource Switch}" HorizontalAlignment="Right" VerticalAlignment="Top"
-                              IsChecked="{Binding ClaudeIntegrationEnabled}" IsEnabled="{Binding CanChangeClaudeIntegration}"
-                              AutomationProperties.Name="{x:Static state:SettingsModel.ClaudeIntegrationTitle}"
-                              AutomationProperties.HelpText="{Binding ClaudeIntegrationCaptionText}" />
-              </Grid>
-              <CheckBox x:Name="ConfirmChangesBox" IsChecked="{Binding ConfirmClaudeChanges}" IsEnabled="{Binding CanChangeConfirmClaudeChanges}"
-                        AutomationProperties.Name="{x:Static state:SettingsModel.ConfirmClaudeChangesTitle}"
-                        AutomationProperties.HelpText="{Binding ConfirmClaudeChangesCaption}">
-                <StackPanel>
-                  <TextBlock Text="{x:Static state:SettingsModel.ConfirmClaudeChangesTitle}" TextWrapping="Wrap" />
-                  <TextBlock x:Name="ConfirmChangesCaption" Text="{Binding ConfirmClaudeChangesCaption}"
-                             Visibility="{Binding HasConfirmClaudeChangesCaption, Converter={StaticResource Vis}}">
-                    <TextBlock.Style>
-                      <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                        <Style.Triggers>
-                          <DataTrigger Binding="{Binding ConfirmClaudeChangesCaptionIsWarning}" Value="True">
-                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                          </DataTrigger>
-                        </Style.Triggers>
-                      </Style>
-                    </TextBlock.Style>
-                  </TextBlock>
-                </StackPanel>
-              </CheckBox>
-              <!-- Plain amber text with no glyph, unlike a tool note's caution mark, and like every caption in these
-                   two groups not selectable: the Mac draws them the same way, so both read alike. -->
-              <TextBlock x:Name="EndpointProblem" Text="{Binding ControlEndpointProblem}" Style="{StaticResource CautionText}" Margin="0,8,0,0"
-                         Visibility="{Binding HasControlEndpointProblem, Converter={StaticResource Vis}}" />
-            </StackPanel>
-          </Border>
+            </Border>
+          </StackPanel>
           <!-- Command-Line Tool: where it is, or the full path scripts can always use, and Install or Remove. -->
-          <Border x:Name="CommandLineToolGroup" Style="{StaticResource Card}"
-                  Visibility="{Binding HasCommandLineTool, Converter={StaticResource Vis}}">
-            <StackPanel>
-              <TextBlock Text="{x:Static state:SettingsModel.CommandLineToolHeader}" Style="{StaticResource SectionTitle}" />
-              <Grid>
-                <StackPanel Margin="0,0,96,0">
-                  <TextBlock x:Name="CommandLineToolStatus" TextWrapping="Wrap" views:TextRuns.Runs="{Binding CommandLineToolStatus}" />
-                  <TextBlock x:Name="CommandLineToolCaption" Style="{StaticResource CaptionText}" views:TextRuns.Runs="{Binding CommandLineToolCaption}"
-                             Visibility="{Binding HasCommandLineToolCaption, Converter={StaticResource Vis}}" />
-                  <TextBlock x:Name="CommandLineToolMessage" Text="{Binding CommandLineToolMessage}" Style="{StaticResource ErrorText}"
-                             Visibility="{Binding HasCommandLineToolMessage, Converter={StaticResource Vis}}" />
-                </StackPanel>
-                <Button x:Name="CommandLineToolButton" Content="{Binding CommandLineToolButton}" IsEnabled="{Binding CanUseCommandLineToolButton}"
-                        HorizontalAlignment="Right" VerticalAlignment="Top" Click="OnCommandLineTool" />
-              </Grid>
-            </StackPanel>
-          </Border>
-          <Border Style="{StaticResource Card}">
-            <StackPanel>
-              <TextBlock Text="{x:Static core:ToolNote.SettingsHeader}" Style="{StaticResource SectionTitle}" />
-              <TextBlock Text="{x:Static core:ToolNote.SettingsCaption}" Style="{StaticResource PathText}" />
+          <StackPanel x:Name="CommandLineToolGroup" Style="{StaticResource GroupSection}"
+                      Visibility="{Binding HasCommandLineTool, Converter={StaticResource Vis}}">
+            <TextBlock Text="{x:Static state:SettingsModel.CommandLineToolHeader}" Style="{StaticResource GroupHeader}" />
+            <Border Style="{StaticResource Group}">
+              <Border Style="{StaticResource Row}">
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                  <StackPanel Style="{StaticResource RowText}">
+                    <TextBlock x:Name="CommandLineToolStatus" TextWrapping="Wrap" views:TextRuns.Runs="{Binding CommandLineToolStatus}" />
+                    <TextBlock x:Name="CommandLineToolCaption" Style="{StaticResource CaptionText}" views:TextRuns.Runs="{Binding CommandLineToolCaption}"
+                               Visibility="{Binding HasCommandLineToolCaption, Converter={StaticResource Vis}}" />
+                    <TextBlock x:Name="CommandLineToolMessage" Text="{Binding CommandLineToolMessage}" Style="{StaticResource ErrorText}" FontSize="12"
+                               Visibility="{Binding HasCommandLineToolMessage, Converter={StaticResource Vis}}" />
+                  </StackPanel>
+                  <StackPanel Style="{StaticResource RowControls}">
+                    <Button x:Name="CommandLineToolButton" Content="{Binding CommandLineToolButton}" IsEnabled="{Binding CanUseCommandLineToolButton}"
+                            Click="OnCommandLineTool" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </Border>
+          </StackPanel>
+          <!-- Tools: every row one line tall, the version or what is wrong; how to install a missing tool is in the
+               footer, one line a family. -->
+          <StackPanel Style="{StaticResource GroupSection}">
+            <TextBlock Text="{x:Static core:ToolNote.SettingsHeader}" Style="{StaticResource GroupHeader}" />
+            <Border Style="{StaticResource Group}">
               <ItemsControl x:Name="ToolList" ItemsSource="{Binding ToolRows}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
-                    <StackPanel Margin="0,0,0,8">
+                    <Border>
+                      <Border.Style>
+                        <Style TargetType="Border" BasedOn="{StaticResource NextRow}">
+                          <Style.Triggers>
+                            <!-- The first row has no line above it. -->
+                            <DataTrigger Binding="{Binding RelativeSource={RelativeSource PreviousData}}" Value="{x:Null}">
+                              <Setter Property="BorderThickness" Value="0" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </Border.Style>
                       <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                         <TextBlock Text="{Binding Name}" FontFamily="{StaticResource MonoFont}" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding StatusText}" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <TextBlock Grid.Column="1" Text="{Binding StatusText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
                           <TextBlock.Style>
                             <Style TargetType="TextBlock">
                               <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -219,13 +401,23 @@
                           </TextBlock.Style>
                         </TextBlock>
                       </Grid>
-                      <views:ToolNoteBlock Note="{Binding Note}" ShowText="False" Margin="0,4,0,0" />
-                    </StackPanel>
+                    </Border>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
+            </Border>
+            <StackPanel Margin="2,5,0,0">
+              <ItemsControl x:Name="ToolFooter" ItemsSource="{Binding ToolFooterLines}"
+                            Visibility="{Binding HasToolFooterLines, Converter={StaticResource Vis}}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <TextBlock Style="{StaticResource CaptionText}" views:ToolFooterText.Line="{Binding}" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock x:Name="ToolsFooter" Text="{x:Static core:ToolNote.SettingsCaption}" Style="{StaticResource CaptionText}" />
             </StackPanel>
-          </Border>
+          </StackPanel>
         </StackPanel>
       </ScrollViewer>
     </TabItem>

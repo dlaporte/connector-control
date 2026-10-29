@@ -27,13 +27,12 @@ public class SettingsWindowTests
             var window = new SettingsWindow(state, services, updates);
             try
             {
-                window.Measure(new Size(480, 500));
-                window.Arrange(new Rect(0, 0, 480, 500));
-                window.UpdateLayout();
+                WindowTestSupport.Layout(window, new Size(480, 500));
                 Assert.Equal(3, window.Tabs.Items.Count);
                 var headers = window.Tabs.Items.Cast<TabItem>().Select(t => ((TextBlock)((StackPanel)t.Header).Children[1]).Text).ToArray();
                 Assert.Equal(["General", "Storage", "Claude"], headers);
                 Assert.Equal("Version 1.2.2", window.Model.VersionText);
+                Assert.Equal(Visibility.Collapsed, window.UpdatesCaption.Visibility);   // a release says nothing about previews
                 Assert.Equal(h.StoreDir, window.Model.StoreDirPath);
                 Assert.Equal("MSIX package", window.Model.InstallKindText);
             }
@@ -94,7 +93,8 @@ public class SettingsWindowTests
                 Assert.Equal(SettingsModel.ClaudeIntegrationCaption, AutomationProperties.GetHelpText(window.IntegrationSwitch));
                 Assert.True(window.IntegrationSwitch.IsEnabled);
                 Assert.Equal(1.0, window.IntegrationTitle.Opacity);
-                Assert.False(window.ConfirmChangesBox.IsEnabled);
+                Assert.False(window.ConfirmChangesSwitch.IsEnabled);
+                Assert.Equal(SettingsModel.DimmedOpacity, window.ConfirmChangesTitle.Opacity);
                 Assert.Equal(Visibility.Collapsed, window.ConfirmChangesCaption.Visibility);
                 Assert.Equal(Visibility.Collapsed, window.EndpointProblem.Visibility);
                 Assert.Equal(Visibility.Visible, window.CommandLineToolGroup.Visibility);
@@ -105,14 +105,15 @@ public class SettingsWindowTests
 
                 window.IntegrationSwitch.IsChecked = true;
                 Assert.True(h.Settings.ClaudeIntegrationEnabled);
-                Assert.True(window.ConfirmChangesBox.IsEnabled);
+                Assert.True(window.ConfirmChangesSwitch.IsEnabled);
+                Assert.Equal(1.0, window.ConfirmChangesTitle.Opacity);
                 Assert.Equal(SettingsModel.ConfirmClaudeChangesOnCaption, window.ConfirmChangesCaption.Text);
                 AssertBrush(Secondary, window.ConfirmChangesCaption);
-                Assert.Equal(SettingsModel.ConfirmClaudeChangesOnCaption, AutomationProperties.GetHelpText(window.ConfirmChangesBox));
-                window.ConfirmChangesBox.IsChecked = false;
+                Assert.Equal(SettingsModel.ConfirmClaudeChangesOnCaption, AutomationProperties.GetHelpText(window.ConfirmChangesSwitch));
+                window.ConfirmChangesSwitch.IsChecked = false;
                 Assert.Equal(SettingsModel.ConfirmClaudeChangesOffCaption, window.ConfirmChangesCaption.Text);
                 AssertBrush(Caution, window.ConfirmChangesCaption);
-                Assert.Equal(SettingsModel.ConfirmClaudeChangesOffCaption, AutomationProperties.GetHelpText(window.ConfirmChangesBox));
+                Assert.Equal(SettingsModel.ConfirmClaudeChangesOffCaption, AutomationProperties.GetHelpText(window.ConfirmChangesSwitch));
 
                 window.CommandLineToolButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
                 Assert.Equal(1, tool.Installs);
@@ -321,7 +322,8 @@ public class SettingsWindowTests
         });
     }
 
-    /// <summary>Spec 2026-09-05-tool-probe §3.5: the Tools card lists the four launchers with their status and notes.</summary>
+    /// <summary>The Tools group lists the four launchers, one line each with its status; how to install a missing one
+    /// is the footer's, one line a family, above the line that says what they are for.</summary>
     [Fact]
     public void ClaudeTabListsTheFourToolsWithTheirStatus()
     {
@@ -354,11 +356,96 @@ public class SettingsWindowTests
                 // dereference warning into an error.
                 Assert.Equal("Install uv", rows[2].Note!.LinkTitle);
                 Assert.Equal("winget install astral-sh.uv", rows[3].Note!.InstallCommand);
+                Assert.Equal(Visibility.Visible, window.ToolFooter.Visibility);
+                Assert.Equal(["uv and uvx: Install uv or run winget install astral-sh.uv."],
+                    window.ToolFooter.Items.Cast<ToolFooterLine>().Select(line => line.Text).ToArray());
+                Assert.Equal(ToolNote.SettingsCaption, window.ToolsFooter.Text);
             }
             finally
             {
                 window.Close();
             }
+        });
+    }
+
+    /// <summary>The General tab: a preview says where its updates come from under its version; the notify switch reads its
+    /// note as its help text; a login item that could not be changed shows why under its switch, in amber, and the
+    /// switch reads that too.</summary>
+    [Fact]
+    public void TheGeneralTabShowsEachRowsNote()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var autostart = new FakeAutostart();
+        var updater = new FakeUpdater { VersionDisplay = "1.5.0-preview.10+1a2b3c4" };
+        var services = new PlatformServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, autostart, updater);
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            var window = new SettingsWindow(state, services, updates);
+            Laid(window, () =>
+            {
+                Assert.Equal(Visibility.Visible, window.UpdatesCaption.Visibility);
+                Assert.Equal(SettingsModel.PreviewUpdatesCaption, window.UpdatesCaption.Text);
+                Assert.Equal(SettingsModel.NotifyCaption, AutomationProperties.GetHelpText(window.NotifySwitch));
+                Assert.Equal(Visibility.Collapsed, window.LoginItemNote.Visibility);
+
+                autostart.FailWith = "Access is denied.";
+                window.LaunchAtStartupSwitch.IsChecked = true;
+                Assert.Equal(Visibility.Visible, window.LoginItemNote.Visibility);
+                Assert.Equal(SettingsModel.StartupEntryFailureNote("Access is denied."), window.LoginItemNote.Text);
+                AssertBrush(Caution, window.LoginItemNote);
+                Assert.Equal(SettingsModel.StartupEntryFailureNote("Access is denied."), AutomationProperties.GetHelpText(window.LaunchAtStartupSwitch));
+            });
+        });
+    }
+
+    /// <summary>The Storage tab's path rows show the folder's name, and the folder it is in as the note; the count
+    /// beside the stepper follows it.</summary>
+    [Fact]
+    public void TheStorageTabShowsEachFolderByNameAndPlace()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var services = h.Services();
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            var window = new SettingsWindow(state, services, updates);
+            Laid(window, () =>
+            {
+                Assert.Equal(SettingsModel.ShownName(h.StoreDir), window.StoreDirName.Text);
+                Assert.Equal(SettingsModel.ShownParent(h.StoreDir), window.StoreDirParent.Text);
+                Assert.Equal(SettingsModel.ShownName(h.BackupsDir), window.BackupsDirName.Text);
+                Assert.Equal(SettingsModel.ShownParent(h.BackupsDir), window.BackupsDirParent.Text);
+                var count = window.Model.BackupKeepCount;
+                Assert.Equal(count.ToString(System.Globalization.CultureInfo.CurrentCulture), window.KeepCount.Text);
+                window.Model.IncrementKeepCount();
+                Assert.Equal((count + 1).ToString(System.Globalization.CultureInfo.CurrentCulture), window.KeepCount.Text);
+            });
+        });
+    }
+
+    /// <summary>A footer line is one sentence: the family's tools, the link's title as a hyperlink, "or run", and the
+    /// command in its own run, set apart as every command is.</summary>
+    [Fact]
+    public void AToolFooterLineDrawsItsLinkAndItsCommand()
+    {
+        WpfApp.Invoke(() =>
+        {
+            var line = ToolFooterLine.Make(new Dictionary<Tool, ToolStatus> { [Tool.Uv] = ToolStatus.NotFound })[0];
+            var block = new TextBlock();
+            ToolFooterText.SetLine(block, line);
+            var inlines = block.Inlines.ToList();
+            Assert.Equal(5, inlines.Count);
+            var link = Assert.IsType<Hyperlink>(inlines[1]);
+            Assert.Equal("Install uv", Assert.IsType<Run>(link.Inlines.FirstInline).Text);
+            Assert.Equal(new TextRun("winget install astral-sh.uv", IsSetApart: true).ShownText, Assert.IsType<Run>(inlines[3]).Text);
+            Assert.Equal("uv and uvx: ", Assert.IsType<Run>(inlines[0]).Text);
+            Assert.Equal(" or run ", Assert.IsType<Run>(inlines[2]).Text);
+            Assert.Equal(".", Assert.IsType<Run>(inlines[4]).Text);
+            ToolFooterText.SetLine(block, null);
+            Assert.Empty(block.Inlines);
         });
     }
 }
