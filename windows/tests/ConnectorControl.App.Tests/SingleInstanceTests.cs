@@ -33,7 +33,7 @@ public class SingleInstanceTests
         var suffix = "." + Guid.NewGuid().ToString("N");
         bool? startedAppIsFirst = null;
         var logged = new List<string>();
-        UninstallCleanup.Run(suffix, TimeSpan.FromSeconds(5), () =>
+        UninstallCleanup.Run(() => SingleInstance.Hold(suffix, TimeSpan.FromSeconds(5)), () =>
         {
             using var started = new SingleInstance(suffix);
             startedAppIsFirst = started.IsFirstInstance;
@@ -62,7 +62,7 @@ public class SingleInstanceTests
             Assert.True(holding.Wait(Wait.Eventually, TestContext.Current.CancellationToken));
             var ran = false;
             var logged = new List<string>();
-            UninstallCleanup.Run(suffix, TimeSpan.FromMilliseconds(50), () => ran = true, logged.Add);
+            UninstallCleanup.Run(() => SingleInstance.Hold(suffix, TimeSpan.FromMilliseconds(50)), () => ran = true, logged.Add);
             Assert.True(ran);
             Assert.Single(logged);
         }
@@ -71,6 +71,16 @@ public class SingleInstanceTests
             release.Set();
             holder.Join();
         }
+    }
+
+    [Fact]
+    public void ALockThatThrowsStillLetsTheUninstallCleanupRun()
+    {
+        var ran = false;
+        var logged = new List<string>();
+        UninstallCleanup.Run(() => throw new IOException("no lock"), () => ran = true, logged.Add);
+        Assert.True(ran);
+        Assert.Contains("no lock", Assert.Single(logged));
     }
 
     [Fact]

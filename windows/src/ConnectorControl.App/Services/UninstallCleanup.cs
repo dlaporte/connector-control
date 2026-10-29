@@ -17,7 +17,7 @@ internal static class UninstallCleanup
     /// <summary>How long the hook waits for the single-instance lock: a few seconds of the 60 Velopack allows.</summary>
     private static readonly TimeSpan LockWait = TimeSpan.FromSeconds(5);
 
-    public static void Run() => Run("", LockWait, () =>
+    public static void Run() => Run(() => SingleInstance.Hold("", LockWait), () =>
     {
         var settings = new SettingsStore(ServiceFactory.DefaultSettingsPath);
         ClaudeIntegrationCleanup.Uninstall(PathContext.Live(), new PathOverrides(settings.ClaudeConfigPath, settings.MasterStoreDir),
@@ -30,18 +30,26 @@ internal static class UninstallCleanup
     /// it again for a call in between; holding the lock makes that app a second instance, which a background launch
     /// ends without a word, before it could put back the entry this hook takes away. A lock that cannot be had —
     /// such an app got there first — is said to <paramref name="log"/>, and the cleanup still runs: its last step
-    /// sweeps the configs again. <paramref name="instanceSuffix"/> keeps a test's lock apart from the shipped app's.
+    /// sweeps the configs again. So does a lock that throws: the lock only narrows a race, and the cleanup matters
+    /// more. <paramref name="hold"/> takes the lock (<see cref="SingleInstance.Hold"/>; a test's keeps its name apart).
     /// </summary>
-    internal static void Run(string instanceSuffix, TimeSpan lockWait, Action cleanup, Action<string> log)
+    internal static void Run(Func<Mutex?> hold, Action cleanup, Action<string> log)
     {
         Mutex? held = null;
         try
         {
-            held = SingleInstance.Hold(instanceSuffix, lockWait);
+            held = hold();
             if (held is null)
             {
                 log("The uninstall cleanup ran without the single-instance lock: a copy of the app is running.");
             }
+        }
+        catch (Exception ex)
+        {
+            log($"The uninstall cleanup ran without the single-instance lock, which could not be taken: {ex.GetType().Name}: {ex.Message}");
+        }
+        try
+        {
             cleanup();
         }
         catch (Exception ex)
