@@ -719,4 +719,12 @@ final class ControlMaskingTests: XCTestCase {
         try assertHidden(["abc123"], in: local("npx", ["supergateway", "--header=Authorization: Bearer abc123"]))
         try assertHidden(["abc123"], in: local("sh", ["-c", "npx supergateway --header Authorization: Bearer abc123"]))
     }
+
+    /// A word written against a placeholder is not part of the reference: it can be the secret.
+    func testAWordGluedToAReferenceIsMasked() throws {
+        XCTAssertEqual(ControlMasking.argument("--password=${CC_NEEDS:PW}hunter"), "--password=•••")
+        XCTAssertEqual(ControlMasking.arguments(["--password", "${CC_NEEDS:PW}hunter"]), ["--password", "•••"])
+        XCTAssertEqual(ControlMasking.argument("--password=${CC_NEEDS:PW}"), "--password=${CC_NEEDS:PW}")
+        try assertHidden(["hunter"], in: local("node", ["s.js", "--password=${CC_NEEDS:PW}hunter", "--token", "${T}hunter"]))
+    }
 }

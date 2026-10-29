@@ -58,4 +58,15 @@ final class CredentialHeuristicsTests: XCTestCase {
         for word in ["Bearer", "bearer", "BASIC", "Token"] { XCTAssertTrue(CredentialHeuristics.isSchemeWord(word), word) }
         for word in ["Bearer ", "Digest", "tokens", "", "Bear"] { XCTAssertFalse(CredentialHeuristics.isSchemeWord(word), word) }
     }
+
+    /// Beside its references a value may hold only a scheme word, before them: any other word, or
+    /// one after a reference, can be the secret itself.
+    func testAReferenceTakesOnlyASchemeWordBeforeIt() {
+        for value in ["${API_TOKEN}", "$API_TOKEN", "Bearer ${API_TOKEN}", "basic $CRED", "Token ${CC_NEEDS:T}", "${A} ${B}", "Bearer${A}"] {
+            XCTAssertTrue(CredentialHeuristics.isReference(value), value)
+        }
+        for value in ["${CC_NEEDS:PW}hunter", "${A} hunter", "hunter ${A}", "${A} Bearer", "Bearer ${A} extra", "Digest ${A}", "Bearer"] {
+            XCTAssertFalse(CredentialHeuristics.isReference(value), value)
+        }
+    }
 }

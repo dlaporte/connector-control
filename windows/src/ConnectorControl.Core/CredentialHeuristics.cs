@@ -81,8 +81,9 @@ public static class CredentialHeuristics
     /// <summary>
     /// Whether <paramref name="value"/> takes its secret from somewhere else rather than holding it: one
     /// or more <c>${NAME}</c> or <c>$NAME</c> references — an environment variable, a
-    /// <c>${CC_NEEDS:NAME}</c> placeholder — with, beside them, at most one word of letters, an
-    /// authentication scheme such as <c>Bearer</c>. A <c>$NAME</c> without braces counts only as
+    /// <c>${CC_NEEDS:NAME}</c> placeholder — with, beside them, at most an authentication scheme before
+    /// them (<see cref="IsSchemeWord"/>: <c>Bearer</c>, <c>Basic</c>, <c>Token</c>). Any other word, or one after a
+    /// reference (<c>${CC_NEEDS:PW}hunter</c>), can be the secret itself. A <c>$NAME</c> without braces counts only as
     /// <see cref="ShellVariableEnd"/> reads one. Walked one UTF-16 unit at a time, as the Mac walks
     /// Unicode scalars.
     /// </summary>
@@ -90,6 +91,7 @@ public static class CredentialHeuristics
     {
         var rest = new System.Text.StringBuilder();
         var references = 0;
+        var textAfterReference = false;
         var index = 0;
         while (index < value.Length)
         {
@@ -108,12 +110,16 @@ public static class CredentialHeuristics
             }
             else
             {
+                if (references > 0 && value[index] != ' ')
+                {
+                    textAfterReference = true;
+                }
                 rest.Append(value[index]);
                 index++;
             }
         }
         var words = rest.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return references > 0 && words.Length <= 1 && words.All(word => word.All(char.IsAsciiLetter));
+        return references > 0 && !textAfterReference && words.Length <= 1 && words.All(IsSchemeWord);
     }
 
     /// <summary>

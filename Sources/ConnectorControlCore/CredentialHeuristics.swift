@@ -85,13 +85,15 @@ public enum CredentialHeuristics {
 
     /// Whether `value` takes its secret from somewhere else rather than holding it: one or more
     /// `${NAME}` or `$NAME` references — an environment variable, a `${CC_NEEDS:NAME}` placeholder —
-    /// with, beside them, at most one word of letters, an authentication scheme such as `Bearer`.
-    /// A `$NAME` without braces counts only as `shellVariableEnd` reads one. Walked one Unicode
-    /// scalar at a time, as the Windows mirror walks UTF-16 units.
+    /// with, beside them, at most an authentication scheme before them (`isSchemeWord`: `Bearer`,
+    /// `Basic`, `Token`). Any other word, or one after a reference (`${CC_NEEDS:PW}hunter`), can be
+    /// the secret itself. A `$NAME` without braces counts only as `shellVariableEnd` reads one.
+    /// Walked one Unicode scalar at a time, as the Windows mirror walks UTF-16 units.
     public static func isReference(_ value: String) -> Bool {
         let scalars = Array(value.unicodeScalars)
         var rest: [Unicode.Scalar] = []
         var references = 0
+        var textAfterReference = false
         var index = 0
         while index < scalars.count {
             if scalars[index] == "$", index + 1 < scalars.count, scalars[index + 1] == "{",
@@ -103,12 +105,14 @@ public enum CredentialHeuristics {
                 references += 1
                 index = end
             } else {
+                if references > 0, scalars[index] != " " { textAfterReference = true }
                 rest.append(scalars[index])
                 index += 1
             }
         }
         let words = rest.split(separator: " ")
-        return references > 0 && words.count <= 1 && words.allSatisfy { $0.allSatisfy { ("A"..."Z").contains($0) || ("a"..."z").contains($0) } }
+        return references > 0 && !textAfterReference && words.count <= 1
+            && words.allSatisfy { isSchemeWord(String(String.UnicodeScalarView($0))) }
     }
 
     /// Where the `$NAME` whose name starts at `start` ends, or nil where the text there is no such

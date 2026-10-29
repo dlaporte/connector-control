@@ -77,4 +77,19 @@ public class CredentialHeuristicsTests
             Assert.False(CredentialHeuristics.IsSchemeWord(word), word);
         }
     }
+
+    /// <summary>Beside its references a value may hold only a scheme word, before them: any other word, or
+    /// one after a reference, can be the secret itself.</summary>
+    [Fact]
+    public void AReferenceTakesOnlyASchemeWordBeforeIt()
+    {
+        foreach (var value in new[] { "${API_TOKEN}", "$API_TOKEN", "Bearer ${API_TOKEN}", "basic $CRED", "Token ${CC_NEEDS:T}", "${A} ${B}", "Bearer${A}" })
+        {
+            Assert.True(CredentialHeuristics.IsReference(value), value);
+        }
+        foreach (var value in new[] { "${CC_NEEDS:PW}hunter", "${A} hunter", "hunter ${A}", "${A} Bearer", "Bearer ${A} extra", "Digest ${A}", "Bearer" })
+        {
+            Assert.False(CredentialHeuristics.IsReference(value), value);
+        }
+    }
 }

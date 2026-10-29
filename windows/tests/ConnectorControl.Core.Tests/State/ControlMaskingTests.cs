@@ -855,4 +855,14 @@ public class ControlMaskingTests
         AssertHidden(["abc123"], Local("npx", ["supergateway", "--header=Authorization: Bearer abc123"]));
         AssertHidden(["abc123"], Local("sh", ["-c", "npx supergateway --header Authorization: Bearer abc123"]));
     }
+
+    /// <summary>A word written against a placeholder is not part of the reference: it can be the secret.</summary>
+    [Fact]
+    public void AWordGluedToAReferenceIsMasked()
+    {
+        Assert.Equal("--password=•••", ControlMasking.Argument("--password=${CC_NEEDS:PW}hunter"));
+        Assert.Equal(["--password", "•••"], ControlMasking.Arguments(["--password", "${CC_NEEDS:PW}hunter"]));
+        Assert.Equal("--password=${CC_NEEDS:PW}", ControlMasking.Argument("--password=${CC_NEEDS:PW}"));
+        AssertHidden(["hunter"], Local("node", ["s.js", "--password=${CC_NEEDS:PW}hunter", "--token", "${T}hunter"]));
+    }
 }
