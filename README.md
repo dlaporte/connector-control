@@ -527,7 +527,7 @@ Connector Control?" — with **Turn On** and **Not Now**. Either answer is for
 good, and the offer waits behind any error or collection banner. The switch
 itself is Settings ▸ Claude ▸ **Let Claude manage Connector Control**, in the
 **Claude Integration** group. Claude reads its config only at startup, so the
-switch "Takes effect when Claude restarts." and **Restart Required** appears
+switch's note says "Restart Claude to apply." and **Restart Required** appears
 while Claude runs. Turning it off takes the entry out again the same way.
 
 The entry runs the tool by its full path, with the one argument `mcp`: the
@@ -577,10 +577,11 @@ Control. While the integration is off, Claude is refused everything.
 
 ### Confirming Claude's changes
 
-**Confirm changes Claude makes to connectors**, under the switch, is on by
-default. While it is on, "Adding, editing or deleting a connector, deleting a
+**Confirm changes Claude makes**, the second switch in the group, is on by
+default; its note reads "Ask before Claude adds, edits, deletes, imports or
+restores." While it is on, adding, editing or deleting a connector, deleting a
 collection, importing, subscribing, applying an update and restoring a backup
-ask here first." Turning a connector on or off and switching collections are
+ask in Connector Control first. Turning a connector on or off and switching collections are
 your everyday changes and don't ask; because they change what Claude runs, a
 notification says what Claude did. Creating, renaming or duplicating a
 collection, refreshing a subscription and changing one of the other settings
@@ -617,7 +618,7 @@ shown; if anything it depends on changed while the question was open,
 nothing is done: "This changed while Connector Control was asking, so
 nothing was done. Ask again."
 
-With the checkbox off, its caption warns "Claude can then change what it runs
+With that switch off, its note warns, in amber, "Claude can then change what it runs
 without asking here. Text Claude reads, such as a web page, could ask it
 to.", and each change Claude makes posts a notification instead.
 
@@ -633,8 +634,8 @@ Settings ▸ Claude ▸ **Command-Line Tool** ▸ **Install** puts
 
 - On a Mac, a link at `/usr/local/bin/connector-control` to the tool inside
   the app, with an administrator prompt when that folder isn't yours. The row
-  then reads "Installed at /usr/local/bin/connector-control" and "Run
-  connector-control help in Terminal." Install won't replace a file there
+  then reads "Installed in /usr/local/bin" and "Run connector-control help in
+  Terminal." Install won't replace a file there
   that isn't its own link, and is dimmed while the app runs from its disk
   image or from where it was downloaded.
 - On Windows, the tool's folder in your user PATH, with no prompt. The row
@@ -944,13 +945,27 @@ file.
   </tr>
 </table>
 
-**General** covers launch-at-login, the confirmation prompts, outside-change
-notifications, and updates. **Storage** is where the master list lives (point
-it at a synced folder to share connectors across machines) and how many
-backups to keep. **Claude** lets you choose which Claude app to restart and
-shows whether the launchers connectors depend on are installed; it also holds
-the **Claude Integration** switch and its confirmation checkbox, and the
-**Command-Line Tool** row (see Claude integration and command line).
+Every row reads the same way on both platforms: what it is on the left, with
+a one-line note under it, and its control on the right; every on/off setting
+is a switch. Each group has a heading, and a note about the whole group sits
+under its box.
+
+**General** has **Startup** (launch at login, or at startup on Windows),
+**Confirmations** (before restarting Claude, before quitting),
+**Notifications** (outside changes to the master list or a subscribed
+document) and **Updates** (install automatically, and the version with
+**Check for Updates**; a preview says "Previews update to later previews and
+the final release."). **Storage** has **Master List Location**, the folder
+the master list and collections.json live in, with **Use Default** and
+**Choose…** (point it at a synced folder to share connectors across
+machines), and **Backups**: how many of each file to keep, and the backups
+folder with **Reveal in Finder** (**Show in Explorer** on Windows) and
+**Restore…**. **Claude** has **Claude App**, the app to restart (on Windows,
+how Claude is installed, its config file and its launch target), the
+**Claude Integration** group's two switches, the **Command-Line Tool** row
+(see Claude integration and command line), and **Tools**: one line per
+launcher with its version or "Not found", and, under the box, how to install
+each missing family with its link and its brew or winget command.
 
 ### Syncing across machines
 

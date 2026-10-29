@@ -67,7 +67,7 @@ bullet once the section is about to ship.
 - Claude integration, off until you turn it on: Connector Control can add a connector of its own,
   connector-control, to Claude's config, so Claude can list, switch and edit your connectors. The
   popover or flyout offers it once; the switch is in Settings ▸ Claude, where "Confirm changes Claude
-  makes to connectors" is on by default.
+  makes" is on by default.
 - While that is on, Connector Control asks you before Claude adds, edits or deletes a connector,
   deletes a collection, imports, subscribes, applies an update or restores a backup, with Don't
   Allow the default; it always asks before Claude restarts itself. Turning a connector on or off and
@@ -116,6 +116,9 @@ bullet once the section is about to ship.
   whole command line in one argument that holds a URL with a query reads as ••• in full.
 - Claude's connection keeps working after Connector Control restarts, and its relay always ends
   once Claude closes it, whatever calls Claude cancelled on the way.
+- Settings reads the same way everywhere: each row says what it is on the left, with a one-line note
+  under it, and has its control on the right; every group has a heading, and every on/off setting
+  is a switch. A missing tool's row stays one line, and how to install it is under the Tools box.
 
 ### Release pipeline
 
