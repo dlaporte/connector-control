@@ -68,10 +68,10 @@ public static class ClaudeIntegrationCleanup
         }
     }
 
-    /// <summary>Everything the uninstaller takes away, as <see cref="ClaudeIntegrationCleanup"/> says. Each config is
-    /// backed up into the app's backups folder first, keeping as many backups as the person chose. The copy goes
-    /// before the PATH entry: Velopack ends the hook after 30 seconds, and the PATH change waits on every window's
-    /// answer to its broadcast. Each step stands alone: one that fails is said to <paramref name="failed"/> — the
+    /// <summary>Everything the uninstaller takes away, as <see cref="ClaudeIntegrationCleanup"/> says. The app's record
+    /// of itself goes first, so nothing starts the app again. Each config is backed up into the app's backups folder
+    /// first, keeping as many backups as the person chose. The copy goes before the PATH entry: Velopack ends the
+    /// hook after 30 seconds, and the PATH change waits on every window's answer to its broadcast. Each step stands alone: one that fails is said to <paramref name="failed"/> — the
     /// app's log — and never keeps another from running, since nobody will see the failure and this runs once.</summary>
     public static void Uninstall(PathContext paths, PathOverrides overrides, string dataDir, IUserEnvironment environment, int keepCount, Action<string>? failed = null) =>
         Uninstall(paths, overrides, dataDir, environment, keepCount, failed, ControlToolCopy.Remove, ClaudeConfigIO.Write);
@@ -84,6 +84,17 @@ public static class ClaudeIntegrationCleanup
         write ??= ClaudeConfigIO.Write;
         var tool = ControlToolCopy.ToolPath(dataDir);
         var bin = ControlToolCopy.BinDir(dataDir);
+        var record = Path.Combine(bin, ControlEndpoint.AppPathFileName);
+        // First, before any config is changed: Velopack stops the app before it runs this hook, and a relay that
+        // gets a call in between would start it again from this record — putting back the entry this hook takes
+        // away, and holding current\ open. Without the record the copy finds no app to start.
+        Step(failed, $"The app's record could not be deleted from {bin}", () =>
+        {
+            if (File.Exists(record))
+            {
+                File.Delete(record);
+            }
+        });
         IReadOnlyList<string> configs = [];
         BackupManager? backups = null;
         Step(failed, "The Claude configs could not be listed", () => configs = CandidateConfigs(paths, overrides));

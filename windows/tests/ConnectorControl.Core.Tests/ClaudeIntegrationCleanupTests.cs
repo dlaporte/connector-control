@@ -224,6 +224,59 @@ public class ClaudeIntegrationCleanupTests : IDisposable
         Assert.Contains("could not be deleted", Assert.Single(reported));
     }
 
+    /// <summary>The app's record of itself goes first, before any config is changed: Velopack has already stopped
+    /// the app, and a relay that gets a call meanwhile would start it again from that record.</summary>
+    [Fact]
+    public void TheAppsRecordGoesBeforeAnyConfigIsChanged()
+    {
+        Write(RoamingConfig, (ClaudeIntegration.EntryName, ClaudeIntegration.Entry(Tool)));
+        Directory.CreateDirectory(Bin);
+        var record = System.IO.Path.Combine(Bin, ControlEndpoint.AppPathFileName);
+        File.WriteAllText(record, dir.File("current/ConnectorControl.exe"));
+        var recordAtWrite = new List<bool>();
+        // The copy step does nothing here, so only the record's own step can have deleted it.
+        ClaudeIntegrationCleanup.Uninstall(Paths(), new PathOverrides(), DataDir, new FakeEnvironment(null), BackupManager.DefaultKeepCount, null,
+            _ => { }, (servers, path) =>
+            {
+                recordAtWrite.Add(File.Exists(record));
+                ClaudeConfigIO.Write(servers, path);
+            });
+        Assert.Equal([false], recordAtWrite);
+    }
+
+    /// <summary>A record that cannot be deleted — held open on Windows, its folder read-only elsewhere — is reported,
+    /// and the configs are still tidied.</summary>
+    [Fact]
+    public void ARecordThatCannotBeDeletedIsReportedAndTheConfigsStillGo()
+    {
+        Write(RoamingConfig, (ClaudeIntegration.EntryName, ClaudeIntegration.Entry(Tool)));
+        Directory.CreateDirectory(Bin);
+        var record = System.IO.Path.Combine(Bin, ControlEndpoint.AppPathFileName);
+        File.WriteAllText(record, dir.File("current/ConnectorControl.exe"));
+        var reported = new List<string>();
+        using (OperatingSystem.IsWindows() ? new FileStream(record, FileMode.Open, FileAccess.Read, FileShare.Read) : null)
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(Bin, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            }
+            try
+            {
+                ClaudeIntegrationCleanup.Uninstall(Paths(), new PathOverrides(), DataDir, new FakeEnvironment(null), BackupManager.DefaultKeepCount, reported.Add);
+            }
+            finally
+            {
+                if (!OperatingSystem.IsWindows())
+                {
+                    File.SetUnixFileMode(Bin, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                }
+            }
+        }
+        Assert.Contains(reported, line => line.StartsWith("The app's record could not be deleted", StringComparison.Ordinal));
+        Assert.True(File.Exists(record));
+        Assert.Empty(ClaudeConfigIO.ReadMcpServers(RoamingConfig));
+    }
+
     [Fact]
     public void APathStepThatThrowsIsReported()
     {

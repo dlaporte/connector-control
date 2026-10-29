@@ -6,7 +6,7 @@ namespace ConnectorControl.App.Services;
 
 /// <summary>
 /// What Velopack runs before it uninstalls the app (<see cref="ClaudeIntegrationCleanup.Uninstall"/> over the live
-/// paths, the settings' overrides and the registry). Velopack allows it 60 seconds and then ends the process, so
+/// paths, the settings' overrides and the registry). Velopack allows it 30 seconds and then ends the process, so
 /// it waits on nothing slow and never throws: an uninstall must not fail for what it tidies, and the worst left
 /// behind is an entry Claude shows as failed.
 /// </summary>
