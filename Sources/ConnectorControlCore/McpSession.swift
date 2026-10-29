@@ -322,7 +322,7 @@ public final class McpSession {
                 comma = true
             } else if byte == UInt8(ascii: "]") || byte == UInt8(ascii: "}") {
                 if comma { return true }
-            } else if ![UInt8(ascii: " "), UInt8(ascii: "\t"), UInt8(ascii: "\n"), UInt8(ascii: "\r")].contains(byte) {
+            } else if byte != UInt8(ascii: " "), byte != UInt8(ascii: "\t"), byte != UInt8(ascii: "\n"), byte != UInt8(ascii: "\r") {
                 comma = false
                 if byte == UInt8(ascii: "\"") { inString = true }
             }
