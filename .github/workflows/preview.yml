@@ -153,14 +153,22 @@ jobs:
           VERSION: ${{ steps.derive.outputs.version }}
           NEXT: ${{ steps.derive.outputs.next }}
           NUMBER: ${{ steps.derive.outputs.number }}
+        # Two texts, as release.yml has: notes.md is what the update dialogs show (embedded in
+        # the Mac appcast and the Windows packages), body.md the prerelease's page, which adds
+        # the install and go-back instructions and the commit list a dialog has no use for.
         run: |
-          ./scripts/release/preview-notes.sh "$TAG" "$VERSION" "$NEXT" "$NUMBER" > notes.md
+          ./scripts/release/preview-notes.sh --dialog "$TAG" "$VERSION" "$NEXT" "$NUMBER" > notes.md
+          ./scripts/release/preview-notes.sh "$TAG" "$VERSION" "$NEXT" "$NUMBER" > body.md
           cat notes.md
+          echo '---'
+          cat body.md
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: notes
-          path: notes.md
+          path: |
+            notes.md
+            body.md
           if-no-files-found: error
 
   mac-test:
@@ -261,7 +269,7 @@ jobs:
         run: |
           ./scripts/release/ensure-release.sh "$TAG" --prerelease \
             --title "Connector Control $VERSION (preview)" \
-            --notes notes/notes.md --target "$GITHUB_SHA" \
+            --notes notes/body.md --target "$GITHUB_SHA" \
             "mac/ConnectorControl_$VERSION.dmg" mac/appcast.xml
 
       # gh, not vpk, uploads everything; a re-run skips a RID whose assets are all published
@@ -315,6 +323,8 @@ jobs:
       TAG: ${{ needs.prepare.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # Copies preview-<n>'s published appcast.xml onto preview-feed (creating it the first
       # time), unless the feed already announces a newer build; then fetches the feed the way
