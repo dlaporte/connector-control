@@ -116,7 +116,7 @@ public class VelopackUpdaterTests
         File.WriteAllText(updateExe, "stub");
         (string Package, string? UpdateExe, UpdateVerifier.RunningIdentity Identity)? seen = null;
         var locator = new TestVelopackLocator("ConnectorControl", "1.3.1", packages.Path, appDir: null, rootDir: null, updateExe: updateExe, channel: "win-x64");
-        var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (p, u, id, running, feed) => { seen = (p, u, id); return "refused by the test verifier"; }, verifyInstalled: (_, _) => null);
+        var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (p, u, id, running, feed) => { seen = (p, u, id); return "refused by the test verifier"; }, verifyInstalled: (_, _) => null, log: _ => { });
         var asset = Asset();
         var packagePath = packages.File(asset.FileName);
         File.WriteAllText(packagePath, "not really a package");
@@ -134,7 +134,7 @@ public class VelopackUpdaterTests
         var updateExe = packages.File("Update.exe");
         File.WriteAllText(updateExe, "stub");
         var locator = new TestVelopackLocator("ConnectorControl", "1.3.1", packages.Path, appDir: null, rootDir: null, updateExe: updateExe, channel: "win-x64");
-        var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (_, _, _, _, _) => null, verifyInstalled: (_, _) => null);
+        var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (_, _, _, _, _) => null, verifyInstalled: (_, _) => null, log: _ => { });
         var asset = Asset();
         File.WriteAllText(packages.File(asset.FileName), "package");
         updater.VerifyDownloaded(new UpdateInfo(asset, isDowngrade: false), knownGoodUpdater: null, TestIdentity);
@@ -148,7 +148,7 @@ public class VelopackUpdaterTests
         var updateExe = packages.File("Update.exe");
         File.WriteAllText(updateExe, "from the refused package");
         var locator = new TestVelopackLocator("ConnectorControl", "1.3.1", packages.Path, appDir: null, rootDir: null, updateExe: updateExe, channel: "win-x64");
-        var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (_, _, _, _, _) => "refused", verifyInstalled: (_, _) => null);
+        var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (_, _, _, _, _) => "refused", verifyInstalled: (_, _) => null, log: _ => { });
         var asset = Asset();
         File.WriteAllText(packages.File(asset.FileName), "package");
         Assert.Throws<UpdateVerificationException>(() => updater.VerifyDownloaded(new UpdateInfo(asset, isDowngrade: false), "the one that was there before"u8.ToArray(), TestIdentity));
@@ -162,7 +162,7 @@ public class VelopackUpdaterTests
         var updateExe = packages.File("Update.exe");
         File.WriteAllText(updateExe, "from the refused package");
         var locator = new TestVelopackLocator("ConnectorControl", "1.3.1", packages.Path, appDir: null, rootDir: null, updateExe: updateExe, channel: "win-x64");
-        var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (_, _, _, _, _) => "refused", verifyInstalled: (_, _) => null);
+        var updater = new VelopackUpdater(_ => new RecordingSource(), locator, verify: (_, _, _, _, _) => "refused", verifyInstalled: (_, _) => null, log: _ => { });
         var asset = Asset();
         File.WriteAllText(packages.File(asset.FileName), "package");
         Assert.Throws<UpdateVerificationException>(() => updater.VerifyDownloaded(new UpdateInfo(asset, isDowngrade: false), knownGoodUpdater: null, TestIdentity));
