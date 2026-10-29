@@ -1,4 +1,7 @@
+using System.Buffers;
 using System.Collections.Immutable;
+using System.Globalization;
+using System.Numerics;
 using System.Text;
 using System.Text.Json;
 
@@ -245,12 +248,57 @@ public sealed class JsonValue : IEquatable<JsonValue>
             throw new JsonException("Number is out of range for a double.");
         }
         // Apple's JSONDecoder decodes 2.0, 1e2 and 100.000 as Int; mirror it so
-        // re-parsing our own output never flips a value between kinds.
-        if (Math.Floor(d) == d && d >= -9223372036854775808.0 && d < 9223372036854775808.0)
+        // re-parsing our own output never flips a value between kinds. A whole number is read from the
+        // token itself, as the Mac reads it, so 9007199254740993.0 is that integer, not the double
+        // nearest it. The Mac reads a number whose double is 2^63 or more, and -2^63 itself, as a double.
+        var token = reader.HasValueSequence ? reader.ValueSequence.ToArray() : reader.ValueSpan.ToArray();
+        if (WholeNumber(token) is { } whole)
+        {
+            return whole > long.MinValue && d < 9223372036854775808.0 ? Int((long)whole) : Double(d);
+        }
+        if (Math.Floor(d) == d && d > -9223372036854775808.0 && d < 9223372036854775808.0)
         {
             return Int((long)d);
         }
         return Double(d);
+    }
+
+    /// <summary>The number a JSON number token holds exactly, when it is a whole number no longer than 20 digits
+    /// (every 64-bit integer); null for a fraction, or a whole number too long to be one. The reader has already
+    /// checked the token's grammar: an optional minus, digits, an optional fraction, an optional exponent.</summary>
+    private static BigInteger? WholeNumber(byte[] token)
+    {
+        var text = Encoding.ASCII.GetString(token);
+        var negative = text.StartsWith('-');
+        if (negative)
+        {
+            text = text[1..];
+        }
+        var e = text.IndexOfAny(['e', 'E']);
+        var mantissa = e < 0 ? text : text[..e];
+        var exponentText = e < 0 ? "0" : text[(e + 1)..];
+        var point = mantissa.IndexOf('.');
+        var digits = point < 0 ? mantissa : mantissa[..point] + mantissa[(point + 1)..];
+        var fractionLength = point < 0 ? 0 : mantissa.Length - point - 1;
+        digits = digits.TrimStart('0');
+        if (digits.Length == 0)
+        {
+            return BigInteger.Zero;   // zero, whatever its exponent
+        }
+        var trimmed = digits.TrimEnd('0');
+        // An exponent too long for an int is far past 20 digits either way.
+        if (!int.TryParse(exponentText, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var exponent))
+        {
+            return null;
+        }
+        var scale = (long)exponent - fractionLength + (digits.Length - trimmed.Length);
+        if (scale < 0 || trimmed.Length + scale > 20)
+        {
+            return null;
+        }
+        var value = BigInteger.Parse(trimmed, CultureInfo.InvariantCulture)
+            * BigInteger.Pow(10, (int)scale);
+        return negative ? -value : value;
     }
 
     // MARK: equality

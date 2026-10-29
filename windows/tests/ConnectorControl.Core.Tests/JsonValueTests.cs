@@ -42,6 +42,23 @@ public class JsonValueTests
         Assert.Equal(JsonValue.Int(0), value["n"]);
     }
 
+    /// <summary>A number written with a fraction or an exponent that is a whole number reads as that integer
+    /// exactly, past where a double is exact; the 64-bit extremes read as doubles, as the Mac's JSONDecoder gives
+    /// them.</summary>
+    [Theory]
+    [InlineData("9007199254740993.0", 9007199254740993L, null)]
+    [InlineData("123456789012345678.0", 123456789012345678L, null)]
+    [InlineData("1234567890123456780e-1", 123456789012345678L, null)]
+    [InlineData("-9223372036854775807.0", -9223372036854775807L, null)]
+    [InlineData("-9223372036854775808.0", null, -9223372036854775808.0)]
+    [InlineData("9223372036854775807.0", null, 9223372036854775808.0)]
+    [InlineData("1e19", null, 1e19)]
+    public void WholeNumbersWithAFractionOrExponentReadExactly(string text, long? integer, double? number)
+    {
+        var expected = integer is { } i ? JsonValue.Int(i) : JsonValue.Double(number!.Value);
+        Assert.Equal(JsonValue.Array([expected]), JsonValue.Parse("[" + text + "]"));
+    }
+
     [Fact]
     public void IntegersBeyondInt64BecomeDoubles()
     {

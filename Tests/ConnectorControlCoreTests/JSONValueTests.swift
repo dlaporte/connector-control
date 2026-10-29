@@ -75,6 +75,24 @@ final class JSONValueTests: XCTestCase {
         }
     }
 
+    /// A number written with a fraction or an exponent that is a whole number reads as that integer
+    /// exactly, past where a double is exact; the 64-bit extremes read as doubles, as `JSONDecoder` gives
+    /// them. The Windows mirror reads the token itself to give the same.
+    func testWholeNumbersWithAFractionOrExponentReadExactly() throws {
+        let cases: [(String, JSONValue)] = [
+            ("9007199254740993.0", .int(9_007_199_254_740_993)),
+            ("123456789012345678.0", .int(123_456_789_012_345_678)),
+            ("1234567890123456780e-1", .int(123_456_789_012_345_678)),
+            ("-9223372036854775807.0", .int(-9_223_372_036_854_775_807)),
+            ("-9223372036854775808.0", .double(-9_223_372_036_854_775_808.0)),
+            ("9223372036854775807.0", .double(9_223_372_036_854_775_808.0)),
+            ("1e19", .double(1e19)),
+        ]
+        for (text, expected) in cases {
+            XCTAssertEqual(try JSONValue.parse(Data("[\(text)]".utf8)), .array([expected]), text)
+        }
+    }
+
     func testIntAndDoubleWithSameValueAreDifferentKinds() {
         XCTAssertNotEqual(JSONValue.int(2), JSONValue.double(2.0))
     }
