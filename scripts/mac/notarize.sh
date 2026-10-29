@@ -30,4 +30,14 @@ xcrun notarytool submit "$SUBMIT_FILE" \
   --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" \
   --team-id "$APPLE_TEAM_ID" --wait
 
-xcrun stapler staple "$TARGET"
+# Stapling fetches the ticket from Apple's CDN, which can lag the Accepted status or drop the
+# connection (error 68: "CloudKit's response is inconsistent", "network connection was lost"),
+# so it is retried before the step fails.
+for attempt in 1 2 3 4 5; do
+  xcrun stapler staple "$TARGET" && exit 0
+  [ "$attempt" -lt 5 ] || break
+  echo "Stapling failed (attempt $attempt of 5); retrying in 30 seconds."
+  sleep 30
+done
+echo "::error::Could not staple $TARGET after 5 attempts"
+exit 1
