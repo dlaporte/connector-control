@@ -69,8 +69,8 @@ extension ControlTools {
         if case .string(let url)? = object["url"], !url.trimmingCharacters(in: .whitespaces).isEmpty { runnable = true }
         guard runnable else { return configShapeError }
         if RemotePattern.isCanonicalShape(config), RemotePattern.detect(config) == nil { return EditorModel.invalidURLError }
-        // The Windows mirror refuses here what its cmd /c launcher would hand to cmd.exe, which treats
-        // & | < > ^ " and spaces as commands; the Mac never writes that launcher, so there is no such check.
+        // Platform idiom: the Windows mirror refuses here what its cmd /c launcher would hand to cmd.exe, which
+        // treats & | < > ^ " and spaces as commands; the Mac never writes that launcher, so there is no such check.
         return nil
     }
 
@@ -423,10 +423,12 @@ extension ControlTools {
         // Platform idiom: a URL takes any text, and the read below refuses what names no file; the
         // Windows mirror first refuses a path .NET cannot make full.
         let url = URL(fileURLWithPath: path).standardizedFileURL
-        // The Windows mirror first refuses, by its form, a path that reaches another computer or a
-        // device: the relay any that starts with \\ or \??\ once made full — opening one has Windows
+        // Platform idiom: the Windows mirror first refuses, by its form, a path that reaches another computer
+        // or a device: the relay any that starts with \\ or \??\ once made full — opening one has Windows
         // sign in to that host as the user, with nothing asked — and every caller a \\.\ path or a
-        // \\?\ or \??\ path to anything but a drive or a share. A Mac path has no such form.
+        // \\?\ or \??\ path to anything but a drive or a share. A Mac path has no such form: a share is
+        // read through /net or /Volumes, a mount the person already made, so reading it signs in nowhere
+        // on their behalf, and a device is refused below as not a regular file.
         if let refusal = ControlTools.documentFileRefusal(url) { return .refused(refusal) }
         let file = ControlText.escapedName(url.lastPathComponent)
         let (read, bytes, failure) = AppState.readDocument(at: url)

@@ -89,8 +89,8 @@ public sealed partial class ControlTools
         {
             return EditorModel.InvalidUrlError;
         }
-        // The cmd /c launcher hands these fields to cmd.exe, which treats & | < > ^ " and spaces as
-        // commands; the Mac never writes that launcher, so its mirror has no such check.
+        // Platform idiom: the cmd /c launcher hands these fields to cmd.exe, which treats & | < > ^ " and spaces
+        // as commands; the Mac never writes that launcher, so its mirror has no such check.
         if (RemotePattern.Decode(config) is { LaunchStyle: RemoteLaunchStyle.CmdNpx } remote
             && RemotePattern.CmdUnsafeField(remote) is { } field)
         {
@@ -307,6 +307,7 @@ public sealed partial class ControlTools
     public const string RestartMessage = "Claude Desktop will quit and reopen to pick up the change. The reply in progress stops; the conversation is kept.";
     public const string RestartingText = "Restarting Claude Desktop.";
     public const string IntoOrNewCollectionError = "Give “into” or “newCollection”, not both.";
+    // Platform idiom: Windows only, as PathRefusal is; the Mac reads a share through a mount the person made.
     public const string NetworkPathError = "Only the command-line tool can read a file on a network share or through a device path. Copy it to this PC first.";
 
     public static string DeleteCollectionTitle(string shownAsker, string collection) => $"{shownAsker} wants to delete the collection “{collection}”";
@@ -523,14 +524,14 @@ public sealed partial class ControlTools
         }
     }
 
+    // Platform idiom: the Mac has no such refusal. Its paths have no form that reaches another computer: a share
+    // is read through /net or /Volumes, a mount the person already made, so reading it signs in nowhere for them.
     /// <summary>Why <paramref name="caller"/> may not read the document at <paramref name="full"/>, a full path,
-    /// by its form alone, or null. Windows-forced, as the <c>cmd /c</c> launcher's rule is: the relay is
-    /// refused any path that starts with <c>\\</c> or <c>\??\</c> — a UNC or WebDAV path, or another device
-    /// form — since opening one has Windows sign in to that host as the user, with nothing asked, while the
+    /// by its form alone, or null. The relay is refused any path that starts with <c>\\</c> or <c>\??\</c> — a UNC
+    /// or WebDAV path, or another device form — since opening one has Windows sign in to that host as the user, with nothing asked, while the
     /// command-line tool keeps its team shares; and a <c>\\.\</c> path, Windows' way to a device or a pipe,
     /// or a <c>\\?\</c> or <c>\??\</c> path to anything but a drive or a share, is refused to everyone, since
-    /// the rule cannot tell where it leads. The Mac mirror's paths have no such form. Pure, so it is tested
-    /// on any platform.</summary>
+    /// the rule cannot tell where it leads. Pure, so it is tested on any platform.</summary>
     internal static string? PathRefusal(string full, ControlCaller caller)
     {
         if (full.StartsWith(@"\\.\", StringComparison.Ordinal) || IsDeviceNamespace(full))

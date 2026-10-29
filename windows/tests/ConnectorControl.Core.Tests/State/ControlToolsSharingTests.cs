@@ -361,7 +361,7 @@ public class ControlToolsSharingTests
     // Windows file system has none — a pipe here is a \\.\ path, or a \\?\ or \??\ one to neither a
     // drive nor a share, refused by its form below — so there is no such test here.
 
-    /// <summary>Windows-forced, as the <c>cmd /c</c> launcher's rule is: a path that reaches another computer
+    /// <summary>Platform idiom, as the <c>cmd /c</c> launcher's rule is: a path that reaches another computer
     /// or a device is refused by its form, before anything touches it. The relay is refused any full path
     /// that starts with <c>\\</c> or <c>\??\</c> — opening a UNC or WebDAV path has Windows sign in to that host
     /// as the user, with nothing asked — while the command-line tool keeps its team shares; a <c>\\.\</c> path,
@@ -401,7 +401,7 @@ public class ControlToolsSharingTests
         Assert.Equal(ControlTools.NetworkPathError, ControlTools.PathRefusal(@"\??\C:\Users\me\x.json", relay));
     }
 
-    /// <summary>Windows-forced: a share named with forward slashes is the same share once made full, and the relay
+    /// <summary>Platform idiom: a share named with forward slashes is the same share once made full, and the relay
     /// is refused it before anything is asked or read.</summary>
     [Fact]
     public void TheRelayIsRefusedAShareNamedWithForwardSlashes()
