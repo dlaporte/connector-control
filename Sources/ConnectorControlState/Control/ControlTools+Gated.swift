@@ -426,9 +426,10 @@ extension ControlTools {
         // Platform idiom: the Windows mirror first refuses, by its form, a path that reaches another computer
         // or a device: the relay any that starts with \\ or \??\ once made full — opening one has Windows
         // sign in to that host as the user, with nothing asked — and every caller a \\.\ path or a
-        // \\?\ or \??\ path to anything but a drive or a share. A Mac path has no such form: a share is
-        // read through /net or /Volumes, a mount the person already made, so reading it signs in nowhere
-        // on their behalf, and a device is refused below as not a regular file.
+        // \\?\ or \??\ path to anything but a drive or a share. A Mac path has no such form. A path under
+        // /Volumes is a share the person mounted themselves; one under /net is mounted by autofs on first
+        // access, but as an NFS mount that sends none of the person's credentials, so neither signs in
+        // anywhere on their behalf. A device is refused below as not a regular file.
         if let refusal = ControlTools.documentFileRefusal(url) { return .refused(refusal) }
         let file = ControlText.escapedName(url.lastPathComponent)
         let (read, bytes, failure) = AppState.readDocument(at: url)

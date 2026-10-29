@@ -307,7 +307,7 @@ public sealed partial class ControlTools
     public const string RestartMessage = "Claude Desktop will quit and reopen to pick up the change. The reply in progress stops; the conversation is kept.";
     public const string RestartingText = "Restarting Claude Desktop.";
     public const string IntoOrNewCollectionError = "Give “into” or “newCollection”, not both.";
-    // Platform idiom: Windows only, as PathRefusal is; the Mac reads a share through a mount the person made.
+    // Platform idiom: Windows only, as PathRefusal is; reading a Mac share sends none of the person's credentials.
     public const string NetworkPathError = "Only the command-line tool can read a file on a network share or through a device path. Copy it to this PC first.";
 
     public static string DeleteCollectionTitle(string shownAsker, string collection) => $"{shownAsker} wants to delete the collection “{collection}”";
@@ -524,8 +524,9 @@ public sealed partial class ControlTools
         }
     }
 
-    // Platform idiom: the Mac has no such refusal. Its paths have no form that reaches another computer: a share
-    // is read through /net or /Volumes, a mount the person already made, so reading it signs in nowhere for them.
+    // Platform idiom: the Mac has no such refusal. A path under /Volumes is a share the person mounted themselves;
+    // one under /net is mounted by autofs on first access, but as an NFS mount that sends none of the person's
+    // credentials, so neither signs in anywhere on their behalf, as opening a UNC path here does.
     /// <summary>Why <paramref name="caller"/> may not read the document at <paramref name="full"/>, a full path,
     /// by its form alone, or null. The relay is refused any path that starts with <c>\\</c> or <c>\??\</c> — a UNC
     /// or WebDAV path, or another device form — since opening one has Windows sign in to that host as the user, with nothing asked, while the
