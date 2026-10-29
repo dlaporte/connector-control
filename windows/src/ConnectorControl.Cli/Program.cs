@@ -38,15 +38,11 @@ internal static class Program
 
     private static int Execute(string[] args, ConsoleText console)
     {
-        var environment = PathContext.Live().Environment;
-        var toolPath = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, ControlEndpoint.ToolFileName);
-        var version = ToolVersion();
-        var pipe = ControlEndpoint.PipeName(environment, ControlEndpoint.CurrentUserSid());
+        // The arguments first: help, --version and a usage error need nothing of this PC's — no environment, no
+        // SID — so nothing about it can keep them from answering. Only a command that goes to the app looks for
+        // its pipe.
         var invocation = ControlCommandLine.Parse(args, Environment.CurrentDirectory, File.ReadAllBytes);
-        // Starting is allowed only for the tool that came with an app (AppExecutable finds no other), and
-        // never while CONNECTOR_CONTROL_STORE_DIR names a store the app it would start does not read.
-        Func<bool>? launch = ControlEndpoint.MayStartApp(environment) ? () => Launch(toolPath) : null;
-        ControlClient Client(Action? announce) => new(() => ControlPipe.TryConnect(pipe, ConnectWait), launch, announce);
+        var version = ToolVersion();
         switch (invocation)
         {
             case ControlInvocation.Help:
@@ -69,6 +65,19 @@ internal static class Program
             default:
                 throw new System.Diagnostics.UnreachableException();
         }
+    }
+
+    /// <summary>The way to the running app, worked out only for a command that goes to it: its pipe, and whether
+    /// this tool may start it.</summary>
+    private static ControlClient Client(Action? announce)
+    {
+        var environment = PathContext.Live().Environment;
+        var toolPath = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, ControlEndpoint.ToolFileName);
+        var pipe = ControlEndpoint.PipeName(environment, ControlEndpoint.CurrentUserSid());
+        // Starting is allowed only for the tool that came with an app (AppExecutable finds no other), and
+        // never while CONNECTOR_CONTROL_STORE_DIR names a store the app it would start does not read.
+        Func<bool>? launch = ControlEndpoint.MayStartApp(environment) ? () => Launch(toolPath) : null;
+        return new ControlClient(() => ControlPipe.TryConnect(pipe, ConnectWait), launch, announce);
     }
 
     private static int Emit(ConsoleText console, ControlOutput output)
