@@ -26,7 +26,7 @@
 #                               fail without failing the release (see the job).
 #
 # Trigger: exact vX.Y.Z tags only (see below). workflow_dispatch runs everything EXCEPT
-# publish — a rehearsal that cannot create a release (its version input names the
+# publish and preview-feed — a rehearsal that cannot create a release (its version input names the
 # CHANGELOG section and stamps the packages; the artifacts are the only output).
 #
 # Required secrets. The Mac set belongs in the "signing" GitHub Environment (Settings ▸
