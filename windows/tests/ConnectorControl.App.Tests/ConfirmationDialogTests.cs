@@ -272,18 +272,22 @@ public class ConfirmationDialogTests
                 ShowOffScreen(dialog);
                 var lines = Lines(dialog);
                 Assert.Equal(7, lines.Count);
+                var ink = Ink.Of(dialog, lines);
                 for (var index = 0; index < 4; index++)
                 {
-                    var rows = InkRows(lines[index]);
-                    Assert.NotEmpty(rows);
-                    var measured = $"ink {rows.Min()}–{rows.Max()}, box 0–{lines[index].ActualHeight}, padding {lines[index].Padding}";
-                    Assert.True(rows.Min() > 0, $"line {index}'s ink clears its box's top: {measured}");
-                    Assert.True(rows.Max() < lines[index].ActualHeight - 1, $"line {index}'s ink clears its box's bottom: {measured}");
+                    var box = ink.Box(lines[index]);
+                    var rows = ink.RowsIn(box);
+                    var (first, last) = ink.Rows(box);
+                    var measured = $"{ink.Report}; box {box.Top}–{box.Bottom} (rows {first}–{last}), padding {lines[index].Padding}; " +
+                                   $"ink rows {(rows.Count == 0 ? "none" : $"{rows.Min()}–{rows.Max()}")}, {ink.PixelsIn(box)} pixels";
+                    Assert.True(rows.Count > 0, $"line {index} is drawn: {measured}");
+                    Assert.True(rows.Min() > first, $"line {index}'s ink clears its box's top: {measured}");
+                    Assert.True(rows.Max() < last, $"line {index}'s ink clears its box's bottom: {measured}");
                 }
-                // The blank line between two stacks, drawn as the panel draws it, holds no ink.
-                var panel = InkRowsOf(dialog.CodeLines);
-                var top = Top(lines[5], dialog);
-                Assert.DoesNotContain(panel, row => row >= top && row < top + lines[5].ActualHeight);
+                // The blank line between two stacks holds no ink.
+                var blank = ink.Box(lines[5]);
+                Assert.True(ink.PixelsIn(blank) == 0, $"no mark reaches the line between two stacks: {ink.PixelsIn(blank)} pixels in " +
+                    $"{blank.Top}–{blank.Bottom}; {ink.Report}");
             }
             finally
             {
@@ -292,50 +296,97 @@ public class ConfirmationDialogTests
         });
     }
 
-    /// <summary>The rows of <paramref name="line"/>, in its own device-independent pixels, that hold any ink.</summary>
-    private static List<double> InkRows(FrameworkElement line) => InkRowsOf(line);
-
-    /// <summary>The rows of <paramref name="element"/>, as drawn with its clip, that hold any ink.</summary>
-    private static List<double> InkRowsOf(FrameworkElement element)
+    /// <summary>
+    /// The code lines' ink, as the dialog draws it: the whole window rendered twice, once as it is and once with the
+    /// lines made fully transparent, and every pixel that differs is ink. The window is the root, so nothing it holds is
+    /// drawn at an offset of its own; the comparison needs no knowledge of the theme's background or the text's colour.
+    /// Rows and boxes are in the window's device-independent pixels.
+    /// </summary>
+    private sealed class Ink
     {
-        var dpi = VisualTreeHelper.GetDpi(element);
-        var width = Math.Max(1, (int)Math.Ceiling(element.ActualWidth * dpi.DpiScaleX));
-        var height = Math.Max(1, (int)Math.Ceiling(element.ActualHeight * dpi.DpiScaleY));
-        var bitmap = new RenderTargetBitmap(width, height, dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
-        var visual = new DrawingVisual();
-        using (var context = visual.RenderOpen())
+        private readonly FrameworkElement window;
+        private readonly bool[,] differs;
+        private readonly double scale;
+
+        private Ink(FrameworkElement window, bool[,] differs, double scale, string report)
         {
-            // The element's own coordinates, one to one: a brush left to its defaults stretches the content's bounds
-            // over the rectangle, which would move the rows it reports.
-            var area = new Rect(0, 0, element.ActualWidth, element.ActualHeight);
-            var brush = new VisualBrush(element)
-            {
-                Stretch = Stretch.None,
-                AlignmentX = AlignmentX.Left,
-                AlignmentY = AlignmentY.Top,
-                ViewboxUnits = BrushMappingMode.Absolute,
-                Viewbox = area,
-                ViewportUnits = BrushMappingMode.Absolute,
-                Viewport = area,
-            };
-            context.DrawRectangle(brush, null, area);
+            this.window = window;
+            this.differs = differs;
+            this.scale = scale;
+            Report = report;
         }
-        bitmap.Render(visual);
-        var pixels = new byte[width * height * 4];
-        bitmap.CopyPixels(pixels, width * 4, 0);
-        var rows = new List<double>();
-        for (var y = 0; y < height; y++)
+
+        /// <summary>The bitmap's size and how many pixels differ, for a failure's message.</summary>
+        public string Report { get; }
+
+        public static Ink Of(Window window, IReadOnlyList<TextBox> lines)
         {
-            for (var x = 0; x < width; x++)
+            var dpi = VisualTreeHelper.GetDpi(window);
+            var width = Math.Max(1, (int)Math.Ceiling(window.ActualWidth * dpi.DpiScaleX));
+            var height = Math.Max(1, (int)Math.Ceiling(window.ActualHeight * dpi.DpiScaleY));
+            byte[] Render()
             {
-                if (pixels[(y * width + x) * 4 + 3] > 12)
+                var bitmap = new RenderTargetBitmap(width, height, dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
+                bitmap.Render(window);
+                var pixels = new byte[width * height * 4];
+                bitmap.CopyPixels(pixels, width * 4, 0);
+                return pixels;
+            }
+            var drawn = Render();
+            foreach (var line in lines)
+            {
+                line.Opacity = 0;
+            }
+            var blank = Render();
+            foreach (var line in lines)
+            {
+                line.Opacity = 1;
+            }
+            var differs = new bool[height, width];
+            var count = 0;
+            for (var y = 0; y < height; y++)
+            {
+                for (var x = 0; x < width; x++)
                 {
-                    rows.Add(y / dpi.DpiScaleY);
-                    break;
+                    var at = (y * width + x) * 4;
+                    if (Math.Abs(drawn[at] - blank[at]) + Math.Abs(drawn[at + 1] - blank[at + 1]) + Math.Abs(drawn[at + 2] - blank[at + 2])
+                        + Math.Abs(drawn[at + 3] - blank[at + 3]) > 24)
+                    {
+                        differs[y, x] = true;
+                        count++;
+                    }
                 }
             }
+            return new Ink(window, differs, dpi.DpiScaleY, $"bitmap {width}×{height} at {dpi.DpiScaleY}x, {count} pixels of ink in all");
         }
-        return rows;
+
+        /// <summary>Where <paramref name="line"/>'s box is, in the window.</summary>
+        public Rect Box(FrameworkElement line) => line.TransformToAncestor(window).TransformBounds(new Rect(line.RenderSize));
+
+        /// <summary>The first and last rows of pixels wholly inside <paramref name="box"/>, in device-independent pixels: a row
+        /// it shares with the box beside it, at a scale that does not divide evenly, is left out.</summary>
+        public (double First, double Last) Rows(Rect box) => (PixelRows(box).First() / scale, PixelRows(box).Last() / scale);
+
+        /// <summary>The rows wholly inside <paramref name="box"/> that hold ink, in device-independent pixels.</summary>
+        public List<double> RowsIn(Rect box) =>
+            PixelRows(box).Where(y => Columns(box).Any(x => differs[y, x])).Select(y => y / scale).ToList();
+
+        /// <summary>How many pixels wholly inside <paramref name="box"/> are ink.</summary>
+        public int PixelsIn(Rect box) => PixelRows(box).Sum(y => Columns(box).Count(x => differs[y, x]));
+
+        private IEnumerable<int> PixelRows(Rect box)
+        {
+            var from = Math.Max(0, (int)Math.Ceiling(box.Top * scale - 0.001));
+            var to = Math.Min(differs.GetLength(0), (int)Math.Floor(box.Bottom * scale + 0.001));
+            return Enumerable.Range(from, Math.Max(1, to - from));
+        }
+
+        private IEnumerable<int> Columns(Rect box)
+        {
+            var from = Math.Max(0, (int)Math.Floor(box.Left * scale));
+            var to = Math.Min(differs.GetLength(1), (int)Math.Ceiling(box.Right * scale));
+            return Enumerable.Range(from, Math.Max(0, to - from));
+        }
     }
 
     /// <summary>The block is one stop for Tab, as one text box was, and Up and Down move the keyboard to the line above

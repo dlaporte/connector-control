@@ -96,7 +96,7 @@ public partial class ConfirmDialog : DialogWindow
                     break;
             }
             line.PreviewKeyDown += OnCodeLineKey;
-            line.GotKeyboardFocus += (_, _) => line.BringIntoView();
+            line.GotKeyboardFocus += (_, _) => ScrollIntoView(line);
             lines.Add(line);
         }
         if (lines.Count == 0)
@@ -127,7 +127,7 @@ public partial class ConfirmDialog : DialogWindow
     }
 
     /// <summary>The keyboard in the code block, as on the Mac: Up and Down move it to the line above or below, Page Up and
-    /// Page Down a block's height of lines, each scrolling the line it reaches into view; Left, Right, Home and End are
+    /// Page Down a block's height of lines, each scrolling the line it reaches, its whole box, into view (<see cref="ScrollIntoView"/>); Left, Right, Home and End are
     /// the line's own. The line it reaches is the block's one stop for Tab, which the panel's Once navigation keeps.</summary>
     private void OnCodeLineKey(object sender, KeyEventArgs e)
     {
@@ -152,8 +152,25 @@ public partial class ConfirmDialog : DialogWindow
         }
         var target = lines[Math.Clamp(index + step, 0, lines.Count - 1)];
         target.Focus();
-        target.BringIntoView();
+        ScrollIntoView(target);
         e.Handled = true;
+    }
+
+    /// <summary>Scrolls the block so the whole of <paramref name="line"/>'s box, its room above and below included, is in
+    /// view, by the least it can, as the Mac scrolls a line's box into view. Done from the box's place in the lines
+    /// rather than by BringIntoView, which, raised from a line, left the block where it was.</summary>
+    private void ScrollIntoView(TextBox line)
+    {
+        var top = line.TranslatePoint(new Point(0, 0), CodeLines).Y;
+        var bottom = top + line.ActualHeight;
+        if (top < CodeScroll.VerticalOffset)
+        {
+            CodeScroll.ScrollToVerticalOffset(top);
+        }
+        else if (bottom > CodeScroll.VerticalOffset + CodeScroll.ViewportHeight)
+        {
+            CodeScroll.ScrollToVerticalOffset(bottom - CodeScroll.ViewportHeight);
+        }
     }
 
     /// <summary>True when the primary button was chosen.</summary>
