@@ -94,6 +94,10 @@ jobs:
       - name: Build the DMG
         run: ./scripts/make-dmg.sh build/ConnectorControl-ci.dmg
 
+      # A busy hdiutil is retried and nothing else is: proved with a fake hdiutil, no image made.
+      - name: make-dmg.sh retries only a busy hdiutil
+        run: ./scripts/tests/make-dmg-retry.sh
+
       # Each build reads one update feed, picked from its version: releases/latest for a stable
       # version, the preview-feed prerelease's appcast for X.Y.Z-preview.N. build-app.sh fails on
       # a mismatched pairing itself; this proves both directions on the bundle that ships.
