@@ -31,8 +31,8 @@ public static class UserPath
         {
             return path!;
         }
-        var kept = (path ?? "").TrimEnd(';');
-        return kept.Length == 0 ? folder : kept + ";" + folder;
+        // Appended after every entry as written, empty ones included, so removing the folder gives the PATH back.
+        return string.IsNullOrEmpty(path) ? folder : path + ";" + folder;
     }
 
     public static string Removing(string? path, string folder) =>

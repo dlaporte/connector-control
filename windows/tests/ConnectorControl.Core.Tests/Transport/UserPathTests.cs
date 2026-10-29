@@ -22,7 +22,10 @@ public class UserPathTests
     {
         Assert.Equal(Bin, UserPath.Adding(null, Bin));
         Assert.Equal(@"C:\Windows;" + Bin, UserPath.Adding(@"C:\Windows", Bin));
-        Assert.Equal(@"C:\Windows;" + Bin, UserPath.Adding(@"C:\Windows;", Bin));
+        // a trailing empty entry stays as written, so removing gives back the PATH as it was
+        Assert.Equal(@"C:\Windows;;" + Bin, UserPath.Adding(@"C:\Windows;", Bin));
+        Assert.Equal(@"C:\Windows;", UserPath.Removing(UserPath.Adding(@"C:\Windows;", Bin), Bin));
+        Assert.Equal(@"C:\Windows;;;" + Bin, UserPath.Adding(@"C:\Windows;;", Bin));
         // already there: nothing is added again
         Assert.Equal(@"C:\Windows;" + Bin, UserPath.Adding(@"C:\Windows;" + Bin, Bin));
         // every other entry stays exactly as it was written
