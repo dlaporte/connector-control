@@ -53,7 +53,7 @@ struct SettingsView: View {
         // Tall enough that no tab scrolls: the Claude tab, the tallest, measures 637 with a missing tool
         // family in the Tools footer and a two-line amber note under the integration switch, and the rest
         // leaves room for one more wrapped note.
-        // Platform idiom: the Windows window is the same width but taller (820): its Fluent rows, buttons and
+        // Platform idiom: the Windows window is the same width but taller (840): its Fluent rows, buttons and
         // tab strip are taller, its Claude App group has three rows, and its height includes the title bar.
         .frame(width: 480, height: 660)
         .sheet(isPresented: $showRestore) {

@@ -449,7 +449,7 @@ public class SettingsWindowTests
         });
     }
 
-    /// <summary>At the window's own size, no tab scrolls, in the tallest state each shows: the Tools footer with a
+    /// <summary>The window asks for the height at which no tab scrolls, in the tallest state each shows: the Tools footer with a
     /// missing family, an installed command-line tool, and the integration on with the name-clash warning under its
     /// switch and the second switch's note under it. Shown, so the title bar and the tab strip take their real room.</summary>
     [Fact]
@@ -490,7 +490,11 @@ public class SettingsWindowTests
                     var measured = $"{name}: extent {scroller.ExtentHeight}, viewport {scroller.ViewportHeight}, window {window.ActualHeight}";
                     TestContext.Current.TestOutputHelper?.WriteLine(measured);
                     Assert.True(scroller.ViewportHeight > 0, measured);
-                    Assert.True(scroller.ExtentHeight <= scroller.ViewportHeight, $"the tab scrolls: {measured}");
+                    // The height the tab needs, from what the window spends around its viewport; asked of the window's own
+                    // Height rather than its viewport, since a screen shorter than the window (a 768-pixel laptop, the CI
+                    // runner) cuts the window to the screen, and then the tab scrolls, as it must.
+                    var needed = scroller.ExtentHeight + (window.ActualHeight - scroller.ViewportHeight);
+                    Assert.True(needed <= window.Height, $"the window is too short for the tab: needs {needed}, has {window.Height}; {measured}");
                 }
             }
             finally
