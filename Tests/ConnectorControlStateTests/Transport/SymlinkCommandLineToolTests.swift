@@ -193,13 +193,26 @@ final class SymlinkCommandLineToolTests: XCTestCase {
         let prompt = CommandLineToolText.adminPrompt
         /// Only the shell text, through a plain `do shell script`: the production wrapper, with its administrator
         /// clause, is never handed to osascript here, and a script that mentions one never runs.
-        func run(_ shell: String, _ arguments: [String]) throws -> (Int32, String) {
+        /// With `umask`, osascript runs under that umask in a shell of its own, so this process's umask, which
+        /// every other test's files share, is never changed.
+        func run(_ shell: String, _ arguments: [String], umask: String? = nil) throws -> (Int32, String) {
             let lines = ["on run argv", "do shell script " + shell, "end run"]
             if lines.contains(where: { $0.contains("administrator") }) {
                 XCTFail("a script with an administrator clause must not run")
                 throw CancellationError()
             }
-            return SymlinkCommandLineTool.osascript(lines.flatMap { ["-e", $0] } + arguments)
+            let osascript = lines.flatMap { ["-e", $0] } + arguments
+            guard let umask else { return SymlinkCommandLineTool.osascript(osascript) }
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = ["-c", "umask \(umask) && exec /usr/bin/osascript \"$@\"", "sh"] + osascript
+            let errors = Pipe()
+            process.standardError = errors
+            process.standardOutput = FileHandle.nullDevice
+            try process.run()
+            let said = errors.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            return (process.terminationStatus, String(decoding: said, as: UTF8.self))
         }
         // The production scripts are these shell texts and the privileges, nothing more.
         XCTAssertEqual(SymlinkCommandLineTool.installScript, ["on run argv", "do shell script \(SymlinkCommandLineTool.installShell)"
@@ -208,10 +221,8 @@ final class SymlinkCommandLineToolTests: XCTestCase {
             + " with prompt (item 3 of argv) with administrator privileges", "end run"])
         let fileManager = FileManager.default
         // Whatever umask the shell inherits — an administrator's may be 000 — the folder it makes is 0755, never
-        // one anybody can write on everyone's PATH. osascript inherits this process's umask.
-        let umask = Darwin.umask(0)
-        XCTAssertEqual(try run(SymlinkCommandLineTool.installShell, [tool, link, bin.path, prompt]).0, 0)
-        _ = Darwin.umask(umask)
+        // one anybody can write on everyone's PATH.
+        XCTAssertEqual(try run(SymlinkCommandLineTool.installShell, [tool, link, bin.path, prompt], umask: "000").0, 0)
         XCTAssertEqual(try fileManager.attributesOfItem(atPath: bin.path)[.posixPermissions] as? Int, 0o755)
         XCTAssertEqual(try fileManager.destinationOfSymbolicLink(atPath: link), tool, "the link is made byte for byte")
         XCTAssertEqual(try run(SymlinkCommandLineTool.installShell, [tool, link, bin.path, prompt]).0, 0, "again, over the link")
