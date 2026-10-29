@@ -71,9 +71,11 @@ public static class ClaudeIntegrationCleanup
     /// <summary>Everything the uninstaller takes away, as <see cref="ClaudeIntegrationCleanup"/> says. The app's record
     /// of itself is deleted before anything else, so nothing starts the app again. Each config is backed up into the
     /// app's backups folder before it is changed, keeping as many backups as the person chose. The copy goes before
-    /// the PATH entry: Velopack ends the hook after 30 seconds, and the PATH change waits on every window's answer to
-    /// its broadcast. Each step stands alone: one that fails is said to <paramref name="failed"/> — the app's log — and
-    /// never keeps another from running, since nobody will see the failure and this runs once.</summary>
+    /// the PATH entry: Velopack ends the hook after 60 seconds, and the PATH change waits on every window's answer to
+    /// its broadcast. The configs are swept once more as the last step: an app a relay started before the hook took
+    /// the single-instance lock may have put the entry back meanwhile. Each step stands alone: one that fails is said
+    /// to <paramref name="failed"/> — the app's log — and never keeps another from running, since nobody will see the
+    /// failure and this runs once.</summary>
     public static void Uninstall(PathContext paths, PathOverrides overrides, string dataDir, IUserEnvironment environment, int keepCount, Action<string>? failed = null) =>
         Uninstall(paths, overrides, dataDir, environment, keepCount, failed, ControlToolCopy.Remove, ClaudeConfigIO.Write);
 
@@ -101,18 +103,22 @@ public static class ClaudeIntegrationCleanup
         Step(failed, "The Claude configs could not be listed", () => configs = CandidateConfigs(paths, overrides));
         Step(failed, "The backups folder could not be resolved", () =>
             backups = new BackupManager(AppPaths.Resolve(paths.Environment, overrides, paths.Folders, paths.Probe).BackupsDir, keepCount));
-        foreach (var config in configs)
+        void RemoveEntries()
         {
-            if (backups is null)
+            foreach (var config in configs)
             {
-                // A config is never changed without its backup.
-                failed?.Invoke($"Connector Control's entry may still be in {config}: there was nowhere to back it up.");
-                continue;
+                if (backups is null)
+                {
+                    // A config is never changed without its backup.
+                    failed?.Invoke($"Connector Control's entry may still be in {config}: there was nowhere to back it up.");
+                    continue;
+                }
+                var backUps = backups;
+                Step(failed, $"Connector Control's entry may still be in {config}", () =>
+                    RemoveEntry(config, tool, path => backUps.BackUp(path, RestoreModel.Series), failed, write));
             }
-            var backUps = backups;
-            Step(failed, $"Connector Control's entry may still be in {config}", () =>
-                RemoveEntry(config, tool, path => backUps.BackUp(path, RestoreModel.Series), failed, write));
         }
+        RemoveEntries();
         Step(failed, $"The command-line tool's copy could not be removed from {bin}", () =>
         {
             removeCopy(dataDir);
@@ -130,6 +136,8 @@ public static class ClaudeIntegrationCleanup
                 environment.WritePath(UserPath.Removing(userPath, bin));
             }
         });
+        // Last: an entry put back while the steps above ran goes again. A config that is already clean is only read.
+        RemoveEntries();
     }
 
     private static void Step(Action<string>? failed, string what, Action step)

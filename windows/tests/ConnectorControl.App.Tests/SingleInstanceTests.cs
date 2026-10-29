@@ -1,3 +1,4 @@
+using ConnectorControl.App.Services;
 using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.App.Tests;
@@ -22,6 +23,54 @@ public class SingleInstanceTests
         }
         Assert.True(shown.Wait(Wait.Eventually, TestContext.Current.CancellationToken));
         Assert.False(SingleInstance.IsToastActivation([]));   // a plain double-click carries no arguments
+    }
+
+    [Fact]
+    public void TheUninstallCleanupHoldsTheLockSoAnAppStartedMeanwhileLeaves()
+    {
+        // A relay that gets a call while the uninstall hook runs would start the app; holding the lock makes that
+        // app a second instance, which a background launch ends without a word, before it touches anything.
+        var suffix = "." + Guid.NewGuid().ToString("N");
+        bool? startedAppIsFirst = null;
+        var logged = new List<string>();
+        UninstallCleanup.Run(suffix, TimeSpan.FromSeconds(5), () =>
+        {
+            using var started = new SingleInstance(suffix);
+            startedAppIsFirst = started.IsFirstInstance;
+        }, logged.Add);
+        Assert.False(startedAppIsFirst);
+        Assert.Empty(logged);
+        using var later = new SingleInstance(suffix);
+        Assert.True(later.IsFirstInstance, "the lock is let go once the cleanup is done");
+    }
+
+    [Fact]
+    public void AnUninstallCleanupThatCannotTakeTheLockSaysSoAndStillRuns()
+    {
+        var suffix = "." + Guid.NewGuid().ToString("N");
+        using var holding = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var holder = new Thread(() =>
+        {
+            using var running = new SingleInstance(suffix);
+            holding.Set();
+            release.Wait();
+        });
+        holder.Start();
+        try
+        {
+            Assert.True(holding.Wait(Wait.Eventually, TestContext.Current.CancellationToken));
+            var ran = false;
+            var logged = new List<string>();
+            UninstallCleanup.Run(suffix, TimeSpan.FromMilliseconds(50), () => ran = true, logged.Add);
+            Assert.True(ran);
+            Assert.Single(logged);
+        }
+        finally
+        {
+            release.Set();
+            holder.Join();
+        }
     }
 
     [Fact]

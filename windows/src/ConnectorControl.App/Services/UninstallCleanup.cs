@@ -5,25 +5,57 @@ using ConnectorControl.Core.State;
 namespace ConnectorControl.App.Services;
 
 /// <summary>
+/// Windows only: the Mac has no uninstall hook.
+///
 /// What Velopack runs before it uninstalls the app (<see cref="ClaudeIntegrationCleanup.Uninstall"/> over the live
-/// paths, the settings' overrides and the registry). Velopack allows it 30 seconds and then ends the process, so
+/// paths, the settings' overrides and the registry). Velopack allows it 60 seconds and then ends the process, so
 /// it waits on nothing slow and never throws: an uninstall must not fail for what it tidies, and the worst left
 /// behind is an entry Claude shows as failed.
 /// </summary>
 internal static class UninstallCleanup
 {
-    public static void Run()
+    /// <summary>How long the hook waits for the single-instance lock: a few seconds of the 60 Velopack allows.</summary>
+    private static readonly TimeSpan LockWait = TimeSpan.FromSeconds(5);
+
+    public static void Run() => Run("", LockWait, () =>
     {
+        var settings = new SettingsStore(ServiceFactory.DefaultSettingsPath);
+        ClaudeIntegrationCleanup.Uninstall(PathContext.Live(), new PathOverrides(settings.ClaudeConfigPath, settings.MasterStoreDir),
+            ServiceFactory.DefaultDataDir, new RegistryUserEnvironment(), settings.BackupKeepCount, App.Log);
+    }, App.Log);
+
+    /// <summary>
+    /// Runs <paramref name="cleanup"/> holding the app's single-instance lock, taken before any step. Velopack stops
+    /// the app before the hook, but Claude's relay, which lives outside the install folder and survives, may start
+    /// it again for a call in between; holding the lock makes that app a second instance, which a background launch
+    /// ends without a word, before it could put back the entry this hook takes away. A lock that cannot be had —
+    /// such an app got there first — is said to <paramref name="log"/>, and the cleanup still runs: its last step
+    /// sweeps the configs again. <paramref name="instanceSuffix"/> keeps a test's lock apart from the shipped app's.
+    /// </summary>
+    internal static void Run(string instanceSuffix, TimeSpan lockWait, Action cleanup, Action<string> log)
+    {
+        Mutex? held = null;
         try
         {
-            var settings = new SettingsStore(ServiceFactory.DefaultSettingsPath);
-            ClaudeIntegrationCleanup.Uninstall(PathContext.Live(), new PathOverrides(settings.ClaudeConfigPath, settings.MasterStoreDir),
-                ServiceFactory.DefaultDataDir, new RegistryUserEnvironment(), settings.BackupKeepCount, App.Log);
+            held = SingleInstance.Hold(instanceSuffix, lockWait);
+            if (held is null)
+            {
+                log("The uninstall cleanup ran without the single-instance lock: a copy of the app is running.");
+            }
+            cleanup();
         }
         catch (Exception ex)
         {
             // said to the app's log, which never throws; the uninstall carries on
-            App.Log($"The uninstall cleanup did not finish: {ex}");
+            log($"The uninstall cleanup did not finish: {ex}");
+        }
+        finally
+        {
+            if (held is not null)
+            {
+                held.ReleaseMutex();
+                held.Dispose();
+            }
         }
     }
 }

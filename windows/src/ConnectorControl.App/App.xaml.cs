@@ -54,6 +54,8 @@ public partial class App : Application
             // Windows relaunching us to deliver a toast click must not (the toolkit's COM
             // server already routed it to the running process), and nor must the command-line
             // tool starting an app that was already starting: it asked only for the app to run.
+            // The uninstall hook relies on this: it holds the lock, so an app Claude's relay starts
+            // while it runs ends here, before it can put back the entry the hook takes away.
             if (!SingleInstance.IsToastActivation(e.Args) && !SingleInstance.IsBackgroundLaunch(e.Args))
             {
                 instance.SignalShow();

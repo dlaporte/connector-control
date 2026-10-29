@@ -244,6 +244,19 @@ public class ClaudeIntegrationCleanupTests : IDisposable
         Assert.Equal([false], recordAtWrite);
     }
 
+    /// <summary>An app the relay started before the hook could stop it may put the entry back while the hook runs;
+    /// the last step takes it away again.</summary>
+    [Fact]
+    public void AnEntryPutBackDuringTheUninstallIsTakenAwayAtTheEnd()
+    {
+        Write(RoamingConfig, ("github", Github), (ClaudeIntegration.EntryName, ClaudeIntegration.Entry(Tool)));
+        var reported = new List<string>();
+        ClaudeIntegrationCleanup.Uninstall(Paths(), new PathOverrides(), DataDir, new FakeEnvironment(null), BackupManager.DefaultKeepCount, reported.Add,
+            _ => Write(RoamingConfig, ("github", Github), (ClaudeIntegration.EntryName, ClaudeIntegration.Entry(Tool))));
+        Assert.Equal(["github"], ClaudeConfigIO.ReadMcpServers(RoamingConfig).Keys);
+        Assert.Empty(reported);
+    }
+
     /// <summary>A record that cannot be deleted — held open on Windows, its folder read-only elsewhere — is reported,
     /// and the configs are still tidied.</summary>
     [Fact]

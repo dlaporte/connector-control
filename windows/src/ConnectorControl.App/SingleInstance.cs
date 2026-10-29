@@ -50,6 +50,30 @@ public sealed class SingleInstance : IDisposable
     public static bool IsBackgroundLaunch(IEnumerable<string> arguments) =>
         arguments.Any(a => string.Equals(a, ControlEndpoint.BackgroundArgument, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// The lock alone, for the uninstall hook: held, it makes any app started meanwhile a second instance, which
+    /// leaves before it touches anything. Waits up to <paramref name="timeout"/> for it; an owner that was ended
+    /// without letting go (Velopack stops the app before the hook) hands it over. Null when it could not be had.
+    /// The caller releases it on the thread that took it.
+    /// </summary>
+    internal static Mutex? Hold(string nameSuffix, TimeSpan timeout)
+    {
+        var mutex = new Mutex(initiallyOwned: false, MutexName + nameSuffix);
+        try
+        {
+            if (mutex.WaitOne(timeout))
+            {
+                return mutex;
+            }
+        }
+        catch (AbandonedMutexException)
+        {
+            return mutex;   // acquired: its last owner died holding it
+        }
+        mutex.Dispose();
+        return null;
+    }
+
     /// <summary>Second instance: ask the running one to come forward.</summary>
     public void SignalShow() => showRequested.Set();
 
