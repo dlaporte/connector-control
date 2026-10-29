@@ -312,6 +312,11 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.unreviewedConnectorError"] = AppState.unreviewedConnectorError("X")
         actual["AppVersion.developmentBuild"] = AppVersion.developmentBuild
 
+        // MARK: BoundedRead
+
+        actual["BoundedRead.notAFileError"] = BoundedRead.notAFileError
+        actual["BoundedRead.tooLargeError"] = BoundedRead.tooLargeError
+
         // MARK: ClaudeConfigIO
         // Both messages are inline literals inside guard/throw statements, not
         // exposed as callable factories; pinned here to match ClaudeConfigIO.swift

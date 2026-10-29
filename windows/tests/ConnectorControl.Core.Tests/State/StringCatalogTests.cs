@@ -329,6 +329,11 @@ public class StringCatalogTests
         actual["AppState.unreviewedConnectorError"] = AppState.UnreviewedConnectorError("X");
         actual["AppVersion.developmentBuild"] = AppVersion.DevelopmentBuild;
 
+        // MARK: BoundedRead
+
+        actual["BoundedRead.notAFileError"] = BoundedRead.NotAFileError;
+        actual["BoundedRead.tooLargeError"] = BoundedRead.TooLargeError;
+
         // MARK: ClaudeConfigIO
         // Both messages are inline literals inside a throw, not exposed as callable
         // factories; pinned here to match ClaudeConfigIO.cs and cross-checked against

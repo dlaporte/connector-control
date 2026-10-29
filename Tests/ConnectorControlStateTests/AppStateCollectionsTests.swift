@@ -618,6 +618,18 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(held["swapped"])
     }
 
+    /// A document over the limit is refused by the read itself, whatever a size checked beforehand said.
+    func testADocumentOverTheLimitIsRefusedByItsRead() throws {
+        let (h, _) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("big.json")
+        try Data(repeating: UInt8(ascii: " "), count: McpSession.maxMessageBytes + 1).write(to: url)
+        let (document, data, failure) = AppState.readDocument(at: url)
+        XCTAssertNil(document)
+        XCTAssertNil(data)
+        XCTAssertEqual(failure, AppState.sourceUnreadableError("big.json", BoundedRead.tooLargeError))
+    }
+
     func testSubscribingToADecodedDocumentUsesItAndHashesItsBytes() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

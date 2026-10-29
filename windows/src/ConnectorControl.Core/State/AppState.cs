@@ -2058,7 +2058,7 @@ public sealed class AppState : ObservableObject, IDisposable
         byte[] data;
         try
         {
-            data = File.ReadAllBytes(path);
+            data = BoundedRead.Data(path, MaxDocumentBytes);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
@@ -2176,6 +2176,10 @@ public sealed class AppState : ObservableObject, IDisposable
         notifiedSourceHashes.Remove(collection);
     }
 
+    /// <summary>The most a collection document's read takes: what one message carries, so a document too large
+    /// to send is refused by its read as much as by the size the control tools check first.</summary>
+    internal const int MaxDocumentBytes = McpSession.MaxMessageBytes;
+
     /// <summary>
     /// The document at <paramref name="path"/>, or the message to show for it — the one
     /// read-and-decode every caller that opens a collection document shares. The tuple's document
@@ -2187,7 +2191,7 @@ public sealed class AppState : ObservableObject, IDisposable
         byte[] data;
         try
         {
-            data = File.ReadAllBytes(path);
+            data = BoundedRead.Data(path, MaxDocumentBytes);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
@@ -3321,7 +3325,7 @@ public sealed class AppState : ObservableObject, IDisposable
             byte[] data;
             try
             {
-                data = File.ReadAllBytes(path);
+                data = BoundedRead.Data(path, MaxDocumentBytes);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {

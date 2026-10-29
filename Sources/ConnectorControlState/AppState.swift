@@ -1350,7 +1350,7 @@ public final class AppState: ObservableObject {
         let url = URL(fileURLWithPath: path)
         let data: Data
         do {
-            data = try Data(contentsOf: url)
+            data = try BoundedRead.data(at: url, limit: AppState.maxDocumentBytes)
         } catch {
             noteSourceFailure(collection, AppState.sourceUnreadableError(url.lastPathComponent, AppState.sourceDetail(error)),
                               manual: manual)
@@ -1433,6 +1433,10 @@ public final class AppState: ObservableObject {
         notifiedSourceHashes.removeValue(forKey: collection)
     }
 
+    /// The most a collection document's read takes: what one message carries, so a document too large
+    /// to send is refused by its read as much as by the size the control tools check first.
+    static let maxDocumentBytes = McpSession.maxMessageBytes
+
     /// The document at `url`, or the message to show for it — the one read-and-decode every
     /// caller that opens a collection document shares. The tuple's document is nil exactly when
     /// the failure is not; the bytes come back too, since the callers that keep a binding hash
@@ -1440,7 +1444,7 @@ public final class AppState: ObservableObject {
     static func readDocument(at url: URL) -> (document: CollectionDocument?, data: Data?, failure: String?) {
         let data: Data
         do {
-            data = try Data(contentsOf: url)
+            data = try BoundedRead.data(at: url, limit: AppState.maxDocumentBytes)
         } catch {
             return (nil, nil, sourceUnreadableError(url.lastPathComponent, sourceDetail(error)))
         }
@@ -2389,7 +2393,7 @@ public final class AppState: ObservableObject {
             // against a base without a trailing slash by REPLACING its last component, and the
             // store dir only carries that slash when it already exists on disk.
             let url = service.paths.storeDirURL.appendingPathComponent(relative).standardizedFileURL
-            guard let data = try? Data(contentsOf: url) else { continue }
+            guard let data = try? BoundedRead.data(at: url, limit: AppState.maxDocumentBytes) else { continue }
             var binding = cache.synced[name] ?? CollectionsLocalCache.SyncedBinding(path: nil, lastHash: nil, excluded: [:])
             binding.path = url.path
             binding.lastHash = ContentHash.sha256(data)

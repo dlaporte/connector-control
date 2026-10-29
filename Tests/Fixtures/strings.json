@@ -104,6 +104,8 @@
     "format": "“{0}” hasn’t been reviewed for publishing. Open Publishing Settings to review it."
   },
   "AppVersion.developmentBuild": "development build",
+  "BoundedRead.notAFileError": "It isn’t a file.",
+  "BoundedRead.tooLargeError": "The file is too large.",
   "ClaudeConfigIO.mcpServersNotObjectError": "mcpServers is not a JSON object",
   "ClaudeConfigIO.repeatedKeyError": "the same name appears more than once",
   "ClaudeConfigIO.topLevelNotObjectError": "top level is not a JSON object",

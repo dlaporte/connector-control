@@ -63,8 +63,10 @@ public final class RestoreModel: ObservableObject {
             return
         }
         // A backup that cannot be read says so at once, as a refusal does: there is nothing to ask about.
+        // Platform idiom: every error lands here; the Windows mirror catches the I/O and access errors
+        // a read throws.
         do {
-            asked = (backup, recorded, try Data(contentsOf: backup))
+            asked = (backup, recorded, try BoundedRead.data(at: backup, limit: ConfigService.maxBackupBytes))
         } catch {
             restoreError = error.localizedDescription
             return

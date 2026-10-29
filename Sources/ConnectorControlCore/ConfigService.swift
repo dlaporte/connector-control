@@ -14,6 +14,10 @@ public struct IngestedElsewhere: Equatable, Sendable {
 /// Orchestrates every stateful operation, guaranteeing the backup-before-write
 /// invariant. The UI layer calls only this type for file operations.
 public struct ConfigService: Sendable {
+    /// The most a backup restore reads. Claude's config runs to kilobytes; this is far past any real
+    /// one, and still little enough to read on the UI thread.
+    public static let maxBackupBytes = 16 * 1_048_576
+
     public let paths: AppPaths
     public let backups: BackupManager
 
@@ -269,7 +273,7 @@ public struct ConfigService: Sendable {
                                     backedUpFrom collection: String? = nil,
                                     activating: Bool = false) throws
         -> [String: JSONValue] {
-        let data = try data ?? Data(contentsOf: backup)
+        let data = try data ?? BoundedRead.data(at: backup, limit: ConfigService.maxBackupBytes)
         let root: [String: Any]
         do {
             root = try ClaudeConfigIO.parseRoot(data)

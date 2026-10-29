@@ -881,7 +881,7 @@ public sealed partial class ControlTools
         byte[] bytes;
         try
         {
-            bytes = File.ReadAllBytes(backup);
+            bytes = BoundedRead.Data(backup, ConfigService.MaxBackupBytes);
             servers = ClaudeConfigIO.McpServers(bytes);
             ClaudeConfigIO.RequireUniqueKeys(bytes);
         }

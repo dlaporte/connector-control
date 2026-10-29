@@ -711,6 +711,20 @@ public class AppStateCollectionsTests
         Assert.False(held.ContainsKey("swapped"));
     }
 
+    /// <summary>A document over the limit is refused by the read itself, whatever a size checked beforehand said.</summary>
+    [Fact]
+    public void ADocumentOverTheLimitIsRefusedByItsRead()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("big.json");
+        File.WriteAllBytes(path, Enumerable.Repeat((byte)' ', McpSession.MaxMessageBytes + 1).ToArray());
+        var (document, data, failure) = AppState.ReadDocument(path);
+        Assert.Null(document);
+        Assert.Null(data);
+        Assert.Equal(AppState.SourceUnreadableError("big.json", BoundedRead.TooLargeError), failure);
+    }
+
     [Fact]
     public void SubscribingToADecodedDocumentUsesItAndHashesItsBytes()
     {

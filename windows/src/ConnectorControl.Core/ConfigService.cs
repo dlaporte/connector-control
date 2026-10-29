@@ -6,6 +6,10 @@ namespace ConnectorControl.Core;
 /// </summary>
 public sealed class ConfigService
 {
+    /// <summary>The most a backup restore reads. Claude's config runs to kilobytes; this is far past any real
+    /// one, and still little enough to read on the UI thread.</summary>
+    public const int MaxBackupBytes = 16 * 1_048_576;
+
     public AppPaths Paths { get; }
     public BackupManager Backups { get; }
 
@@ -307,7 +311,7 @@ public sealed class ConfigService
                                                                      bool activating = false,
                                                                      byte[]? data = null)
     {
-        data ??= File.ReadAllBytes(backupPath);
+        data ??= BoundedRead.Data(backupPath, MaxBackupBytes);
         var name = Path.GetFileName(backupPath);
         JsonValue root;
         try

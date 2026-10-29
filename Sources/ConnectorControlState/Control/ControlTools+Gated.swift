@@ -612,7 +612,7 @@ extension ControlTools {
         let servers: [String: JSONValue]
         let bytes: Data
         do {
-            bytes = try Data(contentsOf: backup)
+            bytes = try BoundedRead.data(at: backup, limit: ConfigService.maxBackupBytes)
             servers = try ClaudeConfigIO.mcpServers(in: bytes)
             try ClaudeConfigIO.requireUniqueKeys(in: bytes)
         } catch {
