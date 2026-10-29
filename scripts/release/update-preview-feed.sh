@@ -101,6 +101,21 @@ compare_builds() {
 
 is_build() { [[ "$1" =~ ^[0-9]+(\.[0-9]+)*$ ]]; }
 
+# Downloads release $1's appcast.xml into folder $2, trying three times, PREVIEW_FEED_RETRY_SECONDS
+# apart (5 unless set; the ordering test sets 0), as the served feed's curl retries: one transient
+# failure must not fail the run.
+download_appcast() {
+  local try
+  for try in 1 2 3; do
+    gh release download "$1" --pattern appcast.xml --dir "$2" --clobber >&2 && return 0
+    if [ "$try" != 3 ]; then
+      echo "downloading $1's appcast.xml failed; retrying ($try/3)" >&2
+      sleep "${PREVIEW_FEED_RETRY_SECONDS:-5}"
+    fi
+  done
+  return 1
+}
+
 # The newest build any published release announces: the highest sparkle:version among the
 # appcast.xml assets of the non-draft preview-<n> and vX.Y.Z releases. Empty when there is none.
 # A release that lists an appcast it cannot then give fails the run, so a flaky download can never
@@ -116,7 +131,7 @@ newest_published_build() {
   while IFS= read -r tag; do
     rm -rf "$WORK/published"
     mkdir -p "$WORK/published"
-    gh release download "$tag" --pattern appcast.xml --dir "$WORK/published" >&2 \
+    download_appcast "$tag" "$WORK/published" \
       || { echo "::error::could not download $tag's appcast.xml" >&2; return 1; }
     build=$(build_of "$WORK/published/appcast.xml") || true
     if ! is_build "$build"; then
@@ -130,7 +145,7 @@ newest_published_build() {
 
 # The source: its published appcast, its version and its build.
 mkdir -p "$WORK/source"
-gh release download "$SOURCE" --pattern appcast.xml --dir "$WORK/source"
+download_appcast "$SOURCE" "$WORK/source" || { echo "::error::could not download $SOURCE's appcast.xml"; exit 1; }
 NEW="$WORK/source/appcast.xml"
 NEW_BUILD=$(build_of "$NEW") || true
 is_build "$NEW_BUILD" || { echo "::error::$SOURCE's appcast.xml does not carry exactly one numeric sparkle:version ('$NEW_BUILD')"; exit 1; }

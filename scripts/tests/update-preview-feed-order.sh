@@ -14,7 +14,7 @@ command -v jq >/dev/null || { echo "jq is needed"; exit 1; }
 cat > "$work/bin/gh" <<'FAKE'
 #!/usr/bin/env bash
 # Releases live in $FAKE_STATE/releases/<tag>/ (appcast.xml; a file named draft marks a draft, one named
-# broken an appcast whose download fails);
+# broken an appcast whose download always fails, one named flaky how many downloads fail first);
 # the served feed is $FAKE_STATE/served.xml.
 set -euo pipefail
 case "$1 $2" in
@@ -34,6 +34,13 @@ case "$1 $2" in
   "release download")
     src="$FAKE_STATE/releases/$3/appcast.xml"
     [ -e "$src" ] && [ ! -e "$FAKE_STATE/releases/$3/broken" ] || { echo "could not download appcast.xml from $3" >&2; exit 1; }
+    # flaky holds how many more downloads fail before one succeeds.
+    flaky="$FAKE_STATE/releases/$3/flaky"
+    if [ -e "$flaky" ] && [ "$(cat "$flaky")" -gt 0 ]; then
+      echo $(( $(cat "$flaky") - 1 )) > "$flaky"
+      echo "transient failure downloading appcast.xml from $3" >&2
+      exit 1
+    fi
     cp -f "$src" "$7/appcast.xml" ;;
   "release view")
     case "$*" in
@@ -95,7 +102,7 @@ release() {
 # run <source tag>: prints the script's exit code.
 run() {
   set +e
-  FAKE_STATE="$state" GITHUB_REPOSITORY=o/r GH_TOKEN=x GITHUB_STEP_SUMMARY=/dev/null PATH="$work/bin:$PATH" \
+  FAKE_STATE="$state" PREVIEW_FEED_RETRY_SECONDS=0 GITHUB_REPOSITORY=o/r GH_TOKEN=x GITHUB_STEP_SUMMARY=/dev/null PATH="$work/bin:$PATH" \
     "$here/release/update-preview-feed.sh" "$1" > "$state/log" 2>&1
   local code=$?
   set -e
@@ -150,6 +157,15 @@ release preview-2 1.5.0-preview.2 10499.2
 cp "$state/releases/preview-1/appcast.xml" "$state/served.xml"
 : > "$state/releases/preview-2/broken"
 check "an appcast that cannot be downloaded fails the run" "$(run preview-1) $(served_build)" "1 10499.1"
+
+# A download that fails twice and then succeeds is retried, the source's and a published release's alike.
+state="$work/transient"; mkdir -p "$state"
+release preview-1 1.5.0-preview.1 10499.1
+release preview-2 1.5.0-preview.2 10499.2
+cp "$state/releases/preview-1/appcast.xml" "$state/served.xml"
+echo 2 > "$state/releases/preview-1/flaky"
+echo 2 > "$state/releases/preview-2/flaky"
+check "a transient download failure is retried" "$(run preview-2) $(served_build)" "0 10499.2"
 
 [ "$failures" = 0 ] || { echo "$failures failed"; exit 1; }
 echo "all passed"
