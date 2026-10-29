@@ -50,6 +50,10 @@ public sealed class ControlRelay
     private bool handshakeDone;
     /// <summary>Requests forwarded and not yet answered, oldest first.</summary>
     private readonly List<(JsonValue Id, string Method)> pending = [];
+    /// <summary>Ids whose request Claude cancelled on this connection while it was waited for. The app may still be
+    /// running it, and then answers a request reusing the id with id null and drops the old one's answer: nothing
+    /// will come under the id, so a request reusing it is not waited for.</summary>
+    private readonly List<JsonValue> cancelled = [];
     /// <summary>Lines from Claude waiting for a connection.</summary>
     private readonly List<string> held = [];
     /// <summary>A connection has been asked for and is neither made nor failed yet.</summary>
@@ -75,6 +79,7 @@ public sealed class ControlRelay
         if (message is not null && message["id"] is null && message["method"] == JsonValue.String("notifications/cancelled")
             && message["params"] is { Kind: JsonKind.Object } parameters && parameters["requestId"] is { } id)
         {
+            cancelled.AddRange(pending.Where(entry => entry.Id == id).Select(entry => entry.Id));
             pending.RemoveAll(entry => entry.Id == id);
         }
         if (!IsConnected)
@@ -201,6 +206,7 @@ public sealed class ControlRelay
         }
         IsConnected = false;
         replayId = null;
+        cancelled.Clear();
         var waiting = pending.ToList();
         pending.Clear();
         var actions = waiting.Select(entry => (Action)new Action.ToClaude(Failure(entry.Id, entry.Method, RestartedError))).ToList();
@@ -228,11 +234,12 @@ public sealed class ControlRelay
     }
 
     /// <summary>Passes a line on. A request is waited for only when the session will answer it under its own
-    /// id: one whose id is neither a string nor an integer, or is already running, is answered with id null
-    /// or not at all.</summary>
+    /// id: one whose id is neither a string nor an integer, or is already running — a cancelled request's
+    /// included — is answered with id null or not at all.</summary>
     private List<Action> Forward(string line, JsonValue? message)
     {
-        if (Request(message) is { } request && !pending.Exists(entry => entry.Id == request.Id))
+        if (Request(message) is { } request && !pending.Exists(entry => entry.Id == request.Id)
+            && !cancelled.Exists(id => id == request.Id))
         {
             pending.Add(request);
         }

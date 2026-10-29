@@ -109,6 +109,29 @@ public class ControlRelayTests
 
     /// <summary>A request the session answers with id null — an id that is neither a string nor an integer, or
     /// one already running — is not waited for under that id.</summary>
+    /// <summary>An id Claude reuses after cancelling its request may still be running in the app, which answers the
+    /// new request with id null and drops the old one's answer: nothing will come under that id, so it is not
+    /// waited for, and the relay still ends once Claude closes its side. A new connection is a new session, where
+    /// the id is waited for again.</summary>
+    [Fact]
+    public void AnIdReusedAfterItsRequestWasCancelledIsNotWaitedFor()
+    {
+        var relay = Started();
+        _ = relay.FromClaude(Call(8));
+        _ = relay.FromClaude("""{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":8}}""");
+        Assert.Equal([ToApp(Call(8))], relay.FromClaude(Call(8)));
+        Assert.Equal([Exit(ControlOutput.DoneExit)], relay.ClaudeClosed());
+
+        var restarted = Started();
+        _ = restarted.FromClaude(Call(9));
+        _ = restarted.FromClaude("""{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":9}}""");
+        Assert.Empty(restarted.ConnectionLost());
+        Assert.Equal([Connect()], restarted.FromClaude(Call(9)));
+        _ = restarted.ConnectSucceeded();
+        Assert.Empty(restarted.ClaudeClosed());   // waits for 9 in the new session
+        Assert.Equal([ToClaude(Answer(9)), Exit(ControlOutput.DoneExit)], restarted.FromApp(Answer(9)));
+    }
+
     [Fact]
     public void ARequestTheSessionCannotAnswerByItsIdIsNotWaitedFor()
     {

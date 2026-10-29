@@ -38,6 +38,10 @@ public final class ControlRelay {
     private var handshakeDone = false
     /// Requests forwarded and not yet answered, oldest first.
     private var pending: [(id: JSONValue, method: String)] = []
+    /// Ids whose request Claude cancelled on this connection while it was waited for. The app may still be
+    /// running it, and then answers a request reusing the id with id null and drops the old one's answer:
+    /// nothing will come under the id, so a request reusing it is not waited for.
+    private var cancelled: Set<JSONValue> = []
     /// Lines from Claude waiting for a connection.
     private var held: [String] = []
     /// A connection has been asked for and is neither made nor failed yet.
@@ -61,6 +65,7 @@ public final class ControlRelay {
         // no longer.
         if let message, message["id"] == nil, message["method"] == .string("notifications/cancelled"),
            case .object(let params)? = message["params"], let id = params["requestId"] {
+            for request in pending where request.id == id { cancelled.insert(request.id) }
             pending.removeAll { $0.id == id }
         }
         guard isConnected else {
@@ -143,6 +148,7 @@ public final class ControlRelay {
         guard isConnected else { return [] }
         isConnected = false
         replayID = nil
+        cancelled = []
         let waiting = pending
         pending = []
         var actions = waiting.map { Action.toClaude(ControlRelay.failure(id: $0.id, method: $0.method, ControlRelay.restartedError)) }
@@ -163,10 +169,11 @@ public final class ControlRelay {
     }
 
     /// Passes a line on. A request is waited for only when the session will answer it under its own id:
-    /// one whose id is neither a string nor an integer, or is already running, is answered with id null
-    /// or not at all.
+    /// one whose id is neither a string nor an integer, or is already running — a cancelled request's
+    /// included — is answered with id null or not at all.
     private func forward(_ line: String, _ message: [String: JSONValue]?) -> [Action] {
-        if let request = ControlRelay.request(message), !pending.contains(where: { $0.id == request.id }) {
+        if let request = ControlRelay.request(message), !pending.contains(where: { $0.id == request.id }),
+           !cancelled.contains(request.id) {
             pending.append(request)
         }
         return [.toApp(line)]

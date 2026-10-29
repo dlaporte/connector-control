@@ -90,6 +90,27 @@ final class ControlRelayTests: XCTestCase {
         XCTAssertEqual(other.connectionLost(), [], "no stray answer for a cancelled request")
     }
 
+    /// An id Claude reuses after cancelling its request may still be running in the app, which answers the
+    /// new request with id null and drops the old one's answer: nothing will come under that id, so it is
+    /// not waited for, and the relay still ends once Claude closes its side. A new connection is a new
+    /// session, where the id is waited for again.
+    func testAnIDReusedAfterItsRequestWasCancelledIsNotWaitedFor() {
+        let relay = started()
+        _ = relay.fromClaude(call(8))
+        _ = relay.fromClaude(#"{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":8}}"#)
+        XCTAssertEqual(relay.fromClaude(call(8)), [.toApp(call(8))])
+        XCTAssertEqual(relay.claudeClosed(), [.exit(ControlOutput.doneExit)])
+
+        let restarted = started()
+        _ = restarted.fromClaude(call(9))
+        _ = restarted.fromClaude(#"{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":9}}"#)
+        XCTAssertEqual(restarted.connectionLost(), [])
+        XCTAssertEqual(restarted.fromClaude(call(9)), [.connect])
+        _ = restarted.connectSucceeded()
+        XCTAssertEqual(restarted.claudeClosed(), [], "waits for 9 in the new session")
+        XCTAssertEqual(restarted.fromApp(answer(9)), [.toClaude(answer(9)), .exit(ControlOutput.doneExit)])
+    }
+
     /// A request the session answers with id null — an id that is neither a string nor an integer, or
     /// one already running — is not waited for under that id.
     func testARequestTheSessionCannotAnswerByItsIDIsNotWaitedFor() {
