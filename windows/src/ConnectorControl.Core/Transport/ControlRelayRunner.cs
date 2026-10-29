@@ -140,8 +140,7 @@ public sealed class ControlRelayRunner(ControlClient client, string version, Str
                             ? ControlClient.Message(unreachable.Reason) : ControlClient.UnreachableError));
                         break;
                     }
-                    Attach(connection);
-                    Perform(relay.ConnectSucceeded());
+                    Perform(Attach(connection) ? relay.ConnectSucceeded() : relay.ConnectFailed(ControlClient.UnreachableError));
                     break;
                 case ControlRelay.Action.Exit exit:
                     Finish(exit.Code);
@@ -150,11 +149,18 @@ public sealed class ControlRelayRunner(ControlClient client, string version, Str
         }
     }
 
-    private void Attach(IControlStream connection)
+    /// <summary>Starts reading a new connection once its hello has gone out; false, with the connection closed, when
+    /// the hello could not be written. Nothing else may go on such a connection: the app reads its first line as
+    /// the hello, and Claude's own first line, read so, could pass for the command line.</summary>
+    private bool Attach(IControlStream connection)
     {
+        if (!connection.Write(Encoding.UTF8.GetBytes(ControlHello.Line(ControlHello.RelayClient, version) + "\n")))
+        {
+            connection.Close();
+            return false;
+        }
         var mine = ++generation;
         stream = connection;
-        _ = connection.Write(Encoding.UTF8.GetBytes(ControlHello.Line(ControlHello.RelayClient, version) + "\n"));
         Read(() =>
         {
             // The app's answers may be far longer than what Claude may send: a whole configuration, say.
@@ -201,6 +207,7 @@ public sealed class ControlRelayRunner(ControlClient client, string version, Str
                 });
             }
         });
+        return true;
     }
 
     /// <summary>The connection has gone, or is given up: the relay answers what it was waiting for.</summary>

@@ -89,8 +89,11 @@ public final class ControlRelayRunner: @unchecked Sendable {
                 toClaude(line)
             case .connect:
                 do {
-                    attach(try client.connect())
-                    perform(relay.connectSucceeded())
+                    if attach(try client.connect()) {
+                        perform(relay.connectSucceeded())
+                    } else {
+                        perform(relay.connectFailed(ControlClient.unreachableError))
+                    }
                 } catch {
                     // Any other failure leaves the app unreachable too.
                     perform(relay.connectFailed((error as? ControlClient.Failure)?.message ?? ControlClient.unreachableError))
@@ -101,11 +104,17 @@ public final class ControlRelayRunner: @unchecked Sendable {
         }
     }
 
-    private func attach(_ connection: ControlStream) {
+    /// Starts reading a new connection once its hello has gone out; false, with the connection closed, when
+    /// the hello could not be written. Nothing else may go on such a connection: the app reads its first line
+    /// as the hello, and Claude's own first line, read so, could pass for the command line.
+    private func attach(_ connection: ControlStream) -> Bool {
+        guard connection.write(Data((ControlHello.line(client: ControlHello.relayClient, version: version) + "\n").utf8)) else {
+            connection.close()
+            return false
+        }
         generation += 1
         let mine = generation
         stream = connection
-        _ = connection.write(Data((ControlHello.line(client: ControlHello.relayClient, version: version) + "\n").utf8))
         Thread.detachNewThread { [self] in
             // The app's answers may be far longer than what Claude may send: a whole configuration, say.
             var framer = McpLineFramer(limit: ControlClient.maxAnswerBytes)
@@ -125,6 +134,7 @@ public final class ControlRelayRunner: @unchecked Sendable {
             }
             queue.async { if mine == self.generation { self.lose() } }
         }
+        return true
     }
 
     /// The connection has gone, or is given up: the relay answers what it was waiting for.

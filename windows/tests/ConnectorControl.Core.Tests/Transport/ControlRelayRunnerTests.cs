@@ -164,8 +164,10 @@ public class ControlRelayRunnerTests
 
     /// <summary>The app's end of one connection, scripted: it keeps what the relay writes, hands the relay what the
     /// fact sends, and refuses every write once the fact says the app has gone.</summary>
-    private sealed class ScriptedApp : IControlStream
+    private sealed class ScriptedApp(bool failingFirstWrite = false) : IControlStream
     {
+        /// <summary>The next write fails while the stream stays usable: the relay's hello, when set before it connects.</summary>
+        private bool failNext = failingFirstWrite;
         private readonly object gate = new();
         private readonly List<string> written = [];
         private readonly List<string> refused = [];
@@ -192,8 +194,9 @@ public class ControlRelayRunnerTests
             lock (gate)
             {
                 var lines = Encoding.UTF8.GetString(data).Split('\n', StringSplitOptions.RemoveEmptyEntries);
-                if (gone || writeClosed || closed)
+                if (gone || writeClosed || closed || failNext)
                 {
+                    failNext = false;
                     refused.AddRange(lines);
                     return false;
                 }
@@ -248,6 +251,17 @@ public class ControlRelayRunnerTests
                 lock (gate)
                 {
                     return writeClosed;
+                }
+            }
+        }
+
+        public bool IsClosed
+        {
+            get
+            {
+                lock (gate)
+                {
+                    return closed;
                 }
             }
         }
@@ -529,6 +543,34 @@ public class ControlRelayRunnerTests
             Assert.Equal([answered], claude.AnswersTo(2));   // the app's own answer, not restarted
             Assert.Contains(ControlRelay.RestartedError, claude.AnswersTo(3)![0], StringComparison.Ordinal);
             Assert.True(app.IsWriteClosed, "only the writing half was ended");
+            asserted = true;
+        }
+        finally
+        {
+            End(claude, exit, null, asserted);
+        }
+    }
+
+    /// <summary>A connection whose hello could not be written is dropped before anything else goes on it: Claude's
+    /// first line can never become the hello the app reads. The relay answers as for a connection that could not be
+    /// made. Scripted, so it runs on every platform.</summary>
+    [Fact]
+    public void AConnectionWhoseHelloFailedCarriesNothing()
+    {
+        var app = new ScriptedApp(failingFirstWrite: true);
+        var claude = new Claude();
+        var (_, exit) = Run(claude, new ControlClient(() => app, launch: null, announce: null));
+        var asserted = false;
+        try
+        {
+            claude.Say(Initialize);
+            Assert.True(Until(null, () => exit.Value is not null && claude.AnswersTo(1) is not null));
+            Assert.Equal(ControlOutput.UnreachableExit, exit.Value);
+            Assert.Equal([McpSession.ErrorLine(McpSession.InternalErrorCode, ControlClient.UnreachableError, JsonValue.Int(1))],
+                claude.AnswersTo(1));
+            Assert.Empty(app.Lines);   // nothing reached the app
+            Assert.Single(app.RefusedLines);   // only the hello was tried
+            Assert.True(app.IsClosed);
             asserted = true;
         }
         finally

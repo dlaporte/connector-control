@@ -92,6 +92,10 @@ final class ControlRelayRunnerTests: XCTestCase {
         private var closed = false
         private var gone = false
         private var writeClosed = false
+        /// The next write fails while the stream stays usable: the relay's hello, when set before it connects.
+        private var failNext: Bool
+
+        init(failingFirstWrite: Bool = false) { failNext = failingFirstWrite }
 
         func read(maximum: Int) -> Data {
             condition.lock()
@@ -103,7 +107,8 @@ final class ControlRelayRunnerTests: XCTestCase {
         func write(_ data: Data) -> Bool {
             condition.withLock {
                 let lines = String(decoding: data, as: UTF8.self).split(separator: "\n").map(String.init)
-                if gone || writeClosed || closed {
+                if gone || writeClosed || closed || failNext {
+                    failNext = false
                     refused += lines
                     return false
                 }
@@ -124,6 +129,7 @@ final class ControlRelayRunnerTests: XCTestCase {
         var lines: [String] { condition.withLock { written } }
         var refusedLines: [String] { condition.withLock { refused } }
         var isWriteClosed: Bool { condition.withLock { writeClosed } }
+        var isClosed: Bool { condition.withLock { closed } }
 
         /// The app sends a line, which waits for the relay to read it.
         func send(_ line: String) {
@@ -306,6 +312,24 @@ final class ControlRelayRunnerTests: XCTestCase {
         XCTAssertEqual(claude.answers()[.int(2)], [answered], "the app's own answer, not restarted")
         XCTAssertTrue(claude.answers()[.int(3)]?.first?.contains(ControlRelay.restartedError) == true)
         XCTAssertTrue(app.isWriteClosed, "only the writing half was ended")
+    }
+
+    /// A connection whose hello could not be written is dropped before anything else goes on it: Claude's
+    /// first line can never become the hello the app reads. The relay answers as for a connection that
+    /// could not be made.
+    func testAConnectionWhoseHelloFailedCarriesNothing() {
+        let app = ScriptedApp(failingFirstWrite: true)
+        let claude = Claude()
+        let (_, exit) = run(claude, ControlClient(connectOnce: { app }, launch: nil, announce: nil))
+        defer { end(claude, exit, nil) }
+        claude.say(initialize)
+        XCTAssertTrue(until(nil) { exit.value != nil && claude.answers()[.int(1)] != nil })
+        XCTAssertEqual(exit.value, ControlOutput.unreachableExit)
+        XCTAssertEqual(claude.answers()[.int(1)],
+                       [McpSession.errorLine(code: McpSession.internalErrorCode, message: ControlClient.unreachableError, id: .int(1))])
+        XCTAssertEqual(app.lines, [], "nothing reached the app")
+        XCTAssertEqual(app.refusedLines.count, 1, "only the hello was tried")
+        XCTAssertTrue(app.isClosed)
     }
 
     /// Claude going away while the relay writes to it ends the relay as any failed write to Claude does:
