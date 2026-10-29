@@ -106,8 +106,10 @@ public partial class App : Application
                               IDialogs dialogs)
     {
         controlSettings = new SettingsModel(appState, platform.Settings, platform.Autostart, platform.ClaudeInstall, platform.Updater, coordinator);
-        // Claude's gated changes are asked about in the app's own dialog, posted to a turn of its own, so
-        // the call's progress and early answer go out while it is open.
+        // Claude's gated changes are asked about in the app's own dialog. WPF's nested frame runs the
+        // dispatcher's queue whatever called ShowDialog, which is what keeps the call's progress and early
+        // answer going out while it is open; posting the dialog to a turn of its own is for parity with the
+        // Mac, whose alert must not be entered inside the block that asked.
         var tools = new ControlTools(appState, controlSettings, new DialogConfirmer(dialogs, UiThread.Post), host);
         controlServer = new ControlServer(tools);
         try

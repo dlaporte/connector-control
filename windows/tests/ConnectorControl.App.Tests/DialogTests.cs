@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using ConnectorControl.App.Services;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
@@ -42,6 +43,8 @@ public class DialogTests
             Assert.False(dialog.PrimaryButton.IsDefault);
             Assert.Same(dialog.TryFindResource("DestructiveButton"), dialog.PrimaryButton.Style);
             Assert.Same(dialog.TryFindResource("AccentButtonStyle"), dialog.CancelButton.Style);
+            // Even with the keyboard on Delete: a focused button would otherwise take Return itself.
+            Assert.False(KeyboardNavigation.GetAcceptsReturn(dialog.PrimaryButton));
             // Every other question keeps Return on its primary.
             var usual = new ConfirmDialog("Restart Claude Desktop now?", null, "Restart", "Cancel", destructive: false);
             Assert.True(usual.PrimaryButton.IsDefault);

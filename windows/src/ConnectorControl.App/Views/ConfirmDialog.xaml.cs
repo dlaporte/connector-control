@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Documents;
+using System.Windows.Input;
+using System.Windows.Media;
 using ConnectorControl.Core.State;
 
 namespace ConnectorControl.App.Views;
@@ -28,11 +30,14 @@ public partial class ConfirmDialog : DialogWindow
         {
             PrimaryButton.Style = style;
         }
-        // Return presses the cancel button, and the primary answers only a click; the accent
-        // goes with the default, and a destructive primary keeps its red. Escape stays on Cancel.
+        // Return presses the cancel button wherever the keyboard is, and the primary answers only a
+        // click: a focused button takes Return itself, so the primary is told not to — Tab, or a press
+        // dragged off it, can leave the keyboard there. The accent goes with the default, and a
+        // destructive primary keeps its red. Escape stays on Cancel.
         if (cancelIsDefault)
         {
             PrimaryButton.IsDefault = false;
+            KeyboardNavigation.SetAcceptsReturn(PrimaryButton, false);
             CancelButton.IsDefault = true;
             if (!destructive)
             {
@@ -42,27 +47,46 @@ public partial class ConfirmDialog : DialogWindow
         }
     }
 
-    /// <summary>How wide the code area's page is: far wider than any line of what would run, so none wraps.</summary>
-    public const double UnwrappedWidth = 4000;
+    /// <summary>How far the code area's page runs past its widest line, in ems: room for whatever the measure and
+    /// the page's own layout round differently, so the widest line is never wrapped by a hair.</summary>
+    private const double PageSlackEms = 4;
+
+    /// <summary>The widest the code area's page may be: WPF lays out no FlowDocument page wider than a million
+    /// device-independent pixels.</summary>
+    internal const double MaxPageWidth = 1_000_000;
 
     /// <summary>The confirmation of a change Claude asks for: the question with every name in the monospaced
-    /// face, what would run, the closing line, and Don’t Allow — the default, which Return and Escape press,
-    /// as closing the window answers — before Allow.</summary>
+    /// face, what would run, the closing line, and Don’t Allow — the default, which Return presses wherever
+    /// the keyboard is and Escape presses, as closing the window answers, and where the keyboard starts —
+    /// before Allow, which answers only a click.</summary>
     public ConfirmDialog(ConfirmationDialog question)
         : this(string.Empty, null, ConfirmationDialog.AllowButton, ConfirmationDialog.DontAllowButton, destructive: false, cancelIsDefault: true)
     {
+        // Platform idiom: the Mac's alert draws the title as plain text, NSAlert's message being a plain string;
+        // this dialog's title is a text block of its own, so its names take the monospaced face as the message's do.
         TextRuns.Fill(MessageText, question.Title);
         TextRuns.Fill(InformativeText, question.Message);
         InformativeText.Visibility = question.Message.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
-        var lines = new Paragraph();
+        CodeText.Document = CodeDocument(question);
+        CodeText.Visibility = question.Code.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        TextRuns.Fill(FooterText, question.Footer ?? []);
+        FooterText.Visibility = question.Footer is null ? Visibility.Collapsed : Visibility.Visible;
+        // The keyboard starts on Don’t Allow, as it does on the Mac: the window gives it to the element its
+        // focus scope names when it is first activated.
+        FocusManager.SetFocusedElement(this, CancelButton);
+    }
+
+    /// <summary>What would run, a paragraph a line, as the Mac lays it out: each line is its own left-to-right
+    /// paragraph, whatever the one before it holds, and none is spaced from the next. Removed lines take the
+    /// theme's critical colour and added ones its success colour; a theme without one leaves the line in the
+    /// box's own, and its "−" or "+" still says what it does. The page is as wide as the widest line and some,
+    /// so no line wraps, and only a line wider than the box gives it something to scroll to.</summary>
+    private FlowDocument CodeDocument(ConfirmationDialog question)
+    {
+        var document = new FlowDocument { PagePadding = new Thickness(0), FontFamily = CodeText.FontFamily, FontSize = CodeText.FontSize };
         for (var index = 0; index < question.Code.Count; index++)
         {
-            if (index > 0)
-            {
-                lines.Inlines.Add(new LineBreak());
-            }
             var line = new Run(question.Code[index]);
-            // A theme without the colour leaves the line in the box's own; its "−" or "+" still says what it does.
             switch (question.CodeKinds[index])
             {
                 case ConfirmationDialog.LineKind.Removed:
@@ -72,12 +96,30 @@ public partial class ConfirmDialog : DialogWindow
                     line.SetResourceReference(TextElement.ForegroundProperty, "SystemFillColorSuccessBrush");
                     break;
             }
-            lines.Inlines.Add(line);
+            document.Blocks.Add(new Paragraph(line) { Margin = new Thickness(0) });
         }
-        CodeText.Document = new FlowDocument(lines) { PageWidth = UnwrappedWidth, PagePadding = new Thickness(0) };
-        CodeText.Visibility = question.Code.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
-        TextRuns.Fill(FooterText, question.Footer ?? []);
-        FooterText.Visibility = question.Footer is null ? Visibility.Collapsed : Visibility.Visible;
+        var width = WidestLine(question.Code) + PageSlackEms * CodeText.FontSize;
+        // A line wider than any page, some 140,000 characters, could only wrap, and its tail could then pass for a
+        // row of its own: such a question is not drawn at all, and the confirmer answers it Don’t Allow.
+        if (width > MaxPageWidth)
+        {
+            throw new InvalidOperationException("A line of what would run is too wide to show unwrapped.");
+        }
+        document.PageWidth = width;
+        return document;
+    }
+
+    /// <summary>How wide the widest of <paramref name="lines"/> is drawn in the code area's face, size, language
+    /// and formatting mode, at this window's scale.</summary>
+    private double WidestLine(IReadOnlyList<string> lines)
+    {
+        var typeface = new Typeface(CodeText.FontFamily, CodeText.FontStyle, CodeText.FontWeight, CodeText.FontStretch);
+        var culture = CodeText.Language.GetSpecificCulture();
+        var mode = TextOptions.GetTextFormattingMode(CodeText);
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        return lines.Select(line => new FormattedText(line, culture, FlowDirection.LeftToRight, typeface, CodeText.FontSize, Brushes.Black,
+                null, mode, pixelsPerDip).WidthIncludingTrailingWhitespace)
+            .DefaultIfEmpty(0).Max();
     }
 
     /// <summary>True when the primary button was chosen.</summary>
@@ -99,7 +141,9 @@ public partial class ConfirmDialog : DialogWindow
 
     /// <summary>What <paramref name="show"/> answers; a failure closes <paramref name="dialog"/> before it goes on. A
     /// failure while the dialog is up leaves ShowDialog with the window still on screen, no longer modal, and
-    /// the confirmer answers it Don’t Allow: closed, it leaves no Allow on screen that would count for nothing.</summary>
+    /// the confirmer answers it Don’t Allow: closed, it leaves no Allow on screen that would count for nothing.
+    /// One before it shows closes it too, which is safe on a window never shown, and takes it off the
+    /// application's list of windows, which it joined when it was built.</summary>
     internal static bool ClosedOnFailure(Window dialog, Func<bool> show)
     {
         try
@@ -108,10 +152,7 @@ public partial class ConfirmDialog : DialogWindow
         }
         catch (Exception)
         {
-            if (dialog.IsVisible)
-            {
-                dialog.Close();
-            }
+            dialog.Close();
             throw;
         }
     }

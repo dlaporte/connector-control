@@ -9,7 +9,7 @@
     <TextBlock x:Name="MessageText" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" FlowDirection="LeftToRight" />
     <TextBlock x:Name="InformativeText" Style="{StaticResource CaptionText}" FontSize="13" Margin="0,8,0,0" FlowDirection="LeftToRight" />
     <!-- What would run, for a change Claude asks for: read-only but selectable, so it can be copied. Its page is
-         far wider than the dialog, so one line of it is one line here and the box scrolls sideways rather than
+         as wide as its widest line, so one line of it is one line here and the box scrolls sideways rather than
          wrap: a long value can never pass for a row of its own. Platform idiom: 200 device-independent pixels,
          as the Mac's block is 200 points, the same height at the same scale. Return is left to the dialog, so
          it answers Don’t Allow even while this box holds the keyboard, as it does on the Mac. -->

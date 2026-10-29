@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ConnectorControl.App.Tests.TestSupport;
@@ -27,7 +28,22 @@ public class ConfirmationDialogTests
         _ => "",
     }));
 
-    private static string Code(RichTextBox box) => Text(((Paragraph)box.Document.Blocks.FirstBlock).Inlines);
+    /// <summary>What would run, as the box holds it: a paragraph a line.</summary>
+    private static List<Paragraph> Lines(RichTextBox box) => box.Document.Blocks.Cast<Paragraph>().ToList();
+
+    private static string Code(RichTextBox box) => string.Join("\n", Lines(box).Select(line => Text(line.Inlines)));
+
+    /// <summary>How many lines the box draws, once laid out: one a line of what would run, unless one wraps. None
+    /// before layout, which no assert here takes for a count.</summary>
+    private static int DrawnLines(RichTextBox box)
+    {
+        var count = 0;
+        for (var line = box.Document.ContentStart.GetLineStartPosition(0); line is not null; line = line.GetLineStartPosition(1))
+        {
+            count++;
+        }
+        return count;
+    }
 
     /// <summary>The confirmation on screen, if one is: a window joins the application's list when it is built and
     /// leaves it only when closed, so a dialog another test built and never showed is listed too, and is not it.</summary>
@@ -47,7 +63,9 @@ public class ConfirmationDialogTests
             Assert.Equal($"In “{new TextRun("Harvard", IsSetApart: true).ShownText}”, the collection Claude is running:",
                 Text(dialog.InformativeText.Inlines));
             Assert.Equal("url\n  − https://a.example/mcp\n  + https://b.example/mcp", Code(dialog.CodeText));
-            Assert.Equal(ConfirmDialog.UnwrappedWidth, dialog.CodeText.Document.PageWidth);
+            // A paragraph a line, as the Mac lays them out, each its own left-to-right paragraph and none spaced
+            // from the next.
+            Assert.All(Lines(dialog.CodeText), line => Assert.Equal(new Thickness(0), line.Margin));
             Assert.True(dialog.CodeText.IsReadOnly);
             Assert.Equal(Visibility.Visible, dialog.CodeText.Visibility);
             Assert.Equal(ControlTools.TakesEffectFooter, Text(dialog.FooterText.Inlines));
@@ -57,6 +75,11 @@ public class ConfirmationDialogTests
             Assert.True(dialog.CancelButton.IsDefault);
             Assert.True(dialog.CancelButton.IsCancel);
             Assert.False(dialog.PrimaryButton.IsDefault);
+            // Return answers Don’t Allow wherever the keyboard is: Allow, focused with Tab or by a press dragged
+            // off it, does not take Return itself, as a focused button otherwise would.
+            Assert.False(KeyboardNavigation.GetAcceptsReturn(dialog.PrimaryButton));
+            // The keyboard starts on Don’t Allow, as it does on the Mac.
+            Assert.Same(dialog.CancelButton, FocusManager.GetFocusedElement(dialog));
             Assert.All(new FrameworkElement[] { dialog.MessageText, dialog.InformativeText, dialog.CodeText, dialog.FooterText },
                 element => Assert.Equal(FlowDirection.LeftToRight, element.FlowDirection));
             Assert.False(dialog.Result);
@@ -75,6 +98,62 @@ public class ConfirmationDialogTests
             Assert.Equal(Visibility.Collapsed, dialog.FooterText.Visibility);
             Assert.Equal(ControlTools.RestartMessage, Text(dialog.InformativeText.Inlines));
             dialog.Close();
+        });
+    }
+
+    /// <summary>A removed line is drawn in the theme's critical colour and an added one in its success colour; a
+    /// theme without one leaves the line in the box's own colour, and its "−" or "+" still says what it does.</summary>
+    [Fact]
+    public void RemovedAndAddedLinesTakeTheThemesColours()
+    {
+        WpfApp.Invoke(() =>
+        {
+            var dialog = new ConfirmDialog(new ConfirmationDialog(Change));
+            var runs = Lines(dialog.CodeText).Select(line => line.Inlines.OfType<Run>().Single()).ToList();
+            Assert.Equal(DependencyProperty.UnsetValue, runs[0].ReadLocalValue(TextElement.ForegroundProperty));
+            Assert.Same(dialog.TryFindResource("SystemFillColorCriticalBrush") ?? runs[0].Foreground, runs[1].Foreground);
+            Assert.Same(dialog.TryFindResource("SystemFillColorSuccessBrush") ?? runs[0].Foreground, runs[2].Foreground);
+            dialog.Close();
+        });
+    }
+
+    /// <summary>A line far wider than the dialog — a long command line, a key's whole value — is still one line,
+    /// and the box scrolls sideways to it; with nothing that wide there is nothing to scroll. The wide line has
+    /// spaces to break at, so a page any narrower than it would wrap it.</summary>
+    [Fact]
+    public void ALineNeverWrapsAndOnlyAWideOneScrolls()
+    {
+        WpfApp.Invoke(() =>
+        {
+            var narrow = new ConfirmDialog(new ConfirmationDialog(Change));
+            WindowTestSupport.Layout(narrow, new Size(440, 1000));
+            Assert.Equal(Change.Code.Count, DrawnLines(narrow.CodeText));
+            Assert.True(narrow.CodeText.ViewportWidth > 0);
+            Assert.True(narrow.CodeText.ExtentWidth <= narrow.CodeText.ViewportWidth);
+            narrow.Close();
+
+            var longLine = "args     " + string.Join(" ", Enumerable.Repeat("--flag=value", 170));
+            Assert.True(longLine.Length > 2000);
+            var request = new ConfirmationRequest(ControlTools.ChangeTitle("Claude", "splunk"), ControlTools.ChangeActiveMessage("Harvard"),
+                ["command  npx", longLine, "env      TOKEN = ••• (set)"], null);
+            var wide = new ConfirmDialog(new ConfirmationDialog(request));
+            WindowTestSupport.Layout(wide, new Size(440, 1000));
+            Assert.Equal(request.Code.Count, DrawnLines(wide.CodeText));
+            Assert.True(wide.CodeText.ExtentWidth > wide.CodeText.ViewportWidth);
+            wide.Close();
+        });
+    }
+
+    /// <summary>A line wider than any page WPF lays out could only wrap, so a question holding one is not drawn: the
+    /// dialog fails before it shows, and the confirmer answers Don’t Allow.</summary>
+    [Fact]
+    public void ALineTooWideForAnyPageIsNotDrawn()
+    {
+        WpfApp.Invoke(() =>
+        {
+            var request = new ConfirmationRequest(ControlTools.ChangeTitle("Claude", "splunk"), ControlTools.ChangeActiveMessage("Harvard"),
+                ["args     " + string.Join(" ", Enumerable.Repeat("--flag=value", 15_000)), "env      SAFE = 1"], null);
+            Assert.Throws<InvalidOperationException>(() => new ConfirmDialog(new ConfirmationDialog(request)));
         });
     }
 
@@ -106,8 +185,8 @@ public class ConfirmationDialogTests
     }
 
     /// <summary>A failure while the dialog is up comes out of ShowDialog, for the confirmer to answer Don’t Allow,
-    /// and takes the dialog down with it. Shown modelessly and failed at once, so nothing is thrown through
-    /// the dispatcher every test here shares.</summary>
+    /// and takes the dialog down with it; one before it shows closes it too, so it leaves no window behind.
+    /// Shown modelessly and failed at once, so nothing is thrown through the dispatcher every test here shares.</summary>
     [Fact]
     public void AFailureWhileTheDialogIsUpClosesIt()
     {
@@ -122,6 +201,12 @@ public class ConfirmationDialogTests
             Assert.Equal("drawing failed", Assert.IsType<InvalidOperationException>(failure).Message);
             Assert.False(dialog.IsVisible);
             Assert.DoesNotContain(dialog, Application.Current.Windows.OfType<ConfirmDialog>());
+
+            var unshown = new ConfirmDialog(new ConfirmationDialog(Change));
+            Assert.Contains(unshown, Application.Current.Windows.OfType<ConfirmDialog>());
+            var early = Record.Exception(() => ConfirmDialog.ClosedOnFailure(unshown, () => throw new InvalidOperationException("no owner")));
+            Assert.Equal("no owner", Assert.IsType<InvalidOperationException>(early).Message);
+            Assert.DoesNotContain(unshown, Application.Current.Windows.OfType<ConfirmDialog>());
         });
     }
 
