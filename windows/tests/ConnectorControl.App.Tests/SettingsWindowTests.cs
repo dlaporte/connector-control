@@ -474,6 +474,8 @@ public class SettingsWindowTests
             try
             {
                 h.Drain();
+                // What the window asks for; once shown, Height reports what a shorter screen cut it to.
+                var asked = window.Height;
                 window.Show();
                 // Loaded is below DataBind, so this runs every binding's first update and the layout after it.
                 window.Dispatcher.Invoke(() => { }, DispatcherPriority.Loaded);
@@ -494,7 +496,7 @@ public class SettingsWindowTests
                     // Height rather than its viewport, since a screen shorter than the window (a 768-pixel laptop, the CI
                     // runner) cuts the window to the screen, and then the tab scrolls, as it must.
                     var needed = scroller.ExtentHeight + (window.ActualHeight - scroller.ViewportHeight);
-                    Assert.True(needed <= window.Height, $"the window is too short for the tab: needs {needed}, has {window.Height}; {measured}");
+                    Assert.True(needed <= asked, $"the window is too short for the tab: needs {needed}, asks for {asked}; {measured}");
                 }
             }
             finally
