@@ -602,4 +602,29 @@ final class ControlMaskingTests: XCTestCase {
             XCTAssertFalse(shown.contains(secret), secret)
         }
     }
+
+    /// A shell line packed into one argument (`bash -c "…"`, `cmd /c …`), or a whole command line
+    /// written as the command, is masked word by word as a shell passes its words, so a flag named
+    /// for a secret among them still hides the word after it and a URL among them is not the whole.
+    func testAShellLineInOneArgumentIsMaskedWordByWord() throws {
+        XCTAssertEqual(ControlMasking.arguments(["-c", "npx -y s --token hunter2abc"]), ["-c", "npx -y s --token •••"])
+        let bash = "npx -y mcp-remote https://h/sse --header 'Authorization: Bearer eyJhbGc.eyJzdWI.sig-x_y'"
+        XCTAssertEqual(ControlMasking.arguments(["-c", bash]),
+                       ["-c", "npx -y mcp-remote https://h/sse --header 'Authorization: •••'"])
+        XCTAssertEqual(ControlMasking.argument("API_KEY=sk_live_x npx server https://h.example/mcp"),
+                       "API_KEY=••• npx server https://h.example/mcp")
+        XCTAssertEqual(ControlMasking.codeLines(bare("npx -y s --token hunter2abc")), ["command   npx -y s --token •••"])
+        try assertHidden(["hunter2abc"], in: local("bash", ["-c", "npx -y s --token hunter2abc"]))
+        try assertHidden(["eyJhbGc", "sig-x_y"], in: local("bash", ["-c", bash]))
+        try assertHidden(["sk_live_x"], in: local("sh", ["-c", "API_KEY=sk_live_x npx server https://h.example/mcp"]))
+        try assertHidden(["hunter2abc"], in: local("cmd", ["/c", "npx -y s --api-key hunter2abc"]))
+        try assertHidden(["hunter2abc"], in: bare("npx -y s --token hunter2abc"))
+    }
+
+    /// A value with spaces and no secret reads as written, quotes and all.
+    func testAShellLineWithNoSecretReadsAsWritten() {
+        for text in ["hello world", "echo \"a b\" 'c d'", "C:\\Program Files\\nodejs\\node.exe", "npx -y server --port 8080"] {
+            XCTAssertEqual(ControlMasking.argument(text), text)
+        }
+    }
 }

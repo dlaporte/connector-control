@@ -717,4 +717,34 @@ public class ControlMaskingTests
             Assert.DoesNotContain(secret, shown);
         }
     }
+
+    /// <summary>A shell line packed into one argument (<c>bash -c "…"</c>, <c>cmd /c …</c>), or a whole command line
+    /// written as the command, is masked word by word as a shell passes its words, so a flag named
+    /// for a secret among them still hides the word after it and a URL among them is not the whole.</summary>
+    [Fact]
+    public void AShellLineInOneArgumentIsMaskedWordByWord()
+    {
+        Assert.Equal(["-c", "npx -y s --token •••"], ControlMasking.Arguments(["-c", "npx -y s --token hunter2abc"]));
+        const string bash = "npx -y mcp-remote https://h/sse --header 'Authorization: Bearer eyJhbGc.eyJzdWI.sig-x_y'";
+        Assert.Equal(["-c", "npx -y mcp-remote https://h/sse --header 'Authorization: •••'"],
+            ControlMasking.Arguments(["-c", bash]));
+        Assert.Equal("API_KEY=••• npx server https://h.example/mcp",
+            ControlMasking.Argument("API_KEY=sk_live_x npx server https://h.example/mcp"));
+        Assert.Equal(["command   npx -y s --token •••"], ControlMasking.CodeLines(Bare("npx -y s --token hunter2abc")));
+        AssertHidden(["hunter2abc"], Local("bash", ["-c", "npx -y s --token hunter2abc"]));
+        AssertHidden(["eyJhbGc", "sig-x_y"], Local("bash", ["-c", bash]));
+        AssertHidden(["sk_live_x"], Local("sh", ["-c", "API_KEY=sk_live_x npx server https://h.example/mcp"]));
+        AssertHidden(["hunter2abc"], Local("cmd", ["/c", "npx -y s --api-key hunter2abc"]));
+        AssertHidden(["hunter2abc"], Bare("npx -y s --token hunter2abc"));
+    }
+
+    /// <summary>A value with spaces and no secret reads as written, quotes and all.</summary>
+    [Fact]
+    public void AShellLineWithNoSecretReadsAsWritten()
+    {
+        foreach (var text in new[] { "hello world", "echo \"a b\" 'c d'", "C:\\Program Files\\nodejs\\node.exe", "npx -y server --port 8080" })
+        {
+            Assert.Equal(text, ControlMasking.Argument(text));
+        }
+    }
 }

@@ -376,7 +376,7 @@ public final class CollectionsModel: ObservableObject {
     /// to the argument it touches and loses its quotes, `\"` inside double quotes is a quote, and
     /// a backslash anywhere else is itself, as a Windows path needs. An unterminated quote runs to
     /// the end.
-    private static func shellWords(_ text: String) -> [String] {
+    static func shellWords(_ text: String) -> [String] {
         var words: [String] = []
         var word: String.UnicodeScalarView?
         var quote: Unicode.Scalar?

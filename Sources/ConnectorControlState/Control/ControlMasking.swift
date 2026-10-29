@@ -202,12 +202,16 @@ public enum ControlMasking {
         }.joined(separator: "&")
     }
 
-    /// One argument on its own: a URL through `url(_:)`, a value that is wholly a reference as
-    /// written, `name=value` with the value masked when the name is a secret's (`--api-key=…`,
-    /// Docker's `-e API_KEY=…`), and "•••" for anything that reads as a credential or a random
-    /// token — a "name" that does is part of the token, so the whole word is masked.
+    /// One argument on its own: a shell line word by word through `shellLine(_:)`, a URL through
+    /// `url(_:)`, a value that is wholly a reference as written, `name=value` with the value masked
+    /// when the name is a secret's (`--api-key=…`, Docker's `-e API_KEY=…`), and "•••" for
+    /// anything that reads as a credential or a random token — a "name" that does is part of the
+    /// token, so the whole word is masked.
     public static func argument(_ arg: String, reveal: Bool = false) -> String {
         if reveal { return arg }
+        // Before the URL: a shell line holding a URL is more than the URL, and the URL's rules
+        // would pass every word before its scheme through as written.
+        if let line = shellLine(arg) { return line }
         if cut(arg, at: "://") != nil { return url(arg) }
         if refersElsewhere(arg) { return arg }
         if let piece = cut(arg, at: "="), !looksSecret(piece.before) {
@@ -217,6 +221,19 @@ public enum ControlMasking {
             return piece.before + "=" + argument(piece.after)
         }
         return looksSecret(arg) ? mask : arg
+    }
+
+    /// An argument holding whitespace — a shell line for `sh -c` or `cmd /c`, or a whole command
+    /// line written as the command — masked as `arguments(_:)` masks the words a shell would pass,
+    /// so a flag named for a secret among them hides the word after it as it would in `args`. The
+    /// split drops the line's quotes, so a line none of whose words changed reads as written, and
+    /// one that did is rejoined with each word quoted as the dialog quotes an argument. Nil for an
+    /// argument with no whitespace.
+    static func shellLine(_ arg: String) -> String? {
+        guard arg.unicodeScalars.contains(where: { $0.properties.isWhitespace }) else { return nil }
+        let words = CollectionsModel.shellWords(arg)
+        let shown = arguments(words, exposure: .masked)
+        return zip(words, shown).allSatisfy({ same($0, $1) }) ? arg : ControlText.words(shown)
     }
 
     /// An argument list: each through `argument(_:)`, and also the value after a flag named for a
