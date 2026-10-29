@@ -14,6 +14,9 @@ namespace ConnectorControl.Core.Transport;
 public sealed class UserPathCommandLineTool(string binDir, IUserEnvironment environment, AppHost host) : ICommandLineTool
 {
     private bool busy;
+    private string? lastProblem;
+
+    public event Action? Changed;
 
     public string ToolPath => Path.Combine(binDir, ControlEndpoint.ToolFileName);
 
@@ -22,6 +25,8 @@ public sealed class UserPathCommandLineTool(string binDir, IUserEnvironment envi
 
     /// <summary>While the change runs and is announced, off the UI thread.</summary>
     public bool IsBusy => busy;
+
+    public string? LastProblem => lastProblem;
 
     public bool IsInstalled
     {
@@ -45,6 +50,8 @@ public sealed class UserPathCommandLineTool(string binDir, IUserEnvironment envi
     private void Change(Func<string?, string> change, Func<string, string> failure, Action<string?> completion)
     {
         busy = true;
+        lastProblem = null;
+        Changed?.Invoke();
         host.Background(() =>
         {
             string? problem = null;
@@ -64,8 +71,10 @@ public sealed class UserPathCommandLineTool(string binDir, IUserEnvironment envi
             }
             host.Marshal(() =>
             {
-                // Not busy by the time the completion runs, so what it raises can start the next one.
+                // Kept and announced before the completion runs, so every window open sees the end.
                 busy = false;
+                lastProblem = problem;
+                Changed?.Invoke();
                 completion(problem);
             });
         });

@@ -70,6 +70,27 @@ public class UserPathCommandLineToolTests
         Assert.False(tool.IsInstalled);
     }
 
+    /// <summary>The last failure stays on the seam for any Settings window to show, until the next try clears it.
+    /// Each start and end is announced.</summary>
+    [Fact]
+    public void TheLastFailureStaysUntilTheNextTryAndEachStartAndEndIsAnnounced()
+    {
+        var environment = new FakeEnvironment(@"C:\Windows") { Failure = new UnauthorizedAccessException("Access denied.") };
+        var tool = new UserPathCommandLineTool(Bin, environment, AppHost.Inline());
+        var changes = 0;
+        tool.Changed += () => changes++;
+        Assert.Equal(CommandLineToolText.InstallFailedError("Access denied."), Answer(tool.Install));
+        Assert.Equal(CommandLineToolText.InstallFailedError("Access denied."), tool.LastProblem);
+        Assert.Equal(2, changes);   // as the change starts and as it ends
+        environment.Failure = null;
+        var during = new List<string?>();
+        environment.WhileWriting = () => during.Add(tool.LastProblem);
+        Assert.Null(Answer(tool.Install));
+        Assert.Equal([null], during);   // the next try clears it
+        Assert.Null(tool.LastProblem);
+        Assert.Equal(4, changes);
+    }
+
     [Fact]
     public void RemovingWhenTheFolderIsAbsentChangesNothing()
     {

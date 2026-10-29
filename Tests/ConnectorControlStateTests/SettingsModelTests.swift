@@ -16,9 +16,10 @@ final class SettingsModelTests: XCTestCase {
         let updater = FakeUpdater()
         let model: SettingsModel
 
-        init() {
+        init(commandLineTool: CommandLineTool? = nil) {
             state = h.create()
-            model = SettingsModel(state: state, settings: h.settings, autostart: autostart, updater: updater)
+            model = SettingsModel(state: state, settings: h.settings, autostart: autostart, updater: updater,
+                                  commandLineTool: commandLineTool)
         }
 
         func dispose() {
@@ -372,11 +373,13 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertTrue(model.claudeIntegrationCaptionIsWarning)
         XCTAssertFalse(model.canUseCommandLineToolButton)
         XCTAssertEqual(model.commandLineToolMessage, ClaudeIntegration.moveToApplicationsError)
+        XCTAssertEqual(model.commandLineToolCaption, [], "no path for scripts that is about to be gone")
         model.commandLineToolAction()
         XCTAssertEqual(tool.installs, 0)
         tool.isInstalled = true
         XCTAssertTrue(model.canUseCommandLineToolButton, "a link made earlier can still go")
         XCTAssertNil(model.commandLineToolMessage)
+        XCTAssertEqual(model.commandLineToolCaption, TextRun.runs(CommandLineToolText.runHelpCaption, settingApart: [CommandLineToolText.helpCommand]))
     }
 
     // MARK: Command-line tool
@@ -423,6 +426,60 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertNil(model.commandLineToolMessage, "a new try clears the last failure")
         tool.finish(installed: false)
         XCTAssertEqual(model.commandLineToolButton, CommandLineToolText.installButton)
+    }
+
+    /// The row repaints as an operation starts and as it ends: the seam's own announcements, relayed.
+    func testTheCommandLineToolRowRaisesAsAnOperationStartsAndEnds() {
+        let tool = FakeCommandLineTool()
+        let rig = Rig(commandLineTool: tool); defer { rig.dispose() }
+        var raised = 0
+        let subscription = rig.model.objectWillChange.sink { _ in raised += 1 }
+        defer { subscription.cancel() }
+        rig.model.commandLineToolAction()
+        XCTAssertGreaterThan(raised, 0, "busy: Install dims")
+        let started = raised
+        tool.finish(installed: false, problem: CommandLineToolText.installFailedError("Access denied."))
+        XCTAssertGreaterThan(raised, started, "done: Install comes back, with the failure under it")
+    }
+
+    /// A Settings window closed and opened again while Install or Remove runs hears its end, not only the
+    /// window that started it, and shows its failure. Dispose stops it hearing.
+    func testAWindowOpenedDuringAnOperationHearsItsEnd() {
+        let tool = FakeCommandLineTool()
+        let rig = Rig(commandLineTool: tool); defer { rig.dispose() }
+        rig.model.commandLineToolAction()
+        rig.model.dispose()   // the window that started it closes
+        let reopened = SettingsModel(state: rig.state, settings: rig.h.settings, autostart: FakeAutostart(), updater: FakeUpdater(),
+                                     commandLineTool: tool)
+        defer { reopened.dispose() }
+        var raised = 0
+        let subscription = reopened.objectWillChange.sink { _ in raised += 1 }
+        defer { subscription.cancel() }
+        XCTAssertFalse(reopened.canUseCommandLineToolButton)
+        tool.finish(installed: false, problem: CommandLineToolText.installFailedError("Access denied."))
+        XCTAssertGreaterThan(raised, 0)
+        XCTAssertTrue(reopened.canUseCommandLineToolButton)
+        XCTAssertEqual(reopened.commandLineToolMessage, CommandLineToolText.installFailedError("Access denied."))
+        reopened.dispose()
+        let disposed = raised
+        tool.install { _ in }
+        tool.finish(installed: true)
+        XCTAssertEqual(raised, disposed, "dispose stops it hearing the seam")
+    }
+
+    /// A cancelled prompt says nothing, even after a failure: the next try clears the failure, and the
+    /// cancel puts nothing in its place.
+    func testACancelledPromptSaysNothing() {
+        let tool = FakeCommandLineTool()
+        let rig = Rig(commandLineTool: tool); defer { rig.dispose() }
+        rig.model.commandLineToolAction()
+        tool.finish(installed: false, problem: CommandLineToolText.installFailedError("Access denied."))
+        XCTAssertEqual(rig.model.commandLineToolMessage, CommandLineToolText.installFailedError("Access denied."))
+        rig.model.commandLineToolAction()
+        tool.finish(installed: false)
+        XCTAssertNil(rig.model.commandLineToolMessage)
+        XCTAssertEqual(rig.model.commandLineToolButton, CommandLineToolText.installButton)
+        XCTAssertTrue(rig.model.canUseCommandLineToolButton)
     }
 
     func testWithNoToolThereIsNoRow() {

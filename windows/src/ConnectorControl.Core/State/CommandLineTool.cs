@@ -24,10 +24,19 @@ public interface ICommandLineTool
     /// announced. The seam's, not a window's, so a Settings window opened meanwhile cannot start another.</summary>
     bool IsBusy { get; }
 
-    /// <summary>Puts the tool on PATH. <c>completion</c> runs on the UI thread, once, with null when it is done or the
-    /// person cancelled — <c>IsInstalled</c> says which — or the reason it failed, in the app's words.
-    /// It may run before <c>Install</c> returns (nothing to do, or a refusal), so a caller sets its busy state before
-    /// calling, never after.</summary>
+    /// <summary>Why the last Install or Remove failed, in the app's words; null from the moment the next one starts,
+    /// and after one that was done or cancelled. The seam's, so any Settings window shows it.</summary>
+    string? LastProblem { get; }
+
+    /// <summary>Raised, on the UI thread, after <c>IsBusy</c> or <c>LastProblem</c> changes: as an operation starts and as it
+    /// ends, even one that ends within the call. Every Settings window open then repaints, not only the one
+    /// that started it.</summary>
+    event Action? Changed;
+
+    /// <summary>Puts the tool on PATH. The seam keeps <c>IsBusy</c> and <c>LastProblem</c> itself and announces them on
+    /// <c>Changed</c>; a caller keeps no state of its own. <c>completion</c> runs on the UI thread, once, after they
+    /// are set, with null when it is done or the person cancelled — <c>IsInstalled</c> says which — or the reason
+    /// it failed, in the app's words. It may run before <c>Install</c> returns (nothing to do, or a refusal).</summary>
     void Install(Action<string?> completion);
 
     /// <summary>Takes the tool off PATH; <c>completion</c> as for <c>Install</c>.</summary>

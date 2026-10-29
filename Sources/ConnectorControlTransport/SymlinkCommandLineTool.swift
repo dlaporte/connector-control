@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import ConnectorControlState
 
@@ -49,6 +50,9 @@ public final class SymlinkCommandLineTool: CommandLineTool {
     /// Only while the administrator prompt's script runs: a link made or taken away directly, with no
     /// prompt, finishes inside the call and is never busy.
     public private(set) var isBusy = false
+    public private(set) var lastProblem: String?
+    private let changed = PassthroughSubject<Void, Never>()
+    public var changes: AnyPublisher<Void, Never> { changed.eraseToAnyPublisher() }
     private let host: AppHost
     private let runScript: @Sendable ([String]) -> (Int32, String)
 
@@ -76,6 +80,8 @@ public final class SymlinkCommandLineTool: CommandLineTool {
     private var isLink: Bool { (try? FileManager.default.destinationOfSymbolicLink(atPath: linkPath)) != nil }
 
     public func install(completion: @escaping (String?) -> Void) {
+        lastProblem = nil
+        let completion = finishing(completion)
         guard !host.controlToolIsTransient else {
             completion(ClaudeIntegration.moveToApplicationsError)
             return
@@ -108,6 +114,8 @@ public final class SymlinkCommandLineTool: CommandLineTool {
     /// Takes away this install's own link and nothing else: a link to another copy, or someone's own
     /// file, stays.
     public func remove(completion: @escaping (String?) -> Void) {
+        lastProblem = nil
+        let completion = finishing(completion)
         guard let destination, isInstalled else {
             completion(nil)
             return
@@ -132,11 +140,10 @@ public final class SymlinkCommandLineTool: CommandLineTool {
         let host = self.host
         let occupied = CommandLineToolText.occupiedError(linkPath)
         isBusy = true
+        changed.send()
         host.background {
             let (code, error) = runScript(argv)
             host.marshal {
-                // Not busy by the time the completion runs, so what it repaints can start the next one.
-                self.isBusy = false
                 // What AppleScript says ends the text: the cancel code, or the marker before the exit status.
                 let said = error.trimmingCharacters(in: .whitespacesAndNewlines)
                 let reason = SymlinkCommandLineTool.reason(from: said)
@@ -148,6 +155,17 @@ public final class SymlinkCommandLineTool: CommandLineTool {
                     completion(failure(reason))
                 }
             }
+        }
+    }
+
+    /// `completion`, run once the operation's end is kept and announced: not busy, and why it failed, if it
+    /// did. Every path through `install` and `remove` ends through it, inside the call or after the prompt.
+    private func finishing(_ completion: @escaping (String?) -> Void) -> (String?) -> Void {
+        { problem in
+            self.isBusy = false
+            self.lastProblem = problem
+            self.changed.send()
+            completion(problem)
         }
     }
 

@@ -397,12 +397,14 @@ public class SettingsModelTests
         Assert.False(rig.Model.CanUseCommandLineToolButton);
         Assert.Equal(ClaudeIntegration.MoveToApplicationsError, rig.Model.CommandLineToolMessage);
         Assert.True(rig.Model.HasCommandLineToolMessage);
+        Assert.Empty(rig.Model.CommandLineToolCaption);   // no path for scripts that is about to be gone
         rig.Model.CommandLineToolAction();
         Assert.Equal(0, tool.Installs);
         tool.IsInstalled = true;
         Assert.True(rig.Model.CanUseCommandLineToolButton);   // a link made earlier can still go
         Assert.Null(rig.Model.CommandLineToolMessage);
         Assert.False(rig.Model.HasCommandLineToolMessage);
+        Assert.Equal(TextRun.Runs(CommandLineToolText.RunHelpCaption, [CommandLineToolText.HelpCommand]), rig.Model.CommandLineToolCaption);
     }
 
     // MARK: Command-line tool
@@ -450,8 +452,8 @@ public class SettingsModelTests
         Assert.Equal(CommandLineToolText.InstallButton, rig.Model.CommandLineToolButton);
     }
 
-    /// <summary>Windows only: WPF bindings re-read only the members raised, so the row's must be raised as an
-    /// operation starts and as it ends; SwiftUI re-reads the whole view from one send.</summary>
+    /// <summary>The row repaints as an operation starts and as it ends: the seam's own announcements, relayed.
+    /// WPF bindings re-read only the members raised, so these are the row's members by name.</summary>
     [Fact]
     public void TheCommandLineToolRowRaisesAsAnOperationStartsAndEnds()
     {
@@ -467,6 +469,89 @@ public class SettingsModelTests
         Assert.Contains(nameof(SettingsModel.CommandLineToolMessage), names);
         Assert.Contains(nameof(SettingsModel.HasCommandLineToolMessage), names);
         Assert.Contains(nameof(SettingsModel.CommandLineToolBusy), names);
+    }
+
+    /// <summary>A Settings window closed and opened again while Install or Remove runs hears its end, not only the
+    /// window that started it, and shows its failure. Dispose stops it hearing.</summary>
+    [Fact]
+    public void AWindowOpenedDuringAnOperationHearsItsEnd()
+    {
+        var tool = new FakeCommandLineTool();
+        using var rig = new Rig(tool: tool);
+        rig.Model.CommandLineToolAction();
+        rig.Model.Dispose();   // the window that started it closes
+        using var reopened = new SettingsModel(rig.State, rig.H.Settings, rig.Autostart, rig.Install, rig.Updater, rig.Updates, tool);
+        var names = new List<string>();
+        reopened.PropertyChanged += (_, e) => names.Add(e.PropertyName ?? "");
+        Assert.False(reopened.CanUseCommandLineToolButton);
+        tool.Finish(installed: false, CommandLineToolText.InstallFailedError("Access denied."));
+        Assert.Contains(nameof(SettingsModel.CanUseCommandLineToolButton), names);
+        Assert.Contains(nameof(SettingsModel.CommandLineToolMessage), names);
+        Assert.True(reopened.CanUseCommandLineToolButton);
+        Assert.Equal(CommandLineToolText.InstallFailedError("Access denied."), reopened.CommandLineToolMessage);
+        reopened.Dispose();
+        var disposed = names.Count;
+        tool.Install(_ => { });
+        tool.Finish(installed: true);
+        Assert.Equal(disposed, names.Count);   // Dispose stops it hearing the seam
+    }
+
+    /// <summary>A cancelled prompt says nothing, even after a failure: the next try clears the failure, and the
+    /// cancel puts nothing in its place.</summary>
+    [Fact]
+    public void ACancelledPromptSaysNothing()
+    {
+        var tool = new FakeCommandLineTool();
+        using var rig = new Rig(tool: tool);
+        rig.Model.CommandLineToolAction();
+        tool.Finish(installed: false, CommandLineToolText.InstallFailedError("Access denied."));
+        Assert.Equal(CommandLineToolText.InstallFailedError("Access denied."), rig.Model.CommandLineToolMessage);
+        rig.Model.CommandLineToolAction();
+        tool.Finish(installed: false);
+        Assert.Null(rig.Model.CommandLineToolMessage);
+        Assert.False(rig.Model.HasCommandLineToolMessage);
+        Assert.Equal(CommandLineToolText.InstallButton, rig.Model.CommandLineToolButton);
+        Assert.True(rig.Model.CanUseCommandLineToolButton);
+    }
+
+    /// <summary>Windows only: WPF bindings listen by name, so a change that raises only the store, such as a synced
+    /// edit bringing a connector under the reserved name, must still re-raise the Claude group. The Mac relays every
+    /// change AppState announces.</summary>
+    [Fact]
+    public void ARaiseOfTheStoreAloneReRaisesTheClaudeGroup()
+    {
+        using var rig = new Rig();
+        var names = new List<string>();
+        rig.Model.PropertyChanged += (_, e) => names.Add(e.PropertyName ?? "");
+        // A reload raises everything at its end. Subscribed after the model, this listener hears each raise once the
+        // model has answered it, so what the model had raised when the store's own raise arrived is the store's doing.
+        List<string>? raisedByTheStore = null;
+        var everythingFirst = false;
+        rig.State.PropertyChanged += (_, e) =>
+        {
+            if (string.IsNullOrEmpty(e.PropertyName))
+            {
+                everythingFirst |= raisedByTheStore is null;
+            }
+            else if (e.PropertyName == nameof(AppState.Store))
+            {
+                raisedByTheStore ??= [.. names];
+            }
+        };
+        Assert.True(rig.Model.CanChangeClaudeIntegration);
+        // Disabled, so Claude's config is left as it is.
+        var store = rig.H.StoreOnDisk();
+        store.Mcps[ClaudeIntegration.EntryName] = new McpEntry(false, JsonValue.Object(("command", JsonValue.String("x"))));
+        MasterStoreIO.Save(store, rig.H.MasterStorePath);
+        rig.State.Reload();
+        Assert.NotNull(raisedByTheStore);
+        Assert.False(everythingFirst);   // nothing raised everything before the store did
+        Assert.Contains(nameof(SettingsModel.CanChangeClaudeIntegration), raisedByTheStore);
+        Assert.Contains(nameof(SettingsModel.ClaudeIntegrationNote), raisedByTheStore);
+        Assert.Contains(nameof(SettingsModel.ClaudeIntegrationCaptionText), raisedByTheStore);
+        Assert.Contains(nameof(SettingsModel.ClaudeIntegrationTitleOpacity), raisedByTheStore);
+        Assert.False(rig.Model.CanChangeClaudeIntegration);
+        Assert.Equal(ClaudeIntegration.ClashNote, rig.Model.ClaudeIntegrationCaptionText);
     }
 
     [Fact]

@@ -87,6 +87,33 @@ final class SymlinkCommandLineToolTests: XCTestCase {
                        .some(CommandLineToolText.installFailedError("not (-128) the end")), "nor does the cancel code")
     }
 
+    /// The last failure stays on the seam for any Settings window to show, until the next try clears it;
+    /// a cancel leaves nothing. Each start and end is announced.
+    func testTheLastFailureStaysUntilTheNextTryAndEachStartAndEndIsAnnounced() throws {
+        let dir = TempDir(prefix: "cli-link"); defer { dir.dispose() }
+        let bin = dir.file("bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: bin.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: bin.path) }
+        let scripts = Scripts()
+        let installer = make(dir, scripts)
+        var changes = 0
+        let subscription = installer.changes.sink { changes += 1 }
+        defer { subscription.cancel() }
+        scripts.answer = (1, "7:332: execution error: ln: Permission denied (1)\n")
+        let failure = CommandLineToolText.installFailedError("ln: Permission denied")
+        XCTAssertEqual(answer(installer.install), .some(failure))
+        XCTAssertEqual(installer.lastProblem, failure)
+        XCTAssertEqual(changes, 2, "as the prompt goes up and as it is answered")
+        var during: [String?] = []
+        scripts.whileRunning = { MainActor.assumeIsolated { during.append(installer.lastProblem) } }
+        scripts.answer = (1, "0:332: execution error: User canceled. (-128)\n")
+        XCTAssertEqual(answer(installer.install), .some(nil))
+        XCTAssertEqual(during, [nil], "the next try clears it")
+        XCTAssertNil(installer.lastProblem, "a cancel says nothing")
+        XCTAssertEqual(changes, 4)
+    }
+
     /// Through an administrator, Remove hands the script the tool as well, and the script removes the
     /// link only while it still points there.
     func testRemovingThroughAnAdministratorTakesOnlyThisInstallsLink() throws {
@@ -214,7 +241,12 @@ final class SymlinkCommandLineToolTests: XCTestCase {
         let scripts = Scripts()
         let installer = make(dir, scripts)
         try Data("someone else's".utf8).write(to: URL(fileURLWithPath: installer.linkPath))
+        var changes = 0
+        let subscription = installer.changes.sink { changes += 1 }
+        defer { subscription.cancel() }
         XCTAssertEqual(answer(installer.install), .some(CommandLineToolText.occupiedError(installer.linkPath)))
+        XCTAssertEqual(installer.lastProblem, CommandLineToolText.occupiedError(installer.linkPath), "a refusal with no prompt is kept too")
+        XCTAssertEqual(changes, 1, "and announced, though it was never busy")
         XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: installer.linkPath)), Data("someone else's".utf8))
         XCTAssertEqual(answer(installer.remove), .some(nil), "a file that is not this install's link is not its to remove")
         XCTAssertTrue(FileManager.default.fileExists(atPath: installer.linkPath))

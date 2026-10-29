@@ -73,6 +73,11 @@ public final class SettingsModel: ObservableObject {
         state.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &subscriptions)
+        // The command-line tool announces each Install or Remove as it starts and as it ends, so a window
+        // opened meanwhile hears the end too, not only the one that started it.
+        commandLineTool?.changes
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &subscriptions)
         // A change made in Sparkle's own dialog must not leave the toggle stale.
         updater.automaticallyDownloadsUpdatesPublisher.dropFirst()
             .sink { [weak self] _ in self?.objectWillChange.send() }
@@ -249,6 +254,9 @@ public final class SettingsModel: ObservableObject {
     /// Claude Integration group whether the switch is on or off.
     public var controlEndpointProblem: String? { state.controlEndpointProblem }
 
+    // Platform idiom: SwiftUI shows an optional directly; XAML cannot bind a visibility to one, so the
+    // Windows mirror adds a Has… companion for each optional its views show or hide.
+
     public var confirmClaudeChanges: Bool {
         get { settings.confirmClaudeChanges }
         set {
@@ -288,9 +296,10 @@ public final class SettingsModel: ObservableObject {
         return TextRun.runs(CommandLineToolText.installedAtText(location), settingApart: [location])
     }
 
-    /// What to do with it: run `help` once installed; else the full path scripts can always use.
+    /// What to do with it: run `help` once installed; else the full path scripts can always use — left
+    /// out while Install is refused, since that path is about to be gone.
     public var commandLineToolCaption: [TextRun] {
-        guard let tool = commandLineTool else { return [] }
+        guard let tool = commandLineTool, !installRefused else { return [] }
         if tool.isInstalled {
             return TextRun.runs(CommandLineToolText.runHelpCaption, settingApart: [CommandLineToolText.helpCommand])
         }
@@ -305,11 +314,10 @@ public final class SettingsModel: ObservableObject {
     /// so a window opened meanwhile sees it too.
     public var commandLineToolBusy: Bool { commandLineTool?.isBusy == true }
 
-    @Published private var commandLineToolError: String?
-
-    /// Under the row: why the last try failed, else why Install cannot work here; nil otherwise.
+    /// Under the row: why the last try failed — the seam's, so a window opened meanwhile shows it — else
+    /// why Install cannot work here; nil otherwise.
     public var commandLineToolMessage: String? {
-        commandLineToolError ?? (installRefused ? ClaudeIntegration.moveToApplicationsError : nil)
+        commandLineTool?.lastProblem ?? (installRefused ? ClaudeIntegration.moveToApplicationsError : nil)
     }
 
     public var canUseCommandLineToolButton: Bool { commandLineTool != nil && !commandLineToolBusy && !installRefused }
@@ -317,21 +325,14 @@ public final class SettingsModel: ObservableObject {
     /// Install while the app runs from where it will not stay: a link would point at a path about to be gone.
     private var installRefused: Bool { commandLineTool?.isInstalled == false && state.controlToolIsTransient }
 
-    // Platform idiom: the Windows mirror raises the row's members by name as the operation starts and as it
-    // ends; here objectWillChange repaints the view, which reads the seam's busy state afresh.
     /// The row's button: Install or Remove, one at a time. A failure stays under the row until the next try.
+    /// The seam keeps the busy state and the failure and announces both, so nothing waits on the completion.
     public func commandLineToolAction() {
         guard let tool = commandLineTool, canUseCommandLineToolButton else { return }
-        objectWillChange.send()
-        commandLineToolError = nil
-        let finished: (String?) -> Void = { [weak self] problem in
-            self?.objectWillChange.send()
-            self?.commandLineToolError = problem
-        }
         if tool.isInstalled {
-            tool.remove(completion: finished)
+            tool.remove { _ in }
         } else {
-            tool.install(completion: finished)
+            tool.install { _ in }
         }
     }
 
@@ -344,7 +345,7 @@ public final class SettingsModel: ObservableObject {
     /// The Mac probes all four when the Claude tab appears.
     public func refreshTools() { state.refreshTools() }
 
-    /// Stops listening to AppState and the updater. The app does not call
+    /// Stops listening to AppState, the updater and the command-line tool. The app does not call
     /// this: the subscriptions hold `self` weakly and die with the
     /// `@StateObject`. Tests call it to prove the relays are what repaint
     /// the view.

@@ -49,7 +49,6 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     private readonly UpdateCoordinator updates;
     private readonly ICommandLineTool? commandLineTool;
     private bool launchAtStartup;
-    private string? commandLineToolError;
     private string? loginItemNote;
     /// <summary>
     /// Windows only: the Mac has no install to detect. Null until the install is first read, and again after
@@ -70,6 +69,12 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         this.commandLineTool = commandLineTool;
         launchAtStartup = autostart.IsEnabled;
         state.PropertyChanged += OnStateChanged;
+        // The command-line tool announces each Install or Remove as it starts and as it ends, so a window
+        // opened meanwhile hears the end too, not only the one that started it.
+        if (commandLineTool is not null)
+        {
+            commandLineTool.Changed += RaiseCommandLineTool;
+        }
     }
 
     /// <summary>Called whenever the window opens: autostart is read fresh, and the install the next time it is
@@ -190,7 +195,8 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     /// Claude integration group whether the switch is on or off.</summary>
     public string? ControlEndpointProblem => state.ControlEndpointProblem;
 
-    // The Windows mirror's binding companions: XAML cannot bind a visibility to an optional.
+    // Platform idiom: XAML cannot bind a visibility to an optional, so Windows adds a Has… companion for each
+    // optional its views show or hide; SwiftUI shows an optional directly, so the Mac has none.
     public bool HasControlEndpointProblem => ControlEndpointProblem is not null;
 
     public bool HasConfirmClaudeChangesCaption => ConfirmClaudeChangesCaption is not null;
@@ -343,12 +349,13 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>What to do with it: run <c>help</c> once installed; else the full path scripts can always use.</summary>
+    /// <summary>What to do with it: run <c>help</c> once installed; else the full path scripts can always use — left
+    /// out while Install is refused, since that path is about to be gone.</summary>
     public IReadOnlyList<TextRun> CommandLineToolCaption
     {
         get
         {
-            if (commandLineTool is not { } tool)
+            if (commandLineTool is not { } tool || InstallRefused)
             {
                 return [];
             }
@@ -367,9 +374,10 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     /// so a window opened meanwhile sees it too.</summary>
     public bool CommandLineToolBusy => commandLineTool?.IsBusy == true;
 
-    /// <summary>Under the row: why the last try failed, else why Install cannot work here; null otherwise.</summary>
+    /// <summary>Under the row: why the last try failed — the seam's, so a window opened meanwhile shows it — else
+    /// why Install cannot work here; null otherwise.</summary>
     public string? CommandLineToolMessage =>
-        commandLineToolError ?? (InstallRefused ? ClaudeIntegration.MoveToApplicationsError : null);
+        commandLineTool?.LastProblem ?? (InstallRefused ? ClaudeIntegration.MoveToApplicationsError : null);
 
     public bool HasCommandLineToolMessage => CommandLineToolMessage is not null;
 
@@ -378,33 +386,26 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     /// <summary>Install while the app runs from where it will not stay: a link would point at a path about to be gone.</summary>
     private bool InstallRefused => commandLineTool?.IsInstalled == false && state.ControlToolIsTransient;
 
-    /// <summary>The row's button: Install or Remove, one at a time. A failure stays under the row until the next try.</summary>
+    /// <summary>The row's button: Install or Remove, one at a time. A failure stays under the row until the next try.
+    /// The seam keeps the busy state and the failure and announces both, so nothing waits on the completion.</summary>
     public void CommandLineToolAction()
     {
         if (commandLineTool is not { } tool || !CanUseCommandLineToolButton)
         {
             return;
         }
-        commandLineToolError = null;
-        void Finished(string? problem)
-        {
-            commandLineToolError = problem;
-            RaiseCommandLineTool();
-        }
         if (tool.IsInstalled)
         {
-            tool.Remove(Finished);
+            tool.Remove(_ => { });
         }
         else
         {
-            tool.Install(Finished);
+            tool.Install(_ => { });
         }
-        // The seam is busy now, unless the operation finished within the call.
-        RaiseCommandLineTool();
     }
 
-    // Platform idiom: the Mac's model sends objectWillChange around the operation, which repaints the whole view;
-    // WPF bindings listen by name, so this raises every member the row binds.
+    // Platform idiom: the Mac's model relays the seam's announcements as objectWillChange, which repaints the
+    // whole view; WPF bindings listen by name, so this raises every member the row binds.
     /// <summary>Every member the row binds, after its state changed.</summary>
     private void RaiseCommandLineTool()
     {
@@ -459,5 +460,12 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         nameof(HasControlEndpointProblem),
     ];
 
-    public void Dispose() => state.PropertyChanged -= OnStateChanged;
+    public void Dispose()
+    {
+        state.PropertyChanged -= OnStateChanged;
+        if (commandLineTool is not null)
+        {
+            commandLineTool.Changed -= RaiseCommandLineTool;
+        }
+    }
 }

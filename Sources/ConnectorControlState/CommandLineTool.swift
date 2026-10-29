@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 /// Mirror: windows/src/ConnectorControl.Core/State/CommandLineTool.cs
@@ -18,10 +19,17 @@ public protocol CommandLineTool: AnyObject {
     /// Install or Remove is running — an administrator prompt is up, or the PATH's change is being
     /// announced. The seam's, not a window's, so a Settings window opened meanwhile cannot start another.
     var isBusy: Bool { get }
-    /// Puts the tool on PATH. `completion` runs on the main actor, once, with nil when it is done or the
-    /// person cancelled — `isInstalled` says which — or the reason it failed, in the app's words.
-    /// It may run before `install` returns (nothing to do, or a refusal), so a caller sets its busy state before
-    /// calling, never after.
+    /// Why the last Install or Remove failed, in the app's words; nil from the moment the next one starts,
+    /// and after one that was done or cancelled. The seam's, so any Settings window shows it.
+    var lastProblem: String? { get }
+    /// Sends, on the main actor, after `isBusy` or `lastProblem` changes: as an operation starts and as it
+    /// ends, even one that ends within the call. Every Settings window open then repaints, not only the one
+    /// that started it.
+    var changes: AnyPublisher<Void, Never> { get }
+    /// Puts the tool on PATH. The seam keeps `isBusy` and `lastProblem` itself and announces them on
+    /// `changes`; a caller keeps no state of its own. `completion` runs on the main actor, once, after they
+    /// are set, with nil when it is done or the person cancelled — `isInstalled` says which — or the reason
+    /// it failed, in the app's words. It may run before `install` returns (nothing to do, or a refusal).
     func install(completion: @escaping (String?) -> Void)
     /// Takes the tool off PATH; `completion` as for `install`.
     func remove(completion: @escaping (String?) -> Void)
