@@ -212,6 +212,25 @@ public class AppStateCollectionsTests
         Assert.Equal("Default", state.ActiveCollection);
     }
 
+    /// <summary>A collection name in another spelling of one already taken (é composed or decomposed) is that
+    /// name, as on the Mac: adding, copying, renaming into and subscribing under it are refused.</summary>
+    [Fact]
+    public void ACollectionNameComposedAnotherWayIsTaken()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        const string composed = "Caf\u00E9", decomposed = "Cafe\u0301";
+        var taken = $"A collection named “{decomposed}” already exists.";
+        Assert.Null(state.AddEmptyCollection(composed));
+        Assert.Equal(taken, state.AddEmptyCollection(decomposed));
+        Assert.Equal(taken, state.CreateActiveCopy(decomposed));
+        Assert.Null(state.CreateActiveCopy("Work"));
+        Assert.Equal(taken, state.RenameCollection("Work", decomposed));
+        var path = h.WriteDocument(CollectionDocumentSamples.DataTeam, "data-team.json");
+        Assert.Equal(taken, state.Subscribe(path, decomposed));
+        Assert.Equal([4, 7, 4], state.CollectionNames.Select(n => n.Length));
+    }
+
     [Fact]
     public void RenameAndDeleteReportTheStoresErrors()
     {

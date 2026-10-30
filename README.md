@@ -1227,6 +1227,10 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
 - Import, subscribe and restore apply exactly what the question showed: the
   file is read once, at most 1 MB for a collection document and 16 MB for a
   backup.
+- On Windows, a collection named with an accented letter written another
+  way (é as one character, or as e followed by a combining accent) isn't
+  found by the command-line tool or Claude; on a Mac it is. Connector
+  Control never lets two collections take names that differ only that way.
 - The command-line tool and the relay never start the app while
   `CONNECTOR_CONTROL_STORE_DIR` or `CONNECTOR_CONTROL_CLAUDE_CONFIG` is set,
   since those overrides are for development and tests.

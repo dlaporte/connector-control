@@ -87,13 +87,22 @@ public sealed class MasterStore : IEquatable<MasterStore>
         {
             return "Name must not be empty.";
         }
-        if (Collections.ContainsKey(trimmed))
+        if (HoldsCollectionNamed(trimmed))
         {
             return $"A collection named “{trimmed}” already exists.";
         }
         Collections[trimmed] = new Collection();
         return null;
     }
+
+    /// <summary>
+    /// Whether a collection already goes by <paramref name="name"/>, in this spelling or another Unicode
+    /// counts as the same text (<see cref="Collection.NameComparer"/>), as the Mac's dictionary keys
+    /// find it. Platform idiom: the collections stay keyed ordinally, as every sidecar keyed by a
+    /// collection's name is, so only a new name is held to this; a shared store never gains a second
+    /// spelling that a Mac, keeping one, would lose.
+    /// </summary>
+    private bool HoldsCollectionNamed(string name) => Collections.Keys.Any(k => Collection.NameComparer.Equals(k, name));
 
     /// <summary>null on success, else a user-facing error message. Renaming the active collection keeps it active under its new name.</summary>
     public string? RenameCollection(string name, string newName)
@@ -107,7 +116,7 @@ public sealed class MasterStore : IEquatable<MasterStore>
         {
             return "Name must not be empty.";
         }
-        if (trimmed != name && Collections.ContainsKey(trimmed))
+        if (!Collection.NameComparer.Equals(trimmed, name) && HoldsCollectionNamed(trimmed))
         {
             return $"A collection named “{trimmed}” already exists.";
         }

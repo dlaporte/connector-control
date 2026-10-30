@@ -186,6 +186,24 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.activeCollection, "Default")
     }
 
+    /// A collection name in another spelling of one already taken (é composed or decomposed) is that
+    /// name, as on Windows: adding, copying, renaming into and subscribing under it are refused.
+    func testACollectionNameComposedAnotherWayIsTaken() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let composed = "Caf\u{E9}", decomposed = "Cafe\u{301}"
+        let taken = "A collection named \u{201C}\(decomposed)\u{201D} already exists."
+        XCTAssertNil(state.addEmptyCollection(named: composed))
+        XCTAssertEqual(state.addEmptyCollection(named: decomposed), taken)
+        XCTAssertEqual(state.createActiveCopy(named: decomposed), taken)
+        XCTAssertNil(state.createActiveCopy(named: "Work"))
+        XCTAssertEqual(state.renameCollection("Work", to: decomposed), taken)
+        let url = h.dir.file("data-team.json")
+        try h.writeDocument(CollectionDocumentSamples.dataTeam, at: url)
+        XCTAssertEqual(state.subscribe(documentAt: url.path, as: decomposed), taken)
+        XCTAssertEqual(state.collectionNames.map { $0.unicodeScalars.count }, [4, 7, 4])
+    }
+
     func testRenameAndDeleteReportTheStoresErrors() {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
