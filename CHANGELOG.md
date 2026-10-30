@@ -49,6 +49,8 @@ has one.
 - A release now fails at its first step if its changelog section holds only the empty sub-headings, and drops any sub-heading with no bullets from the notes it publishes, so the GitHub release and both apps’ update dialogs never show bare headings.
 - The Sparkle tools version used to sign the Mac update feed is now checked against the Sparkle the app links on every push that touches `Package.resolved`, so a Sparkle bump fails on its pull request instead of partway through a signed build.
 - Every push now checks that no file contains an em-dash.
+- Mac notarization no longer hangs when an upload stalls: an upload that gets no submission ID within five minutes is stopped and tried again, three tries in all, and the wait for Apple’s verdict now ends after 20 minutes. A rejected submission fails at once with Apple’s log, instead of after five stapling attempts.
+- Changes to the release scripts no longer start the macOS build and test run; they’re checked on Linux, where they run.
 
 ## v1.5.0
 

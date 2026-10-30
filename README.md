@@ -1153,7 +1153,8 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
 | `scripts/generate-combining-marks.py` | Writes the combining-mark table into both platforms' `ControlText` files from one pinned Unicode version. | run by hand |
 | `scripts/generate-icon.swift` | Renders the app icon - macOS `.icns` or Windows `.ico`, chosen by the output extension. | `scripts/build-app.sh`; the `.ico` path is run by hand, on a Mac |
 | `scripts/mac/import-signing-cert.sh` | Imports the Developer ID certificate into a throwaway CI keychain. | `mac-build.yml` |
-| `scripts/mac/notarize.sh` | Submits a binary or app bundle for Apple notarization and staples the ticket. | `mac-build.yml` |
+| `scripts/mac/notarize.sh` | Submits a binary or app bundle for Apple notarization, stopping and retrying an upload that stalls, and staples the ticket. | `mac-build.yml` |
+| `scripts/tests/notarize-retry.sh` | Checks that `notarize.sh` retries a stalled or failed upload (three tries in all) and staples only an accepted submission, with a fake `xcrun` and `notarytool`. | `infra-ci.yml` |
 | `scripts/mac/make-appcast.sh` | Builds and EdDSA-signs the Sparkle appcast for one release or preview. | `mac-build.yml` |
 | `scripts/release/changelog-section.sh` | Prints one version's CHANGELOG.md section. | `release.yml`, `scripts/release/preview-notes.sh` |
 | `scripts/release/preview-notes.sh` | Prints the release notes for a joint preview build: the prerelease page, or with `--dialog` the shorter text both apps' update dialogs show. | `preview.yml` |
@@ -1161,7 +1162,9 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
 | `scripts/tests/update-preview-feed-order.sh` | Checks that `update-preview-feed.sh` moves the preview feed only forward, with a fake `gh` and `curl`. | `infra-ci.yml` |
 | `scripts/release/ensure-release.sh` | Creates a GitHub release, or reuses one a previous run already created. | `release.yml`, `preview.yml` |
 | `scripts/release/upload-release-assets.sh` | Uploads one build's Velopack assets to an existing release. | `release.yml`, `preview.yml` |
-| `scripts/release/verify-release.sh` | Verifies a release's draft/prerelease flags and asset set. | `release.yml`, `preview.yml` |
+| `scripts/release/verify-release.sh` | Verifies a release's draft/prerelease flags and that it carries every asset a release of its version publishes. | `release.yml`, `preview.yml` |
+| `scripts/release/check-appcast.sh` | Checks that a served appcast is one Sparkle will take: its version, build, enclosure and both EdDSA signatures. | `release.yml`, `scripts/release/update-preview-feed.sh` |
+| `scripts/lib/common.sh` | Helpers the other scripts source: stopping a process, the release asset names, the all-or-nothing upload check and reading an appcast's build. | the `scripts/mac/` checks and `notarize.sh`, the `scripts/release/` scripts |
 | `windows/scripts/package.ps1` | Publishes and Velopack-packs one Windows runtime. | `windows-build.yml` |
 | `windows/scripts/inspector-check.ps1` | The Windows twin of `scripts/mac/inspector-check.sh`. | `windows-build.yml` |
 | `windows/scripts/smoke-test.ps1` | Installs a packed `Setup.exe` silently and proves the app starts and stays up (with `-ExpectSigned`, that it and its package are signed); with `-SignatureOnly`, only checks a `Setup.exe`'s signature. | `windows-build.yml` |
