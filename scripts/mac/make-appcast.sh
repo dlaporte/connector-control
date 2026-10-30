@@ -26,8 +26,8 @@ DMG="ConnectorControl_${VERSION}.dmg"
 # Tools version pinned to match Package.resolved's Sparkle dependency: generate_appcast ships
 # alongside the Sparkle.framework the app links, and a drifted pin could sign appcast entries
 # with a tool version the shipped app's framework disagrees with.
-SPARKLE_TOOLS_VERSION=2.10.0
-SPARKLE_SHA256=c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c
+SPARKLE_TOOLS_VERSION=2.10.1
+SPARKLE_SHA256=1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27
 
 # jq, not grep: the "version" field lives under "state", several lines below "identity", so a
 # line-proximity grep never matches it.
