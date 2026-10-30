@@ -41,16 +41,63 @@ extension JSONValue: Codable {
 }
 
 public extension JSONValue {
-    /// Strict parse, refusing arrays and objects nested deeper than `McpSession.maxNestingDepth` and a
-    /// trailing comma (`McpSession.hasTrailingComma`).
+    /// How deeply a document may nest arrays and objects; the Windows parser's own limit, set on both
+    /// sides so neither accepts what the other refuses.
+    static let maxNestingDepth = 64
+
+    /// Whether `text` nests arrays and objects no deeper than `limit`, brackets inside strings not counted.
+    static func nests(atMost limit: Int, _ text: String) -> Bool {
+        var depth = 0
+        var inString = false
+        var escaped = false
+        for byte in text.utf8 {
+            if inString {
+                if escaped { escaped = false } else if byte == UInt8(ascii: "\\") { escaped = true } else if byte == UInt8(ascii: "\"") { inString = false }
+            } else if byte == UInt8(ascii: "\"") {
+                inString = true
+            } else if byte == UInt8(ascii: "[") || byte == UInt8(ascii: "{") {
+                depth += 1
+                if depth > limit { return false }
+            } else if byte == UInt8(ascii: "]") || byte == UInt8(ascii: "}") {
+                depth -= 1
+            }
+        }
+        return true
+    }
+
+    /// Whether `text` has a comma, outside a string, followed by nothing but JSON whitespace and then a
+    /// closing bracket or brace. Platform idiom: `JSONDecoder` and `JSONSerialization` read one trailing
+    /// comma, where the Windows reader - and Claude Desktop - refuse it; refused here alike, so a line or a
+    /// file reads the same on both.
+    static func hasTrailingComma(_ text: String) -> Bool {
+        var inString = false
+        var escaped = false
+        var comma = false
+        for byte in text.utf8 {
+            if inString {
+                if escaped { escaped = false } else if byte == UInt8(ascii: "\\") { escaped = true } else if byte == UInt8(ascii: "\"") { inString = false }
+            } else if byte == UInt8(ascii: ",") {
+                comma = true
+            } else if byte == UInt8(ascii: "]") || byte == UInt8(ascii: "}") {
+                if comma { return true }
+            } else if byte != UInt8(ascii: " "), byte != UInt8(ascii: "\t"), byte != UInt8(ascii: "\n"), byte != UInt8(ascii: "\r") {
+                comma = false
+                if byte == UInt8(ascii: "\"") { inString = true }
+            }
+        }
+        return false
+    }
+
+    /// Strict parse, refusing arrays and objects nested deeper than `maxNestingDepth` and a
+    /// trailing comma (`hasTrailingComma`).
     static func parse(_ data: Data) throws -> JSONValue {
         // Platform idiom: the Windows reader refuses nesting past 64 itself, where JSONDecoder reads
         // to 512; held to the same limit here, so a document reads, and is masked, alike on both.
         let text = String(decoding: data, as: UTF8.self)
-        guard McpSession.nests(atMost: McpSession.maxNestingDepth, text) else {
+        guard nests(atMost: maxNestingDepth, text) else {
             throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "nested too deeply"))
         }
-        guard !McpSession.hasTrailingComma(text) else {
+        guard !hasTrailingComma(text) else {
             throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "trailing comma"))
         }
         return try JSONDecoder().decode(JSONValue.self, from: data)

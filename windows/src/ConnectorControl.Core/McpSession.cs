@@ -66,7 +66,7 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
         JsonValue message;
         try
         {
-            if (!Nests(MaxNestingDepth, trimmed)) { throw new JsonException("Nested too deeply."); }
+            // JsonValue.Parse's reader refuses nesting past MaxNestingDepth itself.
             message = JsonValue.Parse(trimmed);
         }
         catch (JsonException)

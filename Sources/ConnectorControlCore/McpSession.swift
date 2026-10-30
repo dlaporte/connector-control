@@ -32,9 +32,6 @@ public final class McpSession {
     public nonisolated static let supportedProtocolVersions = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]
     /// The largest message read; anything longer is refused without being parsed.
     public nonisolated static let maxMessageBytes = 1_048_576
-    /// How deeply a message may nest arrays and objects; the Windows parser's own limit, set on both
-    /// sides so neither accepts what the other refuses.
-    public nonisolated static let maxNestingDepth = 64
     public nonisolated static let parseErrorCode = -32700
     public nonisolated static let invalidRequestCode = -32600
     public nonisolated static let methodNotFoundCode = -32601
@@ -75,8 +72,8 @@ public final class McpSession {
         }
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        guard McpSession.nests(atMost: McpSession.maxNestingDepth, trimmed),
-              let message = try? JSONValue.parse(Data(trimmed.utf8)) else {
+        // JSONValue.parse refuses nesting past JSONValue.maxNestingDepth itself.
+        guard let message = try? JSONValue.parse(Data(trimmed.utf8)) else {
             reply(error: McpSession.parseErrorCode, McpSession.parseErrorMessage, id: .null)
             return
         }
@@ -238,7 +235,7 @@ public final class McpSession {
         // An answer no client can read is refused, as the client must still hear about its request or it
         // waits on that id for good: one nested deeper than maxNestingDepth, which every reader of ours
         // refuses, and one JSON cannot hold (NaN, infinity), for which compactLine answers "null".
-        guard line != "null", McpSession.nests(atMost: McpSession.maxNestingDepth, line) else {
+        guard line != "null", JSONValue.nests(atMost: JSONValue.maxNestingDepth, line) else {
             reply(error: McpSession.internalErrorCode, McpSession.internalErrorMessage, id: id)
             return
         }
@@ -282,48 +279,5 @@ public final class McpSession {
     nonisolated static func number(_ value: Double) -> JSONValue? {
         guard value.isFinite else { return nil }
         return value == value.rounded() && abs(value) < 1e15 ? .int(Int(value)) : .double(value)
-    }
-
-    /// Whether `text` nests arrays and objects no deeper than `limit`, brackets inside strings not counted.
-    public nonisolated static func nests(atMost limit: Int, _ text: String) -> Bool {
-        var depth = 0
-        var inString = false
-        var escaped = false
-        for byte in text.utf8 {
-            if inString {
-                if escaped { escaped = false } else if byte == UInt8(ascii: "\\") { escaped = true } else if byte == UInt8(ascii: "\"") { inString = false }
-            } else if byte == UInt8(ascii: "\"") {
-                inString = true
-            } else if byte == UInt8(ascii: "[") || byte == UInt8(ascii: "{") {
-                depth += 1
-                if depth > limit { return false }
-            } else if byte == UInt8(ascii: "]") || byte == UInt8(ascii: "}") {
-                depth -= 1
-            }
-        }
-        return true
-    }
-
-    /// Whether `text` has a comma, outside a string, followed by nothing but JSON whitespace and then a
-    /// closing bracket or brace. Platform idiom: `JSONDecoder` and `JSONSerialization` read one trailing
-    /// comma, where the Windows reader - and Claude Desktop - refuse it; refused here alike, so a line or a
-    /// file reads the same on both.
-    public nonisolated static func hasTrailingComma(_ text: String) -> Bool {
-        var inString = false
-        var escaped = false
-        var comma = false
-        for byte in text.utf8 {
-            if inString {
-                if escaped { escaped = false } else if byte == UInt8(ascii: "\\") { escaped = true } else if byte == UInt8(ascii: "\"") { inString = false }
-            } else if byte == UInt8(ascii: ",") {
-                comma = true
-            } else if byte == UInt8(ascii: "]") || byte == UInt8(ascii: "}") {
-                if comma { return true }
-            } else if byte != UInt8(ascii: " "), byte != UInt8(ascii: "\t"), byte != UInt8(ascii: "\n"), byte != UInt8(ascii: "\r") {
-                comma = false
-                if byte == UInt8(ascii: "\"") { inString = true }
-            }
-        }
-        return false
     }
 }

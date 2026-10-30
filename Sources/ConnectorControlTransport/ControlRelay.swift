@@ -198,7 +198,7 @@ public final class ControlRelay {
 
     /// The object a line holds, read only to know what the line is - never to change it.
     static func message(_ line: String) -> [String: JSONValue]? {
-        guard McpSession.nests(atMost: McpSession.maxNestingDepth, line),
+        guard JSONValue.nests(atMost: JSONValue.maxNestingDepth, line),
               case .object(let fields)? = try? JSONValue.parse(Data(line.utf8)) else { return nil }
         return fields
     }

@@ -226,12 +226,12 @@ final class McpSessionTests: XCTestCase {
         }
         initialize()
         session.receive(#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"echo"}}"#)
-        try XCTUnwrap(host.calls.last).completion(.object(["value": nested(McpSession.maxNestingDepth - 2)]))
+        try XCTUnwrap(host.calls.last).completion(.object(["value": nested(JSONValue.maxNestingDepth - 2)]))
         let answer = try XCTUnwrap(sent.last)
         XCTAssertTrue(answer.hasPrefix(#"{"id":9,"jsonrpc":"2.0","result":{"value":[[[["#), answer)
-        XCTAssertTrue(McpSession.nests(atMost: McpSession.maxNestingDepth, answer), "a line exactly at the limit goes out")
+        XCTAssertTrue(JSONValue.nests(atMost: JSONValue.maxNestingDepth, answer), "a line exactly at the limit goes out")
         session.receive(#"{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"echo"}}"#)
-        try XCTUnwrap(host.calls.last).completion(.object(["value": nested(McpSession.maxNestingDepth - 1)]))
+        try XCTUnwrap(host.calls.last).completion(.object(["value": nested(JSONValue.maxNestingDepth - 1)]))
         XCTAssertEqual(sent.last, #"{"error":{"code":-32603,"message":"Internal error"},"id":10,"jsonrpc":"2.0"}"#)
     }
 

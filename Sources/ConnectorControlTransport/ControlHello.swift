@@ -34,7 +34,7 @@ public struct ControlHello: Equatable, Sendable {
     /// one that is not UTF-8 is never decoded lossily into a hello.
     public static func parse(_ bytes: Data) -> ControlHello {
         guard bytes.count <= McpSession.maxMessageBytes, let text = McpSession.strictUTF8(bytes),
-              McpSession.nests(atMost: McpSession.maxNestingDepth, text),
+              JSONValue.nests(atMost: JSONValue.maxNestingDepth, text),
               case .object(let fields)? = try? JSONValue.parse(Data(text.utf8)),
               case .string(let client)? = fields["client"],
               case .string(let version)? = fields["version"], !version.isEmpty else { return .unknown }

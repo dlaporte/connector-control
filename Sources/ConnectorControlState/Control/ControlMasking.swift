@@ -263,7 +263,7 @@ public enum ControlMasking {
     /// be read. Nil for anything else. Before the shell line, which would split JSON at its spaces.
     static func jsonArgument(_ arg: String) -> String? {
         guard let first = arg.unicodeScalars.first(where: { !$0.properties.isWhitespace }), first == "{" || first == "[" else { return nil }
-        guard McpSession.nests(atMost: McpSession.maxNestingDepth, arg) else { return mask }
+        guard JSONValue.nests(atMost: JSONValue.maxNestingDepth, arg) else { return mask }
         guard let value = try? JSONValue.parse(Data(arg.utf8)) else { return nil }
         switch value {
         case .object, .array:
