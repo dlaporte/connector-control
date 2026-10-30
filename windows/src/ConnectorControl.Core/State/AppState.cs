@@ -2116,21 +2116,17 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         else
         {
-            CollectionDocument document;
-            try
+            var (decoded, failure) = DecodeDocument(data, Path.GetFileName(path));
+            if (decoded is not { } document)
             {
-                document = CollectionDocument.Decode(data);
-            }
-            catch (CollectionDocumentException ex)
-            {
-                if (ex.NewerFormatVersion is not null)
+                if (failure == NewerDocumentError)
                 {
                     // No amount of waiting makes this readable, so it is said at once and never retried.
                     sourceFailures.Remove(collection);
-                    SetSourceError(collection, NewerDocumentError);
+                    SetSourceError(collection, failure);
                     return;
                 }
-                NoteSourceFailure(collection, SourceUnreadableError(Path.GetFileName(path), ex.Message), manual);
+                NoteSourceFailure(collection, failure ?? "", manual);
                 return;
             }
             rendered = document.Render();
@@ -2237,13 +2233,26 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return (null, null, SourceUnreadableError(Path.GetFileName(path), ex.Message));
         }
+        var (document, failure) = DecodeDocument(data, Path.GetFileName(path));
+        return (document, document is null ? null : data, failure);
+    }
+
+    /// <summary>
+    /// The document <paramref name="data"/> holds, or the message to show for it, naming
+    /// <paramref name="fileName"/>: the decode half of <see cref="ReadDocument"/>, which
+    /// <see cref="ReadSource"/> shares once it has the bytes for its hash. The document is null
+    /// exactly when the failure is not; a failure equal to <see cref="NewerDocumentError"/> is
+    /// the one no retry fixes.
+    /// </summary>
+    internal static (CollectionDocument? Document, string? Failure) DecodeDocument(byte[] data, string fileName)
+    {
         try
         {
-            return (CollectionDocument.Decode(data), data, null);
+            return (CollectionDocument.Decode(data), null);
         }
         catch (CollectionDocumentException ex)
         {
-            return (null, null, ex.NewerFormatVersion is null ? SourceUnreadableError(Path.GetFileName(path), ex.Message) : NewerDocumentError);
+            return (null, ex.NewerFormatVersion is null ? SourceUnreadableError(fileName, ex.Message) : NewerDocumentError);
         }
     }
 

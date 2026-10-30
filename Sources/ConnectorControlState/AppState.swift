@@ -1409,17 +1409,16 @@ public final class AppState: ObservableObject {
             // another machine's apply arriving - and the answer has to follow it.
             rendered = kept.rendered
         } else {
-            let document: CollectionDocument
-            do {
-                document = try CollectionDocument.decode(data)
-            } catch CollectionDocumentError.newerFormat {
-                // No amount of waiting makes this readable, so it is said at once and never retried.
-                sourceFailures.removeValue(forKey: collection)
-                sourceErrors[collection] = AppState.newerDocumentError
-                return
-            } catch {
-                noteSourceFailure(collection, AppState.sourceUnreadableError(url.lastPathComponent, AppState.sourceDetail(error)),
-                                  manual: manual)
+            let decoded = AppState.decodeDocument(data, fileName: url.lastPathComponent)
+            guard let document = decoded.document else {
+                let failure = decoded.failure ?? ""
+                if failure == AppState.newerDocumentError {
+                    // No amount of waiting makes this readable, so it is said at once and never retried.
+                    sourceFailures.removeValue(forKey: collection)
+                    sourceErrors[collection] = failure
+                } else {
+                    noteSourceFailure(collection, failure, manual: manual)
+                }
                 return
             }
             rendered = document.render()
@@ -1493,12 +1492,21 @@ public final class AppState: ObservableObject {
         } catch {
             return (nil, nil, sourceUnreadableError(url.lastPathComponent, sourceDetail(error)))
         }
+        let decoded = decodeDocument(data, fileName: url.lastPathComponent)
+        return (decoded.document, decoded.document == nil ? nil : data, decoded.failure)
+    }
+
+    /// The document `data` holds, or the message to show for it, naming `fileName`: the decode
+    /// half of `readDocument(at:)`, which `readSource` shares once it has the bytes for its hash.
+    /// The document is nil exactly when the failure is not; a failure equal to
+    /// `newerDocumentError` is the one no retry fixes.
+    static func decodeDocument(_ data: Data, fileName: String) -> (document: CollectionDocument?, failure: String?) {
         do {
-            return (try CollectionDocument.decode(data), data, nil)
+            return (try CollectionDocument.decode(data), nil)
         } catch CollectionDocumentError.newerFormat {
-            return (nil, nil, newerDocumentError)
+            return (nil, newerDocumentError)
         } catch {
-            return (nil, nil, sourceUnreadableError(url.lastPathComponent, sourceDetail(error)))
+            return (nil, sourceUnreadableError(fileName, sourceDetail(error)))
         }
     }
 
