@@ -1570,6 +1570,31 @@ public class AppStateCollectionsTests
         Assert.True(File.Exists(file), "only the folder it was publishing to is touched");
     }
 
+    /// <summary>Stop Publishing's delete takes the document, a plain file, and never a folder that has
+    /// come to sit under its name: that folder, and everything in it, survives, as on the Mac.</summary>
+    [Fact]
+    public void StopPublishingDeletesTheDocumentButNeverAFolderUnderItsName()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var fileName = Slug.Make(state.ActiveCollection) + ".json";
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        state.StopPublishing(state.ActiveCollection, deleteFile: true);
+        Assert.False(File.Exists(Path.Combine(folder, fileName)));   // the document goes
+
+        var second = PublishFolder(h, "pub2");
+        Assert.Null(state.StartPublishing(state.ActiveCollection, second, PublishIntent.None));
+        var target = Path.Combine(second, fileName);
+        File.Delete(target);
+        Directory.CreateDirectory(target);
+        var inside = Path.Combine(target, "inside.txt");
+        File.WriteAllText(inside, "keep");
+        state.StopPublishing(state.ActiveCollection, deleteFile: true);
+        Assert.Equal("keep", File.ReadAllText(inside));   // a folder under the name is left alone
+        Assert.Null(state.LastError);
+    }
+
     [Fact]
     public void AChangeThatArrivesFromAnotherMachineIsPublishedOnTheNextLoad()
     {

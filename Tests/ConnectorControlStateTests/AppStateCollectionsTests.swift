@@ -1374,6 +1374,60 @@ final class AppStateCollectionsTests: XCTestCase {
                       "only the folder it was publishing to is touched")
     }
 
+    /// Stop Publishing's delete takes the document, a plain file, and never a folder that has come
+    /// to sit under its name: that folder, and everything in it, survives, as on Windows.
+    func testStopPublishingDeletesTheDocumentButNeverAFolderUnderItsName() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let fileName = Slug.make(state.activeCollection) + ".json"
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+        state.stopPublishing(state.activeCollection, deleteFile: true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.appendingPathComponent(fileName).path), "the document goes")
+
+        let second = try publishFolder(h, "pub2")
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: second.path, intent: .none))
+        let target = second.appendingPathComponent(fileName)
+        try FileManager.default.removeItem(at: target)
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: false)
+        let inside = target.appendingPathComponent("inside.txt")
+        try Data("keep".utf8).write(to: inside)
+        state.stopPublishing(state.activeCollection, deleteFile: true)
+        XCTAssertEqual(try String(contentsOf: inside, encoding: .utf8), "keep", "a folder under the name is left alone")
+        XCTAssertNil(state.lastError)
+    }
+
+    /// A symbolic link under the document's name goes as Windows' File.Delete takes it: a link to a
+    /// file is removed as a link, never the file it points at, and a link to a folder is left.
+    /// Mac-only: making a link on Windows needs a privilege the test runner may not hold.
+    func testStopPublishingRemovesALinkToAFileAsALinkAndLeavesALinkToAFolder() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let fileName = Slug.make(state.activeCollection) + ".json"
+        let fm = FileManager.default
+        let elsewhere = h.dir.file("elsewhere.json")
+        try Data("theirs".utf8).write(to: elsewhere)
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+        let target = folder.appendingPathComponent(fileName)
+        try fm.removeItem(at: target)
+        try fm.createSymbolicLink(at: target, withDestinationURL: elsewhere)
+        state.stopPublishing(state.activeCollection, deleteFile: true)
+        XCTAssertNil(try? fm.destinationOfSymbolicLink(atPath: target.path), "the link goes")
+        XCTAssertEqual(try String(contentsOf: elsewhere, encoding: .utf8), "theirs", "the file it pointed at stays")
+
+        let second = try publishFolder(h, "pub2")
+        let linked = try publishFolder(h, "linked")
+        try Data("keep".utf8).write(to: linked.appendingPathComponent("inside.txt"))
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: second.path, intent: .none))
+        let other = second.appendingPathComponent(fileName)
+        try fm.removeItem(at: other)
+        try fm.createSymbolicLink(at: other, withDestinationURL: linked)
+        state.stopPublishing(state.activeCollection, deleteFile: true)
+        XCTAssertNotNil(try? fm.destinationOfSymbolicLink(atPath: other.path), "a link to a folder is left")
+        XCTAssertEqual(try String(contentsOf: linked.appendingPathComponent("inside.txt"), encoding: .utf8), "keep")
+    }
+
     func testAChangeThatArrivesFromAnotherMachineIsPublishedOnTheNextLoad() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

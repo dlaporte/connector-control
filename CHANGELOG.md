@@ -22,6 +22,7 @@ has one.
 
 - Restart Claude no longer says Claude “didn’t quit” when it actually did; Connector Control now reopens it.
 - The JSON editor now supports undo (Cmd-Z) and no longer autocorrects or spell-checks what you type, so commands, arguments and header names stay as written.
+- When you stop publishing a collection and choose Delete for its published file, only that file is deleted. Before, if a folder had been put in the shared folder under that file’s name, it deleted that folder and everything in it.
 - The menu bar icon now has a name for VoiceOver - “Connector Control”, or “Connector Control: Apply Failed - Retry” when an apply is waiting to be retried - and VoiceOver no longer reads the “▾” after the collection name in the popover.
 
 ### Windows

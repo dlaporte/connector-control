@@ -2869,6 +2869,9 @@ public sealed class AppState : ObservableObject, IDisposable
             var target = Path.Combine(folder, CollectionDocument.FileName(record.Slug));
             try
             {
+                // A file, or a link to one, which goes as a link; never a folder that has come to
+                // sit under the name, which File.Exists does not count. The Mac's
+                // isDeletableDocument draws the same line.
                 if (File.Exists(target))
                 {
                     File.Delete(target);

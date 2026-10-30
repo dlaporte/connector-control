@@ -1944,11 +1944,31 @@ public final class AppState: ObservableObject {
         // After the save, so a failure here reaches the banner rather than being overwritten by it.
         guard deleteFile, let folder else { return }
         let target = URL(fileURLWithPath: folder).appendingPathComponent(CollectionDocument.fileName(slug: record.slug))
-        guard FileManager.default.fileExists(atPath: target.path) else { return }
+        guard AppState.isDeletableDocument(at: target.path) else { return }
         do {
             try FileManager.default.removeItem(at: target)
         } catch {
             lastError = AppState.friendly(error)
+        }
+    }
+
+    /// Whether Stop Publishing may delete what sits at `path`, judged as Windows' `File.Exists` and
+    /// `File.Delete` judge it: a regular file, or a symbolic link that does not lead to a folder,
+    /// which goes as a link and never takes the file it points at. A folder, a link to one, and
+    /// anything else is left alone: the publish folder is shared, and `removeItem` would take a
+    /// folder with everything in it.
+    static func isDeletableDocument(at path: String) -> Bool {
+        let fm = FileManager.default
+        // attributesOfItem does not follow a link, so a link reads as a link.
+        guard let type = (try? fm.attributesOfItem(atPath: path))?[.type] as? FileAttributeType else { return false }
+        switch type {
+        case .typeRegular:
+            return true
+        case .typeSymbolicLink:
+            var isDirectory: ObjCBool = false
+            return !(fm.fileExists(atPath: path, isDirectory: &isDirectory) && isDirectory.boolValue)
+        default:
+            return false
         }
     }
 
