@@ -43,6 +43,7 @@ has one.
 - After you pick a Claude app in Settings ▸ Claude (on Windows, its launch target), the row now reads “Checking…” and Choose… is dimmed while its signature is verified, which can take a few seconds. Before, nothing changed on screen until the check finished, and a second click started a second check.
 - Messages, tooltips and help text use a hyphen where they used an em-dash.
 - When Claude or the command-line tool asks for a tool Connector Control doesn’t have, the answer now reads “There’s no tool named “…”.”, in the app’s own words and with the name shown safely, instead of a bare “Unknown tool: …”.
+- Changing how many backups to keep in Settings no longer makes the next save rewrite an unchanged collections file and take a backup of it, which churned a file your sync tool then copied around.
 
 ### Release pipeline
 

@@ -442,11 +442,24 @@ public final class AppState: ObservableObject {
 
     /// Rebuilds the service from current settings (e.g. after backup retention
     /// changes) without moving the store directory or resetting the
-    /// reconciliation baseline.
+    /// reconciliation baseline. A keep count moves no path, so the watchers and
+    /// the saved-sidecar hash stand: replacing a watcher re-baselines its
+    /// last-seen mtime, and a cleared hash rewrites an unchanged sidecar.
     public func refreshServiceSettings() {
-        service = AppState.makeService(settings: settings, paths: paths)
+        let rebuilt = AppState.makeService(settings: settings, paths: paths)
+        let moved = AppState.locations(rebuilt.paths) != AppState.locations(service.paths)
+        service = rebuilt
+        guard moved else { return }
         lastSavedSidecarHash = nil
         armWatchers()
+    }
+
+    /// Where each of `paths` points, compared as file paths: `URL(fileURLWithPath:)` adds a
+    /// trailing slash to a folder that exists, so the same folder before and after it is created
+    /// would otherwise compare as two.
+    private static func locations(_ paths: AppPaths) -> [String] {
+        [paths.claudeConfigURL, paths.storeDirURL, paths.backupsDirURL, paths.stagingDirURL, paths.collectionsCacheURL]
+            .map(\.path)
     }
 
     /// Restores Claude's config from a backup and syncs the reconciliation

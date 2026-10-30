@@ -235,6 +235,30 @@ public class AppStateWatcherTests
         Assert.Equal(Fixture, state.SortedNames);
     }
 
+    /// <summary>A keep count is the only thing that changes, so no path does: the watchers stay as
+    /// they are (a replacement would re-baseline their last-seen mtime), and so does what the app
+    /// knows of the sidecar on disk, so the next save does not rewrite an unchanged collections.json.</summary>
+    [Fact]
+    public void AKeepCountChangeKeepsTheWatchersAndTheSavedSidecar()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        state.SetEnabled("aws-mcp", false);   // the sidecar is on disk, as this app wrote it
+        var sidecar = state.Service.Paths.CollectionsFilePath;
+        var watchers = state.WatcherIdentities;
+
+        h.Settings.BackupKeepCount = 7;
+        state.RefreshServiceSettings();
+        Assert.Equal(7, state.Service.Backups.KeepCount);
+        Assert.Same(watchers.Claude, state.WatcherIdentities.Claude);
+        Assert.Same(watchers.Store, state.WatcherIdentities.Store);
+
+        var longAgo = new DateTime(2001, 9, 9, 1, 46, 40, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(sidecar, longAgo);
+        state.SetEnabled("aws-mcp", true);
+        Assert.Equal(longAgo, File.GetLastWriteTimeUtc(sidecar));   // a save that changes nothing about collections leaves collections.json alone
+    }
+
     [Fact]
     public void RepointClaudeConfigImportsTheNewFileFreshlyAndQuietly()
     {

@@ -613,12 +613,22 @@ public sealed class AppState : ObservableObject, IDisposable
         Reload();
     }
 
-    /// <summary>Rebuilds the service from current settings (backup retention) without moving the store or resetting the baseline.</summary>
+    /// <summary>
+    /// Rebuilds the service from current settings (backup retention) without moving the store or
+    /// resetting the baseline. A keep count moves no path, so the watchers and the saved-sidecar
+    /// hash stand: replacing a watcher re-baselines its last-seen mtime, and a cleared hash
+    /// rewrites an unchanged sidecar.
+    /// </summary>
     public void RefreshServiceSettings()
     {
-        Service = MakeService(settings, paths);
-        lastSavedSidecarHash = null;
-        ArmWatchers();
+        var rebuilt = MakeService(settings, paths);
+        var moved = rebuilt.Paths != Service.Paths;
+        Service = rebuilt;
+        if (moved)
+        {
+            lastSavedSidecarHash = null;
+            ArmWatchers();
+        }
         RaiseAll();
     }
 

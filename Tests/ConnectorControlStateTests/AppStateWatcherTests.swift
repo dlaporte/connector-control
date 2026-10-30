@@ -235,6 +235,29 @@ final class AppStateWatcherTests: XCTestCase {
         XCTAssertEqual(state.sortedNames, fixture)
     }
 
+    /// A keep count is the only thing that changes, so no path does: the watchers stay as they are
+    /// (a replacement would re-baseline their last-seen mtime), and so does what the app knows of the
+    /// sidecar on disk, so the next save does not rewrite an unchanged collections.json.
+    func testAKeepCountChangeKeepsTheWatchersAndTheSavedSidecar() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        state.setEnabled("aws-mcp", false)   // the sidecar is on disk, as this app wrote it
+        let sidecar = state.service.paths.collectionsFileURL
+        let watchers = state.watcherIdentities
+
+        h.settings.backupKeepCount = 7
+        state.refreshServiceSettings()
+        XCTAssertEqual(state.service.backups.keepCount, 7)
+        XCTAssertEqual(state.watcherIdentities.claude, watchers.claude)
+        XCTAssertEqual(state.watcherIdentities.store, watchers.store)
+
+        let longAgo = Date(timeIntervalSince1970: 1_000_000_000)
+        try FileManager.default.setAttributes([.modificationDate: longAgo], ofItemAtPath: sidecar.path)
+        state.setEnabled("aws-mcp", true)
+        let modified = try FileManager.default.attributesOfItem(atPath: sidecar.path)[.modificationDate] as? Date
+        XCTAssertEqual(modified, longAgo, "a save that changes nothing about collections leaves collections.json alone")
+    }
+
     func testRestoreClaudeConfigIsQuietAndSyncsTheBaseline() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
