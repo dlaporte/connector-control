@@ -15,6 +15,8 @@ never got a bullet from the notes it ships, and fails if no sub-heading
 has one.
 
 ## v1.5.1
+- `connector-control collection` with no subcommand now lists the four it takes (new, rename, duplicate, delete), and a wrong one says it isn’t a collection command, instead of saying there is no command named “collection”. `connector-control help status` now says help takes no arguments.
+- A collection with one connector now reads “1 connector, 1 on” in `connector-control status` and `collections` and in Claude’s answers, not “1 connectors”.
 
 ### macOS
 

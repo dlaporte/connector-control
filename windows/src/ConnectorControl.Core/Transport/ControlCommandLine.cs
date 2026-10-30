@@ -57,6 +57,13 @@ public static class ControlCommandLine
 
     public static string UsageError(string usage) => $"Usage: connector-control {usage}";
 
+    /// Between the usages of a command group, so each starts under the first.
+    public const string UsageContinuation = "\n       connector-control ";
+
+    public static string UnknownSubcommandError(string subcommand, string group) => $"“{subcommand}” isn’t a {group} command.";
+
+    public const string HelpTakesNoArgumentsError = "help takes no arguments. Run connector-control help to see every command.";
+
     public static string UnknownOptionError(string option) => $"“{option}” isn’t an option of this command.";
 
     public static string MissingValueError(string option) => $"“{option}” needs a value.";
@@ -87,7 +94,7 @@ public static class ControlCommandLine
         }
         if (HelpWords.Contains(command))
         {
-            return rest.Count > 0 ? new ControlInvocation.Usage(UnknownOptionError(rest[0])) : new ControlInvocation.Help();
+            return rest.Count > 0 ? new ControlInvocation.Usage(HelpTakesNoArgumentsError) : new ControlInvocation.Help();
         }
         if (command == ClaudeIntegration.RelayArgument)
         {
@@ -170,7 +177,10 @@ public static class ControlCommandLine
                         return Call("duplicate_collection", more, min: 2, max: 2, build: w =>
                             [("collection", JsonValue.String(w.Positionals[0])), ("newName", JsonValue.String(w.Positionals[1]))]);
                     case "delete": return Call("delete_collection", more, min: 1, max: 1, build: w => [("collection", JsonValue.String(w.Positionals[0]))]);
-                    default: return new ControlInvocation.Usage(UnknownCommandError(string.Join(" ", new[] { command }.Concat(rest.Take(1)))));
+                    default:
+                        var usage = UsageError(string.Join(UsageContinuation, ControlTools.Catalog.Select(definition => definition.CliUsage)
+                            .Where(cliUsage => cliUsage.StartsWith(command + " ", StringComparison.Ordinal))));
+                        return new ControlInvocation.Usage(rest.Count > 0 ? UnknownSubcommandError(rest[0], command) + "\n" + usage : usage);
                 }
             case "import":
                 return Call("import_document", rest, options: [Into, New, OnClash], min: 1, max: 1, build: w =>

@@ -287,8 +287,12 @@
   "ControlCommandLine.missingValueError": {
     "format": "“{0}” needs a value."
   },
+  "ControlCommandLine.helpTakesNoArgumentsError": "help takes no arguments. Run connector-control help to see every command.",
   "ControlCommandLine.unknownCommandError": {
     "format": "There’s no command named “{0}”. Run connector-control help to see them all."
+  },
+  "ControlCommandLine.unknownSubcommandError": {
+    "format": "“{0}” isn’t a {1} command."
   },
   "ControlCommandLine.unknownOptionError": {
     "format": "“{0}” isn’t an option of this command."
@@ -296,6 +300,7 @@
   "ControlCommandLine.usageError": {
     "format": "Usage: connector-control {0}"
   },
+  "ControlCommandLine.usageContinuation": "\n       connector-control ",
   "ControlCommandLine.versionLine": {
     "format": "connector-control {0}"
   },
@@ -405,8 +410,11 @@
   "ControlTools.collectionHeader": "COLLECTION",
   "ControlTools.collectionsGroup": "Collections",
   "ControlTools.configShapeError": "A connector’s config needs a “command” or a “url”.",
-  "ControlTools.connectorCountText": {
+  "ControlTools.connectorCountText.many": {
     "format": "{0} connectors, {1} on"
+  },
+  "ControlTools.connectorCountText.one": {
+    "format": "{0} connector, {1} on"
   },
   "ControlTools.connectorsGroup": "Connectors (in the active collection; connectors --collection <name> lists another)",
   "ControlTools.connectorsHeader": "CONNECTORS",

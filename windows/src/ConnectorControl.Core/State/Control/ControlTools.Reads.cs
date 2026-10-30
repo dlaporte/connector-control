@@ -34,7 +34,7 @@ public sealed partial class ControlTools
 
     public static string StatusTitle(string version) => $"Connector Control {version}";
 
-    public static string ConnectorCountText(int total, int on) => $"{total} connectors, {on} on";
+    public static string ConnectorCountText(int total, int on) => total == 1 ? $"{total} connector, {on} on" : $"{total} connectors, {on} on";
 
     public static string InstallHint(string title, string command) => $"{title}: {command}";
 

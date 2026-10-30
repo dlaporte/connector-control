@@ -138,8 +138,11 @@ public class ControlCommandLineTests
     public void WhatTheToolCannotRunIsAUsageError()
     {
         Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UnknownCommandError("frobnicate")), Parse("frobnicate"));
-        Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UnknownCommandError("collection frob")), Parse("collection", "frob"));
-        Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UnknownCommandError("collection")), Parse("collection"));
+        var group = ControlCommandLine.UsageError(string.Join(ControlCommandLine.UsageContinuation,
+            ["collection new <name>", "collection rename <old> <new>",
+             "collection duplicate <name> <new>", "collection delete <name>"]));
+        Assert.Equal(new ControlInvocation.Usage(group), Parse("collection"));
+        Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UnknownSubcommandError("frob", "collection") + "\n" + group), Parse("collection", "frob"));
         Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UsageError("show <name> [--reveal]")), Parse("show"));
         Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UsageError("status")), Parse("status", "extra"));
         Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UnknownOptionError("--reveal")), Parse("status", "--reveal"));
@@ -147,7 +150,7 @@ public class ControlCommandLineTests
         // a combining mark after the dashes does not make the word a name
         Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UnknownOptionError("--\u0301x")), Parse("connectors", "--\u0301x"));
         Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UnknownOptionError("extra")), Parse("mcp", "extra"));
-        Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UnknownOptionError("status")), Parse("help", "status"));
+        Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.HelpTakesNoArgumentsError), Parse("help", "status"));
     }
 
     [Fact]

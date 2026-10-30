@@ -32,7 +32,9 @@ extension ControlTools {
 
     public static func statusTitle(_ version: String) -> String { "Connector Control \(version)" }
 
-    public static func connectorCountText(_ total: Int, _ on: Int) -> String { "\(total) connectors, \(on) on" }
+    public static func connectorCountText(_ total: Int, _ on: Int) -> String {
+        total == 1 ? "\(total) connector, \(on) on" : "\(total) connectors, \(on) on"
+    }
 
     public static func installHint(_ title: String, _ command: String) -> String { "\(title): \(command)" }
 

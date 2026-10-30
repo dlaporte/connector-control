@@ -116,6 +116,7 @@ final class StringCatalogTests: XCTestCase {
         "ControlCommandLine.missingValueError": ["X"],
         "ControlCommandLine.unknownCommandError": ["X"],
         "ControlCommandLine.unknownOptionError": ["X"],
+        "ControlCommandLine.unknownSubcommandError": ["X", "Y"],
         "ControlCommandLine.usageError": ["X"],
         "ControlCommandLine.versionLine": ["X"],
         "ControlMasking.assignment": ["X", "Y"],
@@ -138,7 +139,8 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.changedNotification": ["X", "Y", "Z"],
         "ControlTools.changedText": ["X", "Y"],
         "ControlTools.changesClause": ["X"],
-        "ControlTools.connectorCountText": ["3", "7"],
+        "ControlTools.connectorCountText.many": ["3", "7"],
+        "ControlTools.connectorCountText.one": ["1", "1"],
         "ControlTools.createdText": ["X"],
         "ControlTools.deleteActiveMessage": ["X"],
         "ControlTools.deleteCollectionTitle": ["X", "Y"],
@@ -452,6 +454,9 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlCommandLine.missingValueError"] = ControlCommandLine.missingValueError("X")
         actual["ControlCommandLine.unknownCommandError"] = ControlCommandLine.unknownCommandError("X")
         actual["ControlCommandLine.unknownOptionError"] = ControlCommandLine.unknownOptionError("X")
+        actual["ControlCommandLine.helpTakesNoArgumentsError"] = ControlCommandLine.helpTakesNoArgumentsError
+        actual["ControlCommandLine.unknownSubcommandError"] = ControlCommandLine.unknownSubcommandError("X", "Y")
+        actual["ControlCommandLine.usageContinuation"] = ControlCommandLine.usageContinuation
         actual["ControlCommandLine.usageError"] = ControlCommandLine.usageError("X")
         actual["ControlCommandLine.versionLine"] = ControlCommandLine.versionLine("X")
         actual["ControlMasking.addedPrefix"] = ControlMasking.addedPrefix
@@ -526,7 +531,8 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.collectionHeader"] = ControlTools.collectionHeader
         actual["ControlTools.collectionsGroup"] = ControlTools.collectionsGroup
         actual["ControlTools.configShapeError"] = ControlTools.configShapeError
-        actual["ControlTools.connectorCountText"] = ControlTools.connectorCountText(3, 7)
+        actual["ControlTools.connectorCountText.many"] = ControlTools.connectorCountText(3, 7)
+        actual["ControlTools.connectorCountText.one"] = ControlTools.connectorCountText(1, 1)
         actual["ControlTools.connectorsGroup"] = ControlTools.connectorsGroup
         actual["ControlTools.connectorsHeader"] = ControlTools.connectorsHeader
         actual["ControlTools.createdText"] = ControlTools.createdText("X")

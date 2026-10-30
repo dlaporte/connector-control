@@ -122,6 +122,7 @@ public class StringCatalogTests
         ["ControlCommandLine.missingValueError"] = ["X"],
         ["ControlCommandLine.unknownCommandError"] = ["X"],
         ["ControlCommandLine.unknownOptionError"] = ["X"],
+        ["ControlCommandLine.unknownSubcommandError"] = ["X", "Y"],
         ["ControlCommandLine.usageError"] = ["X"],
         ["ControlCommandLine.versionLine"] = ["X"],
         ["ControlMasking.assignment"] = ["X", "Y"],
@@ -144,7 +145,8 @@ public class StringCatalogTests
         ["ControlTools.changedNotification"] = ["X", "Y", "Z"],
         ["ControlTools.changedText"] = ["X", "Y"],
         ["ControlTools.changesClause"] = ["X"],
-        ["ControlTools.connectorCountText"] = ["3", "7"],
+        ["ControlTools.connectorCountText.many"] = ["3", "7"],
+        ["ControlTools.connectorCountText.one"] = ["1", "1"],
         ["ControlTools.createdText"] = ["X"],
         ["ControlTools.deleteActiveMessage"] = ["X"],
         ["ControlTools.deleteCollectionTitle"] = ["X", "Y"],
@@ -461,6 +463,9 @@ public class StringCatalogTests
         actual["ControlCommandLine.missingValueError"] = ControlCommandLine.MissingValueError("X");
         actual["ControlCommandLine.unknownCommandError"] = ControlCommandLine.UnknownCommandError("X");
         actual["ControlCommandLine.unknownOptionError"] = ControlCommandLine.UnknownOptionError("X");
+        actual["ControlCommandLine.helpTakesNoArgumentsError"] = ControlCommandLine.HelpTakesNoArgumentsError;
+        actual["ControlCommandLine.unknownSubcommandError"] = ControlCommandLine.UnknownSubcommandError("X", "Y");
+        actual["ControlCommandLine.usageContinuation"] = ControlCommandLine.UsageContinuation;
         actual["ControlCommandLine.usageError"] = ControlCommandLine.UsageError("X");
         actual["ControlCommandLine.versionLine"] = ControlCommandLine.VersionLine("X");
         actual["ControlMasking.addedPrefix"] = ControlMasking.AddedPrefix;
@@ -535,7 +540,8 @@ public class StringCatalogTests
         actual["ControlTools.collectionHeader"] = ControlTools.CollectionHeader;
         actual["ControlTools.collectionsGroup"] = ControlTools.CollectionsGroup;
         actual["ControlTools.configShapeError"] = ControlTools.ConfigShapeError;
-        actual["ControlTools.connectorCountText"] = ControlTools.ConnectorCountText(3, 7);
+        actual["ControlTools.connectorCountText.many"] = ControlTools.ConnectorCountText(3, 7);
+        actual["ControlTools.connectorCountText.one"] = ControlTools.ConnectorCountText(1, 1);
         actual["ControlTools.connectorsGroup"] = ControlTools.ConnectorsGroup;
         actual["ControlTools.connectorsHeader"] = ControlTools.ConnectorsHeader;
         actual["ControlTools.createdText"] = ControlTools.CreatedText("X");
