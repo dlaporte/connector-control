@@ -29,6 +29,10 @@ public sealed class PublishModel : ObservableObject
     public static string HintRowLabel(string connector, string subject) => $"Hint for {subject} in {connector}";
     public static string PathNameRowLabel(string connector, string subject) => $"Placeholder name for {subject} in {connector}";
     public static string MarkPathRowLabel(string connector, string value) => $"Mark {value} in {connector} as a path this machine supplies";
+    // The dialog's lists of entries it holds on: each answer is named by the entry it answers.
+    public static string ForgetMarkRowLabel(string connector, string name) => $"Forget mark {name} in {connector}";
+    public static string ReleaseValueRowLabel(string connector, string value) => $"Release {value} in {connector}";
+    public static string UseDirectoryTokenRowLabel(string connector, string value) => $"Use ${{COLLECTION_DIR}} for {value} in {connector}";
     /// <summary>The button beside an unresolved mark's note: drop the mark and let the path travel as the preview shows it.</summary>
     public const string ForgetMarkButton = "Forget Mark";
     /// <summary>The button beside a kept path's note: let that path travel as written in this collection's document, which the preview above shows.</summary>
@@ -78,6 +82,9 @@ public sealed class PublishModel : ObservableObject
     public sealed record UnresolvedMark(string Id, string Connector, string Name, string? Hint)
     {
         internal JsonPointer Pointer { get; init; } = new([]);
+
+        /// <summary><see cref="ForgetMarkRowLabel"/> for this mark: the Forget Mark button's spoken name.</summary>
+        public string ForgetLabel => ForgetMarkRowLabel(Connector, Name);
     }
 
     /// <summary>
@@ -103,6 +110,12 @@ public sealed class PublishModel : ObservableObject
     public sealed record KeptPath(string Value, string Connector, string Field, KeptPathKind Kind = KeptPathKind.Path)
     {
         public string Id => Connector + "\0" + Field + "\0" + Value;
+
+        /// <summary><see cref="ReleaseValueRowLabel"/> for this entry: the Release button's spoken name.</summary>
+        public string ReleaseLabel => ReleaseValueRowLabel(Connector, Value);
+
+        /// <summary><see cref="UseDirectoryTokenRowLabel"/> for this entry: the Use token button's spoken name.</summary>
+        public string UseTokenLabel => UseDirectoryTokenRowLabel(Connector, Value);
     }
 
     /// <summary>

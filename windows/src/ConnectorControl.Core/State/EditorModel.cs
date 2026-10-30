@@ -78,6 +78,9 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// which the field carries no other label for.
     /// </summary>
     public static string ArgumentLabel(int index) => "Argument " + ArgumentNumber(index);
+
+    /// <summary>The delete button beside an argument's field, named by the same number.</summary>
+    public static string DeleteArgumentRowLabel(int index) => "Delete argument " + ArgumentNumber(index);
     public const string EnvironmentHeader = "Environment Variables";
 
     // A screen reader's names for an environment row's three controls, from the row's index, for

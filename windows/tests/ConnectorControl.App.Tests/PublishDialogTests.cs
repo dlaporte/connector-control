@@ -351,6 +351,7 @@ public class PublishDialogTests
                 Assert.Equal(PublishModel.UnresolvedMarkNote("c", "srv"), note.Text);
                 var forget = RowElements.Find<Button>(window.UnresolvedList, lost, "ForgetMark");
                 Assert.Equal(PublishModel.ForgetMarkButton, forget.Content);
+                Assert.Equal(PublishModel.ForgetMarkRowLabel("c", "srv"), AutomationProperties.GetName(forget));
 
                 Press(forget);
                 Layout(window);
@@ -410,6 +411,10 @@ public class PublishDialogTests
                     RowElements.Find<TextBlock>(window.KeptList, kept, "KeptNoteText").Text);
                 Assert.Equal(PublishModel.ForgetMarkButton, RowElements.Find<Button>(window.UnresolvedList, lost, "ForgetMark").Content);
                 Assert.Equal(PublishModel.ReleaseValueButton, RowElements.Find<Button>(window.KeptList, kept, "ReleaseValue").Content);
+                Assert.Equal(PublishModel.ForgetMarkRowLabel("c", "srv"),
+                    AutomationProperties.GetName(RowElements.Find<Button>(window.UnresolvedList, lost, "ForgetMark")));
+                Assert.Equal(PublishModel.ReleaseValueRowLabel(kept.Connector, kept.Value),
+                    AutomationProperties.GetName(RowElements.Find<Button>(window.KeptList, kept, "ReleaseValue")));
                 // A kept path, not a folder of the collection's own: Release is its answer, and the token is not offered.
                 Assert.Equal(PublishModel.KeptPathKind.Path, kept.Kind);
                 Assert.Equal(Visibility.Visible, RowElements.Find<Button>(window.KeptList, kept, "ReleaseValue").Visibility);
@@ -463,6 +468,7 @@ public class PublishDialogTests
                 // One answer only: released, the folder would travel as written.
                 var use = RowElements.Find<Button>(window.KeptList, kept, "UseDirectoryToken");
                 Assert.Equal(PublishModel.UseDirectoryTokenButton, use.Content);
+                Assert.Equal(PublishModel.UseDirectoryTokenRowLabel(kept.Connector, kept.Value), AutomationProperties.GetName(use));
                 Assert.Equal(Visibility.Visible, use.Visibility);
                 Assert.Equal(Visibility.Collapsed, RowElements.Find<Button>(window.KeptList, kept, "ReleaseValue").Visibility);
                 // A folder is on record, and the entry still holds Publish.

@@ -389,7 +389,7 @@
                                      Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,2,0,0" />
                         </StackPanel>
                         <Button x:Name="DeleteArgButton" Grid.Column="2" Style="{StaticResource IconButton}" Content="&#xE711;" Margin="6,0,0,0" VerticalAlignment="Top" Click="OnDeleteArg"
-                                ToolTip="{x:Static state:EditorModel.DeleteArgumentLabel}" AutomationProperties.Name="{x:Static state:EditorModel.DeleteArgumentLabel}"
+                                ToolTip="{x:Static state:EditorModel.DeleteArgumentLabel}" AutomationProperties.Name="{Binding DeleteLabel}"
                                 IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}" />
                       </Grid>
                     </DataTemplate>

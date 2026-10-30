@@ -971,6 +971,13 @@ public class PublishModelTests
         Assert.Equal("Hint for TOKEN in github", PublishModel.HintRowLabel("github", "TOKEN"));
         Assert.Equal("Placeholder name for /args/0 in fs", PublishModel.PathNameRowLabel("fs", "/args/0"));
         Assert.Equal("Mark /Users/me/x in fs as a path this machine supplies", PublishModel.MarkPathRowLabel("fs", "/Users/me/x"));
+        Assert.Equal("Forget mark srv in fs", PublishModel.ForgetMarkRowLabel("fs", "srv"));
+        Assert.Equal("Release /Users/me/x in fs", PublishModel.ReleaseValueRowLabel("fs", "/Users/me/x"));
+        Assert.Equal("Use ${COLLECTION_DIR} for /Users/me/x in fs", PublishModel.UseDirectoryTokenRowLabel("fs", "/Users/me/x"));
+        Assert.Equal("Forget mark srv in fs", new PublishModel.UnresolvedMark("i", "fs", "srv", null).ForgetLabel);
+        var kept = new PublishModel.KeptPath("/Users/me/x", "fs", "local.command");
+        Assert.Equal("Release /Users/me/x in fs", kept.ReleaseLabel);
+        Assert.Equal("Use ${COLLECTION_DIR} for /Users/me/x in fs", kept.UseTokenLabel);
         var env = new PublishModel.EnvRow("github", "TOKEN", "v", false, "");
         Assert.Equal("Share value of TOKEN in github", env.ShareLabel);
         Assert.Equal("Hint for TOKEN in github", env.HintLabel);

@@ -220,11 +220,11 @@ final class StringCatalogTests: XCTestCase {
         "EditorModel.additionalTitle": ["3", "a, b"],
         // Called with the row's index, 2: the text counts from one.
         "EditorModel.argumentLabel": ["3"],
+        "EditorModel.deleteArgumentRowLabel": ["3"],
         "EditorModel.argumentNumber": ["3"],
         "EditorModel.deleteVariableRowLabel": ["3"],
         "EditorModel.hideVariableValueLabel": ["3"],
         "EditorModel.showVariableValueLabel": ["3"],
-        "PublishModel.pathNameRowLabel": ["X", "Y"],
         "EditorModel.changedOutsideMessage": ["X"],
         "EditorModel.deletedOutsideMessage": ["X"],
         "EditorModel.duplicateEnvError": ["X"],
@@ -255,6 +255,10 @@ final class StringCatalogTests: XCTestCase {
         "PublishModel.footerLine": ["X", "Y"],
         "PublishModel.hintRowLabel": ["X", "Y"],
         "PublishModel.markPathRowLabel": ["X", "Y"],
+        "PublishModel.pathNameRowLabel": ["X", "Y"],
+        "PublishModel.forgetMarkRowLabel": ["X", "Y"],
+        "PublishModel.releaseValueRowLabel": ["X", "Y"],
+        "PublishModel.useDirectoryTokenRowLabel": ["X", "Y"],
         "PublishModel.shareValueRowLabel": ["X", "Y"],
         "PublishModel.keptPathNote": ["X", "Y"],
         "PublishModel.otherFolderNote": ["X", "Y", "Z"],
@@ -693,11 +697,11 @@ final class StringCatalogTests: XCTestCase {
         actual["EditorModel.addVariableTitle"] = EditorModel.addVariableTitle
         actual["EditorModel.additionalTitle"] = EditorModel.additionalTitle(count: 3, keys: ["a", "b"])
         actual["EditorModel.argumentLabel"] = EditorModel.argumentLabel(2)
+        actual["EditorModel.deleteArgumentRowLabel"] = EditorModel.deleteArgumentRowLabel(2)
         actual["EditorModel.argumentNumber"] = EditorModel.argumentNumber(2)
         actual["EditorModel.deleteVariableRowLabel"] = EditorModel.deleteVariableRowLabel(2)
         actual["EditorModel.hideVariableValueLabel"] = EditorModel.hideVariableValueLabel(2)
         actual["EditorModel.showVariableValueLabel"] = EditorModel.showVariableValueLabel(2)
-        actual["PublishModel.pathNameRowLabel"] = PublishModel.pathNameRowLabel("X", "Y")
         actual["EditorModel.variableNameLabel"] = EditorModel.variableNameLabel(2)
         actual["EditorModel.variableValueLabel"] = EditorModel.variableValueLabel(2)
         actual["EditorModel.argumentPrompt"] = EditorModel.argumentPrompt
@@ -842,6 +846,10 @@ final class StringCatalogTests: XCTestCase {
         actual["PublishModel.hintPlaceholder"] = PublishModel.hintPlaceholder
         actual["PublishModel.hintRowLabel"] = PublishModel.hintRowLabel("X", "Y")
         actual["PublishModel.markPathRowLabel"] = PublishModel.markPathRowLabel("X", "Y")
+        actual["PublishModel.pathNameRowLabel"] = PublishModel.pathNameRowLabel("X", "Y")
+        actual["PublishModel.forgetMarkRowLabel"] = PublishModel.forgetMarkRowLabel("X", "Y")
+        actual["PublishModel.releaseValueRowLabel"] = PublishModel.releaseValueRowLabel("X", "Y")
+        actual["PublishModel.useDirectoryTokenRowLabel"] = PublishModel.useDirectoryTokenRowLabel("X", "Y")
         actual["PublishModel.shareValueRowLabel"] = PublishModel.shareValueRowLabel("X", "Y")
         actual["PublishModel.markPathLabel"] = PublishModel.markPathLabel
         actual["PublishModel.noFolderError"] = PublishModel.noFolderError

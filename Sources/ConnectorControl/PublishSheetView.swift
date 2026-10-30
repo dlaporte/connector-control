@@ -111,6 +111,7 @@ struct PublishSheetView: View {
                     ForEach(marks) { mark in
                         unansweredLine(PublishModel.unresolvedMarkNote(mark.connector, mark.name)) {
                             Button(PublishModel.forgetMarkButton) { model.forgetUnresolvedMark(mark.id) }
+                                .accessibilityLabel(PublishModel.forgetMarkRowLabel(mark.connector, mark.name))
                         }
                     }
                     // The note is the model's for each entry, never composed here: whether a folder
@@ -124,8 +125,10 @@ struct PublishSheetView: View {
                             switch path.kind {
                             case .folder:
                                 Button(PublishModel.useDirectoryTokenButton) { failure = model.useDirectoryToken(path) }
+                                    .accessibilityLabel(PublishModel.useDirectoryTokenRowLabel(path.connector, path.value))
                             case .path:
                                 Button(PublishModel.releaseValueButton) { failure = model.releaseKeptPath(path.value) }
+                                    .accessibilityLabel(PublishModel.releaseValueRowLabel(path.connector, path.value))
                             }
                         }
                     }

@@ -162,7 +162,8 @@
                   </TextBlock.Text>
                 </TextBlock>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                  <Button x:Name="ForgetMark" Content="{x:Static state:PublishModel.ForgetMarkButton}" Click="OnForgetMark" />
+                  <Button x:Name="ForgetMark" Content="{x:Static state:PublishModel.ForgetMarkButton}" Click="OnForgetMark"
+                          AutomationProperties.Name="{Binding ForgetLabel}" />
                 </StackPanel>
               </Grid>
             </DataTemplate>
@@ -189,8 +190,10 @@
                   </TextBlock.Text>
                 </TextBlock>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                  <Button x:Name="ReleaseValue" Content="{x:Static state:PublishModel.ReleaseValueButton}" Click="OnReleaseValue" />
-                  <Button x:Name="UseDirectoryToken" Content="{x:Static state:PublishModel.UseDirectoryTokenButton}" Click="OnUseDirectoryToken" />
+                  <Button x:Name="ReleaseValue" Content="{x:Static state:PublishModel.ReleaseValueButton}" Click="OnReleaseValue"
+                          AutomationProperties.Name="{Binding ReleaseLabel}" />
+                  <Button x:Name="UseDirectoryToken" Content="{x:Static state:PublishModel.UseDirectoryTokenButton}" Click="OnUseDirectoryToken"
+                          AutomationProperties.Name="{Binding UseTokenLabel}" />
                 </StackPanel>
               </Grid>
               <DataTemplate.Triggers>

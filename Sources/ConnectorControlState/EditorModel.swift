@@ -64,6 +64,8 @@ public final class EditorModel: ObservableObject {
     /// A screen reader's name for an argument's field, from the row's index: the number beside
     /// it, which the field carries no other label for.
     public static func argumentLabel(_ index: Int) -> String { "Argument \(index + 1)" }
+    /// The delete button beside an argument's field, named by the same number.
+    public static func deleteArgumentRowLabel(_ index: Int) -> String { "Delete argument \(index + 1)" }
     public static let environmentHeader = "Environment Variables"
 
     // A screen reader's names for an environment row's three controls, from the row's index, for

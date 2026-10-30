@@ -279,8 +279,8 @@ public class EditorWindowTests
     }
 
     /// <summary>
-    /// Each argument row shows its number, counted from one as a refusal counts them ("argument
-    /// 2"), and its box is named by it; the numbers follow the rows as they come and go.
+    /// Each variable row's name box, eye and delete button are named by the row's number, counted
+    /// from one, and the names follow the rows as they come and go.
     /// </summary>
     [Fact]
     public void EnvironmentRowControlsAreNamedByTheirNumberAndFollowADeletion()
@@ -309,6 +309,10 @@ public class EditorWindowTests
         }, rows: true));
     }
 
+    /// <summary>
+    /// Each argument row shows its number, counted from one as a refusal counts them ("argument
+    /// 2"), and its box is named by it; the numbers follow the rows as they come and go.
+    /// </summary>
     [Fact]
     public void ArgumentRowsAreNumberedAndTheirBoxesNamedByTheNumber()
     {
@@ -325,6 +329,8 @@ public class EditorWindowTests
             Assert.Equal([EditorModel.ArgumentLabel(0), EditorModel.ArgumentLabel(1), EditorModel.ArgumentLabel(2)],
                          window.Model.Args.Select(Name));
             Assert.Equal("Argument 2", Name(window.Model.Args[1]));
+            string DeleteName(ArgRow row) => AutomationProperties.GetName(RowElements.Find<Button>(window.ArgList, row, "DeleteArgButton"));
+            Assert.Equal("Delete argument 2", DeleteName(window.Model.Args[1]));
 
             // Deleting the first moves every other row up a number.
             var second = window.Model.Args[1];
@@ -332,6 +338,7 @@ public class EditorWindowTests
             Layout(window);
             Assert.Equal(["1", "2"], window.Model.Args.Select(Number));
             Assert.Equal("Argument 1", Name(second));
+            Assert.Equal("Delete argument 1", DeleteName(second));
 
             // A row added at the end takes the next.
             window.Model.AddArg();

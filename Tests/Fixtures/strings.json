@@ -798,12 +798,15 @@
   "EditorModel.commandLabel": "Command",
   "EditorModel.commandPrompt": "npx",
   "EditorModel.deleteArgumentLabel": "Delete argument",
-  "EditorModel.deleteVariableLabel": "Delete variable",
-  "EditorModel.hideVariableValueLabel": {
-    "format": "Hide value of variable {0}"
+  "EditorModel.deleteArgumentRowLabel": {
+    "format": "Delete argument {0}"
   },
+  "EditorModel.deleteVariableLabel": "Delete variable",
   "EditorModel.deleteVariableRowLabel": {
     "format": "Delete variable {0}"
+  },
+  "EditorModel.hideVariableValueLabel": {
+    "format": "Hide value of variable {0}"
   },
   "EditorModel.deletedOutsideDetail": "Saving will add it back.",
   "EditorModel.deletedOutsideMessage": {
@@ -862,15 +865,15 @@
   "EditorModel.serverURLLabel": "Server URL",
   "EditorModel.serverURLPrompt": "https://example.com/mcp",
   "EditorModel.showValueLabel": "Show value",
+  "EditorModel.showVariableValueLabel": {
+    "format": "Show value of variable {0}"
+  },
   "EditorModel.stayInJSONButton": "Stay in JSON",
   "EditorModel.switchAnywayButton": "Switch Anyway",
   "EditorModel.tokenLabel": "Token",
   "EditorModel.typeLabel": "Type",
   "EditorModel.urlHint": "Enter a valid http(s) URL, e.g. https://example.com/mcp",
   "EditorModel.valueLabel": "Value",
-  "EditorModel.showVariableValueLabel": {
-    "format": "Show value of variable {0}"
-  },
   "EditorModel.variableNameLabel": {
     "format": "Variable {0} name"
   },
@@ -994,6 +997,9 @@
     "format": "{0} · {1}"
   },
   "PublishModel.forgetMarkButton": "Forget Mark",
+  "PublishModel.forgetMarkRowLabel": {
+    "format": "Forget mark {1} in {0}"
+  },
   "PublishModel.hintPlaceholder": "hint for recipients",
   "PublishModel.hintRowLabel": {
     "format": "Hint for {1} in {0}"
@@ -1010,6 +1016,9 @@
     "format": "“{0}” carries, in {1}, the folder this machine keeps “{2}” in. Tick it where it sits, or release it."
   },
   "PublishModel.pathNamePlaceholder": "placeholder name",
+  "PublishModel.pathNameRowLabel": {
+    "format": "Placeholder name for {1} in {0}"
+  },
   "PublishModel.pathsSectionTitle": "Machine-specific paths · found in arguments",
   "PublishModel.previewTitle": "Document preview",
   "PublishModel.publishButton": "Publish",
@@ -1024,10 +1033,10 @@
   "PublishModel.publishFolderNote": {
     "format": "“{0}” carries this machine’s publish folder as written, in {1}. Use ${COLLECTION_DIR} in its place."
   },
-  "PublishModel.pathNameRowLabel": {
-    "format": "Placeholder name for {1} in {0}"
-  },
   "PublishModel.releaseValueButton": "Release",
+  "PublishModel.releaseValueRowLabel": {
+    "format": "Release {1} in {0}"
+  },
   "PublishModel.shareValueLabel": "share value",
   "PublishModel.shareValueRowLabel": {
     "format": "Share value of {1} in {0}"
@@ -1039,6 +1048,9 @@
     "format": "A path marked “{1}” in “{0}” has moved. Tick it where it now sits, or forget the mark."
   },
   "PublishModel.useDirectoryTokenButton": "Use ${COLLECTION_DIR}",
+  "PublishModel.useDirectoryTokenRowLabel": {
+    "format": "Use ${COLLECTION_DIR} for {1} in {0}"
+  },
   "PublishModel.warningLine": {
     "format": "{0}: {1}"
   },

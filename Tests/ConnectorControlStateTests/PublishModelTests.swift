@@ -768,5 +768,8 @@ final class PublishModelTests: XCTestCase {
         XCTAssertEqual(PublishModel.hintRowLabel("github", "TOKEN"), "Hint for TOKEN in github")
         XCTAssertEqual(PublishModel.pathNameRowLabel("fs", "/args/0"), "Placeholder name for /args/0 in fs")
         XCTAssertEqual(PublishModel.markPathRowLabel("fs", "/Users/me/x"), "Mark /Users/me/x in fs as a path this machine supplies")
+        XCTAssertEqual(PublishModel.forgetMarkRowLabel("fs", "srv"), "Forget mark srv in fs")
+        XCTAssertEqual(PublishModel.releaseValueRowLabel("fs", "/Users/me/x"), "Release /Users/me/x in fs")
+        XCTAssertEqual(PublishModel.useDirectoryTokenRowLabel("fs", "/Users/me/x"), "Use ${COLLECTION_DIR} for /Users/me/x in fs")
     }
 }

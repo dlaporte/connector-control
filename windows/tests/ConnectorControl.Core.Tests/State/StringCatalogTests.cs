@@ -226,14 +226,18 @@ public class StringCatalogTests
         ["EditorModel.additionalTitle"] = ["3", "a, b"],
         // Called with the row's index, 2: the text counts from one.
         ["EditorModel.argumentLabel"] = ["3"],
+        ["EditorModel.deleteArgumentRowLabel"] = ["3"],
         ["EditorModel.deleteVariableRowLabel"] = ["3"],
         ["EditorModel.hideVariableValueLabel"] = ["3"],
         ["EditorModel.showVariableValueLabel"] = ["3"],
-        ["PublishModel.pathNameRowLabel"] = ["X", "Y"],
         ["EditorModel.variableNameLabel"] = ["3"],
         ["EditorModel.variableValueLabel"] = ["3"],
         ["PublishModel.hintRowLabel"] = ["X", "Y"],
         ["PublishModel.markPathRowLabel"] = ["X", "Y"],
+        ["PublishModel.pathNameRowLabel"] = ["X", "Y"],
+        ["PublishModel.forgetMarkRowLabel"] = ["X", "Y"],
+        ["PublishModel.releaseValueRowLabel"] = ["X", "Y"],
+        ["PublishModel.useDirectoryTokenRowLabel"] = ["X", "Y"],
         ["PublishModel.shareValueRowLabel"] = ["X", "Y"],
         ["EditorModel.argumentNumber"] = ["3"],
         ["EditorModel.changedOutsideMessage"] = ["X"],
@@ -720,10 +724,10 @@ public class StringCatalogTests
         actual["EditorModel.addVariableTitle"] = EditorModel.AddVariableTitle;
         actual["EditorModel.additionalTitle"] = EditorModel.AdditionalTitleFor(3, ["a", "b"]);
         actual["EditorModel.argumentLabel"] = EditorModel.ArgumentLabel(2);
+        actual["EditorModel.deleteArgumentRowLabel"] = EditorModel.DeleteArgumentRowLabel(2);
         actual["EditorModel.deleteVariableRowLabel"] = EditorModel.DeleteVariableRowLabel(2);
         actual["EditorModel.hideVariableValueLabel"] = EditorModel.HideVariableValueLabel(2);
         actual["EditorModel.showVariableValueLabel"] = EditorModel.ShowVariableValueLabel(2);
-        actual["PublishModel.pathNameRowLabel"] = PublishModel.PathNameRowLabel("X", "Y");
         actual["EditorModel.variableNameLabel"] = EditorModel.VariableNameLabel(2);
         actual["EditorModel.variableValueLabel"] = EditorModel.VariableValueLabel(2);
         actual["EditorModel.argumentNumber"] = EditorModel.ArgumentNumber(2);
@@ -874,6 +878,10 @@ public class StringCatalogTests
         actual["PublishModel.hintPlaceholder"] = PublishModel.HintPlaceholder;
         actual["PublishModel.hintRowLabel"] = PublishModel.HintRowLabel("X", "Y");
         actual["PublishModel.markPathRowLabel"] = PublishModel.MarkPathRowLabel("X", "Y");
+        actual["PublishModel.pathNameRowLabel"] = PublishModel.PathNameRowLabel("X", "Y");
+        actual["PublishModel.forgetMarkRowLabel"] = PublishModel.ForgetMarkRowLabel("X", "Y");
+        actual["PublishModel.releaseValueRowLabel"] = PublishModel.ReleaseValueRowLabel("X", "Y");
+        actual["PublishModel.useDirectoryTokenRowLabel"] = PublishModel.UseDirectoryTokenRowLabel("X", "Y");
         actual["PublishModel.shareValueRowLabel"] = PublishModel.ShareValueRowLabel("X", "Y");
         actual["PublishModel.markPathLabel"] = PublishModel.MarkPathLabel;
         actual["PublishModel.noFolderError"] = PublishModel.NoFolderError;

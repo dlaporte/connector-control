@@ -227,7 +227,7 @@ struct EditorWindowView: View {
                 .buttonStyle(.plain)
                 .disabled(model.isReadOnly)
                 .help(EditorModel.deleteArgumentLabel)
-                .accessibilityLabel(EditorModel.deleteArgumentLabel)
+                .accessibilityLabel(EditorModel.deleteArgumentRowLabel(index))
             }
         }
         Button(EditorModel.addArgumentTitle) { model.addArg() }
