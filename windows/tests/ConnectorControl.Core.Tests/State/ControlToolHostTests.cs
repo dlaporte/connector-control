@@ -128,7 +128,7 @@ public class ControlToolHostTests
     {
         using var rig = new ControlRig();
         var host = new ControlToolHost(rig.Tools, isCli: true);
-        var unknown = McpSession.UnknownToolMessage("future_tool");
+        var unknown = ControlTools.UnknownToolError("future_tool");
         // No version was said.
         Assert.Equal(unknown, host.UnknownToolMessage("future_tool"));
         foreach (var older in new[] { "1.2.2", "1.2.1", "1.2.2-preview.1", "development build" })
@@ -140,6 +140,17 @@ public class ControlToolHostTests
         Assert.Equal(ControlTools.NeedsNewerAppError("99.0.0"), host.UnknownToolMessage("future_tool"));
         host.ClientVersion = "1.3.0-preview.2";
         Assert.Equal(ControlTools.NeedsNewerAppError("1.3.0-preview.2"), host.UnknownToolMessage("future_tool"));
+    }
+
+    /// <summary>A tool nothing lists gets the app's own sentence, with the name escaped as every other name
+    /// the layer echoes is.</summary>
+    [Fact]
+    public void AnUnknownToolIsRefusedInTheAppsWordsWithItsNameEscaped()
+    {
+        using var rig = new ControlRig();
+        var host = new ControlToolHost(rig.Tools, isCli: true);
+        Assert.Equal(ControlTools.UnknownToolError("no_such_tool"), host.UnknownToolMessage("no_such_tool"));
+        Assert.Equal(ControlTools.UnknownToolError("""bad\n\\name"""), host.UnknownToolMessage("bad\n\\name"));
     }
 
     /// <summary>The version the session introduces itself with, and the one a hello is compared with, is the

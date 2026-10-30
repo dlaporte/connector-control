@@ -7,8 +7,7 @@ import Foundation
 @MainActor
 public protocol McpToolHost: AnyObject {
     func listTools() -> [JSONValue]
-    /// What `tools/call` answers for a tool this host does not list: the session's own sentence, or
-    /// one that says why the tool is missing.
+    /// What `tools/call` answers for a tool this host does not list, in the host's own words.
     func unknownToolMessage(_ name: String) -> String
     /// Runs one tool. `progress` may be called any number of times before `completion`, which is
     /// called once, with the `tools/call` result object.
@@ -49,8 +48,6 @@ public final class McpSession {
     public nonisolated static let tooLargeMessage = "Message too large"
     public nonisolated static let internalErrorCode = -32603
     public nonisolated static let internalErrorMessage = "Internal error"
-
-    public nonisolated static func unknownToolMessage(_ name: String) -> String { "Unknown tool: \(name)" }
 
     /// The client's own name from `initialize`, which the gate names as the asker.
     public private(set) var clientName: String?

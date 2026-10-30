@@ -35,11 +35,12 @@ public sealed class ControlToolHost(ControlTools tools, bool isCli) : IMcpToolHo
 
     /// <summary>A tool this app does not list. Asked for by a newer command-line tool or relay - an update
     /// replaced the app on disk while this one still runs - it needs the newer app, which a restart
-    /// starts.</summary>
+    /// starts. Otherwise it is the app's own sentence, with the name escaped as every name the
+    /// layer echoes is.</summary>
     public string UnknownToolMessage(string name) =>
         ClientVersion is { } clientVersion && ControlVersion.IsNewer(clientVersion, Tools.Version)
             ? ControlTools.NeedsNewerAppError(ControlVersion.Semantic(clientVersion) ?? clientVersion)
-            : McpSession.UnknownToolMessage(name);
+            : ControlTools.UnknownToolError(ControlText.EscapedName(name));
 
     public void CallTool(string name, JsonValue arguments, JsonValue? progressToken,
                          Action<double> progress, Action<JsonValue> completion) =>

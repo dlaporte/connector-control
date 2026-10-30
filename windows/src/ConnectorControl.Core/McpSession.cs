@@ -42,8 +42,6 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
     public const int InternalErrorCode = -32603;
     public const string InternalErrorMessage = "Internal error";
 
-    public static string UnknownToolMessage(string name) => $"Unknown tool: {name}";
-
     /// <summary>The client's own name from <c>initialize</c>, which the gate names as the asker.</summary>
     public string? ClientName { get; private set; }
     public bool IsInitialized { get; private set; }

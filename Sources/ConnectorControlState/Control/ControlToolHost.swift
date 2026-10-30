@@ -37,12 +37,13 @@ public final class ControlToolHost: McpToolHost {
 
     /// A tool this app does not list. Asked for by a newer command-line tool or relay - an update
     /// replaced the app on disk while this one still runs - it needs the newer app, which a restart
-    /// starts.
+    /// starts. Otherwise it is the app's own sentence, with the name escaped as every name the
+    /// layer echoes is.
     public func unknownToolMessage(_ name: String) -> String {
         if let clientVersion, ControlVersion.isNewer(clientVersion, than: tools.version) {
             return ControlTools.needsNewerAppError(ControlVersion.semantic(clientVersion) ?? clientVersion)
         }
-        return McpSession.unknownToolMessage(name)
+        return ControlTools.unknownToolError(ControlText.escapedName(name))
     }
 
     public func callTool(name: String, arguments: JSONValue, progressToken: JSONValue?,

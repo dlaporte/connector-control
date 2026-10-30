@@ -11,6 +11,6 @@
 > {"jsonrpc":"2.0","id":3,"method":"resources/list"}
 < {"error":{"code":-32601,"message":"Method not found"},"id":3,"jsonrpc":"2.0"}
 > {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"no_such_tool"}}
-< {"error":{"code":-32602,"message":"Unknown tool: no_such_tool"},"id":4,"jsonrpc":"2.0"}
+< {"error":{"code":-32602,"message":"There’s no tool named “no_such_tool”."},"id":4,"jsonrpc":"2.0"}
 > {"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_connector","arguments":{}}}
 < {"id":5,"jsonrpc":"2.0","result":{"content":[{"text":"“name” is required.","type":"text"}],"isError":true,"structuredContent":{"error":"“name” is required."}}}
