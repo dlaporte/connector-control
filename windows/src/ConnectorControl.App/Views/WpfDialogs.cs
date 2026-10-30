@@ -40,7 +40,7 @@ public sealed class WpfDialogs : IDialogs
     public string? PromptForName(string title, string initial) => NamePromptDialog.Show(ResolveOwner(), title, initial);
 
     public void Inform(string message, string? informativeText) =>
-        ConfirmDialog.Show(ResolveOwner(), message, informativeText, "OK", null, destructive: false);
+        ConfirmDialog.Show(ResolveOwner(), message, informativeText, Dialogs.OkTitle, null, destructive: false);
 
     public bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown, Func<Task> install) =>
         UpdateDialog.Show(ResolveOwner(), newVersion, currentVersion, notesMarkdown, install);

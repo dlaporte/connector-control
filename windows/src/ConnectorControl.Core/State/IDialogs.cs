@@ -1,5 +1,12 @@
 namespace ConnectorControl.Core.State;
 
+/// <summary>The button words every dialog shares. Mirror: Dialogs.cancelTitle / okTitle (Sources/ConnectorControlState/Dialogs.swift).</summary>
+public static class Dialogs
+{
+    public const string CancelTitle = "Cancel";
+    public const string OkTitle = "OK";
+}
+
 /// <summary>
 /// The Mac NSAlert/confirmationDialog/promptForName surface, as a seam the
 /// WPF app implements with owned modal windows and tests script with a fake.
@@ -11,7 +18,7 @@ public interface IDialogs
     /// makes the cancel button the one Return presses, for a question whose primary answer is not
     /// to be given by reflex; Escape answers the cancel button either way.
     /// </summary>
-    bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle = "Cancel", bool destructive = false,
+    bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle = Dialogs.CancelTitle, bool destructive = false,
                  bool cancelIsDefault = false);
 
     /// <summary>Text prompt with OK/Cancel; the raw (untrimmed) text, or null on Cancel.</summary>

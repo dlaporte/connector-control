@@ -134,7 +134,7 @@ public partial class SettingsWindow : Window
         }
         if (problem is not null)
         {
-            ConfirmDialog.Show(this, SettingsModel.LaunchTargetRejectedTitle, problem, "OK", null, destructive: false);
+            ConfirmDialog.Show(this, SettingsModel.LaunchTargetRejectedTitle, problem, Dialogs.OkTitle, null, destructive: false);
             return;
         }
         Model.ChooseLaunchTarget(path);

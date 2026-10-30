@@ -37,7 +37,7 @@ internal sealed class TestHostNotifier : INotifier
 
 internal sealed class TestHostDialogs : IDialogs
 {
-    public bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle = "Cancel", bool destructive = false,
+    public bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle = Dialogs.CancelTitle, bool destructive = false,
                         bool cancelIsDefault = false) => false;
 
     public string? PromptForName(string title, string initial) => null;

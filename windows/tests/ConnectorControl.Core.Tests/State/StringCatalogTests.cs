@@ -712,11 +712,8 @@ public class StringCatalogTests
 
         // MARK: Dialogs / AlertDialogs
 
-        // IDialogs.Confirm's cancelTitle default parameter value - not a retrievable symbol.
-        actual["Dialogs.cancelTitle"] = "Cancel";
-        // WpfDialogs.cs / NamePromptDialog.xaml live in ConnectorControl.App, which this
-        // Core test project cannot reference; hardcoded here to match their "OK" literal.
-        actual["AlertDialogs.okTitle"] = "OK";
+        actual["Dialogs.cancelTitle"] = Dialogs.CancelTitle;
+        actual["AlertDialogs.okTitle"] = Dialogs.OkTitle;
 
         // MARK: EditTarget / EditorModel
 
