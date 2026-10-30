@@ -892,4 +892,31 @@ public class ControlMaskingTests
         Assert.Equal(["-H", "X-Api-Key: •••", "•••"], ControlMasking.Arguments(["-H", "X-Api-Key: basic", "abc123xyz"]));
         Assert.Equal(["-H", "X-Team: •••", "abc"], ControlMasking.Arguments(["-H", "X-Team:blue", "abc"]));
     }
+
+    /// <summary>A scheme word after a flag named for a secret does not use up the mask: the word after it
+    /// is hidden too, and so is curl's <c>-H'Authorization: Bearer x'</c>, which a shell splits into
+    /// <c>-HAuthorization:</c>, <c>Bearer</c> and <c>x</c>.</summary>
+    [Fact]
+    public void ASchemeWordAfterASecretNamedFlagHidesTheWordAfterIt()
+    {
+        Assert.Equal(["--token", "•••", "•••"], ControlMasking.Arguments(["--token", "Bearer", "hunter2"]));
+        Assert.Equal(["--token", "•••", "--verbose"], ControlMasking.Arguments(["--token", "Bearer", "--verbose"]));
+        Assert.Equal(["--token", "•••", "${TOKEN}"], ControlMasking.Arguments(["--token", "Bearer", "${TOKEN}"]));
+        string[][] cases = [["--token", "Bearer", "hunter2"], ["-c", "curl -H'Authorization: Bearer hunter2' https://x"]];
+        foreach (var args in cases)
+        {
+            Assert.DoesNotContain("hunter2", string.Join(" ", ControlMasking.Arguments(args)));
+            AssertHidden(["hunter2"], Local("sh", args));
+        }
+    }
+
+    /// <summary>Text that starts as JSON does but does not parse (JSON5's unquoted keys and single quotes)
+    /// is masked whole, as JSON too deep to read is: what it holds cannot be read by key.</summary>
+    [Fact]
+    public void JsonLikeTextThatDoesNotParseIsMaskedWhole()
+    {
+        Assert.Equal(["--config", ControlMasking.Mask], ControlMasking.Arguments(["--config", "{apiKey: 'hunter2'}"]));
+        Assert.Equal(ControlMasking.Mask, ControlMasking.Argument(" [hunter2"));
+        AssertHidden(["hunter2"], Local("npx", ["--config", "{apiKey: 'hunter2'}"]));
+    }
 }

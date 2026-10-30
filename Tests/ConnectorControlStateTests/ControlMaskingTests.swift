@@ -750,4 +750,25 @@ final class ControlMaskingTests: XCTestCase {
         XCTAssertEqual(ControlMasking.arguments(["-H", "X-Api-Key: basic", "abc123xyz"]), ["-H", "X-Api-Key: •••", "•••"])
         XCTAssertEqual(ControlMasking.arguments(["-H", "X-Team:blue", "abc"]), ["-H", "X-Team: •••", "abc"])
     }
+
+    /// A scheme word after a flag named for a secret does not use up the mask: the word after it
+    /// is hidden too, and so is curl's `-H'Authorization: Bearer x'`, which a shell splits into
+    /// `-HAuthorization:`, `Bearer` and `x`.
+    func testASchemeWordAfterASecretNamedFlagHidesTheWordAfterIt() throws {
+        XCTAssertEqual(ControlMasking.arguments(["--token", "Bearer", "hunter2"]), ["--token", "•••", "•••"])
+        XCTAssertEqual(ControlMasking.arguments(["--token", "Bearer", "--verbose"]), ["--token", "•••", "--verbose"])
+        XCTAssertEqual(ControlMasking.arguments(["--token", "Bearer", "${TOKEN}"]), ["--token", "•••", "${TOKEN}"])
+        for args in [["--token", "Bearer", "hunter2"], ["-c", "curl -H'Authorization: Bearer hunter2' https://x"]] {
+            XCTAssertFalse(ControlMasking.arguments(args).joined(separator: " ").contains("hunter2"), "\(args)")
+            try assertHidden(["hunter2"], in: local("sh", args))
+        }
+    }
+
+    /// Text that starts as JSON does but does not parse (JSON5's unquoted keys and single quotes)
+    /// is masked whole, as JSON too deep to read is: what it holds cannot be read by key.
+    func testJSONLikeTextThatDoesNotParseIsMaskedWhole() throws {
+        XCTAssertEqual(ControlMasking.arguments(["--config", "{apiKey: 'hunter2'}"]), ["--config", ControlMasking.mask])
+        XCTAssertEqual(ControlMasking.argument(" [hunter2"), ControlMasking.mask)
+        try assertHidden(["hunter2"], in: local("npx", ["--config", "{apiKey: 'hunter2'}"]))
+    }
 }

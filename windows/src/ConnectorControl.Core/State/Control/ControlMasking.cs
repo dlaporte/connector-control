@@ -304,8 +304,9 @@ public static class ControlMasking
 
     /// <summary>An argument that is a JSON object or array — Smithery's <c>--config '{"apiKey":"…"}'</c> — with
     /// each leaf masked by its key, as a config's are, on one line; as written when nothing in it
-    /// changed. JSON nested deeper than <see cref="JsonValue.Parse(string)"/> reads is "•••", since what it holds cannot
-    /// be read. Null for anything else. Before the shell line, which would split JSON at its spaces.</summary>
+    /// changed. JSON nested deeper than <see cref="JsonValue.Parse(string)"/> reads, and text that starts as JSON does
+    /// but does not parse (JSON5's <c>{apiKey: 'x'}</c>), is "•••", since what it holds cannot be read.
+    /// Null for anything else. Before the shell line, which would split JSON at its spaces.</summary>
     internal static string? JsonArgument(string arg)
     {
         var first = arg.FirstOrDefault(c => !char.IsWhiteSpace(c));
@@ -324,7 +325,7 @@ public static class ControlMasking
         }
         catch (JsonException)
         {
-            return null;
+            return Mask;
         }
         if (value.Kind is not (JsonKind.Object or JsonKind.Array))
         {
@@ -385,8 +386,28 @@ public static class ControlMasking
                     return exposure == Exposure.Dialog ? ClientInfo(arg) : Mask;
                 }
             }
+            if (AfterScheme(args, index, exposure))
+            {
+                return Mask;
+            }
             return exposure == Exposure.Masked ? Argument(arg) : DialogArgument(arg);
         }).ToList();
+    }
+
+    /// <summary>Whether <c>args[index]</c> is the value after a scheme word that follows a flag named for a
+    /// secret (<c>--token Bearer x</c>, and curl's <c>-H'Authorization: Bearer x'</c> as a shell splits it,
+    /// <c>-HAuthorization:</c> <c>Bearer</c> <c>x</c>): the flag hides the scheme word, so the word after it is
+    /// hidden too, as <see cref="HeaderValues"/> hides a header's value past its scheme word, unless it is
+    /// a flag or a reference.</summary>
+    internal static bool AfterScheme(IReadOnlyList<string> args, int index, Exposure exposure)
+    {
+        if (exposure != Exposure.Masked || index <= 1)
+        {
+            return false;
+        }
+        var arg = args[index];
+        return HidesNext(args[index - 2], exposure) && CredentialHeuristics.IsSchemeWord(args[index - 1])
+            && !IsFlag(arg) && !RefersElsewhere(arg);
     }
 
     /// <summary>One argument as the dialog shows it: as written, but for the value of

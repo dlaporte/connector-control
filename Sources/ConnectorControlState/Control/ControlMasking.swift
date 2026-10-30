@@ -259,12 +259,13 @@ public enum ControlMasking {
 
     /// An argument that is a JSON object or array — Smithery's `--config '{"apiKey":"…"}'` — with
     /// each leaf masked by its key, as a config's are, on one line; as written when nothing in it
-    /// changed. JSON nested deeper than `JSONValue.parse` reads is "•••", since what it holds cannot
-    /// be read. Nil for anything else. Before the shell line, which would split JSON at its spaces.
+    /// changed. JSON nested deeper than `JSONValue.parse` reads, and text that starts as JSON does
+    /// but does not parse (JSON5's `{apiKey: 'x'}`), is "•••", since what it holds cannot be read.
+    /// Nil for anything else. Before the shell line, which would split JSON at its spaces.
     static func jsonArgument(_ arg: String) -> String? {
         guard let first = arg.unicodeScalars.first(where: { !$0.properties.isWhitespace }), first == "{" || first == "[" else { return nil }
         guard McpSession.nests(atMost: McpSession.maxNestingDepth, arg) else { return mask }
-        guard let value = try? JSONValue.parse(Data(arg.utf8)) else { return nil }
+        guard let value = try? JSONValue.parse(Data(arg.utf8)) else { return mask }
         switch value {
         case .object, .array:
             let shown = compactText(leaves(value, .masked, secret: false))
@@ -309,8 +310,21 @@ public enum ControlMasking {
                     return exposure == .dialog ? clientInfo(arg) : mask
                 }
             }
+            if afterScheme(args, index, exposure) { return mask }
             return exposure == .masked ? argument(arg) : dialogArgument(arg)
         }
+    }
+
+    /// Whether `args[index]` is the value after a scheme word that follows a flag named for a
+    /// secret (`--token Bearer x`, and curl's `-H'Authorization: Bearer x'` as a shell splits it,
+    /// `-HAuthorization:` `Bearer` `x`): the flag hides the scheme word, so the word after it is
+    /// hidden too, as `headerValues(_:)` hides a header's value past its scheme word, unless it is
+    /// a flag or a reference.
+    static func afterScheme(_ args: [String], _ index: Int, _ exposure: Exposure) -> Bool {
+        guard exposure == .masked, index > 1 else { return false }
+        let arg = args[index]
+        return hidesNext(args[index - 2], exposure) && CredentialHeuristics.isSchemeWord(args[index - 1])
+            && !isFlag(arg) && !refersElsewhere(arg)
     }
 
     /// One argument as the dialog shows it: as written, but for the value of
