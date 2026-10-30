@@ -29,6 +29,10 @@ public partial class PublishDialog : DialogWindow
         ExportButton.Visibility = publishing ? Visibility.Collapsed : Visibility.Visible;
         PublishButton.IsDefault = publishing;
         ExportButton.IsDefault = !publishing;
+        // With env and path rows, open questions and warnings all showing, the dialog asks for more than a 1080p
+        // screen at 150% has. Capped at the work area, the preview gives way and the buttons stay on screen. The
+        // primary screen's: the dialog centres on its owner, which is nearly always there.
+        MaxHeight = SystemParameters.WorkArea.Height;
     }
 
     public PublishModel Model { get; }

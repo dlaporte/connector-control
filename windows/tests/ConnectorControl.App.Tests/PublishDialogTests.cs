@@ -214,6 +214,38 @@ public class PublishDialogTests
         });
     }
 
+    /// <summary>
+    /// Capped below what it asks for — the work area of a short screen — the dialog gives the room up from the preview,
+    /// and its buttons stay inside it rather than being cut off below. Windows only.
+    /// </summary>
+    [Fact]
+    public void ACappedDialogShrinksThePreviewAndKeepsItsButtonsInside()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        WpfApp.Invoke(() =>
+        {
+            var model = new PublishModel(state, state.ActiveCollection);
+            Publishing(model, window =>
+            {
+                window.Show();
+                window.UpdateLayout();
+                var preview = window.PreviewBox.ActualHeight;
+                Assert.True(window.MaxHeight <= SystemParameters.WorkArea.Height);
+                window.MaxHeight = window.ActualHeight - 60;
+                window.UpdateLayout();
+                var root = (FrameworkElement)window.Content;
+                var buttonBottom = window.PublishButton.TranslatePoint(new Point(0, window.PublishButton.ActualHeight), root).Y;
+                var measured = $"window {window.ActualHeight}, cap {window.MaxHeight}, preview {window.PreviewBox.ActualHeight} (was {preview}), "
+                    + $"button bottom {buttonBottom}, content {root.ActualHeight}";
+                window.Hide();
+                Assert.True(window.ActualHeight <= window.MaxHeight + 0.5, measured);
+                Assert.True(window.PreviewBox.ActualHeight < preview, measured);
+                Assert.True(buttonBottom <= root.ActualHeight + 0.5, measured);
+            });
+        });
+    }
+
     [Fact]
     public void ThePreviewHidesUnsharedValues()
     {
