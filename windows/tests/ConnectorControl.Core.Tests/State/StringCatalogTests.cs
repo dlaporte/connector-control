@@ -1046,6 +1046,8 @@ public class StringCatalogTests
         actual["UpdateRefusals.signedByUntrusted"] = UpdateRefusals.SignedByUntrusted("X", "Y");
         actual["UpdateRefusals.sizeMismatch"] = UpdateRefusals.SizeMismatch("X", 3, 7);
         actual["UpdateRefusals.unreadable"] = UpdateRefusals.Unreadable("X");
+        actual["UpdateRefusals.updaterKeptSentence"] = UpdateRefusals.UpdaterKeptSentence;
+        actual["UpdateRefusals.updaterLeftSentence"] = UpdateRefusals.UpdaterLeftSentence;
         actual["UpdateRefusals.versionMismatch"] = UpdateRefusals.VersionMismatch("X", "Y");
 
         // MARK: UserPath

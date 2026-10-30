@@ -61,4 +61,15 @@ public static class UpdateRefusals
         $"{MainExecutable} inside the update is the preview {embedded}, and the installed version could not be read{NotInstalledSuffix}";
 
     public static string Unreadable(string reason) => $"The update package could not be read ({reason}){NotInstalledSuffix}";
+
+    /// <summary>Said after a refusal whose package's Update.exe could not be replaced, while the copy saved before the
+    /// download is kept for the next launch or check to put back.</summary>
+    public const string UpdaterKeptSentence = "The updater it brought couldn’t be removed yet; Connector Control puts its own back the next time it starts or checks for updates.";
+
+    /// <summary>Said after a refusal whose package's Update.exe could not be replaced, with no saved copy to put back.</summary>
+    public const string UpdaterLeftSentence = "The updater it brought couldn’t be removed; reinstall Connector Control to replace it.";
+
+    /// <summary><paramref name="refusal"/>, then which of the two sentences above is true.</summary>
+    public static string UpdaterLeftInPlace(string refusal, bool copyKept) =>
+        $"{refusal} {(copyKept ? UpdaterKeptSentence : UpdaterLeftSentence)}";
 }

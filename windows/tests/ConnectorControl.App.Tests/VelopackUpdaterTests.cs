@@ -411,9 +411,24 @@ public class VelopackUpdaterTests
 
         var ex = Assert.Throws<UpdateVerificationException>(() => updater.FinishCheck(new UpdateInfo(Asset(), isDowngrade: false), "ours"u8.ToArray(), TestIdentity));
         Assert.True(ex.UpdaterLeftInPlace);
-        Assert.Equal("refused", ex.Message);
+        Assert.Equal("refused " + UpdateRefusals.UpdaterKeptSentence, ex.Message);   // the refusal says so, as well as why
         Assert.Equal("ours", File.ReadAllText(saved));
         Assert.Contains(logged, line => line.Contains("is kept", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ARefusalWhoseUpdaterCannotBeRemovedWithNoCopyToPutBackSaysSo()
+    {
+        using var packages = new TempDir("vpk");
+        using var data = new TempDir("ccdata");
+        var (updater, updateExe, saved, _) = Interrupted(packages, data);
+        Directory.CreateDirectory(updateExe);   // nothing can be written where the updater belongs
+        File.WriteAllText(packages.File(Asset().FileName), "package");
+
+        var ex = Assert.Throws<UpdateVerificationException>(() => updater.FinishCheck(new UpdateInfo(Asset(), isDowngrade: false), "ours"u8.ToArray(), TestIdentity));
+        Assert.True(ex.UpdaterLeftInPlace);
+        Assert.Equal("refused " + UpdateRefusals.UpdaterLeftSentence, ex.Message);
+        Assert.False(File.Exists(saved));
     }
 
     [Fact]

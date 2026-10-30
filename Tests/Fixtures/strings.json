@@ -1330,6 +1330,12 @@
       "format": "The update package could not be read ({0}); the update was not installed."
     }
   },
+  "UpdateRefusals.updaterKeptSentence": {
+    "win": "The updater it brought couldn’t be removed yet; Connector Control puts its own back the next time it starts or checks for updates."
+  },
+  "UpdateRefusals.updaterLeftSentence": {
+    "win": "The updater it brought couldn’t be removed; reinstall Connector Control to replace it."
+  },
   "UpdateRefusals.versionMismatch": {
     "win": {
       "format": "ConnectorControl.exe inside the update is version {0}, but the update feed says {1}; the update was not installed."

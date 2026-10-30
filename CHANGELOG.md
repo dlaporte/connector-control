@@ -34,6 +34,7 @@ has one.
 - The Publish and Export dialogs now fit on a short screen: when there isn’t room, the preview gets shorter so the Publish, Export and Cancel buttons stay visible.
 - Start Publishing into a folder that already holds a folder with the collection’s document name (such as `work.json`) now says that name is taken, as the Mac does, instead of failing with a file-system error.
 - A Connector Control release now also refuses a preview update when it can’t read its own installed version. Before, that check was skipped, and only the update feed kept previews away from release installs.
+- When an update is refused and the updater it brought can’t be removed (for example, because a virus scanner is holding it), the message now says so, and says whether Connector Control will put its own updater back the next time it starts or whether you need to reinstall. Before, it gave only the reason for the refusal.
 
 ### Both platforms
 

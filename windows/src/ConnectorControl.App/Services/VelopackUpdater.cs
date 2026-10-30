@@ -178,7 +178,8 @@ public sealed class VelopackUpdater : IUpdater
 
     /// <summary>The package check, then the saved Update.exe goes: the check ended, in acceptance or refusal, and the
     /// restore it was kept for has happened or is not needed. A refusal whose restore failed keeps the copy, so the next
-    /// launch or check puts it back (<see cref="RecoverInterruptedCheck"/>); so does anything else that ends the check.</summary>
+    /// launch or check puts it back (<see cref="RecoverInterruptedCheck"/>); so does anything else that ends the check.
+    /// That refusal also says the package's updater is still in place, and whether a copy is kept to put back.</summary>
     internal void FinishCheck(UpdateInfo info, byte[]? knownGoodUpdater, UpdateVerifier.RunningIdentity identity)
     {
         try
@@ -187,17 +188,16 @@ public sealed class VelopackUpdater : IUpdater
         }
         catch (UpdateVerificationException ex)
         {
-            if (ex.UpdaterLeftInPlace)
-            {
-                log(savedUpdaterPath is not null && File.Exists(savedUpdaterPath)
-                    ? "The refused update's updater is still in place: the copy saved before the download is kept, to be put back at the next launch or update check."
-                    : "The refused update's updater is still in place, and no copy was saved before the download to put back.");
-            }
-            else
+            if (!ex.UpdaterLeftInPlace)
             {
                 DeleteSavedUpdater();
+                throw;
             }
-            throw;
+            var kept = savedUpdaterPath is not null && File.Exists(savedUpdaterPath);
+            log(kept
+                ? "The refused update's updater is still in place: the copy saved before the download is kept, to be put back at the next launch or update check."
+                : "The refused update's updater is still in place, and no copy was saved before the download to put back.");
+            throw new UpdateVerificationException(UpdateRefusals.UpdaterLeftInPlace(ex.Message, kept)) { UpdaterLeftInPlace = true };
         }
         DeleteSavedUpdater();
     }
