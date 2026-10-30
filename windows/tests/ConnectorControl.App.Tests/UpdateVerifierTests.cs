@@ -173,6 +173,9 @@ public class UpdateVerifierTests : IDisposable
     [InlineData("Update.exe", true)]
     [InlineData("connector-control.exe", true)]
     [InlineData("Connector-Control.exe", true)]
+    [InlineData("Connector Control_ExecutionStub.exe", true)]   // vpk's launcher stub, named after the pack title
+    [InlineData("connector control_executionstub.exe", true)]
+    [InlineData("Connector Control.exe", false)]                 // not a name any package entry carries
     [InlineData("System.Runtime.dll", false)]
     [InlineData("Markdig.dll", false)]
     public void OnlyTheAppsOwnFilesAndTheUpdaterMustCarryItsSignature(string name, bool expected)

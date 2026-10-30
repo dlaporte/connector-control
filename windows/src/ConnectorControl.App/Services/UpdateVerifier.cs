@@ -43,7 +43,7 @@ public static class UpdateVerifier
 
     /// <summary>
     /// The files an attacker would have to replace to run code in this app's name: its own
-    /// executables and assemblies, the command-line tool, and the updater. These must carry this
+    /// executables and assemblies, the command-line tool, the updater and its launcher. These must carry this
     /// app's own signature; a trusted third party's is not enough.
     /// </summary>
     internal static bool MustBeOurs(string fileName) =>
@@ -51,7 +51,11 @@ public static class UpdateVerifier
         // The command-line tool: Claude's entry runs its copy, and the PATH may.
         || fileName.StartsWith("connector-control", StringComparison.OrdinalIgnoreCase)
         || string.Equals(fileName, "Squirrel.exe", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(fileName, "Update.exe", StringComparison.OrdinalIgnoreCase);
+        || string.Equals(fileName, "Update.exe", StringComparison.OrdinalIgnoreCase)
+        // The launcher vpk pack adds as "<pack title>_ExecutionStub.exe" ("Connector Control_ExecutionStub.exe": a space,
+        // so the prefix above misses it). Every apply puts it at the install root, where it starts Update.exe. vpk signs
+        // it with this app's certificate, as v1.5.0's package shows.
+        || fileName.EndsWith("_ExecutionStub.exe", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>What the running app's signature says about who may sign an update; read once per download.
     /// <see cref="Subject"/> is its certificate's full subject DN, null when its signature could not be validated.</summary>
