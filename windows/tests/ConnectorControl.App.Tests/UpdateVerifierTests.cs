@@ -260,17 +260,20 @@ public class UpdateVerifierTests : IDisposable
     [InlineData(null, "1.4.2", "1.5.0", false)]                                   // no product version at all
     [InlineData("1.5.1-preview.1", "1.5.0", "1.5.1-preview.1", false)]           // a release install never takes a preview
     [InlineData("1.5.1", "1.5.0", "1.5.1", true)]                                 // a release install takes the next release
-    [InlineData("1.5.1-preview.1", "", "1.5.1-preview.1", false)]                 // an unreadable install never takes a preview
-    [InlineData("1.5.1-preview.1", "garbage", "1.5.1-preview.1", false)]
+    [InlineData("1.5.1-preview.1", "", "1.5.1-preview.1", false)]                 // an unreadable install takes nothing:
+    [InlineData("1.5.1-preview.1", "garbage", "1.5.1-preview.1", false)]          // not a preview,
+    [InlineData("1.4.0", "", "1.4.0", false)]                                     // not what may be a downgrade,
+    [InlineData("1.5.1", "garbage", "1.5.1", false)]                              // nor a release
     public void TheEmbeddedVersionIsBoundByItsFullSemVer(string? embedded, string running, string feed, bool accepted)
     {
         Assert.Equal(accepted, UpdateVerifier.VersionProblem(embedded, running, feed) is null);
     }
 
     [Fact]
-    public void APreviewForAnInstallWhoseVersionCannotBeReadSaysSo()
+    public void AnInstallWhoseVersionCannotBeReadSaysSo()
     {
-        Assert.Equal(UpdateRefusals.PreviewForUnknownVersion("1.5.1-preview.1"), UpdateVerifier.VersionProblem("1.5.1-preview.1", "", "1.5.1-preview.1"));
+        Assert.Equal(UpdateRefusals.UnknownInstalledVersion("1.4.0"), UpdateVerifier.VersionProblem("1.4.0", "", "1.4.0"));
+        Assert.Equal(UpdateRefusals.UnknownInstalledVersion("1.5.1-preview.1"), UpdateVerifier.VersionProblem("1.5.1-preview.1", "garbage", "1.5.1-preview.1"));
         Assert.Equal(UpdateRefusals.PreviewForRelease("1.5.1-preview.1", "1.5.0"), UpdateVerifier.VersionProblem("1.5.1-preview.1", "1.5.0", "1.5.1-preview.1"));
     }
 

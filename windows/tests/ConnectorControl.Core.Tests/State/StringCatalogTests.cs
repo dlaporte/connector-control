@@ -292,11 +292,11 @@ public class StringCatalogTests
         ["UpdateRefusals.notValidlySigned"] = ["X"],
         ["UpdateRefusals.olderVersion"] = ["X", "Y"],
         ["UpdateRefusals.previewForRelease"] = ["X", "Y"],
-        ["UpdateRefusals.previewForUnknownVersion"] = ["X"],
         ["UpdateRefusals.renamedEntry"] = ["X"],
         ["UpdateRefusals.signedByAnother"] = ["X", "Y"],
         ["UpdateRefusals.signedByUntrusted"] = ["X", "Y"],
         ["UpdateRefusals.sizeMismatch"] = ["X", "3", "7"],
+        ["UpdateRefusals.unknownInstalledVersion"] = ["X"],
         ["UpdateRefusals.unreadable"] = ["X"],
         ["UpdateRefusals.versionMismatch"] = ["X", "Y"],
     };
@@ -1041,11 +1041,11 @@ public class StringCatalogTests
         actual["UpdateRefusals.notValidlySigned"] = UpdateRefusals.NotValidlySigned("X");
         actual["UpdateRefusals.olderVersion"] = UpdateRefusals.OlderVersion("X", "Y");
         actual["UpdateRefusals.previewForRelease"] = UpdateRefusals.PreviewForRelease("X", "Y");
-        actual["UpdateRefusals.previewForUnknownVersion"] = UpdateRefusals.PreviewForUnknownVersion("X");
         actual["UpdateRefusals.renamedEntry"] = UpdateRefusals.RenamedEntry("X");
         actual["UpdateRefusals.signedByAnother"] = UpdateRefusals.SignedByAnother("X", "Y");
         actual["UpdateRefusals.signedByUntrusted"] = UpdateRefusals.SignedByUntrusted("X", "Y");
         actual["UpdateRefusals.sizeMismatch"] = UpdateRefusals.SizeMismatch("X", 3, 7);
+        actual["UpdateRefusals.unknownInstalledVersion"] = UpdateRefusals.UnknownInstalledVersion("X");
         actual["UpdateRefusals.unreadable"] = UpdateRefusals.Unreadable("X");
         actual["UpdateRefusals.updaterKeptSentence"] = UpdateRefusals.UpdaterKeptSentence;
         actual["UpdateRefusals.updaterLeftSentence"] = UpdateRefusals.UpdaterLeftSentence;

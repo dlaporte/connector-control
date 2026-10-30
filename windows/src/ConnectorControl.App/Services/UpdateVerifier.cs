@@ -268,23 +268,21 @@ public static class UpdateVerifier
         {
             return UpdateRefusals.VersionMismatch(embedded, feedVersion);
         }
+        // Neither rule below can be judged against an installed version that cannot be read, and an unjudged update is
+        // not taken: IsNewer answers false for an unreadable version, which would let a downgrade through.
+        if (ControlVersion.Semantic(runningVersion) is not { } running)
+        {
+            return UpdateRefusals.UnknownInstalledVersion(embedded);
+        }
         if (ControlVersion.IsNewer(runningVersion, embedded))
         {
             return UpdateRefusals.OlderVersion(embedded, runningVersion);
         }
         // A release install never takes a preview, whatever the feed offers: the stable feed's filter is not the only
-        // thing keeping one out. A preview install still takes its release. Only a known preview install takes a
-        // preview: an installed version that cannot be read refuses one.
-        if (IsPrerelease(embedded))
+        // thing keeping one out. A preview install still takes its release.
+        if (IsPrerelease(embedded) && !IsPrerelease(running))
         {
-            if (ControlVersion.Semantic(runningVersion) is not { } running)
-            {
-                return UpdateRefusals.PreviewForUnknownVersion(embedded);
-            }
-            if (!IsPrerelease(running))
-            {
-                return UpdateRefusals.PreviewForRelease(embedded, runningVersion);
-            }
+            return UpdateRefusals.PreviewForRelease(embedded, runningVersion);
         }
         return null;
     }

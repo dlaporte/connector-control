@@ -1303,11 +1303,6 @@
       "format": "ConnectorControl.exe inside the update is the preview {0}, and the installed {1} takes releases only; the update was not installed."
     }
   },
-  "UpdateRefusals.previewForUnknownVersion": {
-    "win": {
-      "format": "ConnectorControl.exe inside the update is the preview {0}, and the installed version could not be read; the update was not installed."
-    }
-  },
   "UpdateRefusals.renamedEntry": {
     "win": {
       "format": "The update package contains an entry named \"{0}\", which Windows would rename on extraction; the update was not installed."
@@ -1326,6 +1321,11 @@
   "UpdateRefusals.sizeMismatch": {
     "win": {
       "format": "The update package entry \"{0}\" declares {1} bytes but holds {2}; the update was not installed."
+    }
+  },
+  "UpdateRefusals.unknownInstalledVersion": {
+    "win": {
+      "format": "ConnectorControl.exe inside the update is version {0}, but the installed version could not be read; the update was not installed."
     }
   },
   "UpdateRefusals.unreadable": {

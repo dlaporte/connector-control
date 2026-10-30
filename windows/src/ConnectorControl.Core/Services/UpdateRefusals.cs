@@ -56,9 +56,10 @@ public static class UpdateRefusals
     public static string PreviewForRelease(string embedded, string running) =>
         $"{MainExecutable} inside the update is the preview {embedded}, and the installed {running} takes releases only{NotInstalledSuffix}";
 
-    /// <summary>A preview, when the installed version cannot be read: only a known preview install takes one.</summary>
-    public static string PreviewForUnknownVersion(string embedded) =>
-        $"{MainExecutable} inside the update is the preview {embedded}, and the installed version could not be read{NotInstalledSuffix}";
+    /// <summary>Any update, when the installed version cannot be read: neither the downgrade rule nor the preview rule can
+    /// be judged, so nothing is taken.</summary>
+    public static string UnknownInstalledVersion(string embedded) =>
+        $"{MainExecutable} inside the update is version {embedded}, but the installed version could not be read{NotInstalledSuffix}";
 
     public static string Unreadable(string reason) => $"The update package could not be read ({reason}){NotInstalledSuffix}";
 
