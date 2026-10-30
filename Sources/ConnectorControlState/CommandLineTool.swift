@@ -64,5 +64,12 @@ public enum CommandLineToolText {
     // missing while the app runs, so only Windows, whose copy lives outside the install, ever says it.
     public static func missingToolError(_ path: String) -> String { "\(path) is missing. Quit and reopen Connector Control, then try again." }
 
+    /// Why the Mac installs nothing for an app in `folder`, which can be changed without an administrator.
+    // Platform idiom: Windows puts the tool on this person's own PATH only, so no other account runs it and it
+    // never says this.
+    public static func unprotectedFolderError(_ folder: String) -> String {
+        "The command-line tool can’t be installed from \(folder): every account on this Mac would run it, and that folder can be changed without an administrator. Move Connector Control to Applications, then try again."
+    }
+
     public static func occupiedError(_ path: String) -> String { "\(path) already exists and isn’t a link. Remove it, then try again." }
 }

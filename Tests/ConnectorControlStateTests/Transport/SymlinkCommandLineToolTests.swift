@@ -21,13 +21,15 @@ final class SymlinkCommandLineToolTests: XCTestCase {
                 now: { Date() }, background: { $0() }, controlToolPath: tool, controlToolIsTransient: transient)
     }
 
-    private func make(_ dir: TempDir, _ scripts: Scripts, transient: Bool = false, tool: String? = nil) -> SymlinkCommandLineTool {
+    private func make(_ dir: TempDir, _ scripts: Scripts, transient: Bool = false, tool: String? = nil,
+                      protected: Bool = true) -> SymlinkCommandLineTool {
         SymlinkCommandLineTool(toolPath: tool ?? self.tool, linkPath: dir.file("bin/connector-control").path, host: host(transient: transient),
                                runScript: { arguments in
                                    scripts.ran.append(arguments)
                                    scripts.whileRunning?()
                                    return scripts.answer
-                               })
+                               },
+                               folderIsProtected: { _ in protected })
     }
 
     private func answer(_ act: (@escaping (String?) -> Void) -> Void) -> String?? {
@@ -162,6 +164,42 @@ final class SymlinkCommandLineToolTests: XCTestCase {
         XCTAssertEqual(answer(installer.remove), .some(nil))
         XCTAssertEqual(scripts.ran, [SymlinkCommandLineTool.removeScript.flatMap { ["-e", $0] }
                                         + [installer.linkPath, "../app/connector-control", CommandLineToolText.adminPrompt]])
+    }
+
+    /// Every account on the Mac runs the tool through the link, so an app in a folder that can be changed
+    /// without an administrator installs nothing: no link, no prompt, and the reason names the app's folder.
+    func testAnAppInAFolderNotOnlyAnAdministratorCanChangeInstallsNothing() throws {
+        let dir = TempDir(prefix: "cli-link"); defer { dir.dispose() }
+        try FileManager.default.createDirectory(at: dir.file("bin"), withIntermediateDirectories: true)
+        let scripts = Scripts()
+        let installer = make(dir, scripts, protected: false)
+        XCTAssertEqual(answer(installer.install), .some(CommandLineToolText.unprotectedFolderError("/Applications")))
+        XCTAssertEqual(installer.lastProblem, CommandLineToolText.unprotectedFolderError("/Applications"))
+        XCTAssertFalse(installer.isBusy)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: installer.linkPath))
+        XCTAssertEqual(scripts.ran, [], "no administrator prompt")
+    }
+
+    /// A folder only an administrator can change: root's, and not writable by everyone. /Applications, root's
+    /// and writable by the admin group, is one.
+    func testOnlyAFolderRootOwnsAndNotEveryoneCanWriteIsProtected() {
+        XCTAssertTrue(SymlinkCommandLineTool.isProtected(owner: 0, permissions: 0o775))
+        XCTAssertTrue(SymlinkCommandLineTool.isProtected(owner: 0, permissions: 0o755))
+        XCTAssertFalse(SymlinkCommandLineTool.isProtected(owner: 501, permissions: 0o755), "a person's own folder")
+        XCTAssertFalse(SymlinkCommandLineTool.isProtected(owner: 0, permissions: 0o777))
+        XCTAssertFalse(SymlinkCommandLineTool.isProtected(owner: 0, permissions: 0o1777), "sticky, as /tmp, is still writable by all")
+    }
+
+    /// The folder judged is the one holding the app, or a development build's tool; read from the disk, it and
+    /// every folder above it must be protected.
+    func testTheFolderJudgedIsTheOneHoldingTheApp() {
+        XCTAssertEqual(SymlinkCommandLineTool.appFolder(ofTool: tool), "/Applications")
+        XCTAssertEqual(SymlinkCommandLineTool.appFolder(ofTool: "/Users/me/code/.build/debug/connector-control"),
+                       "/Users/me/code/.build/debug")
+        XCTAssertTrue(SymlinkCommandLineTool.folderIsProtected("/Applications"))
+        let dir = TempDir(prefix: "cli-link"); defer { dir.dispose() }
+        XCTAssertFalse(SymlinkCommandLineTool.folderIsProtected(dir.url.path))
+        XCTAssertFalse(SymlinkCommandLineTool.folderIsProtected(dir.file("missing").path))
     }
 
     /// No password for a change that is already made.

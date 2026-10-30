@@ -634,8 +634,11 @@ Settings ▸ Claude ▸ **Command-Line Tool** ▸ **Install** puts
   then reads "Installed in /usr/local/bin" and "Run connector-control help in
   Terminal." Install replaces a link already there, wherever it points, but
   won't replace a file that isn't a link, and is dimmed while the app runs
-  from its disk image or from where it was downloaded. Remove takes away only
-  a link to this app's own tool.
+  from its disk image or from where it was downloaded. It also refuses while
+  the app is in a folder that can be changed without an administrator, such
+  as `~/Applications`, since every account on the Mac runs the tool through
+  the link: move the app to Applications first. Remove takes away only a link
+  to this app's own tool.
 - On Windows, the tool's folder in your user PATH, with no prompt. The row
   then reads "In your PATH" and "Run connector-control help in a new
   terminal.": terminals opened afterwards see it, and one already open keeps

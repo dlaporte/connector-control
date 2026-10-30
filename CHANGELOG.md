@@ -25,6 +25,7 @@ has one.
 - When you stop publishing a collection and choose Delete for its published file, only that file is deleted. Before, if a folder had been put in the shared folder under that file’s name, it deleted that folder and everything in it.
 - The menu bar icon now has a name for VoiceOver - “Connector Control”, or “Connector Control: Apply Failed - Retry” when an apply is waiting to be retried - and VoiceOver no longer reads the “▾” after the collection name in the popover.
 - A change to a connector that differs only in how an accented letter is written (é as one character, or as e followed by a combining accent) is now written to Claude’s config, as it is on Windows. Before, the Mac counted the two as the same and left Claude’s config as it was.
+- Settings ▸ Claude ▸ Command-Line Tool ▸ Install now refuses while Connector Control is in a folder that can be changed without an administrator, such as `~/Applications` or Downloads, and asks you to move it to Applications. The link it makes in /usr/local/bin is on every account’s PATH, so before, another account running `connector-control` could run a tool you were able to change.
 
 ### Windows
 

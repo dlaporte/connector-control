@@ -108,6 +108,7 @@ final class StringCatalogTests: XCTestCase {
         "CommandLineToolText.installedInText": ["X"],
         "CommandLineToolText.missingToolError": ["X"],
         "CommandLineToolText.occupiedError": ["X"],
+        "CommandLineToolText.unprotectedFolderError": ["X"],
         "CommandLineToolText.removeFailedError": ["X"],
         "CommandLineToolText.scriptsCaption": ["X"],
         "ConfigService.corruptStoreNote": ["X"],
@@ -458,6 +459,7 @@ final class StringCatalogTests: XCTestCase {
         actual["CommandLineToolText.removeFailedError"] = CommandLineToolText.removeFailedError("X")
         actual["CommandLineToolText.runHelpCaption"] = CommandLineToolText.runHelpCaption
         actual["CommandLineToolText.scriptsCaption"] = CommandLineToolText.scriptsCaption("X")
+        actual["CommandLineToolText.unprotectedFolderError"] = CommandLineToolText.unprotectedFolderError("X")
 
         // MARK: ControlMasking / ControlText
 

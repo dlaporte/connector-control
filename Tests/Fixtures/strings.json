@@ -264,6 +264,11 @@
   "CommandLineToolText.scriptsCaption": {
     "format": "Scripts can always use {0}"
   },
+  "CommandLineToolText.unprotectedFolderError": {
+    "mac": {
+      "format": "The command-line tool can’t be installed from {0}: every account on this Mac would run it, and that folder can be changed without an administrator. Move Connector Control to Applications, then try again."
+    }
+  },
   "ConfigService.corruptStoreNote": {
     "format": "The MCP list file was unreadable; it was preserved as {0} and rebuilt from Claude’s config."
   },
