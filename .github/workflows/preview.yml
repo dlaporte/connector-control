@@ -232,7 +232,6 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ needs.prepare.outputs.tag }}
       VERSION: ${{ needs.prepare.outputs.version }}
-      REPO_URL: ${{ github.server_url }}/${{ github.repository }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -278,29 +277,10 @@ jobs:
       - name: Upload the Windows assets
         run: ./scripts/release/upload-release-assets.sh "$TAG" "$VERSION" artifacts
 
+      # releases/latest is checked by the preview-feed job, which runs next and whose summary
+      # names it.
       - name: Verify the release
-        run: |
-          ./scripts/release/verify-release.sh "$TAG" --prerelease \
-            "ConnectorControl_$VERSION.dmg" appcast.xml \
-            ConnectorControl-win-x64-Setup.exe ConnectorControl-win-arm64-Setup.exe \
-            "ConnectorControl-$VERSION-win-x64-full.nupkg" "ConnectorControl-$VERSION-win-arm64-full.nupkg" \
-            releases.win-x64.json releases.win-arm64.json
-
-          # `gh release view --json isLatest` does not exist (gh 2.99.0: "Unknown JSON field"),
-          # and "Latest" is a repository-level pointer anyway. This endpoint IS what the Mac
-          # appcast URL resolves through, so asking it is the real check.
-          LATEST=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
-          [ "$LATEST" != "$TAG" ] || { echo "::error::$TAG became releases/latest - the Mac appcast would break"; exit 1; }
-          case "$LATEST" in
-            v[0-9]*) echo "releases/latest is still $LATEST (a stable release)" ;;
-            *) echo "::error::releases/latest is '$LATEST', which is not a stable v* release"; exit 1 ;;
-          esac
-          {
-            echo "## Preview $TAG ($VERSION)"
-            echo
-            echo "- Release: $REPO_URL/releases/tag/$TAG"
-            echo "- releases/latest unchanged: $LATEST"
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: ./scripts/release/verify-release.sh "$TAG" --prerelease --version "$VERSION"
 
   preview-feed:
     name: Update the Mac preview feed

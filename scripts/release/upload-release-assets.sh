@@ -19,10 +19,11 @@
 # of a job that failed AFTER uploading is idempotent); a RID with some but not all of them fails
 # with the delete-asset commands to run first. If the release itself is wrong,
 # `gh release delete <tag> --yes --cleanup-tag`, `git tag -d <tag>`, re-tag and re-push for a
-# fresh run. The file set is the one vpk uploaded for windows-preview-1: the installer, the full
-# package, and the channel index GithubSource reads. RELEASES-<rid> and assets.<rid>.json are
-# pack-time by-products and stay out.
+# fresh run. The file set is the one vpk uploaded for windows-preview-1, named in
+# scripts/lib/common.sh (windows_release_assets), which verify-release.sh reads too.
 set -euo pipefail
+# shellcheck source=scripts/lib/common.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
 TAG=${1:?usage: upload-release-assets.sh <tag> <version> <artifacts-dir>}
 VERSION=${2:?usage: upload-release-assets.sh <tag> <version> <artifacts-dir>}
@@ -30,25 +31,20 @@ ARTIFACTS=${3:?usage: upload-release-assets.sh <tag> <version> <artifacts-dir>}
 
 published=$(gh release view "$TAG" --json assets --jq '.assets[].name')
 
-for rid in win-x64 win-arm64; do
+for rid in $(release_rids); do
   dir="$ARTIFACTS/$rid"
   index="$dir/releases.$rid.json"
   [ -f "$index" ] || { echo "::error::expected asset $index is missing"; exit 1; }
   echo "releases.$rid.json lists: $(jq -r '.Assets[] | "\(.Type) \(.Version)"' "$index" | paste -sd, -)"
-  files=("$dir/ConnectorControl-$rid-Setup.exe" "$dir/ConnectorControl-$VERSION-$rid-full.nupkg" "$index")
+  files=()
+  while IFS= read -r name; do files+=("$dir/$name"); done < <(windows_release_assets "$VERSION" "$rid")
   for f in "${files[@]}"; do [ -f "$f" ] || { echo "::error::expected asset $f is missing"; exit 1; }; done
 
-  present=(); missing=()
-  for f in "${files[@]}"; do
-    if grep -qxF "$(basename "$f")" <<< "$published"; then present+=("$(basename "$f")"); else missing+=("$(basename "$f")"); fi
-  done
+  missing=() # set by partition_assets
+  partition_assets "$TAG" "$rid" "$published" "${files[@]}" || exit 1
   if [ "${#missing[@]}" -eq 0 ]; then
     echo "$rid: every asset is already published; leaving them untouched."
     continue
-  fi
-  if [ "${#present[@]}" -gt 0 ]; then
-    echo "::error::$TAG already carries some $rid assets (${present[*]}) but not others (${missing[*]}). Published assets are never replaced: remove the partial set with 'gh release delete-asset $TAG <name> --yes' for each of ${present[*]}, then re-run."
-    exit 1
   fi
   gh release upload "$TAG" "${files[@]}"
 done

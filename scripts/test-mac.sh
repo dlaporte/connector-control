@@ -7,7 +7,7 @@
 # locally too (set DEVELOPER_DIR when the default toolchain cannot run tests).
 #
 # How the two test targets report depends on the toolchain: one .xctest bundle
-# per target with its own summary (Xcode-beta locally) or one combined
+# per target with its own summary (the local Xcode) or one combined
 # ConnectorControlPackageTests bundle (the CI runner's Xcode). The checks
 # therefore count per-test lines across the whole log and look only for the
 # toolchain-independent suite lines.

@@ -4,8 +4,8 @@
 # Jobs:
 #   prepare          (ubuntu)   version from the tag; CHANGELOG section -> notes.md (gate 1);
 #                               the tagged commit is on master (gate 2)
-#   mac-test         (macos-15) swift test; a failed test, or a skipped one other than the
-#                               deliberate goldens-regeneration skip, stops the run here
+#   mac-test         (macos-15) swift test; any failed or skipped test stops the run here
+#                               (scripts/test-mac.sh)
 #   mac              (macos-15) .github/workflows/mac-build.yml: build, sign, notarize, DMG,
 #                               appcast -> artifact "mac-dmg-appcast". preview.yml calls the
 #                               same file.
@@ -283,11 +283,7 @@ jobs:
 
       - name: Verify the release
         run: |
-          ./scripts/release/verify-release.sh "$TAG" --full \
-            "ConnectorControl_$VERSION.dmg" appcast.xml \
-            ConnectorControl-win-x64-Setup.exe ConnectorControl-win-arm64-Setup.exe \
-            "ConnectorControl-$VERSION-win-x64-full.nupkg" "ConnectorControl-$VERSION-win-arm64-full.nupkg" \
-            releases.win-x64.json releases.win-arm64.json
+          ./scripts/release/verify-release.sh "$TAG" --full --version "$VERSION"
 
           # This release must now be releases/latest: the Mac appcast URL
           # (releases/latest/download/appcast.xml) resolves through it. GitHub can take a few
@@ -304,21 +300,11 @@ jobs:
           done
           [ "$LATEST" = "$TAG" ] || { echo "::error::releases/latest is $LATEST, not $TAG"; exit 1; }
           [ "$REDIRECT" = "$REPO_URL/releases/download/$TAG/appcast.xml" ] || { echo "::error::appcast redirect is '$REDIRECT'"; exit 1; }
-          # The served appcast must announce THIS version, carry the monotonic build number
-          # build-app.sh derives (major*10000 + minor*100 + patch), and point at this
-          # release's DMG.
-          IFS=. read -r MAJ MIN PAT <<< "$VERSION"
-          BUILD=$(( MAJ * 10000 + MIN * 100 + PAT ))
+          # The served appcast must announce THIS version, point at this release's DMG and be
+          # signed, by the rules update-preview-feed.sh applies to the preview feed. The build
+          # number is read from it, not derived again: build-app.sh alone owns that formula.
           curl -sfL --retry 5 --retry-delay 5 --retry-all-errors "$REPO_URL/releases/latest/download/appcast.xml" > served-appcast.xml
-          grep -q "<sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>" served-appcast.xml || { echo "::error::served appcast does not announce $VERSION"; exit 1; }
-          grep -q "<sparkle:version>$BUILD</sparkle:version>" served-appcast.xml || { echo "::error::served appcast build number is not $BUILD"; exit 1; }
-          grep -q "url=\"$REPO_URL/releases/download/$TAG/ConnectorControl_$VERSION.dmg\"" served-appcast.xml || { echo "::error::served appcast enclosure is not this release's DMG"; exit 1; }
-          # An unsigned item is refused by Sparkle at update time and looks perfectly fine on
-          # the release page - the failure mode is "1.3.0 is live, nobody's Mac updates".
-          grep -q 'sparkle:edSignature="[^"][^"]*"' served-appcast.xml || { echo "::error::served appcast item carries no EdDSA signature"; exit 1; }
-          # The feed's own signature: SURequireSignedFeed makes Sparkle reject an appcast without
-          # its sparkle-signatures block, however well its item is signed.
-          grep -q 'sparkle-signatures:' served-appcast.xml || { echo "::error::served appcast carries no sparkle-signatures block"; exit 1; }
+          BUILD=$(./scripts/release/check-appcast.sh served-appcast.xml "$VERSION" "$REPO_URL/releases/download/$TAG/ConnectorControl_$VERSION.dmg")
           {
             echo "## Sparkle appcast for $TAG"
             echo

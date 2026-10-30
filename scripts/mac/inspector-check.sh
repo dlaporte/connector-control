@@ -9,6 +9,8 @@
 #
 # Needs Node 22.19 or later (npx) and jq. windows/scripts/inspector-check.ps1 is its Windows twin.
 set -euo pipefail
+# shellcheck source=scripts/lib/common.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh" # stop_process
 
 TOOL=${1:?usage: inspector-check.sh <connector-control> <connector-control-test-host>}
 HOST_BIN=${2:?usage: inspector-check.sh <connector-control> <connector-control-test-host>}
@@ -18,15 +20,6 @@ INSPECTOR="@modelcontextprotocol/inspector@2.12.0"
 # Short: a socket path holds at most 103 bytes.
 SANDBOX=$(mktemp -d /tmp/cc-inspect-XXXXXX)
 HOST_PID=""
-# SIGTERM first, as a quit; SIGKILL if the process is still there after about 3 s.
-stop_process() { # <pid>
-    kill -TERM "$1" 2>/dev/null || return 0
-    for _ in $(seq 1 30); do
-        kill -0 "$1" 2>/dev/null || return 0
-        sleep 0.1
-    done
-    kill -KILL "$1" 2>/dev/null || true
-}
 cleanup() {
     local code=$?
     if [ "$code" != 0 ] && [ -s "$SANDBOX/host.err" ]; then
