@@ -75,12 +75,13 @@ public final class ImportModel: ObservableObject {
     /// new one named when it is chosen and made only when Import is pressed.
     public enum Target: Hashable, Sendable { case collection(String), newCollection }
 
-    /// One target's picker label: the collection's name, or New Collection, the words Copy to's
-    /// menu ends with for the same thing.
+    /// One target's picker label: the collection's name, or New Collection, the title of the
+    /// prompt that names it. Without Copy to's ellipsis: choosing it here asks for nothing until
+    /// Import is pressed.
     public static func targetTitle(_ target: Target) -> String {
         switch target {
         case .collection(let name): return name
-        case .newCollection: return CollectionsModel.newButton
+        case .newCollection: return AppState.newCollectionTitle
         }
     }
 

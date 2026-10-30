@@ -125,17 +125,17 @@ final class PopoverModelTests: XCTestCase {
 
         XCTAssertEqual(popover.collectionBanner, .locate(collection: "Team", fileName: "team.json"))
         XCTAssertEqual(popover.collectionBannerText, "Team’s file isn’t on this Mac yet.")
-        XCTAssertEqual(popover.collectionBannerButton, "Locate team.json")
+        XCTAssertEqual(popover.collectionBannerButton, "Locate team.json…")
 
         let diff = CollectionDiff(added: ["jira"], removed: ["confluence"], changed: [])
         state.pendingUpdates = ["Team": diff]
         XCTAssertEqual(popover.collectionBannerText, "Team changed at its source: adds jira; deletes confluence.")
-        XCTAssertEqual(popover.collectionBannerButton, "Review & Apply")
+        XCTAssertEqual(popover.collectionBannerButton, "Review & Apply…")
 
         state.publishError = CollectionPublishError(collection: "Default", message: "the folder is read-only")
         XCTAssertEqual(popover.collectionBannerText,
                        "Couldn’t publish Default to \(folder.path): the folder is read-only")
-        XCTAssertEqual(popover.collectionBannerButton, "Choose Folder")
+        XCTAssertEqual(popover.collectionBannerButton, "Choose Folder…")
 
         state.publishError = nil
         state.pendingUpdates = [:]

@@ -16,8 +16,8 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public const string QuitTooltip = "Quit Connector Control";
     public const string RetryTitle = "Apply Failed — Retry";
     public const string RestartTitle = "Restart Required";
-    public const string ReviewAndApplyButton = "Review & Apply";
-    public const string ChooseFolderButton = "Choose Folder";
+    public const string ReviewAndApplyButton = "Review & Apply…";
+    public const string ChooseFolderButton = "Choose Folder…";
     public const string ManageTitle = "Manage Collections";
     /// <summary>
     /// The tray icon's right-click menu opens the flyout with this. Windows only: the Mac's menu
@@ -58,7 +58,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     public static string SettingsNotSavedCaution(string detail) => $"Settings could not be saved ({detail}); changes apply until the app quits.";
 
-    public static string LocateButton(string fileName) => $"Locate {fileName}";
+    public static string LocateButton(string fileName) => $"Locate {fileName}…";
 
     /// <summary>
     /// The list's empty state, followed by the Manage Collections button that answers it: an empty

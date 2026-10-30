@@ -96,7 +96,7 @@ public class ImportModelTests
         Assert.Null(state.Upsert("github", new McpEntry(true, AppStateHarness.Remote("https://x/")), null));
         var model = new ImportModel(state, path);
         Assert.Equal([new ImportModel.Target("Default"), ImportModel.Target.NewCollection], model.Targets);
-        Assert.Equal(["Default", CollectionsModel.NewButton], model.Targets.Select(ImportModel.TargetTitle));
+        Assert.Equal(["Default", AppState.NewCollectionTitle], model.Targets.Select(ImportModel.TargetTitle));
         Assert.Equal(new ImportModel.Target("Default"), model.ImportTarget);
 
         h.Dialogs.NextPromptAnswer = null;

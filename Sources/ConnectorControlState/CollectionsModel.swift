@@ -12,15 +12,15 @@ import ConnectorControlCore
 @MainActor
 public final class CollectionsModel: ObservableObject {
     public static let windowTitle = "Collections"
-    public static let importButton = "Import"
-    public static let subscribeButton = "Subscribe"
-    public static let publishButton = "Start Publishing"
+    public static let importButton = "Import…"
+    public static let subscribeButton = "Subscribe…"
+    public static let publishButton = "Start Publishing…"
     /// The same sheet, reached from a collection that already publishes.
-    public static let publishSettingsButton = "Publishing Settings"
+    public static let publishSettingsButton = "Publishing Settings…"
     public static let refreshButton = "Refresh"
-    public static let makeLocalCopyButton = "Make Local Copy"
-    public static let newButton = "New Collection"
-    public static let renameAction = "Rename"
+    public static let makeLocalCopyButton = "Make Local Copy…"
+    public static let newButton = "New Collection…"
+    public static let renameAction = "Rename…"
     public static let deleteAction = "Delete"
     public static let stopPublishingAction = "Stop Publishing"
     public static let stopSyncingAction = "Stop Syncing"
@@ -46,7 +46,7 @@ public final class CollectionsModel: ObservableObject {
     // MARK: - Selection bar
 
     public static let copyToButton = "Copy to"
-    public static let exportCheckedButton = "Export"
+    public static let exportCheckedButton = "Export…"
     public static let deleteCheckedButton = "Delete"
 
     /// The bar's own tally, e.g. "2 selected".
@@ -672,8 +672,8 @@ public final class CollectionsModel: ObservableObject {
              stopSyncing, delete(enabled: Bool), separator
     }
 
-    public static let duplicateAction = "Duplicate"
-    public static let exportAllAction = "Export All"
+    public static let duplicateAction = "Duplicate…"
+    public static let exportAllAction = "Export All…"
     public static let showPublishedFileAction = "Show Published File"
     public static let showSourceFileAction = "Show Source File"
 

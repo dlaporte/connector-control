@@ -136,18 +136,18 @@ public class FlyoutModelTests
         Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), flyout.CollectionBanner);
         Assert.True(flyout.HasCollectionBanner);
         Assert.Equal("Team’s file isn’t on this PC yet.", flyout.CollectionBannerText);
-        Assert.Equal("Locate team.json", flyout.CollectionBannerButton);
+        Assert.Equal("Locate team.json…", flyout.CollectionBannerButton);
 
         state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
         {
             ["Team"] = new CollectionDiff(["jira"], ["confluence"], []),
         };
         Assert.Equal("Team changed at its source: adds jira; deletes confluence.", flyout.CollectionBannerText);
-        Assert.Equal("Review & Apply", flyout.CollectionBannerButton);
+        Assert.Equal("Review & Apply…", flyout.CollectionBannerButton);
 
         state.PublishError = new CollectionPublishError("Default", "the folder is read-only");
         Assert.Equal($"Couldn’t publish Default to {folder}: the folder is read-only", flyout.CollectionBannerText);
-        Assert.Equal("Choose Folder", flyout.CollectionBannerButton);
+        Assert.Equal("Choose Folder…", flyout.CollectionBannerButton);
 
         state.PublishError = null;
         state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal);

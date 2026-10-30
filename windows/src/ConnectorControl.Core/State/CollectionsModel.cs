@@ -14,15 +14,15 @@ namespace ConnectorControl.Core.State;
 public sealed class CollectionsModel : ObservableObject, IDisposable
 {
     public const string WindowTitle = "Collections";
-    public const string ImportButton = "Import";
-    public const string SubscribeButton = "Subscribe";
-    public const string PublishButton = "Start Publishing";
+    public const string ImportButton = "Import…";
+    public const string SubscribeButton = "Subscribe…";
+    public const string PublishButton = "Start Publishing…";
     /// <summary>The same sheet, reached from a collection that already publishes.</summary>
-    public const string PublishSettingsButton = "Publishing Settings";
+    public const string PublishSettingsButton = "Publishing Settings…";
     public const string RefreshButton = "Refresh";
-    public const string MakeLocalCopyButton = "Make Local Copy";
-    public const string NewButton = "New Collection";
-    public const string RenameAction = "Rename";
+    public const string MakeLocalCopyButton = "Make Local Copy…";
+    public const string NewButton = "New Collection…";
+    public const string RenameAction = "Rename…";
     public const string DeleteAction = "Delete";
     public const string StopPublishingAction = "Stop Publishing";
     public const string StopSyncingAction = "Stop Syncing";
@@ -55,7 +55,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     // MARK: selection bar
 
     public const string CopyToButton = "Copy to";
-    public const string ExportCheckedButton = "Export";
+    public const string ExportCheckedButton = "Export…";
     public const string DeleteCheckedButton = "Delete";
 
     /// <summary>The bar's own tally, e.g. "2 selected".</summary>
@@ -876,8 +876,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         public sealed record Separator : MenuEntry;
     }
 
-    public const string DuplicateAction = "Duplicate";
-    public const string ExportAllAction = "Export All";
+    public const string DuplicateAction = "Duplicate…";
+    public const string ExportAllAction = "Export All…";
     public const string ShowPublishedFileAction = "Show Published File";
     public const string ShowSourceFileAction = "Show Source File";
 

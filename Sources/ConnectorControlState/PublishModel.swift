@@ -21,7 +21,7 @@ public final class PublishModel: ObservableObject {
     public static let cancelButton = "Cancel"
     /// This sheet's own folder picker, not the failed-publish banner's button of the same words:
     /// a sheet's buttons are its model's, as Settings' and the Import sheet's already are.
-    public static let chooseFolderButton = "Choose Folder"
+    public static let chooseFolderButton = "Choose Folder…"
     /// What a screen reader says for the bare tick beside a path row, which has no visible label.
     public static let markPathLabel = "Mark as a path this machine supplies"
     // A screen reader's names for a row's controls: the visible row says which connector and

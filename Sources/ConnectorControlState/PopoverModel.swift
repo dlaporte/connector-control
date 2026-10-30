@@ -16,8 +16,8 @@ public final class PopoverModel: ObservableObject {
     /// unnamed warning triangle. Mac only; the tray icon's tooltip is the product name.
     public static let menuBarRetryLabel = "\(title): \(retryTitle)"
     public static let restartTitle = "Restart Required"
-    public static let reviewAndApplyButton = "Review & Apply"
-    public static let chooseFolderButton = "Choose Folder"
+    public static let reviewAndApplyButton = "Review & Apply…"
+    public static let chooseFolderButton = "Choose Folder…"
     public static let manageTitle = "Manage Collections"
     /// SF Symbols: the retry footer, the restart footer, and the row caution glyph.
     public static let retryGlyph = "exclamationmark.arrow.circlepath"
@@ -52,7 +52,7 @@ public final class PopoverModel: ObservableObject {
         item.source.map(sourceTooltipFormat)
     }
 
-    public static func locateButton(_ fileName: String) -> String { "Locate \(fileName)" }
+    public static func locateButton(_ fileName: String) -> String { "Locate \(fileName)…" }
 
     /// The list's empty state, followed by the Manage Collections button that answers it: an
     /// empty active collection is an ordinary one now, and connectors are added in the window.

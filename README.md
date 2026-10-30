@@ -105,11 +105,11 @@ Copy, Publish, Export, Review — opens as a dialog on Windows. Escape cancels
 any of these, and the connector editor, as its **Cancel** button does.
 
 - **The sidebar** lists the collections under the heading **Collections**.
-  Its **+** (tooltip "Add Collection") offers **New Collection**, which
+  Its **+** (tooltip "Add Collection") offers **New Collection…**, which
   asks for a name and makes an empty local collection, leaving Claude
   running the active one; fill it with the list's **+**, then make it active
-  once it holds what you want. Next come **Import**, "Adds copies you own",
-  and **Subscribe**, "Stays in sync, read-only" (see Sharing a collection
+  once it holds what you want. Next come **Import…**, "Adds copies you own",
+  and **Subscribe…**, "Stays in sync, read-only" (see Sharing a collection
   with a team).
   Selecting a collection only shows it; double-click it, press Return, or
   choose **Make Active** from its context menu, to switch to it.
@@ -127,12 +127,12 @@ any of these, and the connector editor, as its **Cancel** button does.
   collection whose source couldn't be read, the reason follows the count: "5
   connectors · data-team.json couldn’t be read: …". The menu lists only what
   applies: **Make Active** first, on a collection that is not active;
-  **Rename**; **Duplicate**, or **Make Local Copy** on a subscribed
-  collection; **Start Publishing**, or once it publishes **Publishing
-  Settings** and **Stop Publishing**, with **Show Published File** on the
+  **Rename…**; **Duplicate…**, or **Make Local Copy…** on a subscribed
+  collection; **Start Publishing…**, or once it publishes **Publishing
+  Settings…** and **Stop Publishing**, with **Show Published File** on the
   machine that writes the file; on a subscribed collection **Refresh** and
   **Show Source File** once its file has been found, and **Stop Syncing**,
-  which asks first; **Export All**, dimmed on a subscribed collection; and
+  which asks first; **Export All…**, dimmed on a subscribed collection; and
   **Delete**, dimmed on the last local collection, which asks first and says
   what goes with the collection: its connectors ("Its 3 connectors are deleted with it."), but not their copies
   in other collections, nor a subscribed collection's source file; the
@@ -158,7 +158,7 @@ any of these, and the connector editor, as its **Cancel** button does.
   is the popover's or flyout's business, so to switch a connector in another
   collection, make that collection active first.
 - **The selection bar** along the bottom is empty while nothing is ticked.
-  Tick rows and it reads "2 selected", with **Copy to**, **Export** and,
+  Tick rows and it reads "2 selected", with **Copy to**, **Export…** and,
   apart at the far end, **Delete**. The rows of a subscribed collection
   can't be ticked.
 
@@ -181,13 +181,13 @@ window.
 
 **Copy to** lists every other collection — a subscribed one is listed but
 dimmed and marked "read-only", since its connectors are the author's — then
-**New Collection**, which asks for a name and makes an empty local
+**New Collection…**, which asks for a name and makes an empty local
 collection to take the copies. Copies arrive switched off and record where
 they came from. When the destination already holds a name you ticked, the
 Copy sheet asks about each clash: **Replace**, **Keep both**, which lands the
 copy as `<name> 2` and is the default, or **Skip**; the rest are listed as
 "new · arrives off". Replacing a connector in the active collection applies
-at once. **Export** opens the
+at once. **Export…** opens the
 Export sheet on the ticked rows. **Delete** asks first — "Delete
 “<name>”?", or "Delete 3 connectors?" — adding "A copy remains in Backups.";
 deleting from the active collection applies at once.
@@ -219,7 +219,7 @@ carry the master list today.
 #### Publishing
 
 Select a local collection in the Collections window and choose **Start
-Publishing** from its **⋯**. Point it at a folder in a repository or a synced drive — the master list's
+Publishing…** from its **⋯**. Point it at a folder in a repository or a synced drive — the master list's
 own folder and the backups folder are refused — and the app writes
 `<collection-name>.json` there: the name lowercased, keeping only ASCII
 letters and digits, with every run of other characters between them collapsed
@@ -257,7 +257,7 @@ The sheet decides what leaves the machine:
   Nothing is ever edited on your behalf; the preview is there so you see
   every byte before it leaves.
 
-Once the collection publishes, the same menu's **Publishing Settings**
+Once the collection publishes, the same menu's **Publishing Settings…**
 changes what is shared or re-marks a path: the sheet reopens on the folder and every tick the collection
 publishes with, and pressing Publish there updates what is shared and
 rewrites the document.
@@ -299,7 +299,7 @@ machine that published it. **That machine has to be running for a change to
 reach the team**: an edit made on your other machine travels through the
 master list and is published the next time the publishing machine sees it. A
 write that fails puts "Couldn’t publish …" on the banner with **Choose
-Folder**, and in the popover or flyout **Stop Publishing** beside it (in the
+Folder…**, and in the popover or flyout **Stop Publishing** beside it (in the
 window, Stop Publishing is in the **⋯**). The Publish sheet stays open on
 a failure, and pressing Publish there, or in the sheet opened again later,
 retries at once; otherwise the next change retries the write. The banner
@@ -325,9 +325,9 @@ All is dimmed on one and its rows can't be ticked.
 
 #### Subscribing
 
-**Subscribe**, under the sidebar's **+**, picks a document and opens the
+**Subscribe…**, under the sidebar's **+**, picks a document and opens the
 Import sheet on **Keep as its own collection, in sync with this file**;
-**Import** opens the same sheet on the other mode. Either way the sheet names the document and lists its
+**Import…** opens the same sheet on the other mode. Either way the sheet names the document and lists its
 connectors before anything happens; a file it cannot read shows why
 ("<file> couldn’t be read: …"), with no Import button. A subscribed
 collection arrives with every connector switched off and does not become
@@ -343,7 +343,7 @@ or "“<name>” was deleted outside this editor." — rather than write the old
 version back; reopen the editor to fill in your values again.
 
 When the author changes the file the collection says so — "Data team changed
-at its source: adds jira; deletes confluence." — with **Review & Apply**.
+at its source: adds jira; deletes confluence." — with **Review & Apply…**.
 The review sheet groups what would land under **Added**, **Deleted** and
 **Changed**, with the JSON either side of every change, and nothing lands
 until you press **Apply**. Added connectors arrive switched off, and your
@@ -357,10 +357,10 @@ Another machine picks the collection up from the master list, but where the
 document sits is a per-machine fact. If it lies inside the master-list
 folder the app finds it by itself; otherwise the collection shows "<name>’s
 file isn’t on this Mac yet." — "this PC" on Windows — with
-**Locate <file>**.
+**Locate <file>…**.
 
 To take a subscribed collection somewhere you can edit it, choose **Make
-Local Copy** from its **⋯**: it copies the whole collection into a new local
+Local Copy…** from its **⋯**: it copies the whole collection into a new local
 one, every connector switched off. **Stop Syncing** turns the collection
 itself into an ordinary local one, keeping every connector, every value you
 filled in and every switch; it asks first, and says as much. Deleting a
@@ -437,7 +437,7 @@ machines that follow it, including the one that publishes it.
   document already in the folder is left exactly as it was, and subscribers
   receive none of that collection's other changes until the entry is
   answered.
-- Reopen **Publishing Settings** and the sheet lists every mark it could not place,
+- Reopen **Publishing Settings…** and the sheet lists every mark it could not place,
   and every path this machine keeps back that turns up elsewhere in the
   document, each with its connector and the field it sits in. Publish and
   Export stay unavailable until every entry is answered, and each kind of

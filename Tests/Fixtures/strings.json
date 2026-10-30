@@ -194,27 +194,27 @@
   "CollectionsModel.documentFilter": {
     "win": "Collection (*.json)|*.json"
   },
-  "CollectionsModel.duplicateAction": "Duplicate",
+  "CollectionsModel.duplicateAction": "Duplicate…",
   "CollectionsModel.editLabel": {
     "format": "Edit “{0}”"
   },
-  "CollectionsModel.exportAllAction": "Export All",
-  "CollectionsModel.exportCheckedButton": "Export",
-  "CollectionsModel.importButton": "Import",
+  "CollectionsModel.exportAllAction": "Export All…",
+  "CollectionsModel.exportCheckedButton": "Export…",
+  "CollectionsModel.importButton": "Import…",
   "CollectionsModel.importSubtitle": "Adds copies you own",
   "CollectionsModel.keepFileButton": "Keep",
   "CollectionsModel.lockedGlyphTooltip": "Read-only: synced from the collection’s author",
   "CollectionsModel.makeActiveAction": "Make Active",
-  "CollectionsModel.makeLocalCopyButton": "Make Local Copy",
+  "CollectionsModel.makeLocalCopyButton": "Make Local Copy…",
   "CollectionsModel.moreActionsLabel": "More",
-  "CollectionsModel.newButton": "New Collection",
-  "CollectionsModel.publishButton": "Start Publishing",
-  "CollectionsModel.publishSettingsButton": "Publishing Settings",
+  "CollectionsModel.newButton": "New Collection…",
+  "CollectionsModel.publishButton": "Start Publishing…",
+  "CollectionsModel.publishSettingsButton": "Publishing Settings…",
   "CollectionsModel.publishedPill": "Published",
   "CollectionsModel.readOnlyNote": "read-only",
   "CollectionsModel.refreshButton": "Refresh",
   "CollectionsModel.remoteType": "remote",
-  "CollectionsModel.renameAction": "Rename",
+  "CollectionsModel.renameAction": "Rename…",
   "CollectionsModel.selectedCount": {
     "format": "{0} selected"
   },
@@ -226,7 +226,7 @@
   "CollectionsModel.stopSyncingMessage": {
     "format": "Stop Syncing “{0}”?"
   },
-  "CollectionsModel.subscribeButton": "Subscribe",
+  "CollectionsModel.subscribeButton": "Subscribe…",
   "CollectionsModel.subscribeSubtitle": "Stays in sync, read-only",
   "CollectionsModel.subscribedPill": "Subscribed",
   "CollectionsModel.updateAvailableStatus": "update available",
@@ -945,12 +945,12 @@
   },
   "Notifications.restartToastButton": "Restart Claude",
   "Notifications.title": "Connector Control",
-  "PopoverModel.chooseFolderButton": "Choose Folder",
+  "PopoverModel.chooseFolderButton": "Choose Folder…",
   "PopoverModel.emptyText": {
     "format": "No connectors in “{0}”."
   },
   "PopoverModel.locateButton": {
-    "format": "Locate {0}"
+    "format": "Locate {0}…"
   },
   "PopoverModel.manageTitle": "Manage Collections",
   "PopoverModel.menuBarRetryLabel": {
@@ -960,14 +960,14 @@
   "PopoverModel.quitTooltip": "Quit Connector Control",
   "PopoverModel.restartTitle": "Restart Required",
   "PopoverModel.retryTitle": "Apply Failed — Retry",
-  "PopoverModel.reviewAndApplyButton": "Review & Apply",
+  "PopoverModel.reviewAndApplyButton": "Review & Apply…",
   "PopoverModel.settingsTooltip": "Settings",
   "PopoverModel.sourceTooltipFormat": {
     "format": "Synced from {0}"
   },
   "PopoverModel.title": "Connector Control",
   "PublishModel.cancelButton": "Cancel",
-  "PublishModel.chooseFolderButton": "Choose Folder",
+  "PublishModel.chooseFolderButton": "Choose Folder…",
   "PublishModel.envSectionTitle": "Environment values · stripped unless shared",
   "PublishModel.exportButton": "Export",
   "PublishModel.exportTitle": {

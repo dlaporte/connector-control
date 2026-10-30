@@ -20,7 +20,7 @@ public sealed class PublishModel : ObservableObject
     public const string ExportButton = "Export";
     public const string CancelButton = "Cancel";
     /// <summary>This dialog's own folder picker, not the failed-publish banner's button of the same words: a dialog's buttons are its model's, as Settings' and the Import dialog's already are.</summary>
-    public const string ChooseFolderButton = "Choose Folder";
+    public const string ChooseFolderButton = "Choose Folder…";
     /// <summary>What a screen reader says for the bare tick beside a path row, which has no visible label.</summary>
     public const string MarkPathLabel = "Mark as a path this machine supplies";
     // A screen reader's names for a row's controls: the visible row says which connector and

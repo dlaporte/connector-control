@@ -77,7 +77,7 @@ final class ImportModelTests: XCTestCase {
                                   renamedFrom: nil))
         let model = ImportModel(state: state, path: url.path)
         XCTAssertEqual(model.targets, [.collection("Default"), .newCollection])
-        XCTAssertEqual(model.targets.map(ImportModel.targetTitle), ["Default", CollectionsModel.newButton])
+        XCTAssertEqual(model.targets.map(ImportModel.targetTitle), ["Default", AppState.newCollectionTitle])
         XCTAssertEqual(model.target, .collection("Default"))
 
         h.dialogs.nextPromptAnswer = nil
