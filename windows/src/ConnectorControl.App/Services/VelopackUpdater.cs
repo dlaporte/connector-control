@@ -31,6 +31,9 @@ public sealed class VelopackUpdater : IUpdater
     private readonly Action<string> log;
     private readonly string? savedUpdaterPath;
 
+    /// <summary>The startup recovery (<see cref="StartRecovery"/>), which every check waits for; done until it starts.</summary>
+    private Task startupRecovery = Task.CompletedTask;
+
     /// <summary>How long a failed put-back of the updater waits before its one retry.</summary>
     private static readonly TimeSpan RestoreRetryDelay = TimeSpan.FromMilliseconds(250);
 
@@ -126,7 +129,9 @@ public sealed class VelopackUpdater : IUpdater
             return null;
         }
         // An updater left in place by an earlier check is put back before this one asks the feed (off the UI thread:
-        // the installed-updater check reads signatures).
+        // the installed-updater check reads signatures). The startup recovery finishes first: still running, it could
+        // put the saved copy back, and sweep packages\, in the middle of this check's download.
+        await startupRecovery.ConfigureAwait(false);
         await Task.Run(() => RecoverInterruptedCheck(), cancellationToken).ConfigureAwait(false);
         var info = await manager.CheckForUpdatesAsync().ConfigureAwait(false);
         if (info is null)
@@ -201,6 +206,10 @@ public sealed class VelopackUpdater : IUpdater
         }
         DeleteSavedUpdater();
     }
+
+    /// <summary>At launch, once this is the app's only instance: <see cref="RecoverInterruptedCheck"/>, off the calling thread
+    /// (it reads signatures, and may wait on revocation). Every check waits for it to finish before it starts.</summary>
+    public void StartRecovery() => startupRecovery = Task.Run(RecoverInterruptedCheck);
 
     /// <summary>
     /// At launch, once this is the app's only instance, and before every check: when a copy of the updater saved by an

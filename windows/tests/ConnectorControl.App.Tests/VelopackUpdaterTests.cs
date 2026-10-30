@@ -498,6 +498,51 @@ public class VelopackUpdaterTests
     }
 
     [Fact]
+    public async Task ACheckWaitsForTheStartupRecoveryBeforeItAsksTheFeed()
+    {
+        // Run alongside, a slow startup recovery could put the saved copy back, and sweep packages\, in the middle of the
+        // first check's download, failing it and losing the copy that check saved.
+        using var packages = new TempDir("vpk");
+        using var data = new TempDir("ccdata");
+        var updateExe = packages.File("Update.exe");
+        var saved = data.File(VelopackUpdater.SavedUpdaterFileName);
+        File.WriteAllText(updateExe, "from the package");
+        File.WriteAllText(saved, "ours");
+        var source = new RecordingSource();
+        var calls = 0;
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var locator = new TestVelopackLocator("ConnectorControl", "1.3.1", packages.Path, appDir: null, rootDir: null, updateExe: updateExe, channel: "win-x64");
+        var updater = new VelopackUpdater(_ => source, locator,
+            verify: (_, _, _, _, _) => "refused",
+            verifyInstalled: (path, _) =>
+            {
+                if (Interlocked.Increment(ref calls) == 1)
+                {
+                    // The startup recovery's first check of the installed updater: held, as a slow revocation check would.
+                    entered.Set();
+                    release.Wait(TimeSpan.FromSeconds(30));
+                }
+                return path is not null && File.Exists(path) && File.ReadAllText(path) == "ours" ? null : "The installed Update.exe is not validly signed";
+            },
+            identify: _ => TestIdentity,
+            log: _ => { }, savedUpdaterPath: saved);
+
+        updater.StartRecovery();
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken), "the startup recovery started");
+        var check = updater.CheckAsync(TestContext.Current.CancellationToken);
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        Assert.Empty(source.FeedRequests);
+        Assert.Equal(1, Volatile.Read(ref calls));   // the check's own recovery has not started either
+        release.Set();
+
+        Assert.Null(await check.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        Assert.Single(source.FeedRequests);
+        Assert.Equal("ours", File.ReadAllText(updateExe));
+        Assert.False(File.Exists(saved));
+    }
+
+    [Fact]
     public async Task ACheckPutsBackAnUpdaterAnEarlierCheckLeftInPlace()
     {
         // The feed may offer nothing newer, so no download would ever reach the recovery in PrepareInstalledUpdater.
