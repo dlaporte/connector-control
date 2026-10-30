@@ -1718,10 +1718,10 @@ public final class AppState: ObservableObject {
         let fileName = CollectionDocument.fileName(slug: slug)
         let target = url.appendingPathComponent(fileName)
         // Somebody else's document under the name this one would take: publishing over it would
-        // replace what their subscribers follow. A file that cannot be decoded counts too — it
-        // has no origin to vouch for it.
+        // replace what their subscribers follow. A file that cannot be read within the document
+        // bound or decoded counts too — it has no origin to vouch for it.
         if FileManager.default.fileExists(atPath: target.path),
-           (try? CollectionDocument.decode(try Data(contentsOf: target)))?.origin != origin {
+           AppState.readDocument(at: target).document?.origin != origin {
             return AppState.publishSlugTakenError(fileName)
         }
         var entry = collectionsFile.collections[collection] ?? .local
@@ -2263,9 +2263,9 @@ public final class AppState: ObservableObject {
 
     /// The connectors `document` holds exactly as the document already at `target` does, which a
     /// binding from before reviews were kept has published already. None when that document cannot
-    /// be read.
+    /// be read within the document bound or decoded.
     static func alreadyPublished(_ document: CollectionDocument, at target: URL) -> Set<String> {
-        guard let data = try? Data(contentsOf: target), let published = try? CollectionDocument.decode(data) else { return [] }
+        guard let published = readDocument(at: target).document else { return [] }
         return Set(document.connectors.keys.filter { published.connectors[$0] == document.connectors[$0] })
     }
 

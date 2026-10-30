@@ -1122,6 +1122,27 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
     }
 
+    /// The publish folder is shared, so what sits under the document's name is read within the same
+    /// bound as every other collection document: a file past it, even one carrying this collection's
+    /// own origin, vouches for nothing, as an unreadable one does not.
+    func testADocumentPastTheReadBoundInThePublishFolderIsTreatedAsUnreadable() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+        let fileName = Slug.make(state.activeCollection) + ".json"
+        let target = folder.appendingPathComponent(fileName)
+        let written = try Data(contentsOf: target)
+        let document = try CollectionDocument.decode(written)
+        XCTAssertFalse(AppState.alreadyPublished(document, at: target).isEmpty, "the document within the bound is read")
+
+        try (written + Data(repeating: UInt8(ascii: " "), count: AppState.maxDocumentBytes)).write(to: target)
+        XCTAssertNoThrow(try CollectionDocument.decode(try Data(contentsOf: target)), "still a valid document, only too large")
+        XCTAssertEqual(AppState.alreadyPublished(document, at: target), [])
+        XCTAssertEqual(state.startPublishing(state.activeCollection, to: folder.path, intent: .none),
+                       AppState.publishSlugTakenError(fileName))
+    }
+
     func testPublishingIsRefusedWhileTheCollectionFileCannotBeRead() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

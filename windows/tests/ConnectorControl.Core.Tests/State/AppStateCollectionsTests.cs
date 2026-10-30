@@ -1295,6 +1295,31 @@ public class AppStateCollectionsTests
         Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
     }
 
+    /// <summary>The publish folder is shared, so what sits under the document's name is read within
+    /// the same bound as every other collection document: a file past it, even one carrying this
+    /// collection's own origin, vouches for nothing, as an unreadable one does not.</summary>
+    [Fact]
+    public void ADocumentPastTheReadBoundInThePublishFolderIsTreatedAsUnreadable()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var fileName = Slug.Make(state.ActiveCollection) + ".json";
+        var target = Path.Combine(folder, fileName);
+        var written = File.ReadAllBytes(target);
+        var document = CollectionDocument.Decode(written);
+        // The document within the bound is read.
+        Assert.NotEmpty(AppState.AlreadyPublished(document, target));
+
+        File.WriteAllBytes(target, [.. written, .. Enumerable.Repeat((byte)' ', AppState.MaxDocumentBytes)]);
+        // Still a valid document, only too large.
+        CollectionDocument.Decode(File.ReadAllBytes(target));
+        Assert.Empty(AppState.AlreadyPublished(document, target));
+        Assert.Equal(AppState.PublishSlugTakenError(fileName),
+            state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+    }
+
     [Fact]
     public void PublishingIsRefusedWhileTheCollectionFileCannotBeRead()
     {

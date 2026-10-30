@@ -2614,8 +2614,8 @@ public sealed class AppState : ObservableObject, IDisposable
         var fileName = CollectionDocument.FileName(slug);
         var target = Path.Combine(full, fileName);
         // Somebody else's document under the name this one would take: publishing over it would
-        // replace what their subscribers follow. A file that cannot be decoded counts too — it
-        // has no origin to vouch for it.
+        // replace what their subscribers follow. A file that cannot be read within the document
+        // bound or decoded counts too — it has no origin to vouch for it.
         if (File.Exists(target) && ReadOrigin(target) != origin)
         {
             return PublishSlugTakenError(fileName);
@@ -3125,17 +3125,11 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>
     /// The connectors <paramref name="document"/> holds exactly as the document already at
     /// <paramref name="target"/> does, which a binding from before reviews were kept has published
-    /// already. None when that document cannot be read.
+    /// already. None when that document cannot be read within the document bound or decoded.
     /// </summary>
     internal static IReadOnlySet<string> AlreadyPublished(CollectionDocument document, string target)
     {
-        CollectionDocument published;
-        try
-        {
-            published = CollectionDocument.Decode(File.ReadAllBytes(target));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
-                                   or NotSupportedException or CollectionDocumentException)
+        if (ReadDocument(target).Document is not { } published)
         {
             return new HashSet<string>(StringComparer.Ordinal);
         }
@@ -3152,19 +3146,8 @@ public sealed class AppState : ObservableObject, IDisposable
     private static string PublishHash(CollectionDocument document) =>
         ContentHash.Sha256(document.WithExported(string.Empty).Serialize());
 
-    /// <summary>The origin of the document at <paramref name="path"/>, or null when there is nothing readable there to vouch for it.</summary>
-    private static string? ReadOrigin(string path)
-    {
-        try
-        {
-            return CollectionDocument.Decode(File.ReadAllBytes(path)).Origin;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
-                                   or NotSupportedException or CollectionDocumentException)
-        {
-            return null;
-        }
-    }
+    /// <summary>The origin of the document at <paramref name="path"/>, or null when there is nothing readable within the document bound there to vouch for it.</summary>
+    private static string? ReadOrigin(string path) => ReadDocument(path).Document?.Origin;
 
     /// <summary><paramref name="path"/> is <paramref name="folder"/> itself or somewhere under it.</summary>
     private static bool IsInside(string path, string folder)
