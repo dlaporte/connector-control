@@ -27,6 +27,8 @@ has one.
 
 ### Both platforms
 
+- The Publish sheet no longer offers plain words such as `usr` or `tmp` as machine-specific paths. Which arguments it offers now depends only on how they’re written (a full path, `~`, `.` or `..`), not on how Connector Control happened to be started.
+
 ### Release pipeline
 
 - A release now fails at its first step if its changelog section holds only the empty sub-headings, and drops any sub-heading with no bullets from the notes it publishes, so the GitHub release and both apps’ update dialogs never show bare headings.

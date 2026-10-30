@@ -87,6 +87,26 @@ final class PublishModelTests: XCTestCase {
         XCTAssertEqual(model.pathRows.filter { $0.connector == "win" }.map(\.value), ["C:/tools/x.js", "C:\\tools\\y.js"])
     }
 
+    /// Whether an argument is offered as a path is read from how it is written, never from what this
+    /// process's working directory holds: that is "/" for an app the Finder starts, and the same
+    /// collection must offer the same rows wherever it is opened. Besides the window's explicit
+    /// paths, "." and ".." and their Windows-written forms count; a bare word, or a relative name
+    /// with a separator inside it (a package, an image), does not, even when the working directory
+    /// holds something by that name.
+    func testAPathRowIsOfferedByHowTheArgumentIsWrittenNotByTheWorkingDirectory() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        let cwd = FileManager.default.currentDirectoryPath
+        let held = try XCTUnwrap(try FileManager.default.contentsOfDirectory(atPath: cwd).sorted()
+            .first { !$0.hasPrefix(".") && !$0.hasPrefix("~") }, "the working directory holds something")
+        let args = ["usr", held, "dist/index.js", "@scope/pkg", cwd, ".", "..", ".\\x.js", "..\\y.js", "--out=a/b", "https://h/p"]
+        XCTAssertNil(state.upsert(name: "rel", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array(args.map(JSONValue.string)),
+        ])), renamedFrom: nil))
+        let model = PublishModel(state: state, collection: state.activeCollection)
+        XCTAssertEqual(model.pathRows.filter { $0.connector == "rel" }.map(\.value), [cwd, ".", "..", ".\\x.js", "..\\y.js"])
+    }
+
     /// Rows and warnings list in UTF-16 code-unit order, as Windows sorts them: a character beyond
     /// U+FFFF comes before U+FF5E there, where Swift's own `<` puts it after.
     func testRowsAndWarningsSortAsWindowsDoes() throws {

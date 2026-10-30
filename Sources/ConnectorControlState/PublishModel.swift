@@ -682,11 +682,16 @@ public final class PublishModel: ObservableObject {
     }
 
     /// An argument worth offering as machine-specific: it is written as a path, by the same rule
-    /// the Collections window's target column uses, or something by that name is on this disk. A
-    /// flag or a URL is neither.
+    /// the Collections window's target column uses, or it is `.` or `..`, or starts with `.\` or
+    /// `..\`. Read from the text alone: the disk is never asked about a relative argument, since
+    /// it would be resolved against this process's working directory — "/" for an app the Finder
+    /// starts — and offer `usr` or `tmp` on one machine and not another. A bare word, a flag or a
+    /// URL is none of these.
     private static func looksLikeAPath(_ argument: String) -> Bool {
         if Placeholder.containsMarker(argument) { return false }
-        return CollectionsModel.isExplicitPath(argument) || FileManager.default.fileExists(atPath: argument)
+        // By Unicode scalar, as the Windows mirror compares by UTF-16 unit.
+        return CollectionsModel.isExplicitPath(argument) || argument == "." || argument == ".."
+            || [".\\", "..\\"].contains { argument.unicodeScalars.starts(with: $0.unicodeScalars) }
     }
 
     /// A connector's recorded marks by the text each was made on, in NFC; where two share a text,

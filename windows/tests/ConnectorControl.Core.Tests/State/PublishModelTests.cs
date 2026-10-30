@@ -108,6 +108,30 @@ public class PublishModelTests
     }
 
     /// <summary>
+    /// Whether an argument is offered as a path is read from how it is written, never from what this
+    /// process's working directory holds: that depends on how the app was started, and the same
+    /// collection must offer the same rows wherever it is opened. Besides the window's explicit
+    /// paths, "." and ".." and their Windows-written forms count; a bare word, or a relative name
+    /// with a separator inside it (a package, an image), does not, even when the working directory
+    /// holds something by that name.
+    /// </summary>
+    [Fact]
+    public void APathRowIsOfferedByHowTheArgumentIsWrittenNotByTheWorkingDirectory()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var cwd = Directory.GetCurrentDirectory();
+        var held = Directory.EnumerateFileSystemEntries(cwd).Select(Path.GetFileName).OfType<string>()
+            .Order(StringComparer.Ordinal).First(name => !name.StartsWith('.') && !name.StartsWith('~'));
+        string[] args = ["usr", held, "dist/index.js", "@scope/pkg", cwd, ".", "..", ".\\x.js", "..\\y.js", "--out=a/b", "https://h/p"];
+        Assert.Null(state.Upsert("rel", new McpEntry(true, JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([.. args.Select(JsonValue.String)])))), null));
+        var model = new PublishModel(state, state.ActiveCollection);
+        Assert.Equal([cwd, ".", "..", ".\\x.js", "..\\y.js"], model.PathRows.Where(r => r.Connector == "rel").Select(r => r.Value));
+    }
+
+    /// <summary>
     /// Rows and warnings list in UTF-16 code-unit order, as Windows sorts them: a character beyond
     /// U+FFFF comes before U+FF5E here, where Swift's own <c>&lt;</c> puts it after.
     /// </summary>
