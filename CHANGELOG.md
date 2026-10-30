@@ -15,8 +15,6 @@ never got a bullet from the notes it ships, and fails if no sub-heading
 has one.
 
 ## v1.5.1
-- `connector-control collection` with no subcommand now lists the four it takes (new, rename, duplicate, delete), and a wrong one says it isn’t a collection command, instead of saying there is no command named “collection”. `connector-control help status` now says help takes no arguments.
-- A collection with one connector now reads “1 connector, 1 on” in `connector-control status` and `collections` and in Claude’s answers, not “1 connectors”.
 
 ### macOS
 
@@ -25,22 +23,22 @@ has one.
 - When you stop publishing a collection and choose Delete for its published file, only that file is deleted. Before, if a folder had been put in the shared folder under that file’s name, it deleted that folder and everything in it.
 - The menu bar icon now has a name for VoiceOver - “Connector Control”, or “Connector Control: Apply Failed - Retry” when an apply is waiting to be retried - and VoiceOver no longer reads the “▾” after the collection name in the popover.
 - A change to a connector that differs only in how an accented letter is written (é as one character, or as e followed by a combining accent) is now written to Claude’s config, as it is on Windows. Before, the Mac counted the two as the same and left Claude’s config as it was.
-- Settings ▸ Claude ▸ Command-Line Tool ▸ Install now refuses while Connector Control is in a folder that can be changed without an administrator, such as `~/Applications` or Downloads, and asks you to move it to Applications. The link it makes in /usr/local/bin is on every account’s PATH, so before, another account running `connector-control` could run a tool you were able to change.
+- Settings ▸ Claude ▸ Command-Line Tool ▸ Install now refuses while Connector Control is in a folder that can be changed without an administrator, such as `~/Applications` or Downloads, and asks you to move it to Applications. The link it makes in /usr/local/bin is on every account’s PATH, so before, another account running `connector-control` could run a tool any account could change; now only an administrator can.
 - A master list file (mcps.json) with a trailing comma, nested more than 64 levels deep, or saved as UTF-16 or UTF-32 is now treated as unreadable, as on Windows: it’s kept aside and replaced, as any unreadable master list is. Before, the Mac read such a file while Windows, which can share it through a synced Master List Location, could not. Claude’s own config was already read this way.
 - Removing old backups no longer deletes a folder in the backups folder that’s named like a backup, with everything in it; only backup files are counted and removed, as on Windows.
 
 ### Windows
 
 - Pressing Escape to close the editor’s Authentication drop-down now closes just the drop-down; before, it closed the whole editor and lost your unsaved changes. Escape in the flyout’s collection menu likewise closes only the menu. With nothing open, Escape still cancels the editor and dismisses the flyout.
-- Check for Updates now reads “Checking…” and can’t be clicked while a check runs, instead of looking as if nothing happened. After Install and Relaunch, the update dialog stays open reading “Downloading…” until Connector Control relaunches, so the app no longer just vanishes; if the download fails, the dialog closes and says why.
+- Check for Updates now reads “Checking…” and can’t be clicked while a check runs, instead of looking as if nothing happened. After Install and Relaunch, the update dialog stays open reading “Downloading…” until Connector Control relaunches, instead of the app just vanishing, and its Later button reads Cancel, which stops the download and takes the dialog back to Install and Relaunch or Later. A download or relaunch that fails now closes the dialog and says “Couldn’t install the update.” rather than “Couldn’t check for updates.”
 - Narrator now names the flyout’s Restart Claude button and the collection switcher (with its waiting update), the Settings backup − and + buttons (which also dim at 5 and 100) and the Name field in New Collection, Rename and Duplicate. Each Use Default and Choose… button in Settings now says which row it belongs to.
 - The Settings tabs now show their icons - a gear for General, a drive for Storage, and Claude’s own icon, or a generic app icon where Claude’s can’t be read - instead of an empty space before each name. Claude’s icon is now sharp at 150% and 200% scaling.
 - The Publish and Export dialogs now fit on a short screen, including a second screen shorter than the main one: when there isn’t room, the preview gets shorter so the Publish, Export and Cancel buttons stay visible.
 - Start Publishing into a folder that already holds a folder with the collection’s document name (such as `work.json`) now says that name is taken, as the Mac does, instead of failing with a file-system error.
 - Connector Control now refuses an update when it can’t read its own installed version. Before, the checks that keep a preview off a release install and stop a downgrade were skipped in that case, and only the update feed kept them out.
+- An update is now installed only if the launcher it puts beside Connector Control’s updater is a program signed by Connector Control’s own publisher, as the app and its updater already had to be.
 - When an update is refused and the updater it brought can’t be removed (for example, because a virus scanner is holding it), the message now says so, and says whether Connector Control will put its own updater back the next time it starts or whether you need to reinstall. Before, it gave only the reason for the refusal.
 - The first update check after launch now waits for Connector Control to finish restoring an updater left behind by an earlier, interrupted update. Before, the two could overlap, and the check could fail for no real reason.
-- While the update dialog reads “Downloading…”, its Later button now reads Cancel: it stops the download and takes the dialog back to Install and Relaunch or Later. Before, the dialog couldn’t be dismissed until the download finished or failed. A download or relaunch that fails after Install and Relaunch now says “Couldn’t install the update.” rather than “Couldn’t check for updates.”
 - Two connectors in a collection can no longer have names that differ only in how an accented letter is written (é as one character, or as e followed by a combining accent): the second is refused as a name already in use, as on the Mac, and Claude’s config naming a connector in the other spelling is read as that connector. Before, Windows kept both, and Claude’s config then named one connector twice, which Connector Control refused to read back.
 - A new, copied, renamed or subscribed collection can no longer take a name that differs from another collection’s only in how an accented letter is written, as on the Mac. Before, Windows kept both, and a Mac sharing the same master list kept only one of them and dropped the other.
 - With UAC turned off, or on the built-in Administrator account, the command-line tool and Claude now start Connector Control when it isn’t running, as they do everywhere else. Before, they started nothing there, and you had to open Connector Control first. A terminal opened with Run as administrator still starts nothing, since the app it started would be out of reach of everything else you run.
@@ -48,8 +46,7 @@ has one.
 ### Both platforms
 
 - Screen readers now name each row in the Publish sheet and the editor’s environment list: the share and path ticks and the hint boxes say which connector and variable they belong to, and each environment row’s name, value and delete button, and each argument’s delete button, carry the row’s number, instead of every row sounding the same. The Publish sheet’s Forget Mark, Release and Use ${COLLECTION_DIR} buttons now say which connector and path they act on.
-- The Publish sheet no longer offers plain words such as `usr` or `tmp` as machine-specific paths. Which arguments it offers now depends only on how they’re written (a full path, `.` or `..`, or one that starts with `~`, `./` or `../`), not on how Connector Control happened to be started.
-- The Publish sheet now also offers a network path, one that starts with `\\` such as `\\server\share\server.js`, as a machine-specific path, whether or not the share can be reached right now. On the Mac it was never offered.
+- The Publish sheet no longer offers plain words such as `usr` or `tmp` as machine-specific paths. Which arguments it offers now depends only on how they’re written (a full path, `.` or `..`, or one that starts with `~`, `./`, `../` or `\\`, such as `\\server\share\server.js`, whether or not the share can be reached right now), not on how Connector Control happened to be started. On the Mac a network path was never offered.
 - Saving a connector with “Also apply this change to …” ticked now writes your connector list and takes a backup once, instead of once per collection. The in-between states no longer use up backup slots and push older history out.
 - Commands that ask for something before they act now end in “…”, as Choose… and Restore… in Settings already did. New Collection, Rename, Duplicate, Make Local Copy, Import, Subscribe, Start Publishing, Publishing Settings, Export, Export All, Choose Folder, Locate and Review & Apply now read that way; commands that act at once, or only ask you to confirm, keep their plain names.
 - Claude no longer sees a secret in a few argument shapes that used to slip past the masking: a header written as `X-Api-Key: …` after a flag Connector Control doesn’t know, `admin:password` after `-u`, `--user` or `--proxy-user` or before an `@` with no `https://`, JSON-like config that isn’t strict JSON (`{apiKey: '…'}` or `{env: {…}}`), a shell default such as `${DB_PASSWORD:-…}`, the rest of a value written with `\ ` for a space, and `env` or `headers` spelt with capitals or as `envs`. Ordinary values still show as written: ones that start with a bracket, such as `[::1]`, `{src,lib}` or `[default]`, and ones such as `keycloak:8080`, `token:read` or Docker’s `-v secrets:/run/secrets`.
@@ -58,6 +55,8 @@ has one.
 - After you pick a Claude app in Settings ▸ Claude (on Windows, its launch target), the row now reads “Checking…” and Choose… is dimmed while its signature is verified, which can take a few seconds. Before, nothing changed on screen until the check finished, and a second click started a second check.
 - Messages, tooltips and help text use a hyphen where they used an em-dash.
 - When Claude or the command-line tool asks for a tool Connector Control doesn’t have, the answer now reads “There’s no tool named “…”.”, in the app’s own words and with the name shown safely, instead of a bare “Unknown tool: …”.
+- `connector-control collection` with no subcommand now lists the four it takes (new, rename, duplicate, delete), and a wrong one says it isn’t a collection command, instead of saying there is no command named “collection”. `connector-control help status` now says help takes no arguments.
+- A collection with one connector now reads “1 connector, 1 on” in `connector-control status` and `collections` and in Claude’s answers, not “1 connectors”.
 - Changing how many backups to keep in Settings no longer makes the next save rewrite an unchanged collections file and take a backup of it, which churned a file your sync tool then copied around.
 
 ### Release pipeline
@@ -67,6 +66,7 @@ has one.
 - Every push now checks that no file contains an em-dash.
 - Mac notarization no longer hangs when an upload stalls: an upload that gets no submission ID within five minutes is stopped and tried again, three tries in all, and the wait for Apple’s verdict now ends after 20 minutes. A rejected submission fails at once with Apple’s log, instead of after five stapling attempts.
 - Changes to the release scripts no longer start the macOS build and test run; they’re checked on Linux, where they run.
+- The Windows build’s smoke test now checks that the Start-menu shortcut starts Connector Control itself and that uninstalling removes it.
 
 ## v1.5.0
 
