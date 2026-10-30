@@ -24,4 +24,11 @@ final class ClaudeSignatureTests: XCTestCase {
         XCTAssertEqual(ClaudeSignature.requirementCompileFailure,
                        "The Claude Desktop signing requirement could not be compiled.")
     }
+
+    func testIsStillRunning() {
+        XCTAssertFalse(ClaudeSignature.isStillRunning(instancesTerminated: []))
+        XCTAssertFalse(ClaudeSignature.isStillRunning(instancesTerminated: [true, true]))
+        XCTAssertTrue(ClaudeSignature.isStillRunning(instancesTerminated: [true, false]))
+        XCTAssertTrue(ClaudeSignature.isStillRunning(instancesTerminated: [false]))
+    }
 }

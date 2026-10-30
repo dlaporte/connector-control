@@ -62,16 +62,18 @@ enum ClaudeRestarter {
                 .forEach { $0.terminate() }
         }
 
+        // One test for the wait loop and the check after it.
+        func stillRunning() -> Bool {
+            ClaudeSignature.isStillRunning(instancesTerminated:
+                NSRunningApplication.runningApplications(withBundleIdentifier: ClaudeSignature.bundleID)
+                    .map(\.isTerminated))
+        }
         let deadline = Date().addingTimeInterval(quitTimeout)
         while Date() < deadline {
-            let still = NSRunningApplication.runningApplications(
-                withBundleIdentifier: ClaudeSignature.bundleID)
-            if still.allSatisfy(\.isTerminated) || still.isEmpty { break }
+            if !stillRunning() { break }
             Thread.sleep(forTimeInterval: pollInterval)
         }
-        let stillRunning = !NSRunningApplication.runningApplications(
-            withBundleIdentifier: ClaudeSignature.bundleID).isEmpty
-        if stillRunning {
+        if stillRunning() {
             completion("Claude didn’t quit (it may be showing a dialog). "
                        + "Quit it manually, then click Restart Claude again.")
             return

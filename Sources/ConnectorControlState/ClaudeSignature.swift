@@ -7,6 +7,14 @@ import Foundation
 /// fails that check. Kept here (not on `ClaudeRestarter`) so the strings can
 /// be pinned by a State-layer test without pulling in AppKit/Security.
 public enum ClaudeSignature {
+    /// The one "is Claude still running?" test: it is, unless every instance
+    /// listed has terminated (an empty list counts as none running). The quit
+    /// wait loop and the check after it must both use this, or they can
+    /// disagree and report a quit Claude as "didn't quit".
+    public static func isStillRunning(instancesTerminated: [Bool]) -> Bool {
+        !instancesTerminated.allSatisfy { $0 }
+    }
+
     public static let bundleID = "com.anthropic.claudefordesktop"
     /// Anthropic PBC's Developer ID team, as on every shipped Claude.app.
     public static let teamIdentifier = "Q6L2SF6YDW"

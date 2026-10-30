@@ -18,6 +18,9 @@ has one.
 
 ### macOS
 
+- Restart Claude no longer says Claude “didn’t quit” when it actually did; Connector Control now reopens it.
+- The JSON editor now supports undo (Cmd-Z) and no longer autocorrects or spell-checks what you type, so commands, arguments and header names stay as written.
+
 ### Windows
 
 ### Both platforms
