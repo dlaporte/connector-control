@@ -87,6 +87,11 @@ for attempt in 1 2 3; do
     echo "notarytool submit had no submission ID after $UPLOAD_SECONDS seconds; stopped it."
   else
     echo "notarytool submit failed (exit $status): $(cat "$WORK/submit.json")"
+    # Bad credentials will not mend between tries: fail at once with Apple's message.
+    if grep -qiE 'unauthorized|authenticat|invalid credentials|HTTP status code: 401|app-specific password' "$WORK/submit.json"; then
+      echo "::error::Apple refused the credentials; not retrying: $(cat "$WORK/submit.json")"
+      exit 1
+    fi
   fi
   [ "$attempt" -lt 3 ] || break
   echo "Uploading again (attempt $((attempt + 1)) of 3) in $RETRY_SECONDS seconds."
@@ -106,6 +111,11 @@ for attempt in 1 2 3; do
   [ -z "$RESULT" ] || break
   if [ "$attempt" -lt 3 ]; then sleep "$RETRY_SECONDS"; fi
 done
+# If every `info` failed, the verdict `wait` printed is better than none (an Accepted must not be
+# lost to a dropped connection here).
+if [ -z "$RESULT" ]; then
+  RESULT=$(jq -r '.status // empty' "$WORK/wait.json" 2>/dev/null || true)
+fi
 if [ "$RESULT" = "In Progress" ]; then
   echo "::error::Apple was still processing $TARGET after $((WAIT_SECONDS / 60)) minutes (submission $SUBMISSION). Apple carries on regardless: re-run the job."
   exit 1

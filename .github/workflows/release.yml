@@ -305,6 +305,8 @@ jobs:
           # number is read from it, not derived again: build-app.sh alone owns that formula.
           curl -sfL --retry 5 --retry-delay 5 --retry-all-errors "$REPO_URL/releases/latest/download/appcast.xml" > served-appcast.xml
           BUILD=$(./scripts/release/check-appcast.sh served-appcast.xml "$VERSION" "$REPO_URL/releases/download/$TAG/ConnectorControl_$VERSION.dmg")
+          # A stable build has no preview component: digits only.
+          [[ "$BUILD" =~ ^[0-9]+$ ]] || { echo "::error::stable appcast build '$BUILD' is not a plain number"; exit 1; }
           {
             echo "## Sparkle appcast for $TAG"
             echo

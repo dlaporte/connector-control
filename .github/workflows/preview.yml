@@ -277,8 +277,9 @@ jobs:
       - name: Upload the Windows assets
         run: ./scripts/release/upload-release-assets.sh "$TAG" "$VERSION" artifacts
 
-      # releases/latest is checked by the preview-feed job, which runs next and whose summary
-      # names it.
+      # The preview-feed job, which runs next, checks releases/latest too, but only on the runs
+      # where update-preview-feed.sh goes on to change the feed (it exits early when the feed is
+      # left unchanged). verify-release.sh's isPrerelease check is what always applies.
       - name: Verify the release
         run: ./scripts/release/verify-release.sh "$TAG" --prerelease --version "$VERSION"
 
