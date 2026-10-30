@@ -976,14 +976,15 @@ public class ControlMaskingTests
         string[][] plain =
         [
             ["-v", "secrets:/run/secrets"], ["-v", "ssh-keys:/root/.ssh:ro"], ["--opt", "keycloak:8080"], ["--opt", "keydb:6379"],
-            ["--opt", "auth0:domain"], ["--opt", "author:x"], ["--opt", "keyword:x"], ["--scopes", "token:read"],
+            ["--opt", "author:x"], ["--opt", "keyword:x"], ["--scopes", "token:read"],
             ["--scopes", "tokens:read users:write"],
         ];
         foreach (var args in plain)
         {
             Assert.Equal(args, ControlMasking.Arguments(args));
         }
-        foreach (var (text, shown) in new[] { ("apiKey:hunter2", "apiKey: •••"), ("Authorization: hunter2", "Authorization: •••"),
+        // A digit ends a word of the name, so `auth0` reads as `auth` and its value is hidden.
+        foreach (var (text, shown) in new[] { ("password:admin", "password: •••"), ("pwd:all", "pwd: •••"), ("X-Api-Key:/Abc9xYz1QwErTy7UiOp3AsDf", "X-Api-Key: •••"), ("token1:hunter2", "token1: •••"), ("apiKey2:hunter2", "apiKey2: •••"), ("auth0:domain", "auth0: •••"), ("apiKey:hunter2", "apiKey: •••"), ("Authorization: hunter2", "Authorization: •••"),
                      ("password:hunter2", "password: •••"), ("X-Auth-Token: hunter2", "X-Auth-Token: •••") })
         {
             Assert.Equal(["--opt", shown], ControlMasking.Arguments(["--opt", text]));
@@ -1005,13 +1006,17 @@ public class ControlMaskingTests
         string[][] plain =
         [
             ["-u", "1000:1000"], ["-u", "admin"], ["--user", "admin:${PW}"], ["-u", "${CC_NEEDS:creds}"], ["--user=${CC_NEEDS:creds}"], ["git@github.com:org/repo.git"], ["a@b.example"],
-            ["--user", "node:node"], ["--user", "1000:node"], ["--user", "www-data:www-data"],
+            ["--user", "node:node"], ["--user", "1000:node"], ["--user", "1000:www-data"], ["--user", "www-data:www-data"], ["-update:true"], ["-useLegacy:yes"],
         ];
         foreach (var args in plain)
         {
             Assert.Equal(args, ControlMasking.Arguments(args));
         }
         Assert.Equal(["-u", "admin:•••"], ControlMasking.Arguments(["-u", "admin:123456"]));
+        Assert.Equal(["-u", "123456:•••"], ControlMasking.Arguments(["-u", "123456:hunter2"]));
+        Assert.Equal("--user=123:•••", ControlMasking.Argument("--user=123:hunter2"));
+        Assert.Equal("-uadmin:•••", ControlMasking.Argument("-uadmin:pa=ss"));
+        AssertHidden(["hunter2"], Local("sh", ["-c", "curl -u 123456:hunter2 https://x"]));
         Assert.Equal(["-u", "https://u:•••@h"], ControlMasking.Arguments(["-u", "https://u:hunter2@h"]));
         Assert.Equal(["-uadmin:•••", "--proxy-user", "admin:•••"], ControlMasking.Arguments(["-uadmin:hunter2", "--proxy-user", "admin:hunter2"]));
         Assert.Equal(["-c", "admin:•••@db --token •••"], ControlMasking.Arguments(["-c", "admin:hunter2@db --token mysecretvalue"]));

@@ -814,10 +814,11 @@ final class ControlMaskingTests: XCTestCase {
         }
         // Only a whole word of the name counts, and a scope word or a path is not a header's value.
         let plain = [["-v", "secrets:/run/secrets"], ["-v", "ssh-keys:/root/.ssh:ro"], ["--opt", "keycloak:8080"], ["--opt", "keydb:6379"],
-                     ["--opt", "auth0:domain"], ["--opt", "author:x"], ["--opt", "keyword:x"], ["--scopes", "token:read"],
+                     ["--opt", "author:x"], ["--opt", "keyword:x"], ["--scopes", "token:read"],
                      ["--scopes", "tokens:read users:write"]]
         for args in plain { XCTAssertEqual(ControlMasking.arguments(args), args) }
-        for (text, shown) in [("apiKey:hunter2", "apiKey: •••"), ("Authorization: hunter2", "Authorization: •••"),
+        // A digit ends a word of the name, so `auth0` reads as `auth` and its value is hidden.
+        for (text, shown) in [("password:admin", "password: •••"), ("pwd:all", "pwd: •••"), ("X-Api-Key:/Abc9xYz1QwErTy7UiOp3AsDf", "X-Api-Key: •••"), ("token1:hunter2", "token1: •••"), ("apiKey2:hunter2", "apiKey2: •••"), ("auth0:domain", "auth0: •••"), ("apiKey:hunter2", "apiKey: •••"), ("Authorization: hunter2", "Authorization: •••"),
                               ("password:hunter2", "password: •••"), ("X-Auth-Token: hunter2", "X-Auth-Token: •••")] {
             XCTAssertEqual(ControlMasking.arguments(["--opt", text]), ["--opt", shown])
         }
@@ -834,10 +835,14 @@ final class ControlMaskingTests: XCTestCase {
         XCTAssertEqual(ControlMasking.argument("curl -u admin:hunter2 https://x"), "curl -u admin:••• https://x")
         XCTAssertEqual(ControlMasking.arguments(["--dsn", "admin:hunter2@db/x"]), ["--dsn", "admin:•••@db/x"])
         for args in [["-u", "1000:1000"], ["-u", "admin"], ["--user", "admin:${PW}"], ["-u", "${CC_NEEDS:creds}"], ["--user=${CC_NEEDS:creds}"], ["git@github.com:org/repo.git"], ["a@b.example"],
-                     ["--user", "node:node"], ["--user", "1000:node"], ["--user", "www-data:www-data"]] {
+                     ["--user", "node:node"], ["--user", "1000:node"], ["--user", "1000:www-data"], ["--user", "www-data:www-data"], ["-update:true"], ["-useLegacy:yes"]] {
             XCTAssertEqual(ControlMasking.arguments(args), args)
         }
         XCTAssertEqual(ControlMasking.arguments(["-u", "admin:123456"]), ["-u", "admin:•••"])
+        XCTAssertEqual(ControlMasking.arguments(["-u", "123456:hunter2"]), ["-u", "123456:•••"])
+        XCTAssertEqual(ControlMasking.argument("--user=123:hunter2"), "--user=123:•••")
+        XCTAssertEqual(ControlMasking.argument("-uadmin:pa=ss"), "-uadmin:•••")
+        try assertHidden(["hunter2"], in: local("sh", ["-c", "curl -u 123456:hunter2 https://x"]))
         XCTAssertEqual(ControlMasking.arguments(["-u", "https://u:hunter2@h"]), ["-u", "https://u:•••@h"])
         XCTAssertEqual(ControlMasking.arguments(["-uadmin:hunter2", "--proxy-user", "admin:hunter2"]), ["-uadmin:•••", "--proxy-user", "admin:•••"])
         XCTAssertEqual(ControlMasking.arguments(["-c", "admin:hunter2@db --token mysecretvalue"]), ["-c", "admin:•••@db --token •••"])
