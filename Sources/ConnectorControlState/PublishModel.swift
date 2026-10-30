@@ -692,8 +692,8 @@ public final class PublishModel: ObservableObject {
     }
 
     /// An argument worth offering as machine-specific: it is written as a path, by the same rule
-    /// the Collections window's target column uses, or it is `.` or `..`, or starts with `.\` or
-    /// `..\`. Read from the text alone: the disk is never asked about a relative argument, since
+    /// the Collections window's target column uses, or it is `.` or `..`, or starts with `.\`,
+    /// `..\` or a network path's `\\`. Read from the text alone: the disk is never asked about a relative argument, since
     /// it would be resolved against this process's working directory - "/" for an app the Finder
     /// starts - and offer `usr` or `tmp` on one machine and not another. A bare word, a flag or a
     /// URL is none of these.
@@ -701,7 +701,7 @@ public final class PublishModel: ObservableObject {
         if Placeholder.containsMarker(argument) { return false }
         // By Unicode scalar, as the Windows mirror compares by UTF-16 unit.
         return ConnectorTarget.isExplicitPath(argument) || argument == "." || argument == ".."
-            || [".\\", "..\\"].contains { argument.unicodeScalars.starts(with: $0.unicodeScalars) }
+            || [".\\", "..\\", "\\\\"].contains { argument.unicodeScalars.starts(with: $0.unicodeScalars) }
     }
 
     /// A connector's recorded marks by the text each was made on, in NFC; where two share a text,

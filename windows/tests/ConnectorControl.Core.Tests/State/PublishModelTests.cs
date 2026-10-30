@@ -107,6 +107,20 @@ public class PublishModelTests
         Assert.Equal(["C:/tools/x.js", "C:\\tools\\y.js"], model.PathRows.Where(r => r.Connector == "win").Select(r => r.Value));
     }
 
+    /// <summary>A network path (<c>\\server\share\…</c>) is offered too: it names the same place wherever
+    /// it is opened, as a drive root does. A single leading backslash is not one.</summary>
+    [Fact]
+    public void AUncPathIsOfferedAsAPathRow()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        Assert.Null(state.Upsert("unc", new McpEntry(true, JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String("\\\\server\\share\\x.js"), JsonValue.String("\\y.js")])))), null));
+        var model = new PublishModel(state, state.ActiveCollection);
+        Assert.Equal(["\\\\server\\share\\x.js"], model.PathRows.Where(r => r.Connector == "unc").Select(r => r.Value));
+    }
+
     /// <summary>
     /// Whether an argument is offered as a path is read from how it is written, never from what this
     /// process's working directory holds: that depends on how the app was started, and the same

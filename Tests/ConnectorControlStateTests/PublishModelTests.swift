@@ -87,6 +87,19 @@ final class PublishModelTests: XCTestCase {
         XCTAssertEqual(model.pathRows.filter { $0.connector == "win" }.map(\.value), ["C:/tools/x.js", "C:\\tools\\y.js"])
     }
 
+    /// A network path (`\\server\share\…`) is offered too: it names the same place wherever it is
+    /// opened, as a drive root does. A single leading backslash is not one.
+    func testAUNCPathIsOfferedAsAPathRow() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        XCTAssertNil(state.upsert(name: "unc", entry: MCPEntry(config: .object([
+            "command": .string("node"),
+            "args": .array([.string("\\\\server\\share\\x.js"), .string("\\y.js")]),
+        ])), renamedFrom: nil))
+        let model = PublishModel(state: state, collection: state.activeCollection)
+        XCTAssertEqual(model.pathRows.filter { $0.connector == "unc" }.map(\.value), ["\\\\server\\share\\x.js"])
+    }
+
     /// Whether an argument is offered as a path is read from how it is written, never from what this
     /// process's working directory holds: that is "/" for an app the Finder starts, and the same
     /// collection must offer the same rows wherever it is opened. Besides the window's explicit

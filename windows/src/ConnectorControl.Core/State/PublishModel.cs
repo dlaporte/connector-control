@@ -968,7 +968,7 @@ public sealed class PublishModel : ObservableObject
     /// <summary>
     /// An argument worth offering as machine-specific: it is written as a path, by the same rule
     /// the Collections window's target column uses, or it is <c>.</c> or <c>..</c>, or starts with
-    /// <c>.\</c> or <c>..\</c>. Read from the text alone: the disk is never asked about a relative
+    /// <c>.\</c>, <c>..\</c> or a network path's <c>\\</c>. Read from the text alone: the disk is never asked about a relative
     /// argument, since it would be resolved against this process's working directory - which
     /// depends on how the app was started - and offer a different set of words on each launch. A
     /// bare word, a flag or a URL is none of these.
@@ -976,7 +976,8 @@ public sealed class PublishModel : ObservableObject
     private static bool LooksLikeAPath(string argument) =>
         !Placeholder.ContainsMarker(argument)
         && (ConnectorTarget.IsExplicitPath(argument) || argument is "." or ".."
-            || argument.StartsWith(".\\", StringComparison.Ordinal) || argument.StartsWith("..\\", StringComparison.Ordinal));
+            || argument.StartsWith(".\\", StringComparison.Ordinal) || argument.StartsWith("..\\", StringComparison.Ordinal)
+            || argument.StartsWith("\\\\", StringComparison.Ordinal));
 
     /// <summary>A connector's recorded marks by the text each was made on, in NFC; where two share a text, the first in pointer order speaks for both.</summary>
     private static Dictionary<string, PublishIntent.PathMark> MarksByValue(IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark> marks)
