@@ -254,9 +254,12 @@ public enum ControlMasking {
         let text = defaultsMasked(arg)
         if isURL(text) { return url(text) }
         if refersElsewhere(text) { return text }
-        if let piece = cut(text, at: ":"), isHeaderName(piece.before), headerNamesASecret(piece.before), !isPlainValue(piece.after) {
+        if let piece = cut(text, at: ":"), isHeaderName(piece.before), headerNamesASecret(piece.before),
+           !isPlainValue(piece.after, under: piece.before) {
             return header(text)
         }
+        let scalars = Array(text.unicodeScalars)
+        if scalars.starts(with: "-u".unicodeScalars), let shown = gluedPair(string(scalars[2...])) { return "-u" + shown }
         if let piece = cut(text, at: "="), !looksSecret(piece.before) {
             if CredentialHeuristics.namesASecret(piece.before), !refersElsewhere(piece.after) {
                 return piece.before + "=" + mask
@@ -264,8 +267,6 @@ public enum ControlMasking {
             if pairFlags.contains(piece.before), let shown = pair(piece.after) { return piece.before + "=" + shown }
             return piece.before + "=" + argument(piece.after)
         }
-        let scalars = Array(text.unicodeScalars)
-        if scalars.starts(with: "-u".unicodeScalars), let shown = pair(string(scalars[2...])) { return "-u" + shown }
         if let at = cutLast(text, at: "@"), let piece = cut(at.before, at: ":"), isUserName(piece.before),
            !piece.after.isEmpty, !piece.after.unicodeScalars.contains(where: { $0.properties.isWhitespace || $0 == "/" || $0 == "\\" }),
            !at.after.unicodeScalars.contains(where: { $0.properties.isWhitespace }) {
@@ -301,40 +302,66 @@ public enum ControlMasking {
         "credential", "credentials", "bearer", "cookie",
     ]
 
-    /// Whether a whole word of the ASCII name `name` - split at `-`, `_`, `.` and where a lower-case
-    /// letter meets an upper-case one - names a secret or signs in: `X-Api-Key`, `apiKey`,
-    /// `Authorization`, `Cookie`, but not `keycloak`, `auth0` or `ssh-keys`.
-    static func headerNamesASecret(_ name: String) -> Bool {
+    /// The words of the ASCII name `name`, lowered: split at `-`, `_`, `.`, where a lower-case letter
+    /// meets an upper-case one and where a letter meets a digit (`apiKey2` is api, key, 2).
+    static func nameWords(_ name: String) -> [String] {
         var words: [String] = []
         var word = String.UnicodeScalarView()
         var lowerBefore = false
+        var letterBefore = false
         for scalar in name.unicodeScalars {
             if scalar == "-" || scalar == "_" || scalar == "." {
                 words.append(String(word))
                 word = String.UnicodeScalarView()
                 lowerBefore = false
+                letterBefore = false
                 continue
             }
             let upper = ("A"..."Z").contains(scalar)
-            if upper, lowerBefore {
+            if (upper && lowerBefore) || (("0"..."9").contains(scalar) && letterBefore) {
                 words.append(String(word))
                 word = String.UnicodeScalarView()
             }
             word.append(upper ? Unicode.Scalar(scalar.value + 32)! : scalar)
             lowerBefore = ("a"..."z").contains(scalar)
+            letterBefore = upper || lowerBefore
         }
         words.append(String(word))
-        return words.contains { secretHeaderWords.contains($0) }
+        return words
+    }
+
+    /// Whether a whole word of the ASCII name `name` (`nameWords(_:)`) names a secret or signs in:
+    /// `X-Api-Key`, `apiKey`, `token1`, `Authorization`, `Cookie`, but not `keycloak` or `ssh-keys`.
+    static func headerNamesASecret(_ name: String) -> Bool {
+        nameWords(name).contains { secretHeaderWords.contains($0) }
     }
 
     /// Values after a `name:` that are an access scope, not a secret (`token:read`).
     static let scopeWords = ["read", "write", "admin", "readonly", "read-only", "rw", "ro", "all", "none"]
 
-    /// Whether a header-shaped word's value is a scope word or a path, which read as written.
-    static func isPlainValue(_ value: String) -> Bool {
+    /// The words of a name that make its value a password, whatever word it is (`password:admin`).
+    static let passwordWords: Set<String> = ["password", "passwd", "pass", "pwd", "pw"]
+
+    /// Whether a header-shaped word's value reads as written: a path that does not read as a secret
+    /// (`secrets:/run/secrets`, but not `X-Api-Key:/Abc9…`), or a scope word under a name with no
+    /// password word (`token:read`, but not `password:admin`).
+    static func isPlainValue(_ value: String, under name: String) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespaces)
-        return trimmed.unicodeScalars.first == "/"
-            || scopeWords.contains { CredentialHeuristics.loweredUnits(trimmed).elementsEqual($0.utf16) }
+        if trimmed.unicodeScalars.first == "/" { return !looksSecret(trimmed) }
+        return scopeWords.contains { CredentialHeuristics.loweredUnits(trimmed).elementsEqual($0.utf16) }
+            && !nameWords(name).contains { passwordWords.contains($0) }
+    }
+
+    /// Values a single-dash option such as `-update:` or `-useLegacy:` takes, which no password is.
+    static let switchWords = ["true", "false", "yes", "no", "on", "off"]
+
+    /// curl's `-u` with its `user:password` glued on (`-uadmin:…`), as `pair(_:)` shows it; nil for
+    /// a switch's value (`-update:true`).
+    static func gluedPair(_ text: String) -> String? {
+        if let piece = cut(text, at: ":"), switchWords.contains(where: { CredentialHeuristics.loweredUnits(piece.after).elementsEqual($0.utf16) }) {
+            return nil
+        }
+        return pair(text)
     }
 
     /// curl's flags whose value is `user:password`.
@@ -342,13 +369,21 @@ public enum ControlMasking {
 
     /// A pair flag's `user:password` as a URL's user info shows it; nil for a value with no ":", a
     /// URL, which reads as one, a reference (`${CC_NEEDS:creds}`), or a user and group as Docker's
-    /// `--user` takes them - a uid (`1000:…`) or a group named as the user (`node:node`) - which read
-    /// as any argument does.
+    /// `--user` takes them - a uid and a gid or a group's name (`1000:1000`, `1000:node`), or a group
+    /// named as the user (`node:node`) - which read as any argument does. A uid before anything else
+    /// (`123456:…`, an account number and its key) is masked.
     static func pair(_ text: String) -> String? {
         guard !refersElsewhere(text), !isURL(text), let piece = cut(text, at: ":") else { return nil }
-        if !piece.before.isEmpty, piece.before.unicodeScalars.allSatisfy({ ("0"..."9").contains($0) }) { return nil }
+        let digits: (String) -> Bool = { !$0.isEmpty && $0.unicodeScalars.allSatisfy { ("0"..."9").contains($0) } }
+        if digits(piece.before), digits(piece.after) || isGroupName(piece.after) { return nil }
         if piece.before.hasSameScalars(as: piece.after) { return nil }
         return userInfo(text)
+    }
+
+    /// Whether `text` is shaped as a Unix group's name, `[a-z_][a-z_-]*`: no digits or capitals.
+    static func isGroupName(_ text: String) -> Bool {
+        guard let first = text.unicodeScalars.first, ("a"..."z").contains(first) || first == "_" else { return false }
+        return text.unicodeScalars.allSatisfy { ("a"..."z").contains($0) || $0 == "_" || $0 == "-" }
     }
 
     /// `text` with the default of each `${NAME:-default}` or `${NAME-default}` replaced by "•••" when
