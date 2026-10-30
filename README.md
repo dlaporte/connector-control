@@ -1200,7 +1200,14 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
   notifications show as typed; the name is set apart instead.
 - Claude sees any connector argument that reads as a secret as `•••`. A
   whole command line written as one argument that holds a URL with a query
-  reads as `•••` in full.
+  reads as `•••` in full, and so does a command line in one argument that
+  starts with a `NAME=value` named like a secret (`API_KEY=x npx server`
+  reads `API_KEY=•••`). A few shapes that don't work as written still show a
+  secret to Claude: JSON5 config written unquoted into a shell line, where
+  the shell splits it at the space (`--config {apiKey: x}`), a value after
+  `--` (`--password Basic -- x`), and a second word after a scheme word and
+  its value (`--auth Token abc def` shows `def`). A user:group after `-u` or
+  `--user` that isn't all digits reads as `name:•••`.
 - A restore asks with the names of the connectors it would put back. A
   backup someone else planted in your backups folder could carry commands
   the question doesn't show; doing that needs write access to your own

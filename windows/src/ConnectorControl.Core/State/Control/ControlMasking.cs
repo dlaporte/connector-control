@@ -276,36 +276,166 @@ public static class ControlMasking
         return Cut(arg, "=") is not { } piece || Cut(piece.Before, "://") is not null;
     }
 
-    /// <summary>An argument as one word: a URL through <see cref="Url"/>, a value that is wholly a reference as
-    /// written, <c>name=value</c> with the value masked when the name is a secret's (<c>--api-key=…</c>,
-    /// Docker's <c>-e API_KEY=…</c>) - read before a URL in the value, so the URL's rules never pass
-    /// the value's start through - and "•••" for anything that reads as a credential or a random
-    /// token - a "name" that does is part of the token, so the whole word is masked.</summary>
+    /// <summary>An argument as one word, with a shell default for a secret masked first
+    /// (<see cref="DefaultsMasked"/>): a URL through <see cref="Url"/>, a value that is wholly a reference as
+    /// written, a header named for a secret or that signs in through <see cref="Header"/> (<c>X-Api-Key: …</c>
+    /// after a flag of any name), <c>name=value</c> with the value masked when the name is a secret's
+    /// (<c>--api-key=…</c>, Docker's <c>-e API_KEY=…</c>) or a pair flag's (<c>--user=admin:…</c>) - read before a
+    /// URL in the value, so the URL's rules never pass the value's start through - <c>user:password@host</c>
+    /// with no scheme as a URL's user info, and "•••" for anything that reads as a credential or a
+    /// random token - a "name" that does is part of the token, so the whole word is masked.</summary>
     internal static string Word(string arg)
     {
-        if (IsUrl(arg))
+        var text = DefaultsMasked(arg);
+        if (IsUrl(text))
         {
-            return Url(arg);
+            return Url(text);
         }
-        if (RefersElsewhere(arg))
+        if (RefersElsewhere(text))
         {
-            return arg;
+            return text;
         }
-        if (Cut(arg, "=") is { } piece && !LooksSecret(piece.Before))
+        if (Cut(text, ":") is { } named && IsHeaderName(named.Before) && SignsIn(named.Before))
+        {
+            return Header(text);
+        }
+        if (Cut(text, "=") is { } piece && !LooksSecret(piece.Before))
         {
             if (CredentialHeuristics.NamesASecret(piece.Before) && !RefersElsewhere(piece.After))
             {
                 return piece.Before + "=" + Mask;
             }
+            if (PairFlags.Contains(piece.Before) && Pair(piece.After) is { } shown)
+            {
+                return piece.Before + "=" + shown;
+            }
             return piece.Before + "=" + Argument(piece.After);
         }
-        return LooksSecret(arg) ? Mask : arg;
+        if (CutLast(text, '@') is { } at && Cut(at.Before, ":") is { } user && IsUserName(user.Before)
+            && user.After.Length > 0 && !user.After.Any(c => char.IsWhiteSpace(c) || c is '/' or '\\'))
+        {
+            return UserInfo(at.Before) + "@" + Location(at.After);
+        }
+        return LooksSecret(text) ? Mask : text;
+    }
+
+    /// <summary>Whether <paramref name="text"/> is a header's or a user's name: ASCII letters, digits, <c>-</c> and <c>_</c>, and for a
+    /// user's also <c>.</c>; never empty.</summary>
+    internal static bool IsHeaderName(string text) =>
+        text.Length > 0 && text.All(c => IsAsciiWordCharacter(c) || c == '-');
+
+    internal static bool IsUserName(string text) =>
+        text.Length > 0 && text.All(c => IsAsciiWordCharacter(c) || c is '-' or '.');
+
+    /// <summary>Whether <paramref name="c"/> is an ASCII letter or digit, or <c>_</c>.</summary>
+    internal static bool IsAsciiWordCharacter(char c) =>
+        char.IsAsciiLetterOrDigit(c) || c == '_';
+
+    /// <summary>Whether a header named <paramref name="name"/> carries a secret: it is named for one or signs in.</summary>
+    internal static bool SignsIn(string name) =>
+        CredentialHeuristics.NamesASecret(name) || SignInHeaders.Contains(name.ToLowerInvariant());
+
+    /// <summary>curl's flags whose value is <c>user:password</c>.</summary>
+    internal static readonly string[] PairFlags = ["-u", "--user"];
+
+    /// <summary>A pair flag's <c>user:password</c> as a URL's user info shows it; null for a value with no ":", or
+    /// a uid:gid pair of digits (Docker's <c>--user 1000:1000</c>), which read as any argument does.</summary>
+    internal static string? Pair(string text)
+    {
+        if (Cut(text, ":") is not { } piece)
+        {
+            return null;
+        }
+        static bool Digits(string part) => part.Length > 0 && part.All(char.IsAsciiDigit);
+        if (Digits(piece.Before) && Digits(piece.After))
+        {
+            return null;
+        }
+        return UserInfo(text);
+    }
+
+    /// <summary><c>text</c> with the default of each <c>${NAME:-default}</c> or <c>${NAME-default}</c> replaced by "•••" when
+    /// <c>NAME</c> is named for a secret or the default reads as one, unless the default is empty or a
+    /// reference: a shell passes the default when the variable is unset, so it can be the secret.
+    /// The default runs to the brace that closes its own, past any <c>${…}</c> inside it.</summary>
+    internal static string DefaultsMasked(string text)
+    {
+        var kept = new StringBuilder();
+        var index = 0;
+        while (index < text.Length)
+        {
+            if (ShellDefault(text, index) is not { } found)
+            {
+                kept.Append(text[index]);
+                index += 1;
+                continue;
+            }
+            var (name, dash, close) = found;
+            var value = text[(dash + 1)..close];
+            kept.Append(text, index, dash + 1 - index);
+            if (value.Length > 0 && !RefersElsewhere(value)
+                && (CredentialHeuristics.NamesASecret(text[(index + 2)..name]) || LooksSecret(value)))
+            {
+                kept.Append(Mask);
+            }
+            else
+            {
+                kept.Append(value);
+            }
+            kept.Append('}');
+            index = close + 1;
+        }
+        return kept.ToString();
+    }
+
+    /// <summary>Where the <c>${NAME:-default}</c> or <c>${NAME-default}</c> starting at <paramref name="start"/> ends its name, has its
+    /// <c>-</c> and closes; null where none starts there.</summary>
+    internal static (int Name, int Dash, int Close)? ShellDefault(string text, int start)
+    {
+        if (text[start] != '$' || start + 1 >= text.Length || text[start + 1] != '{')
+        {
+            return null;
+        }
+        var name = start + 2;
+        while (name < text.Length && IsAsciiWordCharacter(text[name]))
+        {
+            name += 1;
+        }
+        var dash = name;
+        if (dash < text.Length && text[dash] == ':')
+        {
+            dash += 1;
+        }
+        if (name == start + 2 || dash >= text.Length || text[dash] != '-')
+        {
+            return null;
+        }
+        var depth = 1;
+        for (var close = dash + 1; close < text.Length; close++)
+        {
+            if (text[close] == '{')
+            {
+                depth += 1;
+            }
+            if (text[close] == '}')
+            {
+                depth -= 1;
+            }
+            if (depth == 0)
+            {
+                return (name, dash, close);
+            }
+        }
+        return null;
     }
 
     /// <summary>An argument that is a JSON object or array - Smithery's <c>--config '{"apiKey":"…"}'</c> - with
     /// each leaf masked by its key, as a config's are, on one line; as written when nothing in it
     /// changed. JSON nested deeper than <see cref="JsonValue.Parse(string)"/> reads is "•••", since what it holds cannot
-    /// be read. Null for anything else. Before the shell line, which would split JSON at its spaces.</summary>
+    /// be read, and so is text starting with <c>{</c> or <c>[</c> that is not JSON (JSON5's <c>{apiKey: '…'}</c>,
+    /// broken JSON) but names a secret as a key (<see cref="KeyedSecret"/>); other such text - an IPv6
+    /// literal, a glob, a template - is null. Null for anything else. Before the shell line, which
+    /// would split JSON at its spaces.</summary>
     internal static string? JsonArgument(string arg)
     {
         var first = arg.FirstOrDefault(c => !char.IsWhiteSpace(c));
@@ -324,7 +454,7 @@ public static class ControlMasking
         }
         catch (JsonException)
         {
-            return null;
+            return KeyedSecret(arg) ? Mask : null;
         }
         if (value.Kind is not (JsonKind.Object or JsonKind.Array))
         {
@@ -334,12 +464,47 @@ public static class ControlMasking
         return Same(shown, CompactText(value)) ? arg : shown;
     }
 
+    /// <summary>Whether <paramref name="text"/> gives a value under a key named for a secret: a name of ASCII letters, digits,
+    /// <c>_</c>, <c>-</c>, <c>$</c> and <c>.</c>, in quotes or not, right before a <c>:</c> or <c>=</c> (<c>apiKey: …</c>, <c>"token": …</c>,
+    /// <c>password=…</c>). A <c>:</c> after a bracket or another <c>:</c> (<c>[::1]</c>, <c>[Net.X]::Y</c>) has no name.</summary>
+    internal static bool KeyedSecret(string text)
+    {
+        for (var index = 0; index < text.Length; index++)
+        {
+            if (text[index] is not (':' or '='))
+            {
+                continue;
+            }
+            var end = index;
+            while (end > 0 && char.IsWhiteSpace(text[end - 1]))
+            {
+                end -= 1;
+            }
+            if (end > 0 && text[end - 1] is '"' or '\'')
+            {
+                end -= 1;
+            }
+            var start = end;
+            while (start > 0 && (IsAsciiWordCharacter(text[start - 1]) || text[start - 1] is '-' or '$' or '.'))
+            {
+                start -= 1;
+            }
+            if (start < end && CredentialHeuristics.NamesASecret(text[start..end]))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// <summary>An argument holding whitespace - a shell line for <c>sh -c</c> or <c>cmd /c</c>, or a whole command
     /// line written as the command - masked as <see cref="Arguments(IReadOnlyList{string}, bool)"/> masks the words a shell would pass,
     /// so a flag named for a secret among them hides the word after it as it would in <c>args</c>. The
     /// split drops the line's quotes, so a line is rejoined, with each word quoted as the dialog
-    /// quotes an argument, only when one of its words changed. Null for an argument with no
-    /// whitespace, or none of whose words changed.</summary>
+    /// quotes an argument, only when one of its words changed. A word that changed and ends in a
+    /// backslash escaping the space after it (<c>--api-key a\ b</c>) runs on into the next, which is
+    /// hidden too: the split reads a backslash as itself, as a Windows path needs. Null for an
+    /// argument with no whitespace, or none of whose words changed.</summary>
     internal static string? ShellLine(string arg)
     {
         if (!arg.Any(char.IsWhiteSpace))
@@ -347,7 +512,14 @@ public static class ControlMasking
             return null;
         }
         var words = ConnectorTarget.ShellWords(arg);
-        var shown = Arguments(words, Exposure.Masked);
+        var shown = Arguments(words, Exposure.Masked).ToList();
+        for (var index = 0; index < words.Count - 1; index++)
+        {
+            if (!Same(shown[index], words[index]) && (words[index].Length - words[index].TrimEnd('\\').Length) % 2 == 1)
+            {
+                shown[index + 1] = Mask;
+            }
+        }
         return words.Zip(shown).All(pair => Same(pair.First, pair.Second)) ? null : ControlText.Words(shown);
     }
 
@@ -380,6 +552,10 @@ public static class ControlMasking
                 {
                     return Header(arg);
                 }
+                if (exposure == Exposure.Masked && PairFlags.Contains(previous) && Pair(arg) is { } pair)
+                {
+                    return pair;
+                }
                 if (HidesAfter(previous, exposure) && !IsFlag(arg) && !RefersElsewhere(arg))
                 {
                     return exposure == Exposure.Dialog ? ClientInfo(arg) : Mask;
@@ -393,20 +569,23 @@ public static class ControlMasking
         }).ToList();
     }
 
-    /// <summary>Whether <c>args[index]</c> is the value after a scheme word that follows a flag named for a
-    /// secret (<c>--token Bearer x</c>, and curl's <c>-H'Authorization: Bearer x'</c> as a shell splits it,
-    /// <c>-HAuthorization:</c> <c>Bearer</c> <c>x</c>): the flag hides the scheme word, so the word after it is
-    /// hidden too, as <see cref="HeaderValues"/> hides a header's value past its scheme word, unless it is
-    /// a flag or a reference.</summary>
+    /// <summary>Whether <c>args[index]</c> is the value after one or more scheme words that follow a flag named
+    /// for a secret (<c>--token Bearer x</c>, <c>--auth Token Token x</c>, and curl's <c>-H'Authorization: Bearer
+    /// x'</c> as a shell splits it, <c>-HAuthorization:</c> <c>Bearer</c> <c>x</c>): the flag hides the scheme word, so
+    /// the word after it is hidden too, as <see cref="HeaderValues"/> hides a header's value past its scheme
+    /// word, unless it is a flag or a reference.</summary>
     internal static bool AfterScheme(IReadOnlyList<string> args, int index, Exposure exposure)
     {
-        if (exposure != Exposure.Masked || index <= 1)
+        if (exposure != Exposure.Masked || index <= 1 || IsFlag(args[index]) || RefersElsewhere(args[index]))
         {
             return false;
         }
-        var arg = args[index];
-        return HidesAfter(args[index - 2], exposure) && CredentialHeuristics.IsSchemeWord(args[index - 1])
-            && !IsFlag(arg) && !RefersElsewhere(arg);
+        var flag = index - 1;
+        while (flag > 0 && CredentialHeuristics.IsSchemeWord(args[flag]))
+        {
+            flag -= 1;
+        }
+        return flag < index - 1 && HidesAfter(args[flag], exposure);
     }
 
     /// <summary>Whether the word after <paramref name="word"/> is a secret: after a flag <see cref="HidesNext"/> accepts, and, when
@@ -433,7 +612,7 @@ public static class ControlMasking
         {
             return false;
         }
-        return CredentialHeuristics.NamesASecret(named.Name) || SignInHeaders.Contains(named.Name.ToLowerInvariant());
+        return SignsIn(named.Name);
     }
 
     /// <summary>One argument as the dialog shows it: as written, but for the value of
@@ -510,8 +689,7 @@ public static class ControlMasking
             {
                 continue;
             }
-            if (HeaderName(args[index + 1]) is not { } named
-                || !(CredentialHeuristics.NamesASecret(named.Name) || SignInHeaders.Contains(named.Name.ToLowerInvariant())))
+            if (HeaderName(args[index + 1]) is not { } named || !SignsIn(named.Name))
             {
                 continue;
             }
@@ -563,13 +741,17 @@ public static class ControlMasking
 
     // MARK: Whole configs
 
-    /// <summary>The keys whose values are secrets by name: every value under them is.</summary>
-    internal static readonly IReadOnlySet<string> SecretKeys = new HashSet<string>(StringComparer.Ordinal) { "env", "headers" };
+    /// <summary>The keys whose values are secrets by name, in lower case: every value under them is.</summary>
+    internal static readonly IReadOnlySet<string> SecretKeys = new HashSet<string>(StringComparer.Ordinal) { "env", "envs", "headers" };
 
-    /// <summary>Whether a key's values are secrets: <c>env</c> and <c>headers</c> wherever they sit, and any key named
-    /// for a secret.</summary>
+    /// <summary>Whether <paramref name="key"/> is one of <see cref="SecretKeys"/>, whatever its case (<c>Env</c>, <c>HEADERS</c>).</summary>
+    internal static bool IsSecretKey(string key) =>
+        SecretKeys.Contains(key.ToLowerInvariant());
+
+    /// <summary>Whether a key's values are secrets: <c>env</c>, <c>envs</c> and <c>headers</c> in any case wherever they
+    /// sit, and any key named for a secret.</summary>
     internal static bool NamesASecret(string key) =>
-        SecretKeys.Contains(key) || CredentialHeuristics.NamesASecret(key);
+        IsSecretKey(key) || CredentialHeuristics.NamesASecret(key);
 
     /// <summary>The config as structured output carries it, in its own shape: <c>env</c> and <c>headers</c> values
     /// become "set" or "needs value", and so does every string or number under a key named for a
@@ -588,7 +770,7 @@ public static class ControlMasking
         var result = new Dictionary<string, JsonValue>(StringComparer.Ordinal);
         foreach (var (key, value) in config.ObjectProperties)
         {
-            if (SecretKeys.Contains(key) && value.Kind == JsonKind.Object)
+            if (IsSecretKey(key) && value.Kind == JsonKind.Object)
             {
                 result[key] = JsonValue.Object(value.ObjectProperties.Select(item => new KeyValuePair<string, JsonValue>(
                     item.Key, JsonValue.String(item.Value.Kind == JsonKind.String ? SecretState(item.Value.StringValue) : SetState))));
