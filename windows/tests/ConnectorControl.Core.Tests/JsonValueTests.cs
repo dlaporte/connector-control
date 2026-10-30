@@ -126,6 +126,18 @@ public class JsonValueTests
         Assert.Equal(JsonValue.Int(1), JsonValue.Parse("{\"k\": 1, \"k\": 2}")["k"]);
     }
 
+    /// <summary>A key in two spellings Unicode counts as the same text (é composed, then decomposed) is one
+    /// key, and the first in the document wins, spelling and value, as on the Mac.</summary>
+    [Fact]
+    public void FirstSpellingOfADuplicateKeyWins()
+    {
+        var value = JsonValue.Parse("{\"caf\u00E9\": 1, \"cafe\u0301\": 2}");
+        Assert.Equal(["caf\u00E9"], value.ObjectProperties.Keys);
+        Assert.Equal(JsonValue.Int(1), value["caf\u00E9"]);
+        var nested = JsonValue.Parse("{\"env\": {\"cafe\u0301\": \"a\", \"caf\u00E9\": \"b\"}}");
+        Assert.Equal(JsonValue.Object(("env", JsonValue.Object(("cafe\u0301", JsonValue.String("a"))))), nested);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("{not json!!")]

@@ -205,6 +205,7 @@ public sealed class JsonValue : IEquatable<JsonValue>
             case JsonTokenType.StartObject:
             {
                 var builder = EmptyObject.ToBuilder();
+                var seen = new HashSet<string>(Collection.NameComparer);
                 while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
                 {
                     var key = ReadString(ref reader);
@@ -214,9 +215,11 @@ public sealed class JsonValue : IEquatable<JsonValue>
                     }
                     var propertyValue = ReadValue(ref reader);
                     // Apple's JSONSerialization and JSONDecoder both keep the FIRST of two
-                    // duplicate object keys; the Mac test testFirstDuplicateKeyWins pins it,
-                    // and re-parsing our own sorted-key output must never disagree with them.
-                    if (!builder.ContainsKey(key))
+                    // duplicate object keys, and a Swift String key is one however its accents
+                    // are composed; the Mac tests testFirstDuplicateKeyWins and
+                    // testFirstSpellingOfADuplicateKeyWins pin both, and re-parsing our own
+                    // sorted-key output must never disagree with them.
+                    if (seen.Add(key))
                     {
                         builder[key] = propertyValue;
                     }

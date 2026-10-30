@@ -105,6 +105,16 @@ final class JSONValueTests: XCTestCase {
         XCTAssertEqual(value, .object(["a": .int(1)]))
     }
 
+    /// A key in two spellings Unicode counts as the same text (é composed, then decomposed) is one
+    /// key, and the first in the document wins, spelling and value, as with an exact repeat.
+    func testFirstSpellingOfADuplicateKeyWins() throws {
+        let value = try JSONValue.parse(Data("{\"caf\u{00E9}\": 1, \"cafe\u{0301}\": 2}".utf8))
+        guard case .object(let object) = value else { return XCTFail("not an object") }
+        XCTAssertEqual(object.count, 1)
+        XCTAssertEqual(object.keys.first?.unicodeScalars.count, 4)
+        XCTAssertEqual(object["caf\u{00E9}"], .int(1))
+    }
+
     func testInvalidDocumentsThrow() {
         XCTAssertThrowsError(try JSONValue.parse(Data()))
         XCTAssertThrowsError(try JSONValue.parse(Data("{".utf8)))
