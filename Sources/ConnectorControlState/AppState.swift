@@ -1308,7 +1308,7 @@ public final class AppState: ObservableObject {
         sourceFailures.removeValue(forKey: collection)
         sourceRetryScheduled.remove(collection)
         sourceErrors.removeValue(forKey: collection)
-        // persistStore re-derives what the newly bound document would change.
+        // The save re-derives what the newly bound document would change.
         // ${COLLECTION_DIR} resolves against the folder just bound, so what Claude runs changes
         // the moment the file is found - with no second click. The dirty check keeps a locate
         // that resolves to nothing new from rewriting Claude's config for the sake of it.
@@ -1342,7 +1342,6 @@ public final class AppState: ObservableObject {
         // the store it is about to write, and clearing afterwards would throw that answer away.
         pendingUpdates.removeValue(forKey: collection)
         notifiedSourceHashes[collection] = source.hash
-        // Claude only runs the active collection, so only that one reaches its config.
         persistAndApply(touching: collection)
         return nil
     }
@@ -1817,7 +1816,7 @@ public final class AppState: ObservableObject {
             collectionsCache.kept[collection] = departed.isEmpty
                 ? nil : CollectionsLocalCache.KeptRecord(departedFolders: departed, origin: origin)
         }
-        // persistStore ends in publishIfChanged, which is what writes the document.
+        // The save ends in publishIfChanged, which is what writes the document.
         // ${COLLECTION_DIR} stands for the folder just chosen from now on, so what Claude runs
         // changes the moment publishing starts. The dirty check spares the write when nothing in
         // the collection uses the token.

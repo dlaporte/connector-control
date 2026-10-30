@@ -1985,7 +1985,7 @@ public sealed class AppState : ObservableObject, IDisposable
         sourceFailures.Remove(collection);
         sourceRetryScheduled.Remove(collection);
         SetSourceError(collection, null);
-        // PersistStore re-derives what the newly bound document would change.
+        // The save re-derives what the newly bound document would change.
         // ${COLLECTION_DIR} resolves against the folder just bound, so what Claude runs changes
         // the moment the file is found - with no second click. The dirty check keeps a locate
         // that resolves to nothing new from rewriting Claude's config for the sake of it.
@@ -2028,7 +2028,6 @@ public sealed class AppState : ObservableObject, IDisposable
         // the store it is about to write, and clearing afterwards would throw that answer away.
         SetPending(collection, null);
         notifiedSourceHashes[collection] = source.Hash;
-        // Claude only runs the active collection, so only that one reaches its config.
         PersistAndApply(collection);
         RaiseAll();
         return null;
@@ -2698,7 +2697,7 @@ public sealed class AppState : ObservableObject, IDisposable
             SetKeptRecord(collection, departed.Count == 0
                 ? null : new CollectionsLocalCache.KeptRecord(departedFolders: departed, origin: origin));
         }
-        // PersistStore ends in PublishIfChanged, which is what writes the document.
+        // The save ends in PublishIfChanged, which is what writes the document.
         // ${COLLECTION_DIR} stands for the folder just chosen from now on, so what Claude runs
         // changes the moment publishing starts. The dirty check spares the write when nothing in
         // the collection uses the token.
