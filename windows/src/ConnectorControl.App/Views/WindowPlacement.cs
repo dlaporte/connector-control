@@ -7,7 +7,9 @@ namespace ConnectorControl.App.Views;
 /// The flyout opens beside the notification area (fallbacks: the
 /// cursor, then the work-area corner). Every coordinate here is a physical
 /// pixel - what TrayInfo.GetTrayLocation, GetCursorPos, GetMonitorInfo and
-/// SetWindowPos all speak - so no DPI conversion happens anywhere.
+/// SetWindowPos all speak - so no DPI conversion happens in the placement.
+/// The one exception is <see cref="WorkAreaHeightInDips"/>, which sizes a
+/// WPF window and so answers in WPF's units.
 /// </summary>
 public static class WindowPlacement
 {
@@ -79,6 +81,22 @@ public static class WindowPlacement
         SetWindowPos(hwnd, HWND_TOPMOST, target.X, target.Y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
     }
 
+    /// <summary>
+    /// The height of the work area of the monitor <paramref name="hwnd"/> is on (the nearest one), in device-independent
+    /// pixels: its physical pixels at the window's own DPI, which, per-monitor aware as this app is, is that monitor's.
+    /// Null when either query fails.
+    /// </summary>
+    public static double? WorkAreaHeightInDips(nint hwnd)
+    {
+        var monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+        var dpi = GetDpiForWindow(hwnd);
+        return GetMonitorInfo(monitor, ref info) && dpi != 0 ? ToDips(info.rcWork.Bottom - info.rcWork.Top, dpi) : null;
+    }
+
+    /// <summary><paramref name="pixels"/> physical pixels at <paramref name="dpi"/> dots per inch, in WPF's 1/96 inch.</summary>
+    public static double ToDips(int pixels, uint dpi) => pixels * 96.0 / dpi;
+
     /// <summary>Work area of the monitor nearest <paramref name="point"/>; a 1920×1080 guess if the query fails.</summary>
     private static Rectangle WorkAreaAround(Point point)
     {
@@ -124,6 +142,12 @@ public static class WindowPlacement
 
     [DllImport("user32.dll")]
     private static extern nint MonitorFromPoint(POINT point, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern nint MonitorFromWindow(nint hwnd, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(nint hwnd);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetMonitorInfoW")]
     private static extern bool GetMonitorInfo(nint monitor, ref MONITORINFO info);

@@ -7,6 +7,16 @@ public class WindowPlacementTests
 {
     private static readonly Size Flyout = new(300, 400);
 
+    [Theory]
+    [InlineData(1040, 96u, 1040.0)]
+    [InlineData(1560, 144u, 1040.0)]   // 150%
+    [InlineData(2080, 192u, 1040.0)]   // 200%
+    [InlineData(1000, 120u, 800.0)]    // 125%
+    public void APhysicalHeightIsConvertedAtTheWindowsDpi(int pixels, uint dpi, double dips)
+    {
+        Assert.Equal(dips, WindowPlacement.ToDips(pixels, dpi), 6);
+    }
+
     [Fact]
     public void BottomTaskbarPlacesTheFlyoutAboveTheWorkAreaEdge()
     {

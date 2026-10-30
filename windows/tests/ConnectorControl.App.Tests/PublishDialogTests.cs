@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Interop;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
 using ConnectorControl.Core;
@@ -237,7 +238,12 @@ public class PublishDialogTests
                 window.Show();
                 window.UpdateLayout();
                 var preview = window.PreviewBox.ActualHeight;
-                Assert.True(window.MaxHeight <= SystemParameters.WorkArea.Height);
+                // The cap is the work area of the screen the dialog is on, in its own units; on the runner's one screen,
+                // the primary's.
+                var workArea = WindowPlacement.WorkAreaHeightInDips(new WindowInteropHelper(window.Owner ?? window).Handle);
+                Assert.NotNull(workArea);
+                Assert.Equal(workArea.Value, window.MaxHeight, 3);
+                Assert.Equal(SystemParameters.WorkArea.Height, window.MaxHeight, 0);
                 window.MaxHeight = window.ActualHeight - 60;
                 window.UpdateLayout();
                 var root = (FrameworkElement)window.Content;

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Interop;
 using ConnectorControl.Core.State;
 
 namespace ConnectorControl.App.Views;
@@ -31,8 +32,16 @@ public partial class PublishDialog : DialogWindow
         ExportButton.IsDefault = !publishing;
         // With env and path rows, open questions and warnings all showing, the dialog asks for more than a 1080p
         // screen at 150% has. Capped at the work area, the preview gives way and the buttons stay on screen. The
-        // primary screen's: the dialog centres on its owner, which is nearly always there.
+        // work area of the screen it opens on: its owner's, as it centres there, or, with no owner, its own. Until
+        // the dialog has a window to ask about, the primary screen's.
         MaxHeight = SystemParameters.WorkArea.Height;
+        SourceInitialized += (_, _) =>
+        {
+            if (WindowPlacement.WorkAreaHeightInDips(new WindowInteropHelper(Owner ?? this).Handle) is { } height)
+            {
+                MaxHeight = height;
+            }
+        };
     }
 
     public PublishModel Model { get; }
