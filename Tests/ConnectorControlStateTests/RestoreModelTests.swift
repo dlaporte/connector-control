@@ -134,7 +134,7 @@ final class RestoreModelTests: XCTestCase {
         XCTAssertFalse(model.confirmRestore())
         XCTAssertEqual(model.restoreError,
                        "backup claude_desktop_config.2026-09-04T00-00-00-000Z.json is not a valid config file "
-                       + "(The data couldn’t be read because it isn’t in the correct format.)")
+                       + "(the text does not parse as JSON)")
         XCTAssertEqual(state.lastError, model.restoreError)
         XCTAssertFalse(model.confirming)
     }

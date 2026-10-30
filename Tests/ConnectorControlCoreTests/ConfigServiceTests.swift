@@ -469,7 +469,7 @@ final class ConfigServiceTests: XCTestCase {
                 return XCTFail("wrong error: \($0)")
             }
             XCTAssertEqual(detail, "backup bad-backup.json is not a valid config file "
-                           + "(The data couldn’t be read because it isn’t in the correct format.)")
+                           + "(the text does not parse as JSON)")
         }
         XCTAssertEqual(try Data(contentsOf: paths.claudeConfigURL), before,
                        "live config must be untouched after refused restore")

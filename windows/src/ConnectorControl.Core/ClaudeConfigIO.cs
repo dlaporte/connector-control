@@ -9,6 +9,10 @@ public static class ClaudeConfigIO
     /// parenthesis as well as on its own.</summary>
     public const string RepeatedKeyError = "the same name appears more than once";
 
+    /// <summary>Why a config file is refused when it does not parse: fixed words, alike on both platforms, that quote
+    /// nothing from the file, as the reader's own message would. It reads inside the backup refusal's parenthesis as well.</summary>
+    public const string NotJsonError = "the text does not parse as JSON";
+
     private static readonly IReadOnlyDictionary<string, JsonValue> Empty =
         new Dictionary<string, JsonValue>(StringComparer.Ordinal);
 
@@ -91,7 +95,7 @@ public static class ClaudeConfigIO
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or ArgumentException)
         {
             // Bytes ParseRoot would refuse, UTF-16 or UTF-32 among them, refused as it refuses them, never skipped.
-            throw new ClaudeConfigException(ex.Message);
+            throw new ClaudeConfigException(NotJsonError);
         }
     }
 
@@ -175,9 +179,9 @@ public static class ClaudeConfigIO
         {
             parsed = JsonValue.Parse(data);
         }
-        catch (JsonException ex)
+        catch (JsonException)
         {
-            throw new ClaudeConfigException(ex.Message);
+            throw new ClaudeConfigException(NotJsonError);
         }
         if (parsed.Kind != JsonKind.Object)
         {

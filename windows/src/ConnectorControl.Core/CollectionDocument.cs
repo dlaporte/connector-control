@@ -526,6 +526,10 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     public const int FormatVersion = 1;
     public const string FileExtension = "json";
 
+    /// <summary>Why a document is refused when it does not parse: fixed words, alike on both platforms, that quote
+    /// nothing from the file, as the reader's own message would.</summary>
+    public const string NotJsonError = "not JSON";
+
     /// <summary>
     /// The document's name in a publish folder: the slug publishing fixed, never re-derived from
     /// the collection's current name.
@@ -896,9 +900,9 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
         {
             json = JsonValue.Parse(data);
         }
-        catch (JsonException e)
+        catch (JsonException)
         {
-            throw CollectionDocumentException.Malformed("not JSON: " + e.Message);
+            throw CollectionDocumentException.Malformed(NotJsonError);
         }
         return Decode(json);
     }

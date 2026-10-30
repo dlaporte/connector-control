@@ -135,7 +135,7 @@ public class RestoreModelTests
         Assert.False(model.Restore());
         Assert.Equal(
             "backup claude_desktop_config.2026-09-04T00-00-00-000Z.json is not a valid config file "
-                + "('n' is an invalid start of a property name. Expected a '\"'. LineNumber: 0 | BytePositionInLine: 1.)",
+                + "(the text does not parse as JSON)",
             model.RestoreError);
         Assert.Equal(model.RestoreError, state.LastError);
         Assert.True(model.HasRestoreError);

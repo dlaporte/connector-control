@@ -9,6 +9,10 @@ public enum ClaudeConfigIO {
     /// parenthesis as well as on its own.
     public static let repeatedKeyError = "the same name appears more than once"
 
+    /// Why a config file is refused when it does not parse: fixed words, alike on both platforms and in every
+    /// language, that quote nothing from the file. It reads inside the backup refusal's parenthesis as well.
+    public static let notJSONError = "the text does not parse as JSON"
+
     public static func readMCPServers(at url: URL) throws -> [String: JSONValue] {
         guard FileManager.default.fileExists(atPath: url.path) else { return [:] }
         return try mcpServers(in: Data(contentsOf: url))
@@ -117,9 +121,6 @@ public enum ClaudeConfigIO {
         }
     }
 
-    /// What JSONSerialization says of data it cannot read, for data this app refuses before it does.
-    static var notJSONError: String { CocoaError(CocoaError.Code(rawValue: 3840)).localizedDescription }
-
     /// A zero-byte payload (crash/truncation artifact) is deliberately treated
     /// like a missing file, not malformed JSON: there is nothing in it to
     /// preserve, and callers back up before writing. A non-object top level is
@@ -146,7 +147,7 @@ public enum ClaudeConfigIO {
         do {
             parsed = try JSONSerialization.jsonObject(with: data)
         } catch {
-            throw ClaudeConfigError.malformed(error.localizedDescription)
+            throw ClaudeConfigError.malformed(notJSONError)
         }
         guard let root = parsed as? [String: Any] else {
             throw ClaudeConfigError.malformed("top level is not a JSON object")

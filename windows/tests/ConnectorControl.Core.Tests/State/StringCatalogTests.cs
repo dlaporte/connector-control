@@ -341,6 +341,7 @@ public class StringCatalogTests
         // this project's own JSON-parsing test coverage.
 
         actual["ClaudeConfigIO.mcpServersNotObjectError"] = "mcpServers is not a JSON object";
+        actual["ClaudeConfigIO.notJSONError"] = ClaudeConfigIO.NotJsonError;
         actual["ClaudeConfigIO.repeatedKeyError"] = ClaudeConfigIO.RepeatedKeyError;
         actual["ClaudeConfigIO.topLevelNotObjectError"] = "top level is not a JSON object";
 
@@ -375,6 +376,7 @@ public class StringCatalogTests
         // MARK: CollectionDocument
 
         actual["CollectionDocument.credentialLiteralPhrase"] = CollectionDocument.CredentialLiteralPhrase;
+        actual["CollectionDocument.notJSONError"] = CollectionDocument.NotJsonError;
         actual["CollectionDocument.credentialReferencePhrase"] = CollectionDocument.CredentialReferencePhrase;
         actual["CollectionDocument.credentialUserOnlyPhrase"] = CollectionDocument.CredentialUserOnlyPhrase;
 

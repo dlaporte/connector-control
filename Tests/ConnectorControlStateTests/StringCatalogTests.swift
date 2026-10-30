@@ -324,6 +324,7 @@ final class StringCatalogTests: XCTestCase {
         // and cross-checked against ClaudeConfigIOTests.swift's real-parse assertions.
 
         actual["ClaudeConfigIO.mcpServersNotObjectError"] = "mcpServers is not a JSON object"
+        actual["ClaudeConfigIO.notJSONError"] = ClaudeConfigIO.notJSONError
         actual["ClaudeConfigIO.repeatedKeyError"] = ClaudeConfigIO.repeatedKeyError
         actual["ClaudeConfigIO.topLevelNotObjectError"] = "top level is not a JSON object"
 
@@ -367,6 +368,7 @@ final class StringCatalogTests: XCTestCase {
         // MARK: CollectionDocument
 
         actual["CollectionDocument.credentialLiteralPhrase"] = CollectionDocument.credentialLiteralPhrase
+        actual["CollectionDocument.notJSONError"] = CollectionDocument.notJSONError
         actual["CollectionDocument.credentialReferencePhrase"] = CollectionDocument.credentialReferencePhrase
         actual["CollectionDocument.credentialUserOnlyPhrase"] = CollectionDocument.credentialUserOnlyPhrase
 

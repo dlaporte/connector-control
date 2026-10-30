@@ -38,6 +38,15 @@ public class CollectionDocumentTests
         Assert.Null(malformed.NewerFormatVersion);
     }
 
+    /// <summary>A document that does not parse is refused in fixed words, alike on both platforms, quoting nothing from it.</summary>
+    [Fact]
+    public void ADocumentThatDoesNotParseIsRefusedInFixedWords()
+    {
+        var refused = Assert.Throws<CollectionDocumentException>(
+            () => CollectionDocument.Decode(System.Text.Encoding.UTF8.GetBytes("{\"apiKey\": hunter2}")));
+        Assert.Equal(CollectionDocument.NotJsonError, refused.Message);
+    }
+
     [Fact]
     public void RenderProducesThisPlatformsLaunchersWithMarkers()
     {

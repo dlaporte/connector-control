@@ -325,6 +325,9 @@ public struct RenderedCollection: Equatable, Sendable {
 /// Mirror: windows/src/ConnectorControl.Core/CollectionDocument.cs
 public struct CollectionDocument: Equatable, Sendable {
     public static let formatVersion = 1
+    /// Why a document is refused when it does not parse: fixed words, alike on both platforms, that quote
+    /// nothing from the file.
+    public static let notJSONError = "not JSON"
     public static let fileExtension = "json"
 
     /// The document's name in a publish folder: the slug publishing fixed, never re-derived from
@@ -423,7 +426,7 @@ public struct CollectionDocument: Equatable, Sendable {
 
     public static func decode(_ data: Data) throws -> CollectionDocument {
         let json: JSONValue
-        do { json = try JSONValue.parse(data) } catch { throw CollectionDocumentError.malformed("not JSON: \(error.localizedDescription)") }
+        do { json = try JSONValue.parse(data) } catch { throw CollectionDocumentError.malformed(notJSONError) }
         return try decode(json)
     }
 

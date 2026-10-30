@@ -488,10 +488,10 @@ public class ConfigServiceTests : IDisposable
         File.WriteAllText(bad, "{not json");
         var before = File.ReadAllBytes(paths.ClaudeConfigPath);
         var ex = Assert.Throws<ClaudeConfigException>(() => service.RestoreClaudeConfig(bad, store));
-        // The parenthesised detail is .NET's own JSON error text, as the Mac's is Foundation's.
+        // The parenthesised detail is fixed words, alike on both platforms, quoting nothing from the file.
         Assert.Equal(
             "backup bad-backup.json is not a valid config file "
-                + "('n' is an invalid start of a property name. Expected a '\"'. LineNumber: 0 | BytePositionInLine: 1.)",
+                + "(the text does not parse as JSON)",
             ex.Detail);
         Assert.Equal(before, File.ReadAllBytes(paths.ClaudeConfigPath));
     }

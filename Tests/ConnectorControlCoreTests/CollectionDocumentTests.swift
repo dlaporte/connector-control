@@ -32,6 +32,13 @@ final class CollectionDocumentTests: XCTestCase {
         }
     }
 
+    /// A document that does not parse is refused in fixed words, alike on both platforms, quoting nothing from it.
+    func testADocumentThatDoesNotParseIsRefusedInFixedWords() {
+        XCTAssertThrowsError(try CollectionDocument.decode(Data("{\"apiKey\": hunter2}".utf8))) {
+            XCTAssertEqual($0 as? CollectionDocumentError, .malformed(CollectionDocument.notJSONError))
+        }
+    }
+
     func testRenderProducesThisPlatformsLaunchersWithMarkers() throws {
         let rendered = Self.sample.render()
         XCTAssertTrue(rendered.excluded.isEmpty)
