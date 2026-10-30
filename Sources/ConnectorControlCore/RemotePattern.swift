@@ -2,7 +2,7 @@ import Foundation
 
 /// Recognizes the `npx [-y] mcp-remote[@version] <url>` bridge pattern so the
 /// form view can show just Name + Server URL. Keys other than command/args
-/// (env, headers, …) don't disqualify — they surface in the form's read-only
+/// (env, headers, …) don't disqualify - they surface in the form's read-only
 /// Additional fields.
 public enum RemotePattern {
     /// The bridge package as this app writes it when the user has not pinned a
@@ -43,7 +43,7 @@ public enum RemotePattern {
         strippedArgs(config)?.first.map(isMarker) ?? false
     }
 
-    /// True for a BARE bridge invocation — `npx [-y] mcp-remote…` with at most
+    /// True for a BARE bridge invocation - `npx [-y] mcp-remote…` with at most
     /// one trailing argument (the URL slot, present or missing). These must
     /// carry a valid URL to be saveable. Extra flags (e.g. --header) make a
     /// config non-bare: still remote-shaped, but save validation must not
@@ -97,11 +97,11 @@ public enum RemoteAuth: Equatable, Sendable {
 public struct RemoteConfig: Equatable, Sendable {
     public var url: String
     public var auth: RemoteAuth
-    /// mcp-remote flags this app has no widget for — preserved verbatim, in order.
+    /// mcp-remote flags this app has no widget for - preserved verbatim, in order.
     public var extraArgs: [String]
     /// Env vars other than the one auth uses to indirect a header value.
     public var passthroughEnv: [String: String]
-    /// The bridge package specifier as written — `mcp-remote`, or `mcp-remote@0.1.16` when
+    /// The bridge package specifier as written - `mcp-remote`, or `mcp-remote@0.1.16` when
     /// the user pinned a version. A pin is a supply-chain control: it survives every edit.
     public var package: String
 
@@ -129,7 +129,7 @@ public extension RemotePattern {
             break
         case .bearer(let token):
             // Space-safe workaround: no space around the colon in the arg
-            // itself — the space lives in the env value instead.
+            // itself - the space lives in the env value instead.
             args += ["--header", "Authorization:${AUTH_HEADER}"]
             env["AUTH_HEADER"] = "Bearer \(token)"
         case .header(let name, let value):
@@ -190,8 +190,8 @@ public extension RemotePattern {
             switch arg {
             case "--header" where i + 1 < args.count:
                 let raw = args[i + 1]
-                // Recognize ONLY this app's own indirection sentinel —
-                // `Name:${AUTH_HEADER}` backed by an AUTH_HEADER env var — as the
+                // Recognize ONLY this app's own indirection sentinel -
+                // `Name:${AUTH_HEADER}` backed by an AUTH_HEADER env var - as the
                 // editable auth header, and only the first one. Every other
                 // --header (literal values, other env vars, additional headers)
                 // is preserved verbatim as an extra arg so nothing is ever lost
@@ -243,7 +243,7 @@ public extension RemotePattern {
                              extraArgs: extraArgs, passthroughEnv: env, package: package)
     }
 
-    /// Compact (no whitespace), key-sorted JSON — matches what mcp-remote
+    /// Compact (no whitespace), key-sorted JSON - matches what mcp-remote
     /// expects in a single CLI argument.
     private static func compactJSON(_ dict: [String: String]) -> String {
         let data = (try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys])) ?? Data()

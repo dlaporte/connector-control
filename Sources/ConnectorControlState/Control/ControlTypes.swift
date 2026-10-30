@@ -6,7 +6,7 @@ import Foundation
 /// The values the control layer passes around: who is calling, how a tool is guarded, what it
 /// declares, what it answers, and what it asks the user.
 
-/// Who is calling: the command-line tool, trusted as the user, or the relay Claude Desktop runs —
+/// Who is calling: the command-line tool, trusted as the user, or the relay Claude Desktop runs -
 /// which is also what anything but a well-formed command-line hello is taken for, so the gate
 /// guards it. The Windows mirror has no enum payloads, so its two callers are records.
 public enum ControlCaller: Equatable, Sendable {
@@ -62,7 +62,7 @@ public enum ControlGateClass: Equatable, Sendable {
 }
 
 /// The gate's rule, apart from any one tool. The command-line tool is the user and is never gated.
-/// Claude is refused everything while the integration is off — including between turning it off and
+/// Claude is refused everything while the integration is off - including between turning it off and
 /// Claude restarting without the entry.
 @MainActor
 public enum ControlGate {
@@ -206,18 +206,12 @@ public struct ConfirmationRequest: Equatable, Sendable {
         let footers: Bool
         switch (one.footer, other.footer) {
         case (nil, nil): footers = true
-        case (let a?, let b?): footers = same(a, b)
+        case (let a?, let b?): footers = a.hasSameScalars(as: b)
         default: footers = false
         }
-        return same(one.title, other.title) && same(one.message, other.message)
-            && one.code.count == other.code.count && zip(one.code, other.code).allSatisfy { same($0, $1) }
+        return one.title.hasSameScalars(as: other.title) && one.message.hasSameScalars(as: other.message)
+            && one.code.count == other.code.count && zip(one.code, other.code).allSatisfy { $0.hasSameScalars(as: $1) }
             && footers
-    }
-
-    /// The same text, scalar for scalar. A request is compared off the main actor, so this cannot
-    /// lean on ControlMasking's own.
-    private static func same(_ one: String, _ other: String) -> Bool {
-        one.unicodeScalars.elementsEqual(other.unicodeScalars)
     }
 }
 
@@ -236,8 +230,8 @@ public protocol ControlConfirmer: AnyObject {
     func confirm(_ request: ConfirmationRequest, completion: @escaping (Bool) -> Void)
 }
 
-/// Answers every question Don't Allow, at once: the confirmer of a host that can show no dialog —
-/// the test hosts; the apps ask in their own (`DialogConfirmer`) — so a change that must be asked about is
+/// Answers every question Don't Allow, at once: the confirmer of a host that can show no dialog -
+/// the test hosts; the apps ask in their own (`DialogConfirmer`) - so a change that must be asked about is
 /// refused, never made unasked. It keeps the confirmer's contract: one completion, every time.
 @MainActor
 public final class DecliningConfirmer: ControlConfirmer {
@@ -263,8 +257,16 @@ public enum ControlSettingKey {
 
     /// Only the user changes these, in Settings or with the command-line tool: Claude may not
     /// widen what it is allowed to do, silence the notice of changes synced in from another
-    /// machine, or stop the app updating.
-    public static func isUserOnly(_ key: String) -> Bool {
-        key == claudeIntegration || key == confirmClaudeChanges || key == notifyExternalChanges || key == automaticUpdates
-    }
+    /// machine, or stop the app updating. In the order set_setting's description lists them.
+    public static let userOnly = [claudeIntegration, confirmClaudeChanges, notifyExternalChanges, automaticUpdates]
+
+    public static func isUserOnly(_ key: String) -> Bool { userOnly.contains(key) }
+
+    /// "a, b, c and d": the user-only keys as set_setting's description names them, built from
+    /// the list `isUserOnly` reads so the two cannot disagree.
+    static let userOnlyText = userOnly.dropLast().joined(separator: ", ") + ControlText.listAnd + (userOnly.last ?? "")
+
+    /// "5 to 100": the backups-to-keep range as set_setting's description and refusal write it,
+    /// built from the bounds the check enforces.
+    static let keepCountRange = "\(SettingsModel.minKeepCount) to \(SettingsModel.maxKeepCount)"
 }

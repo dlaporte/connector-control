@@ -16,7 +16,7 @@
 #                            prerelease, with assets still missing). On REUSE, each asset already
 #                            published is left untouched; if none of the given assets are
 #                            published yet, all are uploaded; if some are published and others are
-#                            not, the run fails instead of guessing which half to trust — a
+#                            not, the run fails instead of guessing which half to trust - a
 #                            published asset is never replaced, since a re-run has rebuilt its
 #                            file, and a different binary under the same name and version is
 #                            exactly what an update system must never see.
@@ -28,6 +28,8 @@
 # Needs GH_TOKEN and GITHUB_REPOSITORY in the environment (both callers export GH_TOKEN; Actions
 # sets GITHUB_REPOSITORY) and gh + jq on PATH.
 set -euo pipefail
+# shellcheck source=scripts/lib/common.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
 usage() {
   echo "usage: ensure-release.sh <tag> --prerelease|--full --notes <file> --title <text> [--target <ref>] [asset...]" >&2
@@ -81,15 +83,10 @@ if EXISTING=$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease 2>/d
   echo "Release $TAG already exists (re-run); reusing it."
   if [ "${#ASSETS[@]}" -gt 0 ]; then
     published=$(gh release view "$TAG" --json assets --jq '.assets[].name')
-    present=(); missing=()
-    for f in "${ASSETS[@]}"; do
-      if grep -qxF "$(basename "$f")" <<< "$published"; then present+=("$(basename "$f")"); else missing+=("$(basename "$f")"); fi
-    done
+    missing=() # set by partition_assets
+    partition_assets "$TAG" given "$published" "${ASSETS[@]}" || exit 1
     if [ "${#missing[@]}" -eq 0 ]; then
       echo "Every given asset is already published; leaving them untouched."
-    elif [ "${#present[@]}" -gt 0 ]; then
-      echo "::error::$TAG already carries some given assets (${present[*]}) but not others (${missing[*]}). Published assets are never replaced: remove the partial set with 'gh release delete-asset $TAG <name> --yes' for each of ${present[*]}, then re-run."
-      exit 1
     else
       gh release upload "$TAG" "${ASSETS[@]}"
     fi
@@ -107,7 +104,7 @@ else
   fi
   # The assets are positional arguments to `gh release create`, NOT a follow-up upload: with
   # assets to attach, gh creates the release as a draft, uploads them, and only then publishes
-  # it — so a release with an asset requirement (the Mac DMG + appcast) is never live without
+  # it - so a release with an asset requirement (the Mac DMG + appcast) is never live without
   # them, even if this job dies mid-upload.
   # No --prerelease and no --latest for a full release: GitHub marks the newest full release
   # "latest" on its own, which is exactly what SUFeedURL relies on.

@@ -1,8 +1,8 @@
 import Foundation
 
 public enum AtomicFile {
-    /// `staging` when it can serve `dir` — it exists (created 0700 with no ACL) and shares
-    /// `dir`'s device, so the final rename stays a rename — else nil.
+    /// `staging` when it can serve `dir` - it exists (created 0700 with no ACL) and shares
+    /// `dir`'s device, so the final rename stays a rename - else nil.
     static func stagingLocation(for dir: URL, staging: URL?) -> URL? {
         guard let staging else { return nil }
         let fm = FileManager.default
@@ -21,7 +21,7 @@ public enum AtomicFile {
     }
 
     /// `staging` is the app's own private folder for temp files
-    /// (`…/Connector Control/.staging`) — when it can serve the target's directory
+    /// (`…/Connector Control/.staging`) - when it can serve the target's directory
     /// (see `stagingLocation`), the temp file is born there and renamed into place: a
     /// rename does not re-inherit ACEs, so a shared folder's principal never sees the
     /// file, not even empty. Nil (tests, tools, or a volume `staging` can't serve) means
@@ -39,7 +39,7 @@ public enum AtomicFile {
         // A directory this call has to create holds a private file, so it is
         // owner-only from the start (the sweep would only catch it on the
         // next launch; Windows applies its ACL the same way). Directories that
-        // already exist — a synced folder the user chose — are left alone.
+        // already exist - a synced folder the user chose - are left alone.
         let dirExisted = fm.fileExists(atPath: dir.path)
         try fm.createDirectory(at: dir, withIntermediateDirectories: true,
                                attributes: [.posixPermissions: 0o700])
@@ -51,8 +51,8 @@ public enum AtomicFile {
         let tmpDir = stagingLocation(for: dir, staging: staging) ?? dir
         let tmp = tmpDir.appendingPathComponent(".\(target.lastPathComponent).tmp-\(UUID().uuidString)")
         // Connector configs can hold env-var secrets. The file is created 0600
-        // by open(2) itself — never with the umask's default and a chmod after
-        // the bytes are already on disk — so there is no instant at which
+        // by open(2) itself - never with the umask's default and a chmod after
+        // the bytes are already on disk - so there is no instant at which
         // another account could read it. O_EXCL: the name is fresh, so
         // anything already there is an error, not something to overwrite.
         let fd = open(tmp.path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0o600)
@@ -89,7 +89,7 @@ public enum AtomicFile {
     /// `resolvingSymlinksInPath()` for every case but one: a symlink whose
     /// target does not exist yet. `resolvingSymlinksInPath()` (like
     /// `realpath(3)`) requires the fully resolved path to already exist and
-    /// otherwise leaves the whole URL unresolved — which would make the
+    /// otherwise leaves the whole URL unresolved - which would make the
     /// rename below collide with the dangling link and fail (or, off this
     /// codebase, replace it outright), instead of writing through it. This
     /// is the read side of the same shape of bug `File.Exists` guards

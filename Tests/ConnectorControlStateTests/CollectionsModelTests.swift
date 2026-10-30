@@ -66,7 +66,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertTrue(state.isLocated("Default"))
 
         // dispose() cuts the republish: nothing repaints. What the items read afterwards is not
-        // asserted — nobody reads them once the window is gone, and pinning a stale value would
+        // asserted - nobody reads them once the window is gone, and pinning a stale value would
         // make a behaviour of it.
         model.dispose()
         let before = repaints
@@ -166,275 +166,6 @@ final class CollectionsModelTests: XCTestCase {
     }
 
     // MARK: - Target column
-
-    /// The target a local connector shows, which must not carry `secret` whatever else it says.
-    private func assertTarget(_ entry: MCPEntry, is expected: String, hides secret: String,
-                              file: StaticString = #filePath, line: UInt = #line) {
-        let target = CollectionsModel.target(of: entry.config, home: "/Users/x")
-        XCTAssertFalse(target.contains(secret), target, file: file, line: line)
-        XCTAssertEqual(target, expected, file: file, line: line)
-    }
-
-    func testTargetShowsARemoteConnectorsHostOnly() {
-        XCTAssertEqual(CollectionsModel.target(of: RemotePattern.make(url: "https://u:p@api.githubcopilot.com/mcp?k=v"), home: "/Users/x"),
-                       "api.githubcopilot.com")
-        XCTAssertEqual(CollectionsModel.target(of: RemotePattern.make(url: "http://localhost:8080/mcp"), home: "/Users/x"), "localhost:8080")
-    }
-
-    func testTargetShowsOnlyTheHostOfARemoteConnectorWithAHeader() {
-        assertTarget(AppStateHarness.localConnector("npx", ["-y", "mcp-remote", "https://h.example/mcp", "--header", "Authorization: Bearer abc"]),
-                     is: "h.example", hides: "abc")
-    }
-
-    /// A connector Claude reaches by URL, with no command at all, shows the URL's scheme and host
-    /// through the same strict reading as a URL argument; one whose host is in doubt, or that has
-    /// no URL to read, shows only that it is remote.
-    func testTargetShowsAURLOnlyConnectorsSchemeAndHost() {
-        let cases: [(JSONValue, String)] = [
-            (.object(["url": .string("https://mcp.example.com/mcp")]), "https://mcp.example.com"),
-            (.object(["type": .string("http"), "url": .string("https://u:SECRET@h.example:8443/mcp")]), "https://h.example:8443"),
-            (.object(["url": .string("https://u:p@SECRET@h.example/mcp")]), "https://h.example"),
-            (.object(["url": .string("https://u:p/SECRET@h.example/mcp")]), CollectionsModel.remoteType),
-            (.object(["url": .string("https://u:p?SECRET@h.example/mcp")]), CollectionsModel.remoteType),
-            (.object(["url": .string("https://u:p#SECRET@h.example/mcp")]), CollectionsModel.remoteType),
-            (.object(["url": .string("https://h.example/mcp?api_key=SECRET")]), "https://h.example"),
-            (.object(["type": .string("sse"), "url": .string("https://h.example/sse"),
-                      "headers": .object(["Authorization": .string("Bearer SECRET")])]), "https://h.example"),
-            (.object(["type": .string("http"), "url": .string("h.example/SECRET")]), CollectionsModel.remoteType),
-            (.object(["url": .int(5)]), CollectionsModel.remoteType),
-            (.object(["type": .string("http")]), CollectionsModel.remoteType),
-        ]
-        for (config, expected) in cases {
-            let target = CollectionsModel.target(of: config, home: "/Users/x")
-            XCTAssertEqual(target, expected, "\(config)")
-            XCTAssertFalse(target.contains("SECRET"), target)
-        }
-    }
-
-    func testTargetShortensAScopedPackageAndTheHomeFolder() {
-        XCTAssertEqual(CollectionsModel.target(of: AppStateHarness.localConnector("npx", ["-y", "@modelcontextprotocol/server-filesystem", "/Users/x/Documents"]).config, home: "/Users/x"),
-                       "npx …/server-filesystem ~/Documents")
-    }
-
-    /// A connector authored on Windows abbreviates its home folder the same way, whichever
-    /// separator follows it and however its letters are cased.
-    func testTargetShortensAWindowsHomeFolder() {
-        XCTAssertEqual(CollectionsModel.target(of: AppStateHarness.localConnector("node", [#"C:\Users\x\srv\index.js"#, "@scope/pkg@1.2", #"c:\users\X\a.js"#]).config,
-                                               home: #"C:\Users\x"#),
-                       #"node ~\srv\index.js …/pkg@1.2 ~\a.js"#)
-    }
-
-    func testTargetShowsAURLArgumentsSchemeAndHostOnly() {
-        assertTarget(AppStateHarness.localConnector("tool", ["https://me:pw@h.example:8443/x?token=t#frag"]), is: "tool https://h.example:8443", hides: "pw")
-    }
-
-    func testTargetLeavesOutASlackWebhooksPath() {
-        assertTarget(AppStateHarness.localConnector("tool", ["https://hooks.slack.com/services/T000/B000/XXXXsecret"]), is: "tool https://hooks.slack.com", hides: "XXXXsecret")
-    }
-
-    func testTargetLeavesOutFlagsAndTheirValues() {
-        assertTarget(AppStateHarness.localConnector("/usr/local/bin/tool", ["--api-key", "abc", "--port", "80", "--token=abc"]), is: "tool", hides: "abc")
-    }
-
-    func testTargetLeavesOutAHeaderFlag() {
-        assertTarget(AppStateHarness.localConnector("tool", ["-H", "X-Api-Key: abc", "https://h.example/x"]), is: "tool https://h.example", hides: "abc")
-    }
-
-    func testTargetLeavesOutAnEnvironmentAssignment() {
-        assertTarget(AppStateHarness.localConnector("docker", ["run", "-i", "--rm", "-e", "GITHUB_TOKEN=abc", "ghcr.io/github/github-mcp-server"]),
-                     is: "docker ghcr.io/github/github-mcp-server", hides: "abc")
-    }
-
-    func testTargetLeavesOutAShellString() {
-        assertTarget(AppStateHarness.localConnector("sh", ["-c", "TOKEN=abc node srv.js"]), is: "sh", hides: "abc")
-        assertTarget(AppStateHarness.localConnector("sh", ["-c", "curl -H 'Authorization: Bearer abc' https://h.example/x"]), is: "sh", hides: "abc")
-    }
-
-    func testTargetLeavesOutAnAttachedShortFlagValue() {
-        assertTarget(AppStateHarness.localConnector("mysql-mcp", ["-pSECRET"]), is: "mysql-mcp", hides: "SECRET")
-    }
-
-    func testTargetLeavesOutAShortPositionalSecret() {
-        assertTarget(AppStateHarness.localConnector("tool", ["hunter2"]), is: "tool", hides: "hunter2")
-    }
-
-    func testTargetLeavesOutAnUnprefixedKey() {
-        assertTarget(AppStateHarness.localConnector("tool", ["sk_live_abc123"]), is: "tool", hides: "sk_live")
-    }
-
-    func testTargetLeavesOutAConnectionString() {
-        assertTarget(AppStateHarness.localConnector("tool", ["Server=h;Password=x"]), is: "tool", hides: "Password=x")
-    }
-
-    func testTargetLeavesOutInlineJSON() {
-        assertTarget(AppStateHarness.localConnector("tool", ["--config", #"{"apiKey":"abc"}"#]), is: "tool", hides: "abc")
-    }
-
-    /// The value is one the allowlist would show, so only the flag rule keeps it out; the flag's
-    /// name is matched whatever its case.
-    func testTargetLeavesOutTheValueOfASecretNamedFlagWhateverItsCase() {
-        assertTarget(AppStateHarness.localConnector("tool", ["--token", "x.y"]), is: "tool", hides: "x.y")
-        assertTarget(AppStateHarness.localConnector("tool", ["--TOKEN", "abc.def"]), is: "tool", hides: "abc.def")
-    }
-
-    /// A command line written as one string is split into launcher and arguments and each word
-    /// held to the rule, so its last word — often a flag's value — is never shown for the launcher.
-    func testTargetSplitsACommandLineWrittenAsOneString() {
-        assertTarget(AppStateHarness.localConnector("cmd", ["/c", "npx -y @acme/server --api-key hunter2"]), is: "npx …/server", hides: "hunter2")
-        assertTarget(MCPEntry(config: .object(["command": .string("npx -y server --token hunter2")])), is: "npx", hides: "hunter2")
-        assertTarget(MCPEntry(config: .object(["command": .string("tool --token a.b")])), is: "tool", hides: "a.b")
-        let quoted = #"npx -y mcp-remote https://h.example/mcp --header "Authorization: Bearer abc""#
-        assertTarget(AppStateHarness.localConnector("cmd", ["/c", quoted]), is: "h.example", hides: "abc")
-        XCTAssertFalse(CollectionsModel.target(of: AppStateHarness.localConnector("cmd", ["/c", quoted]).config, home: "/Users/x").contains("Bearer"))
-    }
-
-    /// A quoted argument in a one-string command line — a header value, some JSON — is one
-    /// argument, and one holding whitespace fails every shape the column shows; an unterminated
-    /// quote runs to the end as part of its word.
-    func testTargetLeavesOutAQuotedArgumentInACommandLine() {
-        assertTarget(AppStateHarness.localConnector("cmd", ["/c", #"tool --header "X-Key: abc.def extra""#]), is: "tool", hides: "abc.def")
-        assertTarget(AppStateHarness.localConnector("cmd", ["/c", #"npx -y @acme/server --config '{"k":"v.w"}'"#]), is: "npx …/server", hides: "v.w")
-        assertTarget(MCPEntry(config: .object(["command": .string(#"tool "abc.def extra"#)])), is: "tool", hides: "abc.def")
-        assertTarget(MCPEntry(config: .object(["command": .string(#""hunter.2 x" srv.js"#)])), is: "srv.js", hides: "hunter")
-    }
-
-    /// A command line is tokenized the way a shell passes it, so a quoted or partly quoted flag
-    /// is still a flag, its value still drops, and only the first argument is the launcher.
-    func testTargetTokenizesACommandLineLikeAShell() {
-        assertTarget(MCPEntry(config: .object(["command": .string(#""C:\Program Files\Tool\tool.exe" --api-key hunter.2x"#)])),
-                     is: "tool", hides: "hunter.2x")
-        assertTarget(MCPEntry(config: .object(["command": .string(#"tool "--token" hunter.2x"#)])), is: "tool", hides: "hunter.2x")
-        assertTarget(MCPEntry(config: .object(["command": .string(#"tool --to"ken" hunter.2x"#)])), is: "tool", hides: "hunter.2x")
-        assertTarget(MCPEntry(config: .object(["command": .string(#"tool "a b" x.y"#)])), is: "tool x.y", hides: "a b")
-        // An escaped quote does not close the argument, so `c.d` stays inside it.
-        assertTarget(MCPEntry(config: .object(["command": .string(#"tool "a\"b c.d""#)])), is: "tool", hides: "c.d")
-    }
-
-    /// A command that is a path is never split, even with a space in it; one whose last component
-    /// holds a space had arguments packed into it, and names no launcher.
-    func testTargetNamesALauncherUnderProgramFiles() {
-        assertTarget(AppStateHarness.localConnector(#"C:\Program Files\nodejs\node.exe"#, ["index.js"]), is: "node index.js", hides: "Program")
-        assertTarget(AppStateHarness.localConnector(#""C:\Program Files\nodejs\node.exe""#, ["index.js"]), is: "node index.js", hides: "Program")
-        assertTarget(AppStateHarness.localConnector(#"C:\Program Files\nodejs\npx.cmd"#, ["-y", "mcp-remote", "https://h.example/mcp"]), is: "h.example", hides: "npx")
-        assertTarget(AppStateHarness.localConnector("/opt/bin/tool --password hunter.2x", ["srv.js"]), is: "srv.js", hides: "hunter.2x")
-        assertTarget(AppStateHarness.localConnector(#"C:\Program Files (x86)\Tool\tool.exe"#, ["index.js"]), is: "tool index.js", hides: "Program")
-        // Plain words packed after a Unix path do not cost it its launcher.
-        assertTarget(AppStateHarness.localConnector("/usr/bin/tool srv"), is: "tool", hides: "srv")
-    }
-
-    /// A path command with a flag, a URL or a switch packed into it names no launcher: its last
-    /// component could be the tail of an argument.
-    func testTargetNamesNoLauncherForAPathCommandWithAPackedArgument() {
-        assertTarget(AppStateHarness.localConnector("cmd", ["/c", #"C:\tools\notify.exe https://hooks.slack.com/services/T000/B000/XXXXsecret"#]),
-                     is: "", hides: "XXXXsecret")
-        assertTarget(AppStateHarness.localConnector("/usr/local/bin/mcp --api-key abc/hunter.2x"), is: "", hides: "hunter.2x")
-        assertTarget(AppStateHarness.localConnector(#"C:\x\tool.exe --token ab\cd.ef"#), is: "", hides: "cd.ef")
-    }
-
-    /// A flag named for a secret at the end of a command guards the first argument after it,
-    /// whether the command is a path or a tokenized line.
-    func testTargetLeavesOutTheFirstArgumentAfterASecretNamedFlagInTheCommand() {
-        assertTarget(AppStateHarness.localConnector("/opt/bin/tool --password", ["hunter.2x"]), is: "", hides: "hunter.2x")
-        assertTarget(AppStateHarness.localConnector("tool --token", ["abc.def"]), is: "tool", hides: "abc.def")
-    }
-
-    /// A quote packed into a path command costs it its launcher, and a quoted or partly quoted
-    /// flag at its end is still a flag named for a secret.
-    func testTargetReadsAQuotedFlagPackedIntoAPathCommand() {
-        assertTarget(AppStateHarness.localConnector(#"/opt/bin/tool "--password""#, ["hunter.2x"]), is: "", hides: "hunter.2x")
-        assertTarget(AppStateHarness.localConnector(#"C:\x\tool.exe "--token" ab\cd.ef"#), is: "", hides: "cd.ef")
-        assertTarget(AppStateHarness.localConnector(#"/opt/bin/tool --to"ken""#, ["hunter.2x"]), is: "", hides: "hunter.2x")
-    }
-
-    /// Each check that keeps a path command plain is load-bearing: a Windows switch and an
-    /// assignment packed in both cost it its launcher.
-    func testTargetNamesNoLauncherForAPathCommandWithASwitchOrAnAssignment() {
-        assertTarget(AppStateHarness.localConnector(#"C:\x\tool.exe /key ab\cd.ef"#), is: "", hides: "cd.ef")
-        assertTarget(AppStateHarness.localConnector("/opt/bin/tool key=ab/cd.ef"), is: "", hides: "cd.ef")
-    }
-
-    /// A password holding an unencoded `/`, `?` or `#` ends the authority early; what is left of
-    /// the userinfo is refused as a host rather than shown, and so is a scheme that is not one.
-    func testTargetRefusesAURLWhoseUserinfoHoldsADelimiter() {
-        assertTarget(AppStateHarness.localConnector("tool", ["postgres://admin:hunter2#x@db.local/app"]), is: "tool", hides: "hunter2")
-        assertTarget(AppStateHarness.localConnector("tool", ["https://apikey:sk_live_abc/x@api.example.com"]), is: "tool", hides: "sk_live")
-        assertTarget(AppStateHarness.localConnector("tool", ["https://sk_live_abc/x@h"]), is: "tool", hides: "sk_live")
-        assertTarget(AppStateHarness.localConnector("tool", ["sk-proj-abc123://x"]), is: "tool", hides: "abc123")
-        assertTarget(AppStateHarness.localConnector("tool", ["mongodb+srv://u:p@cluster.example.net/db"]), is: "tool mongodb+srv://cluster.example.net", hides: "u:p")
-        // The remote decoder accepts this URL, and its host is still checked.
-        assertTarget(AppStateHarness.localConnector("npx", ["-y", "mcp-remote", "https://token123/x@h.example/mcp"]), is: CollectionsModel.remoteType, hides: "token123")
-    }
-
-    /// A long random token is left out even with a `/` in it, which `looksLikeCredential` would
-    /// not consider; paths and names with a dot, a hyphen or no digits are kept.
-    func testTargetLeavesOutARandomTokenEvenWithASlash() {
-        assertTarget(AppStateHarness.localConnector("tool", ["wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"]), is: "tool", hides: "wJalr")
-        XCTAssertEqual(CollectionsModel.target(of: AppStateHarness.localConnector("tool", ["/Users/x/Documents", "ghcr.io/github/github-mcp-server", "./build/v2Server"]).config,
-                                               home: "/Users/x"),
-                       "tool ~/Documents ghcr.io/github/github-mcp-server ./build/v2Server")
-    }
-
-    /// A Windows switch's value is not a path: a colon anywhere but a drive letter's drops it.
-    func testTargetLeavesOutAWindowsSwitchesValue() {
-        assertTarget(AppStateHarness.localConnector("tool", ["/p:Hunter2", "/token:abc", "/x:secret"]), is: "tool", hides: "secret")
-        assertTarget(AppStateHarness.localConnector("tool", [#"C:\Users\x\Docs"#]), is: #"tool C:\Users\x\Docs"#, hides: "secret")
-    }
-
-    /// A secret shaped like a package still vanishes when a flag named for a secret precedes it.
-    func testTargetLeavesOutWhateverFollowsASecretNamedFlag() {
-        assertTarget(AppStateHarness.localConnector("tool", ["--password", "s3cr3t-pass", "--pass", "./x.key", "index.js"]), is: "tool index.js", hides: "s3cr3t")
-    }
-
-    func testTargetLeavesOutAPathCarryingAnAssignment() {
-        assertTarget(AppStateHarness.localConnector("tool", ["/usr/bin/env TOKEN=abc"]), is: "tool", hides: "abc")
-    }
-
-    func testTargetLeavesOutACredentialShapedArtefact() {
-        assertTarget(AppStateHarness.localConnector("tool", ["sk-abc.def", "ghp_0123456789abcdef0123456789abcdef.js"]), is: "tool", hides: "abc")
-    }
-
-    func testTargetShowsTheServerAPackageRunnerNames() {
-        XCTAssertEqual(CollectionsModel.target(of: AppStateHarness.localConnector("uvx", ["mcp-server-fetch"]).config, home: "/Users/x"), "uvx mcp-server-fetch")
-        XCTAssertEqual(CollectionsModel.target(of: AppStateHarness.localConnector("python", ["mcp_server.py"]).config, home: "/Users/x"), "python mcp_server.py")
-    }
-
-    /// A bare hyphenated word anywhere but the server slot is as likely a password as a package.
-    func testTargetLeavesOutABareHyphenatedWordOutsideTheServerSlot() {
-        assertTarget(AppStateHarness.localConnector("tool", ["hunter-2"]), is: "tool", hides: "hunter-2")
-        assertTarget(AppStateHarness.localConnector("tool", ["-p", "s3cr3t-pass"]), is: "tool", hides: "s3cr3t")
-        assertTarget(AppStateHarness.localConnector("tool", ["correct-horse-battery-staple"]), is: "tool", hides: "horse")
-        assertTarget(AppStateHarness.localConnector("uvx", ["--from", "x", "my-server", "extra-word"]), is: "uvx", hides: "extra-word")
-    }
-
-    func testTargetLeavesOutThePwFlagsValue() {
-        assertTarget(AppStateHarness.localConnector("tool", ["--pw", "a.b"]), is: "tool", hides: "a.b")
-    }
-
-    /// The server slot is the first positional argument, whatever it holds: a bare word there is
-    /// shown because it cannot be told from a package name, and only there.
-    func testTargetTrustsOnlyTheFirstPositionalAfterAPackageRunner() {
-        XCTAssertEqual(CollectionsModel.target(of: AppStateHarness.localConnector("npx", ["-y", "hunter-2", "@scope/pkg", "other-word"]).config, home: "/Users/x"),
-                       "npx hunter-2 …/pkg")
-    }
-
-    /// Claude Desktop on Windows runs a server through `cmd /c`: what cmd runs is the launcher,
-    /// named without its `.cmd`, and a bridge spelled that way is still a remote connector.
-    func testTargetUnwrapsCmdAndAWindowsLaunchersExtension() {
-        XCTAssertEqual(CollectionsModel.target(of: AppStateHarness.localConnector("cmd", ["/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", #"C:\Users\x\Docs"#]).config,
-                                               home: #"C:\Users\x"#),
-                       #"npx …/server-filesystem ~\Docs"#)
-        XCTAssertEqual(CollectionsModel.target(of: AppStateHarness.localConnector("npx.cmd", ["-y", "mcp-server-fetch"]).config, home: "/Users/x"), "npx mcp-server-fetch")
-        assertTarget(AppStateHarness.localConnector("cmd", ["/c", "tool", "--token", "abc"]), is: "tool", hides: "abc")
-        assertTarget(AppStateHarness.localConnector("CMD.EXE", ["/K", "npx", "-y", "mcp-remote", "https://h.example/mcp", "--header", "Authorization: Bearer abc"]),
-                     is: "h.example", hides: "abc")
-    }
-
-    /// A launcher that could itself be a secret is left out, and the arguments still show; a
-    /// command line's words after its first are arguments, held to the rule like any other.
-    func testTargetLeavesOutALauncherThatCouldBeASecret() {
-        assertTarget(AppStateHarness.localConnector("TOKEN=abc node", ["srv.js"]), is: "srv.js", hides: "abc")
-        assertTarget(AppStateHarness.localConnector("ghp_0123456789abcdef0123456789abcdef", ["srv.js"]), is: "srv.js", hides: "ghp_")
-    }
 
     /// End to end through the rows: a connector carrying secrets five ways shows none of them.
     /// (The harness's seeded fixture holds no secrets, so this plants its own.)
@@ -869,7 +600,7 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(model.connectorCount, CollectionsModel.connectorTally(3))
         XCTAssertFalse(model.canRefresh)
 
-        // A synced entry that records no file name either — a hand-edited or foreign collections
+        // A synced entry that records no file name either - a hand-edited or foreign collections
         // file. Nothing asks to be located, but there is still no document to name or to read.
         try h.seed(state, file: CollectionsFile(collections: [
             "Shared": published(slug: "shared"), "Team": CollectionsFile.Entry(kind: .synced),
@@ -1066,7 +797,7 @@ final class CollectionsModelTests: XCTestCase {
         let sink = model.objectWillChange.sink { _ in repaints += 1 }
         defer { sink.cancel() }
 
-        // The active collection is what is showing, so naming it again is the same selection —
+        // The active collection is what is showing, so naming it again is the same selection -
         // as is naming a collection that does not exist, which falls back to the same one.
         model.selected = "Default"
         model.selected = nil
@@ -1206,7 +937,7 @@ final class CollectionsModelTests: XCTestCase {
     /// The kind guard specifically, not just an empty tick set: `selected` clears the ticks on
     /// every switch (in its setter), so a leg that ticks a row and only
     /// then switches to the synced collection would find the predicate false regardless of the
-    /// `isSynced` term — the empty tick set alone would explain it. Reload does not clear ticks,
+    /// `isSynced` term - the empty tick set alone would explain it. Reload does not clear ticks,
     /// so ticking first and letting the *same* collection turn synced underneath is the one path
     /// that isolates the guard.
     func testTheDeletePredicateIsGatedBySyncSpecifically() throws {
@@ -1257,7 +988,7 @@ final class CollectionsModelTests: XCTestCase {
     }
 
     /// `delete(names:in:)` persists but never applies on its own; the caller applies only when
-    /// the collection losing rows is the active one — the same rule `AppState.setEnabled` follows.
+    /// the collection losing rows is the active one - the same rule `AppState.setEnabled` follows.
     func testDeleteCheckedAppliesOnlyWhenTheActiveCollectionLosesRows() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
@@ -1291,14 +1022,14 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertNil(try h.claudeServers()["aws-mcp"], "the active collection changed, so Claude's config follows")
     }
 
-    /// The copy lands in the target, disabled, and the ticks go with it — the same clearing
+    /// The copy lands in the target, disabled, and the ticks go with it - the same clearing
     /// `deleteChecked` does on success. Every copy arrives disabled, so this never applies.
     func testCopyCheckedCopiesIntoTheTargetClearsTicksAndDoesNotApply() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         // Created first: `createActiveCopy` starts a collection as a copy of whichever one is
         // active when it is made, so making Spare before alpha exists keeps alpha out of that
-        // starting snapshot — otherwise the copy below would collide with it and land as
+        // starting snapshot - otherwise the copy below would collide with it and land as
         // "alpha 2" instead, leaving the original untouched and this test green for the wrong
         // reason.
         XCTAssertNil(state.createActiveCopy(named: "Spare"))
@@ -1314,8 +1045,8 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(try h.claudeServers(), before, "every copy arrives disabled, so nothing Claude runs has changed")
     }
 
-    /// The two early-outs `copyChecked` documents: a target `copyDestinations` does not enable —
-    /// the source itself, or a synced collection — and an empty tick set. Both return false without
+    /// The two early-outs `copyChecked` documents: a target `copyDestinations` does not enable -
+    /// the source itself, or a synced collection - and an empty tick set. Both return false without
     /// reaching `AppState.makeLocalCopy`, so nothing lands anywhere and the ticks are left standing.
     /// The last error is cleared, so the window does not show it again as if this copy had failed.
     func testCopyCheckedRefusesATargetCopyDestinationsDoesNotEnable() throws {
@@ -1355,6 +1086,68 @@ final class CollectionsModelTests: XCTestCase {
 
         XCTAssertFalse(model.copyChecked(into: "Spare"), "nothing ticked, so there is nothing to copy")
         XCTAssertEqual(state.store.collections["Spare"], before, "and nothing about Spare changed")
+    }
+
+    /// A copy that lands says so on the count line, naming how many landed and where, since the
+    /// window stays on the source and the ticks clear. The note lasts until the next tick, the next
+    /// action or another collection; a copy that does not land, or one whose clashes were all
+    /// skipped, says nothing.
+    func testACopyConfirmsOnTheCountLineUntilTheNextTickActionOrSelection() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createActiveCopy(named: "Spare"))
+        XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Default"))
+        XCTAssertNil(state.upsert(name: "beta", entry: AppStateHarness.localConnector("/bin/beta"), renamedFrom: nil, in: "Default"))
+        let model = h.collectionsModel(state, selecting: "Default", ticking: ["alpha"])
+        let tally = CollectionsModel.connectorTally(try XCTUnwrap(state.store.collections["Default"]).mcps.count)
+        XCTAssertNil(model.copyConfirmation)
+        XCTAssertEqual(model.connectorCount, tally)
+
+        XCTAssertTrue(model.copyChecked(into: "Spare"))
+        XCTAssertEqual(model.copyConfirmation, "Copied 1 connector to \u{201C}Spare\u{201D}")
+        XCTAssertEqual(model.connectorCount, tally + " · Copied 1 connector to \u{201C}Spare\u{201D}")
+
+        model.setChecked("alpha", true)
+        XCTAssertNil(model.copyConfirmation, "the next tick clears it")
+        XCTAssertEqual(model.connectorCount, tally)
+
+        model.setChecked("beta", true)
+        h.dialogs.nextPromptAnswer = "Fresh"
+        XCTAssertTrue(model.copyCheckedIntoNewCollection())
+        XCTAssertEqual(model.copyConfirmation, "Copied 2 connectors to \u{201C}Fresh\u{201D}", "Copy to ▸ New Collection confirms too")
+        model.selected = "Spare"
+        XCTAssertNil(model.copyConfirmation, "another collection clears it")
+
+        model.selected = "Default"
+        model.setChecked("alpha", true)
+        XCTAssertTrue(model.copyChecked(into: "Spare"))
+        XCTAssertNotNil(model.copyConfirmation)
+        h.dialogs.nextPromptAnswer = nil
+        model.rename()
+        XCTAssertNil(model.copyConfirmation, "the next action clears it, even one cancelled")
+
+        // Spare now holds alpha: skipping the clash copies nothing, so there is nothing to confirm.
+        model.setChecked("alpha", true)
+        XCTAssertTrue(model.copyChecked(into: "Spare", choices: ["alpha": .skip]))
+        XCTAssertNil(model.copyConfirmation, "a skipped clash is not counted")
+
+        // Some clashes answered Skip: only what landed is counted. beta is new to Spare, alpha clashes.
+        model.setChecked("alpha", true)
+        model.setChecked("beta", true)
+        XCTAssertTrue(model.copyChecked(into: "Spare", choices: ["alpha": .skip]))
+        XCTAssertEqual(model.copyConfirmation, "Copied 1 connector to \u{201C}Spare\u{201D}", "the skipped clash is not counted")
+        // Spare now holds both: replace one clash, skip the other, and the replaced one is counted.
+        model.setChecked("alpha", true)
+        model.setChecked("beta", true)
+        XCTAssertTrue(model.copyChecked(into: "Spare", choices: ["alpha": .replace, "beta": .skip]))
+        XCTAssertEqual(model.copyConfirmation, "Copied 1 connector to \u{201C}Spare\u{201D}", "a Replace lands, a Skip does not")
+
+        // A copy that does not land confirms nothing.
+        model.setChecked("alpha", true)
+        h.dialogs.nextPromptAnswer = "Spare"
+        XCTAssertFalse(model.copyCheckedIntoNewCollection())
+        XCTAssertNotNil(model.lastError)
+        XCTAssertNil(model.copyConfirmation)
     }
 
     /// Copy to ▸ New Collection: an empty collection holding only the copies, while the window

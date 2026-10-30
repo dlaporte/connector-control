@@ -33,7 +33,7 @@ public sealed record JsonPointer(ImmutableArray<string> Segments)
 
     /// <summary>
     /// A segment read as an array index the way RFC 6901 writes one: ASCII digits and nothing
-    /// else, so neither a sign nor a space makes " 1" or "+1" an index — whatever the culture.
+    /// else, so neither a sign nor a space makes " 1" or "+1" an index - whatever the culture.
     /// </summary>
     internal static int? ArrayIndex(string segment) =>
         int.TryParse(segment, NumberStyles.None, CultureInfo.InvariantCulture, out var index) ? index : null;

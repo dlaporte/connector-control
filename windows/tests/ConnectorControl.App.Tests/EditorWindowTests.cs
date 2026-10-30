@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Threading;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
@@ -20,10 +22,10 @@ public class EditorWindowTests
     ///
     /// Every App test funnels through the one WPF application's dispatcher, xUnit runs test
     /// classes in parallel, and <see cref="Layout"/> pumps that dispatcher down to DataBind
-    /// priority — which is where another class's queued WpfApp.Invoke body gets to run, nested
+    /// priority - which is where another class's queued WpfApp.Invoke body gets to run, nested
     /// inside this one. A window of ours that is visible AND active during such a pump is the
     /// answer WpfDialogs.ResolveOwner() gives, and DialogTests asserts there is none. So a window
-    /// that needs a real layout pass — an ItemsControl generates no containers without one — is
+    /// that needs a real layout pass - an ItemsControl generates no containers without one - is
     /// shown without taking the activation, and hidden again the moment it has had its pass. The
     /// containers it generated outlive the hiding.
     /// </summary>
@@ -39,7 +41,7 @@ public class EditorWindowTests
             {
                 // Bindings settle first, while nothing of ours is on screen, because that is the
                 // step that pumps. Between Show and Hide there is no pump at all: UpdateLayout
-                // runs the real layout pass — the one that generates the rows — synchronously.
+                // runs the real layout pass - the one that generates the rows - synchronously.
                 Layout(window);
                 window.Show();
                 window.UpdateLayout();
@@ -84,6 +86,67 @@ public class EditorWindowTests
             parts.Add(node is UIElement ui ? $"{node.GetType().Name}({ui.Visibility},{ui.IsEnabled})" : node.GetType().Name);
         }
         return string.Join(" < ", parts);
+    }
+
+    /// <summary>
+    /// A key pressed on an element as the keyboard delivers it - tunnelling first, then bubbling
+    /// unless something took it on the way down. Returns whether anything took it: a key nothing
+    /// took goes on to the window's access keys, which is where Escape finds the Cancel button.
+    /// </summary>
+    private static bool Press(UIElement target, Key key)
+    {
+        var source = PresentationSource.FromVisual(target)!;
+        var preview = new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, key) { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+        target.RaiseEvent(preview);
+        if (preview.Handled)
+        {
+            return true;
+        }
+        var down = new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, key) { RoutedEvent = Keyboard.KeyDownEvent };
+        target.RaiseEvent(down);
+        return down.Handled;
+    }
+
+    /// <summary>
+    /// Escape closes an open drop-down and leaves the editor, and every unsaved field, alone; only
+    /// an Escape nothing else took cancels the editor. The window used to take Escape on its way
+    /// down, ahead of the drop-down, and closed the editor with the menu still open.
+    /// RaiseEvent stops short of WPF's access-key step, so the cancel half is the Cancel button
+    /// being the window's cancel button and what its click does.
+    /// </summary>
+    [Fact]
+    public void EscapeClosesAnOpenDropDownBeforeItCancelsTheEditor()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        WpfApp.Invoke(() => Editing(state, EditTarget.NewRemote(EditorWindow.NewRemoteStyle, "Default"), window =>
+        {
+            var cancels = 0;
+            window.Model.CloseRequested += () => cancels++;
+            window.Model.Name = "example";
+            try
+            {
+                window.AuthPicker.IsDropDownOpen = true;
+                Assert.True(window.AuthPicker.IsDropDownOpen);
+
+                Assert.True(Press(window.AuthPicker, Key.Escape));   // the drop-down took it
+                Assert.False(window.AuthPicker.IsDropDownOpen);
+                Assert.Equal(0, cancels);
+                Assert.Equal("example", window.Model.Name);
+            }
+            finally
+            {
+                window.AuthPicker.IsDropDownOpen = false;   // leave no popup behind in the shared WPF host
+            }
+
+            Assert.False(Press(window.AuthPicker, Key.Escape));      // nothing open: nothing takes it
+            Assert.True(window.CancelButton.IsCancel);
+            window.CancelButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, window.CancelButton));
+            Assert.Equal(1, cancels);
+            // Cancel queues the window's Close; run it inside this guarded body rather than
+            // leaving it to fire on the shared host during some later test.
+            window.Dispatcher.Invoke(() => { }, DispatcherPriority.Background);
+        }, rows: true));
     }
 
     [Fact]
@@ -216,6 +279,37 @@ public class EditorWindowTests
     }
 
     /// <summary>
+    /// Each variable row's name box, eye and delete button are named by the row's number, counted
+    /// from one, and the names follow the rows as they come and go.
+    /// </summary>
+    [Fact]
+    public void EnvironmentRowControlsAreNamedByTheirNumberAndFollowADeletion()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var target = EditTarget.Existing("local", AppStateHarness.LocalConnector("node", "server.js"), "Default");
+        WpfApp.Invoke(() => Editing(state, target, window =>
+        {
+            window.Model.AddEnvRow();
+            window.Model.AddEnvRow();
+            Layout(window);
+            var second = window.Model.EnvRows[1];
+            string NameOf<T>(string element) where T : FrameworkElement =>
+                AutomationProperties.GetName(RowElements.Find<T>(window.EnvList, second, element));
+
+            Assert.Equal(EditorModel.VariableNameLabel(1), NameOf<TextBox>("EnvName"));
+            Assert.Equal(EditorModel.DeleteVariableRowLabel(1), NameOf<Button>("DeleteEnvButton"));
+
+            window.Model.DeleteEnvRow(window.Model.EnvRows[0]);
+            Layout(window);
+            Assert.Equal(EditorModel.VariableNameLabel(0), NameOf<TextBox>("EnvName"));
+            Assert.Equal(EditorModel.DeleteVariableRowLabel(0), NameOf<Button>("DeleteEnvButton"));
+            // The eye says what it would do next: the fresh row is revealed, so it would hide.
+            Assert.Equal(EditorModel.HideVariableValueLabel(0), NameOf<Button>("RevealButton"));
+        }, rows: true));
+    }
+
+    /// <summary>
     /// Each argument row shows its number, counted from one as a refusal counts them ("argument
     /// 2"), and its box is named by it; the numbers follow the rows as they come and go.
     /// </summary>
@@ -235,6 +329,8 @@ public class EditorWindowTests
             Assert.Equal([EditorModel.ArgumentLabel(0), EditorModel.ArgumentLabel(1), EditorModel.ArgumentLabel(2)],
                          window.Model.Args.Select(Name));
             Assert.Equal("Argument 2", Name(window.Model.Args[1]));
+            string DeleteName(ArgRow row) => AutomationProperties.GetName(RowElements.Find<Button>(window.ArgList, row, "DeleteArgButton"));
+            Assert.Equal("Delete argument 2", DeleteName(window.Model.Args[1]));
 
             // Deleting the first moves every other row up a number.
             var second = window.Model.Args[1];
@@ -242,6 +338,7 @@ public class EditorWindowTests
             Layout(window);
             Assert.Equal(["1", "2"], window.Model.Args.Select(Number));
             Assert.Equal("Argument 1", Name(second));
+            Assert.Equal("Delete argument 1", DeleteName(second));
 
             // A row added at the end takes the next.
             window.Model.AddArg();
@@ -305,7 +402,7 @@ public class EditorWindowTests
 
     /// <summary>
     /// A connector in a synced collection opens with its author's fields dead and only the values
-    /// the document asks this machine for live — including the env row's name and the row
+    /// the document asks this machine for live - including the env row's name and the row
     /// structure, because the read-only save projection matches leaves by pointer. The on/off
     /// switch is not in this window at all (the flyout row owns it), so what the editor has to
     /// keep working is Save.
@@ -400,7 +497,7 @@ public class EditorWindowTests
     }
 
     /// <summary>
-    /// One header line per kind of collection, and none at all for an ordinary local connector —
+    /// One header line per kind of collection, and none at all for an ordinary local connector -
     /// plus the repaint a collection that stops syncing under an open editor has to cause.
     /// </summary>
     [Fact]
@@ -505,7 +602,7 @@ public class EditorWindowTests
                     Assert.Equal(Visibility.Collapsed, RowElements.Find<TextBox>(open.EnvList, token, "EnvPlaceholder").Visibility);
                     Assert.Equal(Visibility.Visible, RowElements.Find<ContentControl>(open.EnvList, token, "EnvValue").Visibility);
 
-                    // ledger's marker survives, so its box stays the live one — but the needs the
+                    // ledger's marker survives, so its box stays the live one - but the needs the
                     // hint came from went with the subscription, and the hint must not outlive them.
                     Assert.True(ledger.Model.Args[0].Asks);
                     Assert.Equal(Visibility.Visible, RowElements.Find<TextBox>(ledger.ArgList, arg, "ArgPlaceholder").Visibility);

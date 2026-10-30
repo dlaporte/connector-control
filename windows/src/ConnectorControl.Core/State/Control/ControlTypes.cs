@@ -1,10 +1,12 @@
+using System.Globalization;
+
 namespace ConnectorControl.Core.State;
 
 // The values the control layer passes around: who is calling, how a tool is guarded, what it
 // declares, what it answers, and what it asks the user.
 
 /// <summary>
-/// Who is calling: the command-line tool, trusted as the user, or the relay Claude Desktop runs —
+/// Who is calling: the command-line tool, trusted as the user, or the relay Claude Desktop runs -
 /// which is also what anything but a well-formed command-line hello is taken for, so the gate
 /// guards it. C# has no enum payloads, so the two callers are records.
 ///
@@ -74,7 +76,7 @@ public enum ControlGateClass { Read, Direct, Gated, AlwaysConfirm }
 
 /// <summary>
 /// The gate's rule, apart from any one tool. The command-line tool is the user and is never gated.
-/// Claude is refused everything while the integration is off — including between turning it off and
+/// Claude is refused everything while the integration is off - including between turning it off and
 /// Claude restarting without the entry.
 /// </summary>
 public static class ControlGate
@@ -174,7 +176,7 @@ public sealed record ControlResult(JsonValue Structured, string Text, bool IsErr
 
 /// <summary>
 /// What a confirmation shows: who is asking for what, what would run, and a closing line.
-/// <c>Code</c> holds the monospace lines — what would run, masked; empty for none. Equality
+/// <c>Code</c> holds the monospace lines - what would run, masked; empty for none. Equality
 /// compares them line by line: a record would compare the list by reference.
 /// </summary>
 public sealed record ConfirmationRequest(string Title, string Message, IReadOnlyList<string> Code, string? Footer)
@@ -219,8 +221,8 @@ public interface IControlConfirmer
     void Confirm(ConfirmationRequest request, Action<bool> completion);
 }
 
-/// <summary>Answers every question Don't Allow, at once: the confirmer of a host that can show no dialog —
-/// the test hosts; the apps ask in their own (<c>DialogConfirmer</c>) — so a change that must be asked about is
+/// <summary>Answers every question Don't Allow, at once: the confirmer of a host that can show no dialog -
+/// the test hosts; the apps ask in their own (<c>DialogConfirmer</c>) - so a change that must be asked about is
 /// refused, never made unasked. It keeps the confirmer's contract: one completion, every time. It never
 /// throws.</summary>
 public sealed class DecliningConfirmer : IControlConfirmer
@@ -244,7 +246,20 @@ public static class ControlSettingKey
 
     /// <summary>Only the user changes these, in Settings or with the command-line tool: Claude may not
     /// widen what it is allowed to do, silence the notice of changes synced in from another
-    /// machine, or stop the app updating.</summary>
-    public static bool IsUserOnly(string key) =>
-        key == ClaudeIntegration || key == ConfirmClaudeChanges || key == NotifyExternalChanges || key == AutomaticUpdates;
+    /// machine, or stop the app updating. In the order set_setting's description lists them.</summary>
+    public static readonly IReadOnlyList<string> UserOnly = [ClaudeIntegration, ConfirmClaudeChanges, NotifyExternalChanges, AutomaticUpdates];
+
+    public static bool IsUserOnly(string key) => UserOnly.Contains(key);
+
+    /// <summary>"a, b, c and d": the user-only keys as set_setting's description names them, built from
+    /// the list <see cref="IsUserOnly"/> reads so the two cannot disagree. After <see cref="UserOnly"/>,
+    /// which it reads as it initializes.</summary>
+    internal static readonly string UserOnlyText =
+        string.Join(", ", UserOnly.Take(UserOnly.Count - 1)) + ControlText.ListAnd + UserOnly[^1];
+
+    /// <summary>"5 to 100": the backups-to-keep range as set_setting's description and refusal write it,
+    /// built from the bounds the check enforces.</summary>
+    internal static readonly string KeepCountRange =
+        SettingsModel.MinKeepCount.ToString(CultureInfo.InvariantCulture) + " to "
+        + SettingsModel.MaxKeepCount.ToString(CultureInfo.InvariantCulture);
 }

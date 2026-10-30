@@ -284,7 +284,7 @@ public class EditorModelCollectionsTests
         var folder = Path.GetDirectoryName(rig.H.Publish(state, "Team", folder: "share"))!;
         using var published = rig.Editor("scoutbook", "Team");
         Assert.Equal(new EditorModel.HeaderState.Published(folder), published.Header);
-        Assert.Equal($"Published to {folder} — saving updates the file your team reads. Secrets stay here.",
+        Assert.Equal($"Published to {folder} - saving updates the file your team reads. Secrets stay here.",
                      published.HeaderNote);
         Assert.False(published.IsReadOnly);
     }
@@ -329,6 +329,30 @@ public class EditorModelCollectionsTests
         Assert.True(updated.Enabled);
     }
 
+    /// <summary>The save and every twin it reaches are one change to the master list: written once,
+    /// with one backup of what came before, not one per collection for states that were only ever
+    /// halfway.</summary>
+    [Fact]
+    public void APropagatedSaveWritesTheMasterListOnce()
+    {
+        using var rig = new EditorRig();
+        var state = rig.State;
+        rig.Twin("Backup");
+        rig.Twin("Spare");
+
+        using var editor = rig.Editor("scoutbook", "Default");
+        Assert.Equal(["Backup", "Spare"], editor.PropagateTargets);
+        editor.Propagate = true;
+        editor.RemoteUrl = "https://scoutbook.example.com/mcp/v2";
+        var before = state.Service.Backups.Backups("mcps").Count;
+        Assert.True(editor.Save());
+
+        Assert.Equal(before + 1, state.Service.Backups.Backups("mcps").Count);
+        var updated = state.Store.Collections["Default"].Mcps["scoutbook"].Config;
+        Assert.Equal(updated, state.Store.Collections["Backup"].Mcps["scoutbook"].Config);
+        Assert.Equal(updated, state.Store.Collections["Spare"].Mcps["scoutbook"].Config);
+    }
+
     [Fact]
     public void AnUntickedPropagateLeavesTheTwinAlone()
     {
@@ -353,7 +377,7 @@ public class EditorModelCollectionsTests
 
         using var editor = rig.Editor("scoutbook", "Default");
         Assert.Equal(["Backup"], editor.PropagateTargets);
-        // A second window on the twin saved first — the checkbox's promise no longer holds for it.
+        // A second window on the twin saved first - the checkbox's promise no longer holds for it.
         var moved = new McpEntry(AppStateHarness.Remote("https://scoutbook.example.com/mcp/other"));
         Assert.Null(state.Upsert("scoutbook", moved, "scoutbook", "Backup"));
 

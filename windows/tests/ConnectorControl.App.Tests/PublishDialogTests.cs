@@ -1,6 +1,8 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Interop;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
 using ConnectorControl.Core;
@@ -20,7 +22,7 @@ public class PublishDialogTests
 
     /// <summary>
     /// One local connector with a stripped environment value that looks like a credential, a
-    /// harmless one, and one absolute path argument — a row of each kind the sheet offers.
+    /// harmless one, and one absolute path argument - a row of each kind the sheet offers.
     /// </summary>
     private static JsonValue Connector() => JsonValue.Object(
         ("command", JsonValue.String("node")),
@@ -42,7 +44,7 @@ public class PublishDialogTests
 
     /// <summary>
     /// The sheet, laid out with its rows generated, for the body to work through, and closed
-    /// whether the body finishes or throws — a sheet left alive and on screen is a window every
+    /// whether the body finishes or throws - a sheet left alive and on screen is a window every
     /// later test in this assembly then finds.
     /// </summary>
     private static void Publishing(PublishModel model, Action<PublishDialog> body)
@@ -54,8 +56,8 @@ public class PublishDialogTests
         {
             // The editor tests' order, for the same reason: bindings settle first, while nothing
             // of ours is on screen, because that is the step that pumps. Between Show and Hide
-            // there is no pump at all — UpdateLayout runs the real layout pass, the one that
-            // generates the rows, synchronously — and the body then works on a hidden window.
+            // there is no pump at all - UpdateLayout runs the real layout pass, the one that
+            // generates the rows, synchronously - and the body then works on a hidden window.
             Layout(window);
             window.Show();
             window.UpdateLayout();
@@ -94,8 +96,8 @@ public class PublishDialogTests
     }
 
     /// <summary>
-    /// A Release the model refuses — the path is this machine's publish folder, copied where a
-    /// ticked row already marks it — hands back the entry's note, and the failure line says it, as
+    /// A Release the model refuses - the path is this machine's publish folder, copied where a
+    /// ticked row already marks it - hands back the entry's note, and the failure line says it, as
     /// the Mac sheet's does. Choosing a folder afterwards clears it.
     /// </summary>
     [Fact]
@@ -147,6 +149,9 @@ public class PublishDialogTests
                 var hint = RowElements.Find<TextBox>(window.EnvList, row, "HintBox");
 
                 Assert.Equal(PublishModel.ShareValueLabel, tick.Content);
+                // Visible words stay short; the spoken name says which row the tick is on.
+                Assert.Equal(PublishModel.ShareValueRowLabel(row.Connector, "A"), AutomationProperties.GetName(tick));
+                Assert.Equal(PublishModel.HintRowLabel(row.Connector, "A"), AutomationProperties.GetName(hint));
                 Assert.False(tick.IsChecked);
                 Assert.Equal(PublishModel.HintPlaceholder, hint.Tag);
                 Assert.Equal(Visibility.Visible, hint.Visibility);
@@ -193,6 +198,8 @@ public class PublishDialogTests
                 Assert.False(tick.IsChecked);
                 Assert.Equal(Visibility.Collapsed, fields.Visibility);
                 Assert.Equal(PublishModel.PathNamePlaceholder, nameBox.Tag);
+                Assert.Equal(PublishModel.MarkPathRowLabel(row.Connector, row.Value), AutomationProperties.GetName(tick));
+                Assert.Equal(PublishModel.PathNameRowLabel(row.Connector, row.Pointer.ToString()), AutomationProperties.GetName(nameBox));
                 Assert.Equal(PublishModel.HintPlaceholder, hintBox.Tag);
                 // Unmarked, the path on this machine is what the document carries.
                 Assert.Contains("/Users/d/x.js", window.PreviewBox.Text, StringComparison.Ordinal);
@@ -210,6 +217,43 @@ public class PublishDialogTests
                     model.Intent.PathMarks["c"][JsonPointer.Parse("/args/0")!]);
                 Assert.Contains("${CC_NEEDS:server_path}", window.PreviewBox.Text, StringComparison.Ordinal);
                 Assert.DoesNotContain("/Users/d/x.js", window.PreviewBox.Text, StringComparison.Ordinal);
+            });
+        });
+    }
+
+    /// <summary>
+    /// Capped below what it asks for - the work area of a short screen - the dialog gives the room up from the preview,
+    /// and its buttons stay inside it rather than being cut off below. Windows only.
+    /// </summary>
+    [Fact]
+    public void ACappedDialogShrinksThePreviewAndKeepsItsButtonsInside()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        WpfApp.Invoke(() =>
+        {
+            var model = new PublishModel(state, state.ActiveCollection);
+            Publishing(model, window =>
+            {
+                window.Show();
+                window.UpdateLayout();
+                var preview = window.PreviewBox.ActualHeight;
+                // The cap is the work area of the screen the dialog is on, in its own units; on the runner's one screen,
+                // the primary's.
+                var workArea = WindowPlacement.WorkAreaHeightInDips(new WindowInteropHelper(window.Owner ?? window).Handle);
+                Assert.NotNull(workArea);
+                Assert.Equal(workArea.Value, window.MaxHeight, 3);
+                Assert.Equal(SystemParameters.WorkArea.Height, window.MaxHeight, 0);
+                window.MaxHeight = window.ActualHeight - 60;
+                window.UpdateLayout();
+                var root = (FrameworkElement)window.Content;
+                var buttonBottom = window.PublishButton.TranslatePoint(new Point(0, window.PublishButton.ActualHeight), root).Y;
+                var measured = $"window {window.ActualHeight}, cap {window.MaxHeight}, preview {window.PreviewBox.ActualHeight} (was {preview}), "
+                    + $"button bottom {buttonBottom}, content {root.ActualHeight}";
+                window.Hide();
+                Assert.True(window.ActualHeight <= window.MaxHeight + 0.5, measured);
+                Assert.True(window.PreviewBox.ActualHeight < preview, measured);
+                Assert.True(buttonBottom <= root.ActualHeight + 0.5, measured);
             });
         });
     }
@@ -313,6 +357,7 @@ public class PublishDialogTests
                 Assert.Equal(PublishModel.UnresolvedMarkNote("c", "srv"), note.Text);
                 var forget = RowElements.Find<Button>(window.UnresolvedList, lost, "ForgetMark");
                 Assert.Equal(PublishModel.ForgetMarkButton, forget.Content);
+                Assert.Equal(PublishModel.ForgetMarkRowLabel("c", "srv"), AutomationProperties.GetName(forget));
 
                 Press(forget);
                 Layout(window);
@@ -372,6 +417,10 @@ public class PublishDialogTests
                     RowElements.Find<TextBlock>(window.KeptList, kept, "KeptNoteText").Text);
                 Assert.Equal(PublishModel.ForgetMarkButton, RowElements.Find<Button>(window.UnresolvedList, lost, "ForgetMark").Content);
                 Assert.Equal(PublishModel.ReleaseValueButton, RowElements.Find<Button>(window.KeptList, kept, "ReleaseValue").Content);
+                Assert.Equal(PublishModel.ForgetMarkRowLabel("c", "srv"),
+                    AutomationProperties.GetName(RowElements.Find<Button>(window.UnresolvedList, lost, "ForgetMark")));
+                Assert.Equal(PublishModel.ReleaseValueRowLabel(kept.Connector, kept.Value),
+                    AutomationProperties.GetName(RowElements.Find<Button>(window.KeptList, kept, "ReleaseValue")));
                 // A kept path, not a folder of the collection's own: Release is its answer, and the token is not offered.
                 Assert.Equal(PublishModel.KeptPathKind.Path, kept.Kind);
                 Assert.Equal(Visibility.Visible, RowElements.Find<Button>(window.KeptList, kept, "ReleaseValue").Visibility);
@@ -425,6 +474,7 @@ public class PublishDialogTests
                 // One answer only: released, the folder would travel as written.
                 var use = RowElements.Find<Button>(window.KeptList, kept, "UseDirectoryToken");
                 Assert.Equal(PublishModel.UseDirectoryTokenButton, use.Content);
+                Assert.Equal(PublishModel.UseDirectoryTokenRowLabel(kept.Connector, kept.Value), AutomationProperties.GetName(use));
                 Assert.Equal(Visibility.Visible, use.Visibility);
                 Assert.Equal(Visibility.Collapsed, RowElements.Find<Button>(window.KeptList, kept, "ReleaseValue").Visibility);
                 // A folder is on record, and the entry still holds Publish.

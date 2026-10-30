@@ -96,7 +96,7 @@ public sealed class ReviewModel : ObservableObject
 
     /// <summary>
     /// Null when the update landed and the dialog can close, else the message to show with the
-    /// dialog still open — the same way the Import dialog's <c>Perform()</c> answers. A sheet
+    /// dialog still open - the same way the Import dialog's <c>Perform()</c> answers. A sheet
     /// whose update has already been applied elsewhere reports success too: there is nothing
     /// left to do and nothing went wrong. A document that changed while the dialog was open is
     /// refused instead, because applying it would land connectors nobody read, which is the one
@@ -116,7 +116,7 @@ public sealed class ReviewModel : ObservableObject
         return error;
     }
 
-    /// <summary>Added first, then removed, then changed, each alphabetical — the order the summary sentence reads in, so the list under it is in the same order.</summary>
+    /// <summary>Added first, then removed, then changed, each alphabetical - the order the summary sentence reads in, so the list under it is in the same order.</summary>
     private void Rebuild()
     {
         sourceHash = state.PendingSourceHash(Collection);

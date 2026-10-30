@@ -5,8 +5,8 @@
 
 .DESCRIPTION
     1. dotnet publish (self-contained, -p:Version=<Version>) into windows/artifacts/publish/<Runtime>,
-       and ConnectorControl.Cli single-file and self-contained, copied in beside ConnectorControl.exe as
-       connector-control.exe
+       and ConnectorControl.Cli (single-file and self-contained, as its project sets for a runtime),
+       copied in beside ConnectorControl.exe as connector-control.exe
     2. `vpk pack` into windows/artifacts/<Runtime>:
          ConnectorControl-<Runtime>-Setup.exe
          ConnectorControl-<Version>-<Runtime>-full.nupkg
@@ -14,12 +14,12 @@
     The channel name IS the runtime identifier: an installed app asks GitHub for
     releases.win-x64.json or releases.win-arm64.json and nothing else. Never a delta package:
     VelopackUpdater sets MaximumDeltasBeforeFallback = 0, so an installed client would never apply
-    one anyway — producing one here would just be extra upload weight nobody downloads.
+    one anyway - producing one here would just be extra upload weight nobody downloads.
 
     vpk itself runs with its working directory set to windows/, whatever directory this script was
     invoked from (windows-build.yml runs it from the repo root): `dotnet` resolves a local tool's
-    manifest by walking up from the CURRENT directory, and windows/.config/dotnet-tools.json — the
-    manifest pinning vpk — is not an ancestor of the repo root. Every other path this script uses
+    manifest by walking up from the CURRENT directory, and windows/.config/dotnet-tools.json - the
+    manifest pinning vpk - is not an ancestor of the repo root. Every other path this script uses
     is already absolute by the time vpk runs, so that directory change affects nothing else.
 
 .PARAMETER Version
@@ -52,14 +52,6 @@ param(
     [string] $AzureTrustedSignFile
 )
 
-# 'dotnet vpk' runs the local tool windows/.config/dotnet-tools.json pins (restored by
-# `dotnet tool restore` in windows/) as "dotnet" plus a leading "vpk" argument. No caller
-# needs a different invocation.
-$vpkExe = 'dotnet'
-# Typed: PowerShell unrolls a one-element array into a plain string in some contexts, and a
-# string plus an array is string concatenation, not an argument list — that bit us once.
-[string[]] $vpkPrefixArgs = @('vpk')
-
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 # PowerShell 7.4+ turns a non-zero native exit code into a terminating error whenever
@@ -82,7 +74,7 @@ function Invoke-Native {
     if ($LASTEXITCODE -ne 0) { throw "$Label failed with exit code $LASTEXITCODE" }
 }
 
-if (-not (Test-Path $icon)) { throw "Missing $icon — run: swift scripts/generate-icon.swift windows/assets/ConnectorControl.ico (on the Mac)" }
+if (-not (Test-Path $icon)) { throw "Missing $icon - run: swift scripts/generate-icon.swift windows/assets/ConnectorControl.ico (on the Mac)" }
 
 Write-Host "== Publish $Runtime, version $Version"
 if (Test-Path $publishDir) { Remove-Item -Recurse -Force $publishDir }
@@ -93,15 +85,10 @@ if (-not (Test-Path $mainExe)) { throw "publish produced no $mainExe" }
 
 Write-Host "== Publish the command-line tool $Runtime, version $Version"
 if (Test-Path $cliPublishDir) { Remove-Item -Recurse -Force $cliPublishDir }
-# Single-file and self-contained: the app keeps a copy of it in %LOCALAPPDATA%\Connector Control\bin,
-# outside the update folder, where it runs with nothing beside it. Trimmed and compressed, since the
-# packaged tool and that copy each carry the runtime: about 11 MB instead of 70. These are the flags
-# windows-build.yml's "Publish the command-line tool as it ships" step uses, so CI's Inspector check
-# runs the build that ships: change them in both places.
+# Single-file, self-contained, compressed and trimmed: ConnectorControl.Cli.csproj sets all four for a
+# publish with a runtime identifier, so windows-build.yml's Inspector check runs this same build.
 Invoke-Native 'dotnet publish (connector-control)' 'dotnet' @(
-    'publish', $cliProject, '-c', 'Release', '-r', $Runtime, '--self-contained', 'true',
-    '-p:PublishSingleFile=true', '-p:EnableCompressionInSingleFile=true', '-p:PublishTrimmed=true',
-    "-p:Version=$Version", '-o', $cliPublishDir)
+    'publish', $cliProject, '-c', 'Release', '-r', $Runtime, "-p:Version=$Version", '-o', $cliPublishDir)
 $cliExe = Join-Path $cliPublishDir 'connector-control.exe'
 if (-not (Test-Path $cliExe)) { throw "publish produced no $cliExe" }
 # Only the exe: the publish folder's .pdb stays out of the package.
@@ -133,7 +120,9 @@ if ($AzureTrustedSignFile) { $packArgs += @('--azureTrustedSignFile', (Resolve-P
 # windows/, not wherever this script itself was invoked from.
 Push-Location $windowsDir
 try {
-    Invoke-Native 'vpk pack' $vpkExe ($vpkPrefixArgs + $packArgs)
+    # 'dotnet vpk': the local tool windows/.config/dotnet-tools.json pins (restored by
+    # `dotnet tool restore` in windows/).
+    Invoke-Native 'vpk pack' 'dotnet' (@('vpk') + $packArgs)
 }
 finally {
     Pop-Location

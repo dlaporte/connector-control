@@ -48,7 +48,7 @@ public partial class ImportDialog : DialogWindow
     /// <summary>
     /// The two strings a binding cannot carry: the count beside Import and the mode's own sentence
     /// are built from a value rather than being properties of their own. Everything else is bound,
-    /// Import's IsEnabled included. Reached only through the model's own notification — a row, the
+    /// Import's IsEnabled included. Reached only through the model's own notification - a row, the
     /// mode or the target raises the count and CanImport that follow it.
     /// </summary>
     private void Refresh()
@@ -72,7 +72,7 @@ public partial class ImportDialog : DialogWindow
 }
 
 /// <summary>
-/// One collision choice's picker label, from <see cref="ImportModel.ChoiceTitle"/> — the row's
+/// One collision choice's picker label, from <see cref="ImportModel.ChoiceTitle"/> - the row's
 /// picker holds the choices themselves, so the titles are read off them here rather than kept as
 /// a second list beside them.
 /// </summary>
@@ -83,7 +83,7 @@ public sealed class ImportChoiceTitleConverter : OneWayConverter<ImportChoice>
 
 /// <summary>
 /// A row control's accessibility name, from the connector it acts on: the tick's
-/// <see cref="ImportModel.IncludeLabel"/>, or — with <c>choice</c> as the parameter — the collision
+/// <see cref="ImportModel.IncludeLabel"/>, or - with <c>choice</c> as the parameter - the collision
 /// picker's <see cref="ImportModel.CollisionPickerLabel"/>. Both are factories over the row's own
 /// name, which a DataTemplate cannot call.
 /// </summary>

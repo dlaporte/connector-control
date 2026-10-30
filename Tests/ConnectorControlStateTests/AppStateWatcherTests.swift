@@ -7,11 +7,11 @@ import ConnectorControlTestSupport
 /// against the real DispatchSource watchers. `touchWatchedFiles()`/
 /// `TempDir.bumpModificationDate` keep an external write's mtime distinct
 /// from the file the harness (or a prior write in the same test) just wrote,
-/// deterministically — no sleep needed to let real time do that.
+/// deterministically - no sleep needed to let real time do that.
 @MainActor
 final class AppStateWatcherTests: XCTestCase {
     /// A window to prove an event does NOT arrive (an echo stays quiet, a
-    /// watcher stays silent) — unlike `Wait.eventually`, timing out here is the pass case,
+    /// watcher stays silent) - unlike `Wait.eventually`, timing out here is the pass case,
     /// so it cannot be replaced by `pumpUntil` waiting on a condition.
     private let settle: TimeInterval = 1.5
     private let fixture = ["aws-mcp", "scoutbook", "service-now"]
@@ -60,7 +60,7 @@ final class AppStateWatcherTests: XCTestCase {
     }
 
     /// A synced list can add a command Claude will run. With Claude not running there is no
-    /// restart to offer, but the adoption still has to be announced — before, every branch of
+    /// restart to offer, but the adoption still has to be announced - before, every branch of
     /// the notification chain missed this case and the new server simply started next launch.
     func testStoreWatcherAnnouncesAnAdoptedAdditionEvenWhenClaudeIsNotRunning() throws {
         let h = AppStateHarness()
@@ -233,6 +233,29 @@ final class AppStateWatcherTests: XCTestCase {
         XCTAssertEqual(state.service.backups.keepCount, 7)
         XCTAssertNil(h.settings.lastApplyDate)
         XCTAssertEqual(state.sortedNames, fixture)
+    }
+
+    /// A keep count is the only thing that changes, so no path does: the watchers stay as they are
+    /// (a replacement would re-baseline their last-seen mtime), and so does what the app knows of the
+    /// sidecar on disk, so the next save does not rewrite an unchanged collections.json.
+    func testAKeepCountChangeKeepsTheWatchersAndTheSavedSidecar() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        state.setEnabled("aws-mcp", false)   // the sidecar is on disk, as this app wrote it
+        let sidecar = state.service.paths.collectionsFileURL
+        let watchers = state.watcherIdentities
+
+        h.settings.backupKeepCount = 7
+        state.refreshServiceSettings()
+        XCTAssertEqual(state.service.backups.keepCount, 7)
+        XCTAssertEqual(state.watcherIdentities.claude, watchers.claude)
+        XCTAssertEqual(state.watcherIdentities.store, watchers.store)
+
+        let longAgo = Date(timeIntervalSince1970: 1_000_000_000)
+        try FileManager.default.setAttributes([.modificationDate: longAgo], ofItemAtPath: sidecar.path)
+        state.setEnabled("aws-mcp", true)
+        let modified = try FileManager.default.attributesOfItem(atPath: sidecar.path)[.modificationDate] as? Date
+        XCTAssertEqual(modified, longAgo, "a save that changes nothing about collections leaves collections.json alone")
     }
 
     func testRestoreClaudeConfigIsQuietAndSyncsTheBaseline() throws {

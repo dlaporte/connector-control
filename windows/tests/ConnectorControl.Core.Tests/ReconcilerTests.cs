@@ -1,3 +1,5 @@
+using ConnectorControl.Core.Tests.TestSupport;
+
 namespace ConnectorControl.Core.Tests;
 
 /// <summary>Mirror: Tests/ConnectorControlCoreTests/ReconcilerTests.swift</summary>
@@ -7,12 +9,12 @@ public class ReconcilerTests
     private static readonly JsonValue ConfigB = JsonValue.Object(("command", JsonValue.String("b")));
 
     private static MasterStore Store(params (string Name, McpEntry Entry)[] mcps) =>
-        new(mcps.Select(m => new KeyValuePair<string, McpEntry>(m.Name, m.Entry)));
+        MasterStore.Single(mcps.Select(m => new KeyValuePair<string, McpEntry>(m.Name, m.Entry)));
 
     private static Dictionary<string, JsonValue> Servers(params (string Name, JsonValue Config)[] servers) =>
         servers.ToDictionary(s => s.Name, s => s.Config, StringComparer.Ordinal);
 
-    // ingestion — the only file→store flow
+    // ingestion - the only file→store flow
 
     [Fact]
     public void UnknownServerIsImportedEnabled()
@@ -38,7 +40,40 @@ public class ReconcilerTests
         Assert.True(outcome.StoreChanged);
     }
 
-    // store is the source of truth — the file never edits known entries
+    // store is the source of truth - the file never edits known entries
+
+    /// <summary>An entry the store no longer holds, changed in Claude's file only in how a character is
+    /// composed, is an edit made outside the app, as it is on the Mac: taken in, not left for removal.</summary>
+    [Fact]
+    public void AnEditOnlyInHowACharacterIsComposedIsExternal()
+    {
+        var composed = JsonValue.Object(("command", JsonValue.String("caf\u00E9")));
+        var decomposed = JsonValue.Object(("command", JsonValue.String("cafe\u0301")));
+        var outcome = Reconciler.Reconcile(MasterStore.Empty(), Servers(("gone", decomposed)), Servers(("gone", composed)));
+        Assert.Equal(decomposed, outcome.Store.Mcps["gone"].Config);
+        Assert.True(outcome.StoreChanged);
+    }
+
+    /// <summary>A name in Claude's file spelled another way, é decomposed where the store composes it, is the
+    /// store's own connector, as on the Mac: nothing is taken in.</summary>
+    [Fact]
+    public void ANameSpelledAnotherWayIsTheStoresConnector()
+    {
+        var outcome = Reconciler.Reconcile(Store(("caf\u00E9", new McpEntry(true, ConfigA))), Servers(("cafe\u0301", ConfigB)));
+        Assert.Single(outcome.Store.Mcps);
+        Assert.Equal(ConfigA, outcome.Store.Mcps["caf\u00E9"].Config);
+        Assert.False(outcome.StoreChanged);
+    }
+
+    /// <summary>A connector pending removal that Claude's file names in another spelling than the baseline
+    /// is still the one this app applied, as on the Mac: it is not taken back in.</summary>
+    [Fact]
+    public void APendingRemovalSpelledAnotherWayIsNotResurrected()
+    {
+        var outcome = Reconciler.Reconcile(MasterStore.Empty(), Servers(("cafe\u0301", ConfigA)), Servers(("caf\u00E9", ConfigA)));
+        Assert.Empty(outcome.Store.Mcps);
+        Assert.False(outcome.StoreChanged);
+    }
 
     [Fact]
     public void ExternalEditDoesNotChangeStore()

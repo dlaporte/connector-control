@@ -233,7 +233,7 @@ final class ClaudeIntegrationTests: XCTestCase {
 
     // MARK: Where the app runs from, and whether it can be reached
 
-    /// A Mac app run from where it will not stay — translocated, or from its disk image — refuses to
+    /// A Mac app run from where it will not stay - translocated, or from its disk image - refuses to
     /// turn the integration on, and leaves an entry Claude already has exactly as it is rather than
     /// write a path that will be gone. Turning it off still works.
     func testAnAppRunFromWhereItWillNotStayRefusesTheIntegrationAndLeavesTheEntry() throws {
@@ -255,7 +255,7 @@ final class ClaudeIntegrationTests: XCTestCase {
     }
 
     /// With the switch on but no entry in Claude's config, an app run from where it will not stay
-    /// adds none — not at launch, and not when an apply writes Claude's config for another reason.
+    /// adds none - not at launch, and not when an apply writes Claude's config for another reason.
     func testAnAppRunFromWhereItWillNotStayAddsNoEntryWhereClaudeHasNone() throws {
         let h = AppStateHarness(); defer { h.dispose() }
         h.settings.claudeIntegrationEnabled = true

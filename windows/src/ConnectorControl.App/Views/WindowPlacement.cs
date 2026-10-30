@@ -6,8 +6,10 @@ namespace ConnectorControl.App.Views;
 /// <summary>
 /// The flyout opens beside the notification area (fallbacks: the
 /// cursor, then the work-area corner). Every coordinate here is a physical
-/// pixel — what TrayInfo.GetTrayLocation, GetCursorPos, GetMonitorInfo and
-/// SetWindowPos all speak — so no DPI conversion happens anywhere.
+/// pixel - what TrayInfo.GetTrayLocation, GetCursorPos, GetMonitorInfo and
+/// SetWindowPos all speak - so no DPI conversion happens in the placement.
+/// The one exception is <see cref="WorkAreaHeightInDips"/>, which sizes a
+/// WPF window and so answers in WPF's units.
 /// </summary>
 public static class WindowPlacement
 {
@@ -47,7 +49,7 @@ public static class WindowPlacement
     /// The anchoring rule, pure so it can be unit-tested: the notification
     /// area's own corner if the shell reported one, else the cursor, else the
     /// bottom-right corner of the work area. (0,0) from either source means
-    /// "not reported" — neither the tray nor a real cursor ever sits there.
+    /// "not reported" - neither the tray nor a real cursor ever sits there.
     /// </summary>
     public static Point Anchor(Point? tray, Point? cursor, Rectangle workArea)
     {
@@ -78,6 +80,22 @@ public static class WindowPlacement
         var target = PlaceNear(anchor, workArea, size);
         SetWindowPos(hwnd, HWND_TOPMOST, target.X, target.Y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
     }
+
+    /// <summary>
+    /// The height of the work area of the monitor <paramref name="hwnd"/> is on (the nearest one), in device-independent
+    /// pixels: its physical pixels at the window's own DPI, which, per-monitor aware as this app is, is that monitor's.
+    /// Null when either query fails.
+    /// </summary>
+    public static double? WorkAreaHeightInDips(nint hwnd)
+    {
+        var monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+        var dpi = GetDpiForWindow(hwnd);
+        return GetMonitorInfo(monitor, ref info) && dpi != 0 ? ToDips(info.rcWork.Bottom - info.rcWork.Top, dpi) : null;
+    }
+
+    /// <summary><paramref name="pixels"/> physical pixels at <paramref name="dpi"/> dots per inch, in WPF's 1/96 inch.</summary>
+    public static double ToDips(int pixels, uint dpi) => pixels * 96.0 / dpi;
 
     /// <summary>Work area of the monitor nearest <paramref name="point"/>; a 1920×1080 guess if the query fails.</summary>
     private static Rectangle WorkAreaAround(Point point)
@@ -124,6 +142,12 @@ public static class WindowPlacement
 
     [DllImport("user32.dll")]
     private static extern nint MonitorFromPoint(POINT point, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern nint MonitorFromWindow(nint hwnd, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(nint hwnd);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetMonitorInfoW")]
     private static extern bool GetMonitorInfo(nint monitor, ref MONITORINFO info);

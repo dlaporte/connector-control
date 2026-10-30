@@ -12,8 +12,7 @@ public interface IMcpToolHost
     IReadOnlyList<JsonValue> ListTools();
 
     /// <summary>
-    /// What <c>tools/call</c> answers for a tool this host does not list: the session's own sentence,
-    /// or one that says why the tool is missing.
+    /// What <c>tools/call</c> answers for a tool this host does not list, in the host's own words.
     /// </summary>
     string UnknownToolMessage(string name);
 

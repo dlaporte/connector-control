@@ -30,7 +30,7 @@ public class AppStateWatcherTests
     }
 
     // Notify()'s settings.NotifyExternalChanges
-    // gate had no direct coverage — only that the reload/regeneration it would announce still happens.
+    // gate had no direct coverage - only that the reload/regeneration it would announce still happens.
     [Fact]
     public void ExternalEditIsSilentWhenNotifyExternalChangesIsDisabledButStillReloads()
     {
@@ -64,7 +64,7 @@ public class AppStateWatcherTests
 
     /// <summary>
     /// A synced list can add a command Claude will run. With Claude not running there is no restart
-    /// to offer, but the adoption still has to be announced — before, every branch of the
+    /// to offer, but the adoption still has to be announced - before, every branch of the
     /// notification chain missed this case and the new server simply started next launch.
     /// </summary>
     [Fact]
@@ -173,7 +173,7 @@ public class AppStateWatcherTests
     }
 
     /// <summary>A seed write that fails must not switch the store to a location with no
-    /// mcps.json — Reload would read that as empty and quietly wipe the connector list.</summary>
+    /// mcps.json - Reload would read that as empty and quietly wipe the connector list.</summary>
     [Fact]
     public void ARepointWhoseSeedCannotBeWrittenKeepsTheOldStore()
     {
@@ -233,6 +233,30 @@ public class AppStateWatcherTests
         Assert.Equal(7, state.Service.Backups.KeepCount);
         Assert.Null(h.Settings.LastApplyDate);
         Assert.Equal(Fixture, state.SortedNames);
+    }
+
+    /// <summary>A keep count is the only thing that changes, so no path does: the watchers stay as
+    /// they are (a replacement would re-baseline their last-seen mtime), and so does what the app
+    /// knows of the sidecar on disk, so the next save does not rewrite an unchanged collections.json.</summary>
+    [Fact]
+    public void AKeepCountChangeKeepsTheWatchersAndTheSavedSidecar()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        state.SetEnabled("aws-mcp", false);   // the sidecar is on disk, as this app wrote it
+        var sidecar = state.Service.Paths.CollectionsFilePath;
+        var watchers = state.WatcherIdentities;
+
+        h.Settings.BackupKeepCount = 7;
+        state.RefreshServiceSettings();
+        Assert.Equal(7, state.Service.Backups.KeepCount);
+        Assert.Same(watchers.Claude, state.WatcherIdentities.Claude);
+        Assert.Same(watchers.Store, state.WatcherIdentities.Store);
+
+        var longAgo = new DateTime(2001, 9, 9, 1, 46, 40, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(sidecar, longAgo);
+        state.SetEnabled("aws-mcp", true);
+        Assert.Equal(longAgo, File.GetLastWriteTimeUtc(sidecar));   // a save that changes nothing about collections leaves collections.json alone
     }
 
     [Fact]

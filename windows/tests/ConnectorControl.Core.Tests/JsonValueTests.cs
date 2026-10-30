@@ -126,6 +126,18 @@ public class JsonValueTests
         Assert.Equal(JsonValue.Int(1), JsonValue.Parse("{\"k\": 1, \"k\": 2}")["k"]);
     }
 
+    /// <summary>A key in two spellings Unicode counts as the same text (é composed, then decomposed) is one
+    /// key, and the first in the document wins, spelling and value, as on the Mac.</summary>
+    [Fact]
+    public void FirstSpellingOfADuplicateKeyWins()
+    {
+        var value = JsonValue.Parse("{\"caf\u00E9\": 1, \"cafe\u0301\": 2}");
+        Assert.Equal(["caf\u00E9"], value.ObjectProperties.Keys);
+        Assert.Equal(JsonValue.Int(1), value["caf\u00E9"]);
+        var nested = JsonValue.Parse("{\"env\": {\"cafe\u0301\": \"a\", \"caf\u00E9\": \"b\"}}");
+        Assert.Equal(JsonValue.Object(("env", JsonValue.Object(("cafe\u0301", JsonValue.String("a"))))), nested);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("{not json!!")]
@@ -190,5 +202,21 @@ public class JsonValueTests
         Assert.ThrowsAny<JsonException>(() => JsonValue.Parse(Nested(65)));
         Assert.ThrowsAny<JsonException>(() => JsonValue.Parse(Nested(70)));
         JsonValue.Parse("[\"" + new string('[', 70) + "\"]");
+    }
+
+    /// <summary>Text is compared ordinally, as the Mac compares it scalar by scalar: é as one character and
+    /// as e and a combining accent are different values, in a string and in a key alike, and a set
+    /// holds both.</summary>
+    [Fact]
+    public void TextComposedAnotherWayIsAnotherValue()
+    {
+        const string composed = "caf\u00E9", decomposed = "cafe\u0301";
+        Assert.NotEqual(JsonValue.String(composed), JsonValue.String(decomposed));
+        Assert.NotEqual(JsonValue.Array([JsonValue.String(composed)]), JsonValue.Array([JsonValue.String(decomposed)]));
+        Assert.NotEqual(JsonValue.Object((composed, JsonValue.Int(1))), JsonValue.Object((decomposed, JsonValue.Int(1))));
+        Assert.Equal(2, new HashSet<JsonValue> { JsonValue.String(composed), JsonValue.String(decomposed) }.Count);
+        Assert.Equal(JsonValue.Object((composed, JsonValue.Array([JsonValue.String(decomposed)]))),
+                     JsonValue.Object((composed, JsonValue.Array([JsonValue.String(decomposed)]))));
+        Assert.NotEqual(JsonValue.Int(1), JsonValue.Double(1));
     }
 }

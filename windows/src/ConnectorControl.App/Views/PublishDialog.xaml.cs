@@ -2,14 +2,15 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Interop;
 using ConnectorControl.Core.State;
 
 namespace ConnectorControl.App.Views;
 
 /// <summary>
 /// The Publish dialog and, in the model's other mode, the Export dialog: layout, bindings and the
-/// two native pickers. Every rule and string is PublishModel's — the mode included, and with it
-/// the title, the gate and the verb — and so is every refresh: a tick or a keystroke reaches the
+/// two native pickers. Every rule and string is PublishModel's - the mode included, and with it
+/// the title, the gate and the verb - and so is every refresh: a tick or a keystroke reaches the
 /// preview because the row it changed raises it, not because this window nudges a binding.
 /// </summary>
 public partial class PublishDialog : DialogWindow
@@ -29,6 +30,18 @@ public partial class PublishDialog : DialogWindow
         ExportButton.Visibility = publishing ? Visibility.Collapsed : Visibility.Visible;
         PublishButton.IsDefault = publishing;
         ExportButton.IsDefault = !publishing;
+        // With env and path rows, open questions and warnings all showing, the dialog asks for more than a 1080p
+        // screen at 150% has. Capped at the work area, the preview gives way and the buttons stay on screen. The
+        // work area of the screen it opens on: its owner's, as it centres there, or, with no owner, its own. Until
+        // the dialog has a window to ask about, the primary screen's.
+        MaxHeight = SystemParameters.WorkArea.Height;
+        SourceInitialized += (_, _) =>
+        {
+            if (WindowPlacement.WorkAreaHeightInDips(new WindowInteropHelper(Owner ?? this).Handle) is { } height)
+            {
+                MaxHeight = height;
+            }
+        };
     }
 
     public PublishModel Model { get; }

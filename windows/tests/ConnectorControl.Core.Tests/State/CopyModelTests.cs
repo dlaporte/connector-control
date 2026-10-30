@@ -41,7 +41,7 @@ public class CopyModelTests
 
         var model = new CopyModel(collections, "Spare");
         Assert.Equal("Spare", model.Destination);
-        // CheckedNames follows the rows, which the window shows in ordinal order — not the order
+        // CheckedNames follows the rows, which the window shows in ordinal order - not the order
         // the ticks were made in.
         Assert.Equal(["alpha", "beta", "zeta"], model.Rows.Select(r => r.Name));   // the ticks' own display order
         Assert.Equal(["alpha", "beta", "zeta"], model.Rows.Select(r => r.Id));

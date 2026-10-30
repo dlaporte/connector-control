@@ -31,7 +31,7 @@ public partial class ConfirmDialog : DialogWindow
             PrimaryButton.Style = style;
         }
         // Return presses the cancel button wherever the keyboard is, and the primary answers only a
-        // click: a focused button takes Return itself, so the primary is told not to — Tab, or a press
+        // click: a focused button takes Return itself, so the primary is told not to - Tab, or a press
         // dragged off it, can leave the keyboard there. The accent goes with the default, and a
         // destructive primary keeps its red. Escape stays on Cancel. The keyboard starts on the cancel
         // button, as it does on the Mac: the window gives it to the element its focus scope names when it
@@ -51,8 +51,8 @@ public partial class ConfirmDialog : DialogWindow
     }
 
     /// <summary>The confirmation of a change Claude asks for: the question with every name in the monospaced
-    /// face, what would run, the closing line, and Don’t Allow — the default, which Return presses wherever
-    /// the keyboard is and Escape presses, as closing the window answers, and where the keyboard starts —
+    /// face, what would run, the closing line, and Don’t Allow - the default, which Return presses wherever
+    /// the keyboard is and Escape presses, as closing the window answers, and where the keyboard starts -
     /// before Allow, which answers only a click.</summary>
     public ConfirmDialog(ConfirmationDialog question)
         : this(string.Empty, null, ConfirmationDialog.AllowButton, ConfirmationDialog.DontAllowButton, destructive: false, cancelIsDefault: true)

@@ -12,10 +12,13 @@ namespace ConnectorControl.App.Views;
 /// <summary>
 /// The Claude tab icon is Claude's own icon, extracted from the
 /// resolved exe and desaturated (the Mac uses the template tray glyph). Best
-/// effort — null means "use the generic glyph".
+/// effort - null means the tab keeps SettingsWindow's ClaudeFallbackGlyph.
 /// </summary>
 public static class ClaudeIconLoader
 {
+    /// <summary>The extracted bitmap's size: twice the 16 DIPs it is shown at, so it stays sharp up to 200%.</summary>
+    internal const int IconPixels = 32;
+
     public static ImageSource? Load(ClaudeInstallInfo info)
     {
         var exe = ExecutablePath(info);
@@ -30,12 +33,13 @@ public static class ClaudeIconLoader
             {
                 return null;
             }
-            var source = Imaging.CreateBitmapSourceFromHIcon(icon.Handle, Int32Rect.Empty, BitmapSizeOptions.FromWidthAndHeight(16, 16));
+            // Read at 32 pixels, though shown at 16 DIPs: at 150-200% scaling a 16-pixel bitmap would be scaled up and blur.
+            var source = Imaging.CreateBitmapSourceFromHIcon(icon.Handle, Int32Rect.Empty, BitmapSizeOptions.FromWidthAndHeight(IconPixels, IconPixels));
             return Desaturate(source);
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or COMException or Win32Exception)
         {
-            return null;   // WindowsApps folders are often unreadable; the generic glyph is fine
+            return null;   // WindowsApps folders are often unreadable; the fallback glyph is fine
         }
     }
 

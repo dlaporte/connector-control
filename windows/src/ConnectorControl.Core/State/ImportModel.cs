@@ -4,7 +4,7 @@ namespace ConnectorControl.Core.State;
 
 /// <summary>
 /// The Import sheet: one collection document, and the two exclusive things that can be done with
-/// it — copies into a collection the user owns, or a collection of its own that stays in sync with
+/// it - copies into a collection the user owns, or a collection of its own that stays in sync with
 /// the file. Every row says what would happen to that connector before anything happens, because
 /// an import lands commands Claude will run.
 ///
@@ -46,7 +46,7 @@ public sealed class ImportModel : ObservableObject
 
     /// <summary>
     /// A screen reader's name for a collision's choice picker. Without one it reads out the
-    /// badge beside it, which says the row is skipped — the opposite of what the picker is for.
+    /// badge beside it, which says the row is skipped - the opposite of what the picker is for.
     /// </summary>
     public static string CollisionPickerLabel(string connector) => $"What to do with {connector}";
 
@@ -102,10 +102,11 @@ public sealed class ImportModel : ObservableObject
     }
 
     /// <summary>
-    /// One target's picker label: the collection's name, or New Collection, the words Copy to's menu
-    /// ends with for the same thing.
+    /// One target's picker label: the collection's name, or New Collection, the title of the prompt
+    /// that names it. Without Copy to's ellipsis: choosing it here asks for nothing until Import is
+    /// pressed.
     /// </summary>
-    public static string TargetTitle(Target target) => target.Collection ?? CollectionsModel.NewButton;
+    public static string TargetTitle(Target target) => target.Collection ?? AppState.NewCollectionTitle;
 
     /// <summary>
     /// One connector of the document against the collection it would land in. <see cref="Present"/>
@@ -143,7 +144,7 @@ public sealed class ImportModel : ObservableObject
         public IReadOnlyList<string> Needs { get; } = needs;
 
         /// <summary>
-        /// The caution glyph's tooltip, or null for no glyph — the same sentence a connector of
+        /// The caution glyph's tooltip, or null for no glyph - the same sentence a connector of
         /// the collection this row lands in already carries for the same condition, rather than a
         /// second wording of it. Filled by the model, as <c>CollectionsModel.Row.Caution</c> is.
         /// </summary>
@@ -219,7 +220,7 @@ public sealed class ImportModel : ObservableObject
         Author = document.Author;
         rendered = document.Render();
         // The document's name, suffixed until it is one no collection here already answers to.
-        syncName = FreeName(document.Name, state.CollectionNames);
+        syncName = FreeName.First(document.Name, new HashSet<string>(state.CollectionNames, Collection.NameComparer).Contains);
         RebuildRows();
     }
 
@@ -410,7 +411,7 @@ public sealed class ImportModel : ObservableObject
     }
 
     /// <summary>
-    /// "“Data team” by Acme Data Platform · 4 connectors" — what the file says about itself. The
+    /// "“Data team” by Acme Data Platform · 4 connectors" - what the file says about itself. The
     /// Mac calls this <c>sourceLine</c>; here the static factory already owns that name.
     /// </summary>
     public string SourceSentence => SourceLine(DocumentName, Author ?? UnknownAuthor, Rows.Count);
@@ -482,7 +483,7 @@ public sealed class ImportModel : ObservableObject
     }
 
     /// <summary>
-    /// One row per connector the document carries, including the ones this platform excludes — a
+    /// One row per connector the document carries, including the ones this platform excludes - a
     /// connector that cannot come across is worth seeing and saying why. Ticked by default unless
     /// something already answers to that name in the target, which is the one case where importing
     /// takes a decision from the user.
@@ -515,21 +516,5 @@ public sealed class ImportModel : ObservableObject
                            needs.Count == 0 ? null : AppState.NeedsValueCaution(string.Join(", ", needs)),
                            Badge(reason, present));
         }).ToList();
-    }
-
-    /// <summary><paramref name="name"/>, or "name 2", "name 3", … — the first one nothing in <paramref name="taken"/> answers to.</summary>
-    private static string FreeName(string name, IReadOnlyList<string> taken)
-    {
-        var used = new HashSet<string>(taken, StringComparer.Ordinal);
-        if (!used.Contains(name))
-        {
-            return name;
-        }
-        var suffix = 2;
-        while (used.Contains(name + " " + suffix.ToString(CultureInfo.InvariantCulture)))
-        {
-            suffix++;
-        }
-        return name + " " + suffix.ToString(CultureInfo.InvariantCulture);
     }
 }

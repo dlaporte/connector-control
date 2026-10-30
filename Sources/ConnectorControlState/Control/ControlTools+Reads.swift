@@ -32,7 +32,9 @@ extension ControlTools {
 
     public static func statusTitle(_ version: String) -> String { "Connector Control \(version)" }
 
-    public static func connectorCountText(_ total: Int, _ on: Int) -> String { "\(total) connectors, \(on) on" }
+    public static func connectorCountText(_ total: Int, _ on: Int) -> String {
+        total == 1 ? "\(total) connector, \(on) on" : "\(total) connectors, \(on) on"
+    }
 
     public static func installHint(_ title: String, _ command: String) -> String { "\(title): \(command)" }
 
@@ -112,7 +114,7 @@ extension ControlTools {
                              isError: false)
     }
 
-    /// Probes all four launchers again — the user may have installed one since — and answers once
+    /// Probes all four launchers again - the user may have installed one since - and answers once
     /// every result is in.
     func checkTools(_ done: @escaping (ControlResult) -> Void) {
         state.refreshTools()
@@ -122,8 +124,8 @@ extension ControlTools {
         }
     }
 
-    /// Each launcher as the app's own words put it — "Found", "Not found" or, on the Mac, "Not visible
-    /// to Claude Desktop"; never a version, so the column reads the same whatever is installed — with
+    /// Each launcher as the app's own words put it - "Found", "Not found" or, on the Mac, "Not visible
+    /// to Claude Desktop"; never a version, so the column reads the same whatever is installed - with
     /// where it is or how to install it.
     func toolsResult() -> ControlResult {
         var rows: [[String]] = []
@@ -196,7 +198,7 @@ extension ControlTools {
         var items: [JSONValue] = []
         for name in held.mcps.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
             guard let entry = held.mcps[name] else { continue }
-            let runs = CollectionsModel.target(of: entry.config)
+            let runs = ConnectorTarget.target(of: entry.config)
             rows.append([entry.enabled ? ControlTools.onWord : ControlTools.offWord, ControlText.escapedName(name), runs])
             items.append(.object([
                 "name": .string(name),
@@ -232,8 +234,8 @@ extension ControlTools {
                              isError: false)
     }
 
-    /// What an update adds, deletes and changes, each name quoted through `ControlText.quotedList(_:)`
-    /// — the document's author names its connectors — so that none can invent a clause of its own.
+    /// What an update adds, deletes and changes, each name quoted through `ControlText.quotedList(_:)` -
+    /// the document's author names its connectors - so that none can invent a clause of its own.
     /// The window's banner, written for names read beside a list, joins them bare.
     static func changesText(_ diff: CollectionDiff) -> String {
         var clauses: [String] = []
@@ -243,6 +245,15 @@ extension ControlTools {
         return clauses.joined(separator: clauseSeparator)
     }
 
+    /// The refusal for a subscribed collection whose document can't be read, nil when it can:
+    /// get_pending_update and apply_update both answer with it. The problem names the document's
+    /// file, unquoted.
+    func sourceProblem(_ collection: String) -> String? {
+        guard let problem = state.sourceErrors[collection] else { return nil }
+        let file = state.sourceBinding(of: collection)?.path.map { URL(fileURLWithPath: $0).lastPathComponent }
+        return file.map { ControlTools.shown(problem, leadingWith: $0) } ?? ControlText.escaped(problem)
+    }
+
     /// What an update would change: the window's banner, with the collection quoted and every name
     /// through `ControlText.escapedName(_:)`, since others chose them. refresh_subscription answers
     /// with it, and is announced with it when it lands late; apply_update asks with it.
@@ -250,11 +261,7 @@ extension ControlTools {
         let shown = ControlText.escapedName(collection)
         guard state.store.collections[collection] != nil else { return .refusal(MasterStore.noCollectionError(shown)) }
         guard state.isSynced(collection) else { return .refusal(ControlTools.notSubscribedError(shown)) }
-        if let problem = state.sourceErrors[collection] {
-            // The problem names the document's file, unquoted.
-            let file = state.sourceBinding(of: collection)?.path.map { URL(fileURLWithPath: $0).lastPathComponent }
-            return .refusal(file.map { ControlTools.shown(problem, leadingWith: $0) } ?? ControlText.escaped(problem))
-        }
+        if let problem = sourceProblem(collection) { return .refusal(problem) }
         let diff = state.pendingUpdates[collection]
         let structured: JSONValue = .object([
             "collection": .string(collection),

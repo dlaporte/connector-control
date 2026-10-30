@@ -34,7 +34,7 @@ final class CopyModelTests: XCTestCase {
 
         let model = CopyModel(collections: collections, destination: "Spare")
         XCTAssertEqual(model.destination, "Spare")
-        // checkedNames follows the rows, which the window shows in ordinal order — not the order
+        // checkedNames follows the rows, which the window shows in ordinal order - not the order
         // the ticks were made in.
         XCTAssertEqual(model.rows.map(\.name), ["alpha", "beta", "zeta"], "the ticks' own display order")
         XCTAssertEqual(model.rows.map(\.id), ["alpha", "beta", "zeta"])

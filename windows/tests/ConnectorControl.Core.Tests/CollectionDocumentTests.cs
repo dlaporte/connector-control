@@ -9,6 +9,23 @@ public class CollectionDocumentTests
     /// <summary>Shared with the State tests, which subscribe to this document on disk.</summary>
     private static CollectionDocument Sample => CollectionDocumentSamples.DataTeam;
 
+    /// <summary>
+    /// A hand-written document naming one connector in two spellings (é composed and decomposed) reads as
+    /// one connector, the first, as on the Mac; so once that connector is held, nothing is pending.
+    /// </summary>
+    [Fact]
+    public void AConnectorNamedInTwoSpellingsReadsAsOne()
+    {
+        var github = Sample.Connectors["github"];
+        var twice = new CollectionDocument("Twice", null, null, Sample.Exported,
+            [new("cafe\u0301", github), new("caf\u00E9", github)]);
+        var read = CollectionDocument.Decode(twice.Serialize());
+        Assert.Single(read.Connectors);
+        var rendered = read.Render();
+        var held = rendered.Connectors.ToDictionary(p => p.Key, p => new McpEntry(true, p.Value.Config), Collection.NameComparer);
+        Assert.True(CollectionDiff.Pending(rendered, held).IsEmpty);
+    }
+
     [Fact]
     public void EncodeDecodeRoundTrip()
     {

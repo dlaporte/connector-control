@@ -11,7 +11,7 @@ import AppKit
 /// auto-grow, this shim, the measured scroll-cap feedback), and a violent
 /// content change like a collection switch interleaves them. A delta-based
 /// correction that preserves the current top edge perpetuates whatever
-/// transient frame it happened to read — the frame is therefore always set
+/// transient frame it happened to read - the frame is therefore always set
 /// to absolutes (anchored top, content-ideal height) computed from stable
 /// facts, so competing passes converge instead of compounding drift.
 struct WindowAutoSizer: NSViewRepresentable {
@@ -25,8 +25,8 @@ struct WindowAutoSizer: NSViewRepresentable {
         private var anchoredWindow: NSWindow?
         private var anchorTop: CGFloat?
         /// Tracks visibility TRANSITIONS: the anchor is recorded on the first
-        /// observation after the window becomes visible — by whichever runs
-        /// first, the occlusion notification or a scheduled resize — because
+        /// observation after the window becomes visible - by whichever runs
+        /// first, the occlusion notification or a scheduled resize - because
         /// that is when the system has just positioned the panel under the
         /// status item (a reopen may be on another display). Anchoring at
         /// view-attach time recorded a not-yet-positioned frame, and
@@ -98,7 +98,7 @@ struct WindowAutoSizer: NSViewRepresentable {
             // Pre-show frames belong to the system's placement pass.
             guard let window, let anchorTop, window.isVisible else { return }
             // This view is the root VStack's background, so its own laid-out
-            // height IS the content's ideal height — even while the window is
+            // height IS the content's ideal height - even while the window is
             // stuck at another size. (contentView.fittingSize just echoes the
             // current frame for hosting views, which is why it can't detect
             // slack.)

@@ -12,7 +12,7 @@ public enum CollectionBanner: Equatable, Sendable {
     /// The last attempt to write a published collection's document failed. Another folder is an
     /// answer, which is why this banner offers Choose Folder.
     case publishFailed(collection: String, message: String)
-    /// Publishing refused to write, for the author to review — a marked path that has moved, say.
+    /// Publishing refused to write, for the author to review - a marked path that has moved, say.
     /// Another folder answers nothing here: it would re-bind the collection, write nothing there
     /// and abandon the document the old folder still holds. The Publish sheet is the answer.
     case publishBlocked(collection: String, message: String)

@@ -11,7 +11,7 @@ namespace ConnectorControl.Core.Tests.State;
 public class PublishModelTests
 {
     /// <summary>One local connector with a stripped and a shared environment value and one
-    /// absolute path argument — a row of each kind the sheet offers.</summary>
+    /// absolute path argument - a row of each kind the sheet offers.</summary>
     private static JsonValue Connector() => JsonValue.Object(new Dictionary<string, JsonValue>(StringComparer.Ordinal)
     {
         ["command"] = JsonValue.String("node"),
@@ -105,6 +105,44 @@ public class PublishModelTests
             ("args", JsonValue.Array([JsonValue.String("C:/tools/x.js"), JsonValue.String("C:\\tools\\y.js"), JsonValue.String("é:\\z.js")])))), null));
         var model = new PublishModel(state, state.ActiveCollection);
         Assert.Equal(["C:/tools/x.js", "C:\\tools\\y.js"], model.PathRows.Where(r => r.Connector == "win").Select(r => r.Value));
+    }
+
+    /// <summary>A network path (<c>\\server\share\…</c>) is offered too: it names the same place wherever
+    /// it is opened, as a drive root does. A single leading backslash is not one.</summary>
+    [Fact]
+    public void AUncPathIsOfferedAsAPathRow()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        Assert.Null(state.Upsert("unc", new McpEntry(true, JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([JsonValue.String("\\\\server\\share\\x.js"), JsonValue.String("\\y.js")])))), null));
+        var model = new PublishModel(state, state.ActiveCollection);
+        Assert.Equal(["\\\\server\\share\\x.js"], model.PathRows.Where(r => r.Connector == "unc").Select(r => r.Value));
+    }
+
+    /// <summary>
+    /// Whether an argument is offered as a path is read from how it is written, never from what this
+    /// process's working directory holds: that depends on how the app was started, and the same
+    /// collection must offer the same rows wherever it is opened. Besides the window's explicit
+    /// paths, "." and ".." and their Windows-written forms count; a bare word, or a relative name
+    /// with a separator inside it (a package, an image), does not, even when the working directory
+    /// holds something by that name.
+    /// </summary>
+    [Fact]
+    public void APathRowIsOfferedByHowTheArgumentIsWrittenNotByTheWorkingDirectory()
+    {
+        using var h = new AppStateHarness();
+        using var state = Started(h);
+        var cwd = Directory.GetCurrentDirectory();
+        var held = Directory.EnumerateFileSystemEntries(cwd).Select(Path.GetFileName).OfType<string>()
+            .Order(StringComparer.Ordinal).First(name => !name.StartsWith('.') && !name.StartsWith('~'));
+        string[] args = ["usr", held, "dist/index.js", "@scope/pkg", cwd, ".", "..", ".\\x.js", "..\\y.js", "--out=a/b", "https://h/p"];
+        Assert.Null(state.Upsert("rel", new McpEntry(true, JsonValue.Object(
+            ("command", JsonValue.String("node")),
+            ("args", JsonValue.Array([.. args.Select(JsonValue.String)])))), null));
+        var model = new PublishModel(state, state.ActiveCollection);
+        Assert.Equal([cwd, ".", "..", ".\\x.js", "..\\y.js"], model.PathRows.Where(r => r.Connector == "rel").Select(r => r.Value));
     }
 
     /// <summary>
@@ -756,7 +794,7 @@ public class PublishModelTests
         File.Delete(folder);
         Directory.CreateDirectory(folder);
         // Nothing about the document or the ticks has changed since the failure, so only an
-        // unconditional write puts it back — which is what pressing Publish again has to do,
+        // unconditional write puts it back - which is what pressing Publish again has to do,
         // rather than waiting for whatever the user changes next.
         var retry = new PublishModel(state, state.ActiveCollection);
         Assert.Equal(folder, retry.Folder);
@@ -934,5 +972,28 @@ public class PublishModelTests
         Assert.Equal(["other"], document.Connectors.Keys.Order(StringComparer.Ordinal));
         // Exporting a subset takes nothing out of the collection.
         Assert.Equal(held, state.Store.Collections[collection].Mcps.Keys.Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// Each row's controls are named by the connector and variable or path they act on, so a screen
+    /// reader can tell repeated rows apart.
+    /// </summary>
+    [Fact]
+    public void RowControlsAreNamedByTheirConnectorAndSubject()
+    {
+        Assert.Equal("Share value of TOKEN in github", PublishModel.ShareValueRowLabel("github", "TOKEN"));
+        Assert.Equal("Hint for TOKEN in github", PublishModel.HintRowLabel("github", "TOKEN"));
+        Assert.Equal("Placeholder name for /args/0 in fs", PublishModel.PathNameRowLabel("fs", "/args/0"));
+        Assert.Equal("Mark /Users/me/x in fs as a path this machine supplies", PublishModel.MarkPathRowLabel("fs", "/Users/me/x"));
+        Assert.Equal("Forget mark srv in fs", PublishModel.ForgetMarkRowLabel("fs", "srv"));
+        Assert.Equal("Release /Users/me/x in fs", PublishModel.ReleaseValueRowLabel("fs", "/Users/me/x"));
+        Assert.Equal("Use ${COLLECTION_DIR} for /Users/me/x in fs", PublishModel.UseDirectoryTokenRowLabel("fs", "/Users/me/x"));
+        Assert.Equal("Forget mark srv in fs", new PublishModel.UnresolvedMark("i", "fs", "srv", null).ForgetLabel);
+        var kept = new PublishModel.KeptPath("/Users/me/x", "fs", "local.command");
+        Assert.Equal("Release /Users/me/x in fs", kept.ReleaseLabel);
+        Assert.Equal("Use ${COLLECTION_DIR} for /Users/me/x in fs", kept.UseTokenLabel);
+        var env = new PublishModel.EnvRow("github", "TOKEN", "v", false, "");
+        Assert.Equal("Share value of TOKEN in github", env.ShareLabel);
+        Assert.Equal("Hint for TOKEN in github", env.HintLabel);
     }
 }

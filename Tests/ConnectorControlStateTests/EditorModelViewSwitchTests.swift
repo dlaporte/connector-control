@@ -2,7 +2,7 @@ import XCTest
 import ConnectorControlCore
 @testable import ConnectorControlState
 
-/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/EditorModelViewSwitchTests.cs —
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/EditorModelViewSwitchTests.cs -
 /// the Form/JSON view-switching slice. Sheet-style confirmations are asserted as
 /// pending state plus the method the sheet's button calls.
 @MainActor
@@ -135,7 +135,7 @@ final class EditorModelViewSwitchTests: XCTestCase {
     /// Remote and back to Local must not re-derive and wipe the edited
     /// command/args. The edit is a LOCAL-shaped config on purpose: `load`
     /// assigns `isRemote`'s backing field directly (a plain `didSet`, not
-    /// the `isRemote` setter's discard path — see `isRemoteChanged`'s
+    /// the `isRemote` setter's discard path - see `isRemoteChanged`'s
     /// `view == .form` gate), so switching to Form alone fires no discard
     /// regardless of this fix; only the later explicit toggle does, and only
     /// the fix keeps it from wiping what was just adopted.
@@ -154,7 +154,7 @@ final class EditorModelViewSwitchTests: XCTestCase {
     }
 
     /// An unedited JSON round trip (straight to JSON and back without
-    /// touching the text) still counts as untouched — the discard on Type
+    /// touching the text) still counts as untouched - the discard on Type
     /// toggle to Local fires exactly as it did before this template flag was
     /// scoped to actual edits.
     func testAnUnchangedJsonRoundTripStillDiscardsTheTemplateOnSwitchToLocal() {
@@ -175,7 +175,7 @@ final class EditorModelViewSwitchTests: XCTestCase {
         let editor = rig.editor(.new(template: rig.local("node", ["x.js"])))
         editor.requestView(.json)
         editor.jsonText = "{\"command\": "
-        XCTAssertEqual(editor.jsonError, "Not valid JSON — check for a stray brace, missing comma, or unquoted value.")
+        XCTAssertEqual(editor.jsonError, "Not valid JSON - check for a stray brace, missing comma, or unquoted value.")
         XCTAssertFalse(editor.showJSONTip, "the error takes the tip's place")
         XCTAssertTrue(editor.hasJSONError)
         XCTAssertFalse(editor.canSave)
@@ -185,7 +185,7 @@ final class EditorModelViewSwitchTests: XCTestCase {
     }
 
     /// Adopting a config with a different auth kind must clear the previous kind's
-    /// fields — otherwise a bearer token typed earlier stays readable behind Header auth.
+    /// fields - otherwise a bearer token typed earlier stays readable behind Header auth.
     func testAdoptingAHeaderConfigClearsTheOldBearerToken() {
         let rig = EditorRig()
         defer { rig.dispose() }

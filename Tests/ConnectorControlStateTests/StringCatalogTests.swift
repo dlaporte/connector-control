@@ -21,7 +21,7 @@ final class StringCatalogTests: XCTestCase {
     }
 
     /// nil means the key is Windows-only (no `mac` side, and not a bare
-    /// shared value) — such a key must never appear in `actual` below.
+    /// shared value) - such a key must never appear in `actual` below.
     private static func macValue(_ entry: JSONValue) -> MacValue? {
         switch entry {
         case .string(let s):
@@ -45,7 +45,7 @@ final class StringCatalogTests: XCTestCase {
         }
     }
 
-    /// Substitutes `{0}`, `{1}`, … with `args`, in order — the same
+    /// Substitutes `{0}`, `{1}`, … with `args`, in order - the same
     /// convention the C# test's fixture resolution uses.
     private static func expand(_ format: String, _ args: [String]) -> String {
         var result = format
@@ -67,7 +67,7 @@ final class StringCatalogTests: XCTestCase {
     /// Fixed arguments, by key, for every fixture entry whose Mac value is a
     /// `{n}` template: `"X"`/`"Y"` for string parameters, `"3"`/`"7"` for int
     /// parameters, and the joined-keys rendering for a factory that takes a
-    /// list of keys — matching the convention the C# test also follows.
+    /// list of keys - matching the convention the C# test also follows.
     private static let argsByKey: [String: [String]] = [
         "AppState.collectionLocateBanner": ["X"],
         "AppState.collectionPublishFailedBanner": ["X", "Y", "Z"],
@@ -93,6 +93,8 @@ final class StringCatalogTests: XCTestCase {
         "ClaudeSignature.uninspectableMessage": ["X"],
         "CollectionsModel.connectorTally.many": ["3"],
         "CollectionsModel.connectorTally.one": ["1"],
+        "CollectionsModel.copiedNote.many": ["3", "X"],
+        "CollectionsModel.copiedNote.one": ["X"],
         "CollectionsModel.deleteCheckedMessage.many": ["3"],
         "CollectionsModel.deleteCheckedMessage.one": ["X"],
         "CollectionsModel.deleteConnectorsSentence.many": ["3"],
@@ -106,6 +108,7 @@ final class StringCatalogTests: XCTestCase {
         "CommandLineToolText.installedInText": ["X"],
         "CommandLineToolText.missingToolError": ["X"],
         "CommandLineToolText.occupiedError": ["X"],
+        "CommandLineToolText.unprotectedFolderError": ["X"],
         "CommandLineToolText.removeFailedError": ["X"],
         "CommandLineToolText.scriptsCaption": ["X"],
         "ConfigService.corruptStoreNote": ["X"],
@@ -116,6 +119,7 @@ final class StringCatalogTests: XCTestCase {
         "ControlCommandLine.missingValueError": ["X"],
         "ControlCommandLine.unknownCommandError": ["X"],
         "ControlCommandLine.unknownOptionError": ["X"],
+        "ControlCommandLine.unknownSubcommandError": ["X", "Y"],
         "ControlCommandLine.usageError": ["X"],
         "ControlCommandLine.versionLine": ["X"],
         "ControlMasking.assignment": ["X", "Y"],
@@ -138,7 +142,8 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.changedNotification": ["X", "Y", "Z"],
         "ControlTools.changedText": ["X", "Y"],
         "ControlTools.changesClause": ["X"],
-        "ControlTools.connectorCountText": ["3", "7"],
+        "ControlTools.connectorCountText.many": ["3", "7"],
+        "ControlTools.connectorCountText.one": ["1", "1"],
         "ControlTools.createdText": ["X"],
         "ControlTools.deleteActiveMessage": ["X"],
         "ControlTools.deleteCollectionTitle": ["X", "Y"],
@@ -198,6 +203,8 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.subscribeMessage.one": ["X", "1"],
         "ControlTools.subscribeTitle": ["X", "Y"],
         "ControlTools.subscribedNotification": ["X", "Y", "Z"],
+        "ControlTools.subscribedAddError": ["X"],
+        "ControlTools.subscribedChangeError": ["X"],
         "ControlTools.subscribedText": ["X", "Y"],
         "ControlTools.switchValueError": ["X"],
         "ControlTools.switchedNotification": ["X", "Y"],
@@ -215,11 +222,17 @@ final class StringCatalogTests: XCTestCase {
         "EditorModel.additionalTitle": ["3", "a, b"],
         // Called with the row's index, 2: the text counts from one.
         "EditorModel.argumentLabel": ["3"],
+        "EditorModel.deleteArgumentRowLabel": ["3"],
         "EditorModel.argumentNumber": ["3"],
+        "EditorModel.deleteVariableRowLabel": ["3"],
+        "EditorModel.hideVariableValueLabel": ["3"],
+        "EditorModel.showVariableValueLabel": ["3"],
         "EditorModel.changedOutsideMessage": ["X"],
         "EditorModel.deletedOutsideMessage": ["X"],
         "EditorModel.duplicateEnvError": ["X"],
         "EditorModel.importedNote": ["X", "Y"],
+        "EditorModel.variableNameLabel": ["3"],
+        "EditorModel.variableValueLabel": ["3"],
         "EditorModel.lockedFieldsNote": ["X"],
         "EditorModel.propagateLabel": ["X", "Y"],
         "EditorModel.propagateLabelMany": ["X", "Y"],
@@ -242,6 +255,13 @@ final class StringCatalogTests: XCTestCase {
         "PublishModel.exportTitle": ["X"],
         "PublishModel.folderLine": ["X"],
         "PublishModel.footerLine": ["X", "Y"],
+        "PublishModel.hintRowLabel": ["X", "Y"],
+        "PublishModel.markPathRowLabel": ["X", "Y"],
+        "PublishModel.pathNameRowLabel": ["X", "Y"],
+        "PublishModel.forgetMarkRowLabel": ["X", "Y"],
+        "PublishModel.releaseValueRowLabel": ["X", "Y"],
+        "PublishModel.useDirectoryTokenRowLabel": ["X", "Y"],
+        "PublishModel.shareValueRowLabel": ["X", "Y"],
         "PublishModel.keptPathNote": ["X", "Y"],
         "PublishModel.otherFolderNote": ["X", "Y", "Z"],
         "PublishModel.publishFolderEditNote": ["X", "Y"],
@@ -340,12 +360,8 @@ final class StringCatalogTests: XCTestCase {
         actual["ClaudeIntegration.reservedNameError"] = ClaudeIntegration.reservedNameError
 
         // MARK: ClaudeRestarter / ClaudeSignature
-        // ClaudeRestarter.swift lives in the ConnectorControl app target (AppKit),
-        // which this test target cannot import; its one user-facing literal is
-        // pinned here by hand, matching Sources/ConnectorControl/ClaudeRestarter.swift.
 
-        actual["ClaudeRestarter.didNotQuitMessage"] =
-            "Claude didn\u{2019}t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again."
+        actual["ClaudeRestarter.didNotQuitMessage"] = ClaudeSignature.didNotQuitMessage
         actual["ClaudeSignature.notFoundMessage"] = ClaudeSignature.notFoundMessage(path: "X")
         actual["ClaudeSignature.refusalMessage"] = ClaudeSignature.refusalMessage(name: "X", detail: "Y")
         actual["ClaudeSignature.requirementCompileFailure"] = ClaudeSignature.requirementCompileFailure
@@ -380,6 +396,8 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.addConnectorTooltip"] = CollectionsModel.addConnectorTooltip
         actual["CollectionsModel.connectorTally.many"] = CollectionsModel.connectorTally(3)
         actual["CollectionsModel.connectorTally.one"] = CollectionsModel.connectorTally(1)
+        actual["CollectionsModel.copiedNote.many"] = CollectionsModel.copiedNote(3, to: "X")
+        actual["CollectionsModel.copiedNote.one"] = CollectionsModel.copiedNote(1, to: "X")
         actual["CollectionsModel.copyToButton"] = CollectionsModel.copyToButton
         actual["CollectionsModel.deleteAction"] = CollectionsModel.deleteAction
         actual["CollectionsModel.deleteConnectorsSentence.many"] = CollectionsModel.deleteConnectorsSentence(3)
@@ -406,7 +424,7 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.publishedPill"] = CollectionsModel.publishedPill
         actual["CollectionsModel.readOnlyNote"] = CollectionsModel.readOnlyNote
         actual["CollectionsModel.refreshButton"] = CollectionsModel.refreshButton
-        actual["CollectionsModel.remoteType"] = CollectionsModel.remoteType
+        actual["ConnectorTarget.remoteType"] = ConnectorTarget.remoteType
         actual["CollectionsModel.deleteCheckedButton"] = CollectionsModel.deleteCheckedButton
         actual["CollectionsModel.deleteCheckedInformative"] = CollectionsModel.deleteCheckedInformative
         actual["CollectionsModel.deleteCheckedMessage.many"] = CollectionsModel.deleteCheckedMessage(["X", "Y", "Z"])
@@ -441,6 +459,7 @@ final class StringCatalogTests: XCTestCase {
         actual["CommandLineToolText.removeFailedError"] = CommandLineToolText.removeFailedError("X")
         actual["CommandLineToolText.runHelpCaption"] = CommandLineToolText.runHelpCaption
         actual["CommandLineToolText.scriptsCaption"] = CommandLineToolText.scriptsCaption("X")
+        actual["CommandLineToolText.unprotectedFolderError"] = CommandLineToolText.unprotectedFolderError("X")
 
         // MARK: ControlMasking / ControlText
 
@@ -452,6 +471,9 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlCommandLine.missingValueError"] = ControlCommandLine.missingValueError("X")
         actual["ControlCommandLine.unknownCommandError"] = ControlCommandLine.unknownCommandError("X")
         actual["ControlCommandLine.unknownOptionError"] = ControlCommandLine.unknownOptionError("X")
+        actual["ControlCommandLine.helpTakesNoArgumentsError"] = ControlCommandLine.helpTakesNoArgumentsError
+        actual["ControlCommandLine.unknownSubcommandError"] = ControlCommandLine.unknownSubcommandError("X", "Y")
+        actual["ControlCommandLine.usageContinuation"] = ControlCommandLine.usageContinuation
         actual["ControlCommandLine.usageError"] = ControlCommandLine.usageError("X")
         actual["ControlCommandLine.versionLine"] = ControlCommandLine.versionLine("X")
         actual["ControlMasking.addedPrefix"] = ControlMasking.addedPrefix
@@ -526,7 +548,8 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.collectionHeader"] = ControlTools.collectionHeader
         actual["ControlTools.collectionsGroup"] = ControlTools.collectionsGroup
         actual["ControlTools.configShapeError"] = ControlTools.configShapeError
-        actual["ControlTools.connectorCountText"] = ControlTools.connectorCountText(3, 7)
+        actual["ControlTools.connectorCountText.many"] = ControlTools.connectorCountText(3, 7)
+        actual["ControlTools.connectorCountText.one"] = ControlTools.connectorCountText(1, 1)
         actual["ControlTools.connectorsGroup"] = ControlTools.connectorsGroup
         actual["ControlTools.connectorsHeader"] = ControlTools.connectorsHeader
         actual["ControlTools.createdText"] = ControlTools.createdText("X")
@@ -626,6 +649,8 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.subscribeTitle"] = ControlTools.subscribeTitle("X", "Y")
         actual["ControlTools.subscribedKind"] = ControlTools.subscribedKind
         actual["ControlTools.subscribedNotification"] = ControlTools.subscribedNotification("X", "Y", "Z")
+        actual["ControlTools.subscribedAddError"] = ControlTools.subscribedAddError("X")
+        actual["ControlTools.subscribedChangeError"] = ControlTools.subscribedChangeError("X")
         actual["ControlTools.subscribedText"] = ControlTools.subscribedText("X", "Y")
         actual["ControlTools.switchValueError"] = ControlTools.switchValueError("X")
         actual["ControlTools.switchedNotification"] = ControlTools.switchedNotification("X", "Y")
@@ -659,10 +684,7 @@ final class StringCatalogTests: XCTestCase {
         // MARK: Dialogs / AlertDialogs
 
         actual["Dialogs.cancelTitle"] = FakeDialogs.cancelTitle
-        // AlertDialogs.swift lives in the ConnectorControl app target (AppKit),
-        // which this test target cannot import; its OK button title is pinned
-        // here by hand, matching Sources/ConnectorControl/AlertDialogs.swift.
-        actual["AlertDialogs.okTitle"] = "OK"
+        actual["AlertDialogs.okTitle"] = FakeDialogs.okTitle
 
         // MARK: EditTarget / EditorModel
 
@@ -672,7 +694,13 @@ final class StringCatalogTests: XCTestCase {
         actual["EditorModel.addVariableTitle"] = EditorModel.addVariableTitle
         actual["EditorModel.additionalTitle"] = EditorModel.additionalTitle(count: 3, keys: ["a", "b"])
         actual["EditorModel.argumentLabel"] = EditorModel.argumentLabel(2)
+        actual["EditorModel.deleteArgumentRowLabel"] = EditorModel.deleteArgumentRowLabel(2)
         actual["EditorModel.argumentNumber"] = EditorModel.argumentNumber(2)
+        actual["EditorModel.deleteVariableRowLabel"] = EditorModel.deleteVariableRowLabel(2)
+        actual["EditorModel.hideVariableValueLabel"] = EditorModel.hideVariableValueLabel(2)
+        actual["EditorModel.showVariableValueLabel"] = EditorModel.showVariableValueLabel(2)
+        actual["EditorModel.variableNameLabel"] = EditorModel.variableNameLabel(2)
+        actual["EditorModel.variableValueLabel"] = EditorModel.variableValueLabel(2)
         actual["EditorModel.argumentPrompt"] = EditorModel.argumentPrompt
         actual["EditorModel.argumentsHeader"] = EditorModel.argumentsHeader
         actual["EditorModel.authenticationHeader"] = EditorModel.authenticationHeader
@@ -772,7 +800,7 @@ final class StringCatalogTests: XCTestCase {
 
         // MARK: MasterStore
         // Every message below is returned by a real mutation, not a bare
-        // constant — each store is set up so that mutation fails for exactly
+        // constant - each store is set up so that mutation fails for exactly
         // the reason this key names.
 
         var nameEmptyStore = MasterStore.empty
@@ -796,6 +824,7 @@ final class StringCatalogTests: XCTestCase {
         actual["PopoverModel.quitTooltip"] = PopoverModel.quitTooltip
         actual["PopoverModel.restartTitle"] = PopoverModel.restartTitle
         actual["PopoverModel.retryTitle"] = PopoverModel.retryTitle
+        actual["PopoverModel.menuBarRetryLabel"] = PopoverModel.menuBarRetryLabel
         actual["PopoverModel.reviewAndApplyButton"] = PopoverModel.reviewAndApplyButton
         actual["PopoverModel.settingsTooltip"] = PopoverModel.settingsTooltip
         actual["PopoverModel.sourceTooltipFormat"] = PopoverModel.sourceTooltipFormat("X")
@@ -812,6 +841,13 @@ final class StringCatalogTests: XCTestCase {
         actual["PublishModel.footerLine"] = PublishModel.footerLine("X", "Y")
         actual["PublishModel.forgetMarkButton"] = PublishModel.forgetMarkButton
         actual["PublishModel.hintPlaceholder"] = PublishModel.hintPlaceholder
+        actual["PublishModel.hintRowLabel"] = PublishModel.hintRowLabel("X", "Y")
+        actual["PublishModel.markPathRowLabel"] = PublishModel.markPathRowLabel("X", "Y")
+        actual["PublishModel.pathNameRowLabel"] = PublishModel.pathNameRowLabel("X", "Y")
+        actual["PublishModel.forgetMarkRowLabel"] = PublishModel.forgetMarkRowLabel("X", "Y")
+        actual["PublishModel.releaseValueRowLabel"] = PublishModel.releaseValueRowLabel("X", "Y")
+        actual["PublishModel.useDirectoryTokenRowLabel"] = PublishModel.useDirectoryTokenRowLabel("X", "Y")
+        actual["PublishModel.shareValueRowLabel"] = PublishModel.shareValueRowLabel("X", "Y")
         actual["PublishModel.markPathLabel"] = PublishModel.markPathLabel
         actual["PublishModel.noFolderError"] = PublishModel.noFolderError
         actual["PublishModel.pathNamePlaceholder"] = PublishModel.pathNamePlaceholder
@@ -941,12 +977,12 @@ final class StringCatalogTests: XCTestCase {
             XCTAssertEqual(actual[key], expected, key)
         }
 
-        // An unpaired key — present in `actual` but missing (or Windows-only)
-        // in the fixture, or vice versa — fails here on whichever side lacks it.
+        // An unpaired key - present in `actual` but missing (or Windows-only)
+        // in the fixture, or vice versa - fails here on whichever side lacks it.
         XCTAssertEqual(Set(actual.keys), macKeys)
     }
 
-    /// The comparison above only ever looks at keys `macValue` resolves — a fixture entry
+    /// The comparison above only ever looks at keys `macValue` resolves - a fixture entry
     /// resolving on neither platform (both `mac` and `win` omitted, or an unrecognized value
     /// shape) is silently skipped here AND by the C# mirror's equivalent loop, so such a mistake
     /// would be asserted nowhere. This pins the fixture-wide invariant directly: every root key
@@ -973,9 +1009,9 @@ final class StringCatalogTests: XCTestCase {
 
     /// True when `value` is present and not JSON `null`. A `"mac"`/`"win"`
     /// key explicitly set to `null` is present but unresolved and must not
-    /// count as resolving — matching StringCatalogTests.cs's `mac is not
+    /// count as resolving - matching StringCatalogTests.cs's `mac is not
     /// null` check on `JsonNode`, where a JSON null parses to a null node
-    /// (and every other JSON type — string, nested `format` object, etc. —
+    /// (and every other JSON type - string, nested `format` object, etc. -
     /// parses to a non-null one).
     private static func isResolved(_ value: JSONValue?) -> Bool {
         guard let value else { return false }

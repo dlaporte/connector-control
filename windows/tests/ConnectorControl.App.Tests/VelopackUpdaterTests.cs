@@ -44,7 +44,7 @@ public class VelopackUpdaterTests
 
     /// <summary>
     /// An "installed" app as Velopack's own test locator describes it: package id ConnectorControl,
-    /// the given version, and channel win-x64 — exactly what `vpk pack --packId ConnectorControl
+    /// the given version, and channel win-x64 - exactly what `vpk pack --packId ConnectorControl
     /// --channel win-x64` writes into current\sq.version.
     /// </summary>
     private static (VelopackUpdater Updater, RecordingSource Stable, RecordingSource Prerelease) Installed(string version, TempDir packages)
@@ -81,7 +81,7 @@ public class VelopackUpdaterTests
     {
         // The prerelease flag = current version is a prerelease. A preview is packed as
         // 1.3.0-preview.N, so the installed app must query GitHub WITH prereleases and for the
-        // channel it was packed with — that is the whole contract between the workflow and the app.
+        // channel it was packed with - that is the whole contract between the workflow and the app.
         using var packages = new TempDir("velopack");
         var (updater, stable, prerelease) = Installed("1.3.0-preview.1", packages);
         Assert.True(updater.IsAvailable);
@@ -411,9 +411,24 @@ public class VelopackUpdaterTests
 
         var ex = Assert.Throws<UpdateVerificationException>(() => updater.FinishCheck(new UpdateInfo(Asset(), isDowngrade: false), "ours"u8.ToArray(), TestIdentity));
         Assert.True(ex.UpdaterLeftInPlace);
-        Assert.Equal("refused", ex.Message);
+        Assert.Equal("refused " + UpdateRefusals.UpdaterKeptSentence, ex.Message);   // the refusal says so, as well as why
         Assert.Equal("ours", File.ReadAllText(saved));
         Assert.Contains(logged, line => line.Contains("is kept", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ARefusalWhoseUpdaterCannotBeRemovedWithNoCopyToPutBackSaysSo()
+    {
+        using var packages = new TempDir("vpk");
+        using var data = new TempDir("ccdata");
+        var (updater, updateExe, saved, _) = Interrupted(packages, data);
+        Directory.CreateDirectory(updateExe);   // nothing can be written where the updater belongs
+        File.WriteAllText(packages.File(Asset().FileName), "package");
+
+        var ex = Assert.Throws<UpdateVerificationException>(() => updater.FinishCheck(new UpdateInfo(Asset(), isDowngrade: false), "ours"u8.ToArray(), TestIdentity));
+        Assert.True(ex.UpdaterLeftInPlace);
+        Assert.Equal("refused " + UpdateRefusals.UpdaterLeftSentence, ex.Message);
+        Assert.False(File.Exists(saved));
     }
 
     [Fact]
@@ -479,6 +494,51 @@ public class VelopackUpdaterTests
         updater.RecoverInterruptedCheck();
 
         Assert.Equal("from the package", File.ReadAllText(updateExe));
+        Assert.False(File.Exists(saved));
+    }
+
+    [Fact]
+    public async Task ACheckWaitsForTheStartupRecoveryBeforeItAsksTheFeed()
+    {
+        // Run alongside, a slow startup recovery could put the saved copy back, and sweep packages\, in the middle of the
+        // first check's download, failing it and losing the copy that check saved.
+        using var packages = new TempDir("vpk");
+        using var data = new TempDir("ccdata");
+        var updateExe = packages.File("Update.exe");
+        var saved = data.File(VelopackUpdater.SavedUpdaterFileName);
+        File.WriteAllText(updateExe, "from the package");
+        File.WriteAllText(saved, "ours");
+        var source = new RecordingSource();
+        var calls = 0;
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var locator = new TestVelopackLocator("ConnectorControl", "1.3.1", packages.Path, appDir: null, rootDir: null, updateExe: updateExe, channel: "win-x64");
+        var updater = new VelopackUpdater(_ => source, locator,
+            verify: (_, _, _, _, _) => "refused",
+            verifyInstalled: (path, _) =>
+            {
+                if (Interlocked.Increment(ref calls) == 1)
+                {
+                    // The startup recovery's first check of the installed updater: held, as a slow revocation check would.
+                    entered.Set();
+                    release.Wait(TimeSpan.FromSeconds(30));
+                }
+                return path is not null && File.Exists(path) && File.ReadAllText(path) == "ours" ? null : "The installed Update.exe is not validly signed";
+            },
+            identify: _ => TestIdentity,
+            log: _ => { }, savedUpdaterPath: saved);
+
+        updater.StartRecovery();
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken), "the startup recovery started");
+        var check = updater.CheckAsync(TestContext.Current.CancellationToken);
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        Assert.Empty(source.FeedRequests);
+        Assert.Equal(1, Volatile.Read(ref calls));   // the check's own recovery has not started either
+        release.Set();
+
+        Assert.Null(await check.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        Assert.Single(source.FeedRequests);
+        Assert.Equal("ours", File.ReadAllText(updateExe));
         Assert.False(File.Exists(saved));
     }
 

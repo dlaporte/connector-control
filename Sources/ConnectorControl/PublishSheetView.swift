@@ -2,7 +2,7 @@ import SwiftUI
 import ConnectorControlState
 
 /// The Publish sheet and, in the model's other mode, the Export sheet: layout, bindings and the
-/// two native panels, which are FilePanels'. Every rule and string is PublishModel's — the mode
+/// two native panels, which are FilePanels'. Every rule and string is PublishModel's - the mode
 /// included, and with it the title, the gate and the verb; the preview under the ticks is the
 /// document itself, so nothing here filters, elides or reformats it.
 struct PublishSheetView: View {
@@ -111,6 +111,7 @@ struct PublishSheetView: View {
                     ForEach(marks) { mark in
                         unansweredLine(PublishModel.unresolvedMarkNote(mark.connector, mark.name)) {
                             Button(PublishModel.forgetMarkButton) { model.forgetUnresolvedMark(mark.id) }
+                                .accessibilityLabel(PublishModel.forgetMarkRowLabel(mark.connector, mark.name))
                         }
                     }
                     // The note is the model's for each entry, never composed here: whether a folder
@@ -124,8 +125,10 @@ struct PublishSheetView: View {
                             switch path.kind {
                             case .folder:
                                 Button(PublishModel.useDirectoryTokenButton) { failure = model.useDirectoryToken(path) }
+                                    .accessibilityLabel(PublishModel.useDirectoryTokenRowLabel(path.connector, path.value))
                             case .path:
                                 Button(PublishModel.releaseValueButton) { failure = model.releaseKeptPath(path.value) }
+                                    .accessibilityLabel(PublishModel.releaseValueRowLabel(path.connector, path.value))
                             }
                         }
                     }
@@ -180,6 +183,7 @@ struct PublishSheetView: View {
                 Toggle(PublishModel.shareValueLabel, isOn: $row.share)
                     .toggleStyle(.checkbox)
                     .font(.caption)
+                    .accessibilityLabel(PublishModel.shareValueRowLabel(row.connector, row.name))
                 // One slot, two states: a stripped value travels as its name and a hint, so the
                 // hint field is here; a shared one travels as itself, so the value is, and the
                 // tick is a decision made with the bytes it would send in view. The width is
@@ -196,6 +200,7 @@ struct PublishSheetView: View {
                         TextField(PublishModel.hintPlaceholder, text: $row.hint)
                             .textFieldStyle(.roundedBorder)
                             .font(.caption)
+                            .accessibilityLabel(PublishModel.hintRowLabel(row.connector, row.name))
                     }
                 }
                 .frame(width: 200)
@@ -213,7 +218,7 @@ struct PublishSheetView: View {
                     Toggle("", isOn: $row.marked)
                         .toggleStyle(.checkbox)
                         .labelsHidden()
-                        .accessibilityLabel(PublishModel.markPathLabel)
+                        .accessibilityLabel(PublishModel.markPathRowLabel(row.connector, row.value))
                     Text(row.connector)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -232,10 +237,12 @@ struct PublishSheetView: View {
                             .textFieldStyle(.roundedBorder)
                             .font(.caption)
                             .frame(width: 150)
+                            .accessibilityLabel(PublishModel.pathNameRowLabel(row.connector, row.pointer.description))
                         TextField(PublishModel.hintPlaceholder, text: $row.hint)
                             .textFieldStyle(.roundedBorder)
                             .font(.caption)
                             .frame(width: 200)
+                            .accessibilityLabel(PublishModel.hintRowLabel(row.connector, row.pointer.description))
                     }
                     .padding(.leading, 20)
                 }

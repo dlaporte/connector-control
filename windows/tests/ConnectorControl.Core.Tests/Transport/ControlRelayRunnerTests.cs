@@ -9,7 +9,7 @@ namespace ConnectorControl.Core.Tests.Transport;
 /// <summary>
 /// Windows only: the Mac counterpart is Tests/ConnectorControlStateTests/Transport/ControlRelayRunnerTests.swift.
 ///
-/// The relay between a stand-in for Claude — two anonymous pipes — and the app's real named pipe, or, where a
+/// The relay between a stand-in for Claude - two anonymous pipes - and the app's real named pipe, or, where a
 /// fact must decide what the app has sent when, a scripted stand-in for the app. The facts over the real pipe
 /// are Windows only; the scripted one runs everywhere.
 /// </summary>
@@ -120,7 +120,7 @@ public class ControlRelayRunnerTests
         }
 
         /// <summary>The relay has ended, so nothing writes to its standard output any more: closing it ends the
-        /// thread reading it. Never sooner — the relay could still be writing to it.</summary>
+        /// thread reading it. Never sooner - the relay could still be writing to it.</summary>
         public void RelayEnded()
         {
             Output.Dispose();
@@ -516,8 +516,8 @@ public class ControlRelayRunnerTests
     }
 
     /// <summary>The app answers a call and goes; the relay, not yet having read that answer, fails to write the
-    /// next call. The answer still reaches Claude as the app gave it — a call that went through is never told
-    /// to try again — and only the call that never arrived is. Scripted, so it runs on every platform.</summary>
+    /// next call. The answer still reaches Claude as the app gave it - a call that went through is never told
+    /// to try again - and only the call that never arrived is. Scripted, so it runs on every platform.</summary>
     [Fact]
     public void AnAnswerTheAppSentBeforeItWentReachesClaudeAfterAFailedWrite()
     {

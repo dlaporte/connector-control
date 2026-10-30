@@ -21,7 +21,7 @@ public final class TempDir {
 public extension TempDir {
     /// Writes `content` to `url` (creating intermediate directories as
     /// needed) and advances its modification date one second past whatever
-    /// the write just produced — deterministically later than anything
+    /// the write just produced - deterministically later than anything
     /// written before it, without sleeping wall-clock time to get there.
     /// Replaces `Thread.sleep` used only to keep a file's mtime distinct from
     /// an earlier write a watcher is comparing against.
@@ -32,7 +32,7 @@ public extension TempDir {
         try bumpModificationDate(of: url)
     }
 
-    /// Sets `url`'s modification date one second past its current one — the
+    /// Sets `url`'s modification date one second past its current one - the
     /// half of `touch` a caller needs on its own when the write itself must
     /// go through a different path (e.g. an atomic replace).
     static func bumpModificationDate(of url: URL) throws {

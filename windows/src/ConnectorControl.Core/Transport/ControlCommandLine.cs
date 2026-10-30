@@ -32,7 +32,7 @@ public abstract record ControlInvocation
 ///
 /// <c>connector-control</c>'s arguments, read into what to run: one command per tool, as <c>help</c> lists
 /// them, or <c>help</c>, <c>--version</c> and the relay. <c>--json</c> anywhere asks for the structure
-/// Claude receives instead of text — except in <c>add</c> and <c>edit</c>, where <c>--json</c> followed by
+/// Claude receives instead of text - except in <c>add</c> and <c>edit</c>, where <c>--json</c> followed by
 /// a JSON object (its first character not a space is "{") is the connector's config. Words after
 /// <c>--</c> are names. Paths are made full here, against the directory the command runs in, because the
 /// app runs elsewhere.
@@ -56,6 +56,13 @@ public static class ControlCommandLine
     public static string UnknownCommandError(string command) => $"There’s no command named “{command}”. Run connector-control help to see them all.";
 
     public static string UsageError(string usage) => $"Usage: connector-control {usage}";
+
+    /// Between the usages of a command group, so each starts under the first.
+    public const string UsageContinuation = "\n       connector-control ";
+
+    public static string UnknownSubcommandError(string subcommand, string group) => $"“{subcommand}” isn’t a {group} command.";
+
+    public const string HelpTakesNoArgumentsError = "help takes no arguments. Run connector-control help to see every command.";
 
     public static string UnknownOptionError(string option) => $"“{option}” isn’t an option of this command.";
 
@@ -87,7 +94,7 @@ public static class ControlCommandLine
         }
         if (HelpWords.Contains(command))
         {
-            return rest.Count > 0 ? new ControlInvocation.Usage(UnknownOptionError(rest[0])) : new ControlInvocation.Help();
+            return rest.Count > 0 ? new ControlInvocation.Usage(HelpTakesNoArgumentsError) : new ControlInvocation.Help();
         }
         if (command == ClaudeIntegration.RelayArgument)
         {
@@ -170,7 +177,10 @@ public static class ControlCommandLine
                         return Call("duplicate_collection", more, min: 2, max: 2, build: w =>
                             [("collection", JsonValue.String(w.Positionals[0])), ("newName", JsonValue.String(w.Positionals[1]))]);
                     case "delete": return Call("delete_collection", more, min: 1, max: 1, build: w => [("collection", JsonValue.String(w.Positionals[0]))]);
-                    default: return new ControlInvocation.Usage(UnknownCommandError(string.Join(" ", new[] { command }.Concat(rest.Take(1)))));
+                    default:
+                        var usage = UsageError(string.Join(UsageContinuation, ControlTools.Catalog.Select(definition => definition.CliUsage)
+                            .Where(cliUsage => cliUsage.StartsWith(command + " ", StringComparison.Ordinal))));
+                        return new ControlInvocation.Usage(rest.Count > 0 ? UnknownSubcommandError(rest[0], command) + "\n" + usage : usage);
                 }
             case "import":
                 return Call("import_document", rest, options: [Into, New, OnClash], min: 1, max: 1, build: w =>
@@ -361,7 +371,7 @@ public sealed record ControlOutput(string? Stdout, string? Stderr, int ExitCode)
     public static ControlOutput Unreachable(string message) => new(null, message, UnreachableExit);
 
     /// <summary>The app's answer to the command's call. A refusal, or an error the session answered instead,
-    /// exits 1 with its sentence on stderr — or as <c>{"error": …}</c> on stdout under <paramref name="json"/>.</summary>
+    /// exits 1 with its sentence on stderr - or as <c>{"error": …}</c> on stdout under <paramref name="json"/>.</summary>
     public static ControlOutput Answer(JsonValue response, bool json)
     {
         if (response.Kind != JsonKind.Object)

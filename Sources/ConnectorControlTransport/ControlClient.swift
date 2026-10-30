@@ -2,7 +2,7 @@ import Foundation
 
 /// Mirror: windows/src/ConnectorControl.Core/Transport/ControlClient.cs
 ///
-/// The tool's way to the app: connect, and when nothing answers — and starting is allowed — start the
+/// The tool's way to the app: connect, and when nothing answers - and starting is allowed - start the
 /// app in the background and wait for it, up to `startTimeout`. An elevated tool never starts it.
 public final class ControlClient: @unchecked Sendable {
     public static let startingText = "Starting Connector Control…"
@@ -41,10 +41,10 @@ public final class ControlClient: @unchecked Sendable {
     private let elevated: Bool
 
     /// `connectOnce` tries the endpoint once; `launch` starts the app, nil where starting is not
-    /// allowed; `announce` says it is being started — the command line prints `startingText`, the
+    /// allowed; `announce` says it is being started - the command line prints `startingText`, the
     /// relay says nothing on Claude's stream. All are @Sendable: the relay calls them on its own
     /// queue, not where they were made. `now` reads a monotonic clock, in seconds, so a change to the
-    /// clock cannot stretch the wait. `elevated` says the tool runs with administrator rights — as root
+    /// clock cannot stretch the wait. `elevated` says the tool runs with administrator rights - as root
     /// on the Mac, with an elevated token on Windows.
     public init(connectOnce: @escaping @Sendable () -> ControlStream?, launch: (@Sendable () -> Bool)?,
                 announce: (@Sendable () -> Void)?,

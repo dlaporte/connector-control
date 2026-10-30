@@ -135,6 +135,67 @@ public class SettingsModelTests
         Assert.Equal("You're up to date.", rig.H.Dialogs.Informs[0].Message);
     }
 
+    /// <summary>While a check runs, Check for Updates reads Checking… and cannot be clicked, and says so as it changes.
+    /// Windows only: Sparkle shows the Mac's progress.</summary>
+    [Fact]
+    public async Task CheckForUpdatesReadsCheckingAndIsDisabledWhileACheckRuns()
+    {
+        using var rig = new Rig();
+        rig.Updater.CheckGate = new TaskCompletionSource<bool>();
+        var raised = new List<string?>();
+        rig.Model.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        Assert.True(rig.Model.CanCheckForUpdates);
+        Assert.Equal(SettingsModel.CheckForUpdatesTitle, rig.Model.CheckForUpdatesButtonTitle);
+
+        var check = rig.Model.CheckForUpdatesAsync();
+        Assert.True(rig.Model.IsCheckingForUpdates);
+        Assert.False(rig.Model.CanCheckForUpdates);
+        Assert.Equal("Checking…", rig.Model.CheckForUpdatesButtonTitle);
+        Assert.Contains(nameof(SettingsModel.CanCheckForUpdates), raised);
+        Assert.Contains(nameof(SettingsModel.CheckForUpdatesButtonTitle), raised);
+
+        raised.Clear();
+        rig.Updater.CheckGate.SetResult(true);
+        await check.WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken);
+        Assert.False(rig.Model.IsCheckingForUpdates);
+        Assert.True(rig.Model.CanCheckForUpdates);
+        Assert.Equal(SettingsModel.CheckForUpdatesTitle, rig.Model.CheckForUpdatesButtonTitle);
+        Assert.Contains(nameof(SettingsModel.CanCheckForUpdates), raised);
+    }
+
+    [Fact]
+    public void CheckForUpdatesStaysDisabledWhereThereIsNoUpdater()
+    {
+        using var rig = new Rig();
+        rig.Updater.IsAvailable = false;
+        Assert.False(rig.Model.CanCheckForUpdates);
+    }
+
+    /// <summary>The −/+ buttons dim at the bounds and tell Narrator the count. Windows only: the Mac Stepper does both itself.</summary>
+    [Fact]
+    public void TheKeepCountButtonsDimAtTheBoundsAndSayTheCount()
+    {
+        using var rig = new Rig();
+        var raised = new List<string?>();
+        rig.Model.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        Assert.True(rig.Model.CanDecrementKeepCount);
+        Assert.True(rig.Model.CanIncrementKeepCount);
+        Assert.Equal("Keeps 20 backups of each file.", rig.Model.BackupKeepCountHelpText);
+        rig.Model.BackupKeepCount = SettingsModel.MinKeepCount;
+        Assert.False(rig.Model.CanDecrementKeepCount);
+        Assert.True(rig.Model.CanIncrementKeepCount);
+        Assert.Contains(nameof(SettingsModel.CanDecrementKeepCount), raised);
+        Assert.Contains(nameof(SettingsModel.BackupKeepCountHelpText), raised);
+        raised.Clear();
+        rig.Model.DecrementKeepCount();   // a click at the bound changes nothing, and still says so
+        Assert.Equal(SettingsModel.MinKeepCount, rig.Model.BackupKeepCount);
+        Assert.Contains(nameof(SettingsModel.CanDecrementKeepCount), raised);
+        rig.Model.BackupKeepCount = SettingsModel.MaxKeepCount;
+        Assert.True(rig.Model.CanDecrementKeepCount);
+        Assert.False(rig.Model.CanIncrementKeepCount);
+        Assert.Equal("Keeps 100 backups of each file.", rig.Model.BackupKeepCountHelpText);
+    }
+
     [Fact]
     public void BackupKeepCountClampsAndRebuildsTheService()
     {
@@ -198,8 +259,8 @@ public class SettingsModelTests
     }
 
     /// <summary>Windows only: the Mac has no install to detect. Detecting walks every package registered for
-    /// the user, too slow to run at each launch for a model the Claude tab may never show — the control layer
-    /// builds one at launch and never reads the install — so it runs when the install is first read, and again
+    /// the user, too slow to run at each launch for a model the Claude tab may never show - the control layer
+    /// builds one at launch and never reads the install - so it runs when the install is first read, and again
     /// only after a refresh.</summary>
     [Fact]
     public void TheInstallIsDetectedOnlyWhenItIsRead()
@@ -230,6 +291,36 @@ public class SettingsModelTests
         rig.Install.Info = ClaudeInstallInfo.NotFound;
         rig.Model.Refresh();   // the install is cached; a window re-open is what re-reads it
         Assert.Equal("Not found", rig.Model.LaunchTargetText);
+    }
+
+    /// <summary>
+    /// While a chosen program is verified, the row's caption says "Checking…" and Choose… waits; a
+    /// second check cannot start beside the first, and ending it puts the target back, the path
+    /// unchanged until the window calls ChooseLaunchTarget.
+    /// </summary>
+    [Fact]
+    public void CheckingAChosenLaunchTargetShowsCheckingAndHoldsChoose()
+    {
+        using var rig = new Rig();
+        var raised = new List<string?>();
+        rig.Model.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        Assert.Equal("Claude_pzs8sxrjxfjjc!Claude", rig.Model.LaunchTargetText);
+        Assert.True(rig.Model.CanChooseLaunchTarget);
+
+        Assert.True(rig.Model.BeginCheckingLaunchTarget());
+        Assert.True(rig.Model.IsCheckingLaunchTarget);
+        Assert.Equal(ToolNote.CheckingText, rig.Model.LaunchTargetText);
+        Assert.False(rig.Model.CanChooseLaunchTarget);
+        Assert.Contains(nameof(SettingsModel.LaunchTargetText), raised);
+        Assert.Contains(nameof(SettingsModel.CanChooseLaunchTarget), raised);
+        Assert.False(rig.Model.BeginCheckingLaunchTarget());   // one check at a time
+
+        raised.Clear();
+        rig.Model.EndCheckingLaunchTarget();
+        Assert.Equal("Claude_pzs8sxrjxfjjc!Claude", rig.Model.LaunchTargetText);
+        Assert.True(rig.Model.CanChooseLaunchTarget);
+        Assert.Contains(nameof(SettingsModel.CanChooseLaunchTarget), raised);
+        Assert.Null(rig.H.Settings.ClaudeLaunchTarget);   // the check alone chooses nothing
     }
 
     [Fact]
@@ -374,7 +465,7 @@ public class SettingsModelTests
     public void AClashDimsTheSwitchAndNamesIt()
     {
         using var rig = new Rig(h => MasterStoreIO.Save(
-            new MasterStore([new(ClaudeIntegration.EntryName, new McpEntry(true, JsonValue.Object(("command", JsonValue.String("x")))))]),
+            MasterStore.Single([new(ClaudeIntegration.EntryName, new McpEntry(true, JsonValue.Object(("command", JsonValue.String("x")))))]),
             h.MasterStorePath));
         Assert.False(rig.Model.CanChangeClaudeIntegration);
         Assert.Equal(ClaudeIntegration.ClashNote, rig.Model.ClaudeIntegrationNote);

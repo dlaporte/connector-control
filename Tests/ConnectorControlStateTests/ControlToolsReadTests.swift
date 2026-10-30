@@ -78,7 +78,7 @@ final class ControlToolsReadTests: XCTestCase {
         XCTAssertEqual(result.text, [
             "     NAME          RUNS",
             "on   aws-mcp       aws-mcp.us-east-1.api.aws",
-            "on   github        \(CollectionsModel.target(of: github.config))",
+            "on   github        \(ConnectorTarget.target(of: github.config))",
             "on   scoutbook     scoutbook.example.com",
             "on   service-now   snow.example.com",
         ].joined(separator: "\n"))
@@ -168,7 +168,7 @@ final class ControlToolsReadTests: XCTestCase {
         let files = [rig.h.masterStoreURL, rig.h.storeDir.appendingPathComponent(CollectionsFile.fileName),
                      rig.h.claudeConfigURL, rig.state.service.paths.collectionsCacheURL]
         func bytes() -> [Data?] { files.map { try? Data(contentsOf: $0) } }
-        // Platform idiom: each side lists its own settings seam, which differ — the Mac keeps Claude's
+        // Platform idiom: each side lists its own settings seam, which differ - the Mac keeps Claude's
         // app path, Windows its config path, launch target, tray tip and declined update.
         func settings() -> [String] {
             let s = rig.h.settings

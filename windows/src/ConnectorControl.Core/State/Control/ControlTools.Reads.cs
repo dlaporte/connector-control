@@ -34,7 +34,7 @@ public sealed partial class ControlTools
 
     public static string StatusTitle(string version) => $"Connector Control {version}";
 
-    public static string ConnectorCountText(int total, int on) => $"{total} connectors, {on} on";
+    public static string ConnectorCountText(int total, int on) => total == 1 ? $"{total} connector, {on} on" : $"{total} connectors, {on} on";
 
     public static string InstallHint(string title, string command) => $"{title}: {command}";
 
@@ -127,7 +127,7 @@ public sealed partial class ControlTools
             false);
     }
 
-    /// <summary>Probes all four launchers again — the user may have installed one since — and answers once
+    /// <summary>Probes all four launchers again - the user may have installed one since - and answers once
     /// every result is in.</summary>
     internal void CheckTools(Action<ControlResult> done)
     {
@@ -135,8 +135,8 @@ public sealed partial class ControlTools
         state.WhenToolsProbed(null, () => done(ToolsResult()));
     }
 
-    /// <summary>Each launcher as the app's own words put it — "Found", "Not found" or, on the Mac, "Not visible
-    /// to Claude Desktop"; never a version, so the column reads the same whatever is installed — with
+    /// <summary>Each launcher as the app's own words put it - "Found", "Not found" or, on the Mac, "Not visible
+    /// to Claude Desktop"; never a version, so the column reads the same whatever is installed - with
     /// where it is or how to install it.</summary>
     internal ControlResult ToolsResult()
     {
@@ -222,7 +222,7 @@ public sealed partial class ControlTools
         foreach (var name in held.Mcps.Keys.Order(StringComparer.Ordinal))
         {
             var entry = held.Mcps[name];
-            var runs = CollectionsModel.TargetOf(entry.Config);
+            var runs = ConnectorTarget.TargetOf(entry.Config);
             rows.Add([entry.Enabled ? OnWord : OffWord, ControlText.EscapedName(name), runs]);
             items.Add(JsonValue.Object(
                 ("name", JsonValue.String(name)),
@@ -264,8 +264,8 @@ public sealed partial class ControlTools
             false);
     }
 
-    /// <summary>What an update adds, deletes and changes, each name quoted through <see cref="ControlText.QuotedList"/>
-    /// — the document's author names its connectors — so that none can invent a clause of its own.
+    /// <summary>What an update adds, deletes and changes, each name quoted through <see cref="ControlText.QuotedList"/> -
+    /// the document's author names its connectors - so that none can invent a clause of its own.
     /// The window's banner, written for names read beside a list, joins them bare.</summary>
     internal static string ChangesText(CollectionDiff diff)
     {
@@ -285,6 +285,19 @@ public sealed partial class ControlTools
         return string.Join(ClauseSeparator, clauses);
     }
 
+    /// <summary>The refusal for a subscribed collection whose document can't be read, null when it
+    /// can: get_pending_update and apply_update both answer with it. The problem names the
+    /// document's file, unquoted.</summary>
+    internal string? SourceProblem(string collection)
+    {
+        if (!state.SourceErrors.TryGetValue(collection, out var problem))
+        {
+            return null;
+        }
+        var file = state.SourceBinding(collection)?.Path is { } source ? Path.GetFileName(source) : null;
+        return file is null ? ControlText.Escaped(problem) : Shown(problem, file);
+    }
+
     /// <summary>What an update would change: the window's banner, with the collection quoted and every name
     /// through <see cref="ControlText.EscapedName"/>, since others chose them. refresh_subscription answers
     /// with it, and is announced with it when it lands late; apply_update asks with it.</summary>
@@ -299,11 +312,9 @@ public sealed partial class ControlTools
         {
             return ControlResult.Refusal(NotSubscribedError(shown));
         }
-        if (state.SourceErrors.TryGetValue(collection, out var problem))
+        if (SourceProblem(collection) is { } problem)
         {
-            // The problem names the document's file, unquoted.
-            var file = state.SourceBinding(collection)?.Path is { } source ? Path.GetFileName(source) : null;
-            return ControlResult.Refusal(file is null ? ControlText.Escaped(problem) : Shown(problem, file));
+            return ControlResult.Refusal(problem);
         }
         var diff = state.PendingUpdates.GetValueOrDefault(collection);
         var structured = JsonValue.Object(

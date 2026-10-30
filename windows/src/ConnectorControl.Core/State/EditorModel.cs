@@ -14,10 +14,10 @@ namespace ConnectorControl.Core.State;
 /// </summary>
 public sealed class EditorModel : ObservableObject, IDisposable
 {
-    public const string NotValidJson = "Not valid JSON — check for a stray brace, missing comma, or unquoted value.";
-    public const string JsonTip = "Tip: paste a README snippet or an mcpServers stanza — a wrapper or a bare \"name\": {…} entry is unwrapped automatically, and the name filled in.";
+    public const string NotValidJson = "Not valid JSON - check for a stray brace, missing comma, or unquoted value.";
+    public const string JsonTip = "Tip: paste a README snippet or an mcpServers stanza - a wrapper or a bare \"name\": {…} entry is unwrapped automatically, and the name filled in.";
     public const string UrlHint = "Enter a valid http(s) URL, e.g. https://example.com/mcp";
-    public const string RemoteFooter = "Runs via npx mcp-remote — managed for you.";
+    public const string RemoteFooter = "Runs via npx mcp-remote - managed for you.";
     public const string AutomaticCaption = "Uses the server's OAuth (a browser window opens on first use), or no auth if the server is open.";
     public const string BearerCaption = "Sent as Authorization: Bearer …";
     /// <summary>
@@ -78,7 +78,19 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// which the field carries no other label for.
     /// </summary>
     public static string ArgumentLabel(int index) => "Argument " + ArgumentNumber(index);
+
+    /// <summary>The delete button beside an argument's field, named by the same number.</summary>
+    public static string DeleteArgumentRowLabel(int index) => "Delete argument " + ArgumentNumber(index);
     public const string EnvironmentHeader = "Environment Variables";
+
+    // A screen reader's names for an environment row's three controls, from the row's index, for
+    // the reason ArgumentLabel is: nothing visible says which row a bare "Name" belongs to, and
+    // the variable's own name is the author's to retype under the reader's cursor.
+    public static string VariableNameLabel(int index) => $"Variable {index + 1} name";
+    public static string VariableValueLabel(int index) => $"Variable {index + 1} value";
+    public static string ShowVariableValueLabel(int index) => $"Show value of variable {index + 1}";
+    public static string HideVariableValueLabel(int index) => $"Hide value of variable {index + 1}";
+    public static string DeleteVariableRowLabel(int index) => $"Delete variable {index + 1}";
     public const string ValueLabel = "Value";
     public const string TokenLabel = "Token";
     public const string HeaderNameLabel = "Header name";
@@ -98,7 +110,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     public static string LockedFieldsNote(string collection) => $"Synced from {collection} · read-only";
 
     public static string PublishedNote(string folder) =>
-        $"Published to {folder} — saving updates the file your team reads. Secrets stay here.";
+        $"Published to {folder} - saving updates the file your team reads. Secrets stay here.";
 
     public static string ImportedNote(string collection, string date) =>
         $"Imported from “{collection}” on {date}. Edits stay here.";
@@ -116,7 +128,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     /// <summary>The Mac's static and an instance property of the same name can coexist there; C# forbids that, so the instance property below calls this.</summary>
     public static string AdditionalTitleFor(int count, IEnumerable<string> keys) =>
-        $"{count} field(s) not editable here: {string.Join(", ", keys)} — switch to JSON to edit";
+        $"{count} field(s) not editable here: {string.Join(", ", keys)} - switch to JSON to edit";
 
     /// <summary>
     /// The grey line above the fields, and what it means for what the window may change.
@@ -145,7 +157,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         /// Which state this is, as three bools. XAML cannot pattern match, and a string in a
         /// converter parameter collapses a header on a typo with nothing to catch it; the auth
         /// kinds carry the same trio one screen below for the same reason. The Mac needs none of
-        /// these — SwiftUI switches on the enum itself.
+        /// these - SwiftUI switches on the enum itself.
         /// </summary>
         public bool IsSynced => this is Synced;
 
@@ -168,7 +180,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// True only for a brand-new connector still showing the remote template's placeholder
     /// command/args. Set at open; consumed by the first discard (below) or by adopting an edited
     /// JSON view into the form, since from then on the command/args are the user's own, not a
-    /// re-derivable property of the current fields — a later Type toggle must not wipe what they
+    /// re-derivable property of the current fields - a later Type toggle must not wipe what they
     /// typed. An unchanged JSON round trip (open JSON, switch straight back) leaves it set.
     /// </summary>
     private bool isUntouchedTemplate;
@@ -211,7 +223,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// <summary>
     /// Where each argument sat in the config the window opened on, by row. The publish record
     /// keys a path mark by its pointer, so a hint belongs to a position in the document that was
-    /// published, not to whatever position the row holds now — and a published collection's
+    /// published, not to whatever position the row holds now - and a published collection's
     /// editor is fully editable, so rows move. Fixed at open and never retaken, unlike the
     /// asked-for snapshot, on the assumption that the published document does not change under
     /// the window. A republish from the Collections window while this editor is open breaks that
@@ -328,7 +340,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
             Raise(nameof(CanSave));
             if (!isRemote && View == EditView.Form && isUntouchedTemplate)
             {
-                // Discard the remote template's bridge invocation — a local server has nothing
+                // Discard the remote template's bridge invocation - a local server has nothing
                 // to do with mcp-remote. The template is consumed by this one discard; from here
                 // on the fields are the user's own local form, so a later switch back and forth
                 // must not re-derive and repeat it.
@@ -438,7 +450,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// caution ring and the author's hint under a field follow whether its value is still a
     /// placeholder or owed, so they have to move together. Whether the field is locked does not: that
     /// is the asked-for snapshot taken when the window opened, so typing over the marker never
-    /// locks the field again. The Mac needs none of this — there these are <c>@Published</c>, and
+    /// locks the field again. The Mac needs none of this - there these are <c>@Published</c>, and
     /// a change to one republishes the whole object.
     /// </summary>
     public string BearerToken
@@ -639,7 +651,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     {
         var collection = target.Collection;
         // A connector that does not exist yet has no twins, and a synced collection's copy is its
-        // author's — neither offers the checkbox.
+        // author's - neither offers the checkbox.
         if (target.IsNew || state.KindOf(collection) != CollectionKind.Local)
         {
             return [];
@@ -705,7 +717,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// in a read-only form. Stays true after the value is filled in, unlike
     /// <see cref="IsPlaceholder"/>: a field being typed into must not turn into a locked one
     /// between two keystrokes. Keyed by the row object, so inserting a row above it changes
-    /// nothing — by the row object here, where the Mac's rows are structs and carry a UUID for
+    /// nothing - by the row object here, where the Mac's rows are structs and carry a UUID for
     /// the same purpose. The Mac also takes an id rather than the row, as <see cref="IsPlaceholder"/>
     /// explains.
     /// </summary>
@@ -883,7 +895,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
         return isRemote ? Tool.Npx : ToolRequirement.RequiredTool(command, Args.Select(a => a.Value).ToList());
     }
 
-    /// <summary>A change to a different tool re-probes it even if cached — the user may have just installed it.</summary>
+    /// <summary>A change to a different tool re-probes it even if cached - the user may have just installed it.</summary>
     private void EvaluateRequiredTool()
     {
         if (suppressToolEvaluation)
@@ -930,6 +942,13 @@ public sealed class EditorModel : ObservableObject, IDisposable
             foreach (var arg in Args)
             {
                 arg.RaisePosition();
+            }
+        }
+        else if (ReferenceEquals(sender, EnvRows))
+        {
+            foreach (var env in EnvRows)
+            {
+                env.RaisePosition();
             }
         }
     }
@@ -1044,7 +1063,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     public void DeleteArg(ArgRow row) => Args.Remove(row);
 
-    /// <summary>A fresh row's value is shown in clear — the user is typing it, not inspecting a stored secret.</summary>
+    /// <summary>A fresh row's value is shown in clear - the user is typing it, not inspecting a stored secret.</summary>
     public void AddEnvRow()
     {
         var row = new EnvRow("", "") { Revealed = true };
@@ -1081,7 +1100,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     private void RequestJsonView()
     {
-        // The JSON view renders CollapsedEnv(), which can't represent duplicate or nameless rows —
+        // The JSON view renders CollapsedEnv(), which can't represent duplicate or nameless rows -
         // switching would silently drop them, bypassing the same validation Save enforces.
         if (!isRemote && EnvValidationError() is { } envError)
         {
@@ -1135,7 +1154,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
             argRowsFollowOpen = false;
         }
         // A JSON edit that changed the config consumes the template, exactly
-        // like a discard would — so a later Type toggle to Local re-derives
+        // like a discard would - so a later Type toggle to Local re-derives
         // nothing and leaves what the user typed alone. An unchanged round
         // trip (config still equal to the template as opened) leaves the
         // flag set.
@@ -1150,13 +1169,13 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// <summary>
     /// Both row-keyed records, re-keyed onto something a rebuilt row still has. Load gives every
     /// row a new object, so without this a JSON round trip would leave the asked-for record and
-    /// the published positions recognising no row at all — a synced form's placeholders would
+    /// the published positions recognising no row at all - a synced form's placeholders would
     /// lock, a published form's argument hints would vanish. They are carried, never retaken: a
     /// retake reads current values and so would unlock nothing the user has already filled.
     ///
     /// Env rows are keyed by name, which is unique within a connector. Arguments are keyed by
-    /// position, which is exact in a synced form — its JSON is read-only, so the round trip is
-    /// always unchanged — and approximate only in an editable published form after a JSON edit
+    /// position, which is exact in a synced form - its JSON is read-only, so the round trip is
+    /// always unchanged - and approximate only in an editable published form after a JSON edit
     /// that inserts, removes or reorders arguments, which is the one case this cannot follow.
     /// </summary>
     private sealed record Carried(
@@ -1196,7 +1215,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// Loads <paramref name="config"/> into every form/remote field and (re)computes
     /// <see cref="IsRemote"/>. The one shared place the constructor and AdoptForm funnel through,
     /// so they cannot disagree on the isRemote rule or which fields a config fills in. Tool
-    /// evaluation is suppressed for the duration — both callers evaluate once themselves, after
+    /// evaluation is suppressed for the duration - both callers evaluate once themselves, after
     /// View (for ComputeRequiredTool's JSON branch) is in its final state.
     /// </summary>
     private void Load(JsonValue config)
@@ -1218,12 +1237,12 @@ public sealed class EditorModel : ObservableObject, IDisposable
             }
             additional = model.Additional;
             var detected = RemotePattern.Detect(config);
-            // The backing field, not the IsRemote setter — that setter also discards the remote
+            // The backing field, not the IsRemote setter - that setter also discards the remote
             // template's bridge invocation when switching to local, which would clobber the
             // Command/Args just loaded above from config. See EditorModel.swift's isRemoteChanged.
             isRemote = detected is not null || (Target.ForcesRemote && RemotePattern.IsRemoteShaped(config));
             // Quirk kept intentionally: RemoteUrl comes ONLY from Detect()'s canonical 2-arg shape,
-            // even when IsRemote is true via the ForcesRemote/IsRemoteShaped fallback above — Decode()
+            // even when IsRemote is true via the ForcesRemote/IsRemoteShaped fallback above - Decode()
             // may have found a real URL past extra flags, but the Server URL field stays blank until
             // the user (re)types it.
             remoteUrl = detected ?? "";
@@ -1244,8 +1263,8 @@ public sealed class EditorModel : ObservableObject, IDisposable
 
     /// <summary>
     /// The blank slate every remote field starts from. Called before adopting a decoded config
-    /// too: without it, switching from one auth kind to another left the old kind's fields — a
-    /// bearer token, say — populated behind an auth kind that no longer shows them.
+    /// too: without it, switching from one auth kind to another left the old kind's fields - a
+    /// bearer token, say - populated behind an auth kind that no longer shows them.
     /// </summary>
     private void ResetRemoteFields()
     {
@@ -1390,7 +1409,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     // MARK: save
 
     /// <summary>
-    /// The config this window opened on, with the <c>${CC_NEEDS:…}</c> leaves — and only those —
+    /// The config this window opened on, with the <c>${CC_NEEDS:…}</c> leaves - and only those -
     /// carrying whatever the form now holds at the same JSON pointers. Anything else the fields
     /// have been talked into saying is dropped on the floor, which is the whole point: the author
     /// owns every other byte, and the next refresh would overwrite it anyway.
@@ -1516,14 +1535,10 @@ public sealed class EditorModel : ObservableObject, IDisposable
         var saved = readOnly ? Target.Name : name;
         var entry = new McpEntry(current?.Enabled ?? Target.Entry.Enabled, config, readOnly ? Target.Entry.LastEditView : view);
         if (state.Upsert(saved, entry, Target.IsNew ? null : Target.Name, Target.Collection,
-                         FollowedPathMarks(CollectionName, config)) is { } error)
+                         FollowedPathMarks(CollectionName, config), propagate ? PropagatedSaves(config) : []) is { } error)
         {
             ValidationError = error;
             return false;
-        }
-        if (propagate)
-        {
-            PropagateSavedConfig(config, saved);
         }
         CloseRequested?.Invoke();
         state.ApplyInteractively();
@@ -1534,16 +1549,21 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// The ticked checkbox: the same change again in each collection that held an identical copy
     /// when this window opened. Each twin keeps its own on/off state, which is this machine's
     /// business and not part of "this change"; a name already taken in one of them leaves that
-    /// collection alone rather than failing a save that has already landed.
+    /// collection alone rather than failing the save.
     /// <para>
     /// The checkbox promised these collections held an identical copy, and that was measured when
-    /// the window opened. A twin that has moved since — a second editor window on it saved first,
-    /// or an external edit reconciled in — is no longer the connector the user agreed to change,
+    /// the window opened. A twin that has moved since - a second editor window on it saved first,
+    /// or an external edit reconciled in - is no longer the connector the user agreed to change,
     /// so it is skipped in silence. The same care the primary save takes over its own snapshot.
     /// </para>
+    /// <para>
+    /// The twins go to the store with the save itself (<see cref="AppState.Upsert"/>'s
+    /// <c>alsoIn</c>), so the master list is written once for all of them.
+    /// </para>
     /// </summary>
-    private void PropagateSavedConfig(JsonValue config, string saved)
+    private List<AppState.PropagatedSave> PropagatedSaves(JsonValue config)
     {
+        var saves = new List<AppState.PropagatedSave>();
         foreach (var other in PropagateTargets)
         {
             if (state.Store.Collections.TryGetValue(other, out var held)
@@ -1551,10 +1571,11 @@ public sealed class EditorModel : ObservableObject, IDisposable
                 && twin.Config == Target.Entry.Config)
             {
                 // The twin held this window's opening config, so its marks follow the same rows.
-                state.Upsert(saved, new McpEntry(twin.Enabled, config, view), Target.Name, other,
-                             FollowedPathMarks(other, config));
+                saves.Add(new AppState.PropagatedSave(other, new McpEntry(twin.Enabled, config, view),
+                                                      FollowedPathMarks(other, config)));
             }
         }
+        return saves;
     }
 
     /// <summary>
@@ -1564,7 +1585,7 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// Each mark is first placed on the arguments the window opened on, the way the exporter
     /// places it, so a mark that had already moved before the window opened is followed from where
     /// it really was. It then goes with its row: to wherever the row sits now, recording the row's
-    /// text as its value — the author may have corrected the path in place — or away with the row
+    /// text as its value - the author may have corrected the path in place - or away with the row
     /// when the row was deleted.
     /// </para>
     /// <para>

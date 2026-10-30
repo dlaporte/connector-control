@@ -9,13 +9,13 @@ import ConnectorControlTestSupport
 /// truncate+write can post two callbacks before one pump, so hit counts are
 /// lower bounds, as the C# suite asserts them. `TempDir.touch`/
 /// `bumpModificationDate` give a triggering write an mtime distinct from
-/// whatever the watcher saw at arm time, deterministically — no sleep needed.
+/// whatever the watcher saw at arm time, deterministically - no sleep needed.
 /// The C# suite's error, cooldown and rebuild tests have no mirror here: this
 /// watcher tells a replaced folder by device and inode, and has no error event.
 @MainActor
 final class FileWatcherTests: XCTestCase {
     /// A window to prove an event does NOT arrive (a stopped watcher, an
-    /// unrelated file) — unlike `Wait.eventually`, timing out here is the pass case, so
+    /// unrelated file) - unlike `Wait.eventually`, timing out here is the pass case, so
     /// it cannot be replaced by `pumpUntil` waiting on a condition. An event
     /// slower than the window would pass wrongly, and a real kqueue source
     /// leaves no signal to wait on instead; each use asserts that it timed out.
@@ -145,8 +145,8 @@ final class FileWatcherTests: XCTestCase {
         XCTAssertTrue(r.ui.pumpUntil({ r.hits >= 1 }, timeout: Wait.eventually))
     }
 
-    /// Removing the watched directory is two separate disappearances on disk —
-    /// the file is unlinked, then the directory itself — and the watcher
+    /// Removing the watched directory is two separate disappearances on disk -
+    /// the file is unlinked, then the directory itself - and the watcher
     /// reports each one, so the tests below take them one at a time and wait
     /// for the file's own change to be delivered before the directory goes.
     /// Collapsing them into a single `removeItem(at: dir)` makes the watcher's
@@ -157,7 +157,7 @@ final class FileWatcherTests: XCTestCase {
     ///
     /// The directory's own deletion is delivered exactly once and disarms the
     /// watcher, however many of the directory's and the file's DispatchSource
-    /// events fire for it — the serial queue plus the top-of-function guard
+    /// events fire for it - the serial queue plus the top-of-function guard
     /// collapse them to one.
     func testADeletedDirectoryFiresOnceAndDisarms() throws {
         let r = Rig()
@@ -176,7 +176,7 @@ final class FileWatcherTests: XCTestCase {
 
     /// The shape the app actually meets: the directory goes with the file still
     /// in it. Which disappearance the watcher sees first is the kernel's
-    /// choice, so only the end state is asserted — the change is reported and
+    /// choice, so only the end state is asserted - the change is reported and
     /// the watcher ends up disarmed. Swift-only: on Windows a real deletion
     /// under a live FileSystemWatcher races the OS's own error event, so the C#
     /// suite drives that branch through its HandleError seam instead.
@@ -228,15 +228,15 @@ final class FileWatcherTests: XCTestCase {
     /// A directory replaced wholesale: a sync client swapping a folder in, or a
     /// delete and recreate that the watcher never sees as a gap. `RENAME_SWAP`
     /// makes the replacement atomic, which is the only way a test can produce
-    /// it — delete-then-recreate leaves a window in which the watcher may
+    /// it - delete-then-recreate leaves a window in which the watcher may
     /// instead see the path missing and take its deleted-directory branch. Here
     /// the path never stops existing, so the one thing that changed is which
     /// directory it resolves to, and the descriptor the watcher holds is
     /// orphaned: nothing happening under the path can reach it again.
     ///
     /// The replacement is empty, so the write at the end CREATES the watched
-    /// file. Only the directory source can see a create — the file source has
-    /// no descriptor to arm on a file that does not exist yet — which is what
+    /// file. Only the directory source can see a create - the file source has
+    /// no descriptor to arm on a file that does not exist yet - which is what
     /// makes that assertion fail for a watcher still on the old directory.
     func testAReplacedFolderIsFollowedOnTheNextStart() throws {
         let r = Rig()
@@ -266,7 +266,7 @@ final class FileWatcherTests: XCTestCase {
 
     /// The replacement no event can report: a sync client swapping the folder
     /// ABOVE the watched one. Nothing touches the watched directory's own inode
-    /// or the file's — only what the path resolves to changes — so no kqueue
+    /// or the file's - only what the path resolves to changes - so no kqueue
     /// event is delivered for either, and the re-arm's own re-check is the only
     /// thing that can notice the difference. This is the shape a synced
     /// collection meets when the shared folder holding it is replaced.

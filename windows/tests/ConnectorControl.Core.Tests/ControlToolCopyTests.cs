@@ -3,7 +3,7 @@ using ConnectorControl.Core.Transport;
 
 namespace ConnectorControl.Core.Tests;
 
-/// <summary>Windows only in what it is for — the Mac's tool stays in the bundle — but plain file work, so it
+/// <summary>Windows only in what it is for - the Mac's tool stays in the bundle - but plain file work, so it
 /// runs on any platform, apart from the one fact about a copy that is running.</summary>
 public class ControlToolCopyTests : IDisposable
 {
@@ -93,7 +93,7 @@ public class ControlToolCopyTests : IDisposable
         Assert.Empty(failures);
     }
 
-    /// <summary>A copy that cannot be made — a full disk, an antivirus lock — leaves the old one serving, and
+    /// <summary>A copy that cannot be made - a full disk, an antivirus lock - leaves the old one serving, and
     /// says why. A folder where the new copy is staged fails it the same way on every platform.</summary>
     [Fact]
     public void ACopyThatCannotBeMadeLeavesTheOldOneServingAndSaysWhy()

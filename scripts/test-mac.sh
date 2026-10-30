@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Runs the Swift suite the way CI gates it: every test must run, none may skip
-# and none may fail — the Swift counterpart of windows/ci.runsettings'
+# and none may fail - the Swift counterpart of windows/ci.runsettings'
 # FailSkips. The one legitimate local exception is the exFAT test, which skips
 # if hdiutil cannot attach a disk image on this machine (it attaches
 # successfully on CI). Called by mac-ci.yml, preview.yml and release.yml; runs
 # locally too (set DEVELOPER_DIR when the default toolchain cannot run tests).
 #
 # How the two test targets report depends on the toolchain: one .xctest bundle
-# per target with its own summary (Xcode-beta locally) or one combined
+# per target with its own summary (the local Xcode) or one combined
 # ConnectorControlPackageTests bundle (the CI runner's Xcode). The checks
 # therefore count per-test lines across the whole log and look only for the
 # toolchain-independent suite lines.
@@ -29,4 +29,4 @@ fi
 [ "$SKIPPED" = "0" ] \
     || { echo "error: expected no skipped tests, found $SKIPPED (the exFAT test skips locally if hdiutil cannot attach an image; it must not skip on CI)" >&2; exit 1; }
 [ "$PASSED_ALL" -ge 1 ] \
-    || { echo "error: no 'All tests' suite passed — did the run finish?" >&2; exit 1; }
+    || { echo "error: no 'All tests' suite passed - did the run finish?" >&2; exit 1; }

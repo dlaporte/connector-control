@@ -9,7 +9,7 @@ namespace ConnectorControl.App.Tests;
 public class AppIconTests
 {
     // With nIconIndex = -1 and no output buffers, ExtractIconEx returns the number of icon
-    // resources in the file — 0 for a file without any (unlike Icon.ExtractAssociatedIcon,
+    // resources in the file - 0 for a file without any (unlike Icon.ExtractAssociatedIcon,
     // which silently falls back to the shell's default program icon).
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, EntryPoint = "ExtractIconExW")]
     private static extern uint ExtractIconEx(string file, int iconIndex, nint largeIcons, nint smallIcons, uint count);

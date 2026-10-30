@@ -79,7 +79,7 @@ public class FlyoutModelTests
         Assert.Equal([new CollectionMenuItem("Default", true)], flyout.CollectionItems);
 
         Assert.Null(state.CreateActiveCopy("Work"));
-        // Switching only — New, Rename and Delete live in the window.
+        // Switching only - New, Rename and Delete live in the window.
         Assert.Equal(
             [new CollectionMenuItem("Default", false), new CollectionMenuItem("Work", true)],
             flyout.CollectionItems);
@@ -136,18 +136,18 @@ public class FlyoutModelTests
         Assert.Equal(new CollectionBanner.Locate("Team", "team.json"), flyout.CollectionBanner);
         Assert.True(flyout.HasCollectionBanner);
         Assert.Equal("Team’s file isn’t on this PC yet.", flyout.CollectionBannerText);
-        Assert.Equal("Locate team.json", flyout.CollectionBannerButton);
+        Assert.Equal("Locate team.json…", flyout.CollectionBannerButton);
 
         state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
         {
             ["Team"] = new CollectionDiff(["jira"], ["confluence"], []),
         };
         Assert.Equal("Team changed at its source: adds jira; deletes confluence.", flyout.CollectionBannerText);
-        Assert.Equal("Review & Apply", flyout.CollectionBannerButton);
+        Assert.Equal("Review & Apply…", flyout.CollectionBannerButton);
 
         state.PublishError = new CollectionPublishError("Default", "the folder is read-only");
         Assert.Equal($"Couldn’t publish Default to {folder}: the folder is read-only", flyout.CollectionBannerText);
-        Assert.Equal("Choose Folder", flyout.CollectionBannerButton);
+        Assert.Equal("Choose Folder…", flyout.CollectionBannerButton);
 
         state.PublishError = null;
         state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal);
@@ -177,7 +177,7 @@ public class FlyoutModelTests
         File.WriteAllText(h.ClaudeConfigPath, "{oops");
         state.SetEnabled("scoutbook", false);   // apply fails
         Assert.Equal(FooterKind.RetryApply, flyout.Footer);
-        Assert.Equal("Apply Failed — Retry", flyout.FooterTitle);
+        Assert.Equal("Apply Failed - Retry", flyout.FooterTitle);
         Assert.Equal(FlyoutModel.RetryGlyph, flyout.FooterGlyph);
         Assert.True(flyout.HasError);
 
@@ -258,7 +258,7 @@ public class FlyoutModelTests
         Assert.Equal(1, h.Background.Pending);
         h.Drain();
         Assert.True(state.ToolStatuses.ContainsKey(Tool.Npx));
-        // Three npx connectors: one tool, one batch — not one probe per row.
+        // Three npx connectors: one tool, one batch - not one probe per row.
         Assert.Equal([Tool.Npx], h.Tools.Probed.ToArray());
         Assert.Equal(1, h.Tools.Batches);
 
@@ -370,11 +370,14 @@ public class FlyoutModelTests
             ["Default"] = new CollectionDiff(["jira"], [], []),
         };
         Assert.False(flyout.ActiveHasPendingUpdate);
+        Assert.Equal("Data team", flyout.ChipSpokenName);
         state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
         {
             ["Data team"] = new CollectionDiff(["jira"], [], []),
         };
         Assert.True(flyout.ActiveHasPendingUpdate);
+        // Windows only: the chip's spoken name carries the dot in words, as the menu's titles do.
+        Assert.Equal("Data team" + FlyoutModel.PendingMenuMark, flyout.ChipSpokenName);
     }
 
     [Fact]

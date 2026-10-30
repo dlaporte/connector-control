@@ -31,6 +31,9 @@ public sealed class VelopackUpdater : IUpdater
     private readonly Action<string> log;
     private readonly string? savedUpdaterPath;
 
+    /// <summary>The startup recovery (<see cref="StartRecovery"/>), which every check waits for; done until it starts.</summary>
+    private Task startupRecovery = Task.CompletedTask;
+
     /// <summary>How long a failed put-back of the updater waits before its one retry.</summary>
     private static readonly TimeSpan RestoreRetryDelay = TimeSpan.FromMilliseconds(250);
 
@@ -107,7 +110,7 @@ public sealed class VelopackUpdater : IUpdater
 
     /// <summary>
     /// The hooks <see cref="RunStartupHook"/> runs. Velopack would otherwise apply, at launch, the newest package
-    /// it finds in packages\ — a package this app's check refused, or never finished checking, included. Updates
+    /// it finds in packages\ - a package this app's check refused, or never finished checking, included. Updates
     /// are applied only by <see cref="ApplyOnQuit"/> and <see cref="ApplyAndRestart"/>, after the check has
     /// passed. Nothing is lost: a checked package left unapplied is found again by the next check, which
     /// re-verifies it before offering it.
@@ -126,7 +129,9 @@ public sealed class VelopackUpdater : IUpdater
             return null;
         }
         // An updater left in place by an earlier check is put back before this one asks the feed (off the UI thread:
-        // the installed-updater check reads signatures).
+        // the installed-updater check reads signatures). The startup recovery finishes first: still running, it could
+        // put the saved copy back, and sweep packages\, in the middle of this check's download.
+        await startupRecovery.ConfigureAwait(false);
         await Task.Run(() => RecoverInterruptedCheck(), cancellationToken).ConfigureAwait(false);
         var info = await manager.CheckForUpdatesAsync().ConfigureAwait(false);
         if (info is null)
@@ -145,7 +150,7 @@ public sealed class VelopackUpdater : IUpdater
         }
         var location = manager.Location;
         var runningExe = Environment.ProcessPath
-            ?? throw new UpdateVerificationException("This app's own location is unknown, so an update cannot be checked" + UpdateVerifier.NotInstalledSuffix);
+            ?? throw new UpdateVerificationException(UpdateRefusals.LocationUnknown);
         // The running app's identity is read once per download and decides both checks below.
         var identity = identify(runningExe);
         var knownGoodUpdater = PrepareInstalledUpdater(identity);
@@ -155,8 +160,8 @@ public sealed class VelopackUpdater : IUpdater
 
     /// <summary>
     /// Before a download. Velopack may run the installed Update.exe during it, so it must already be ours. If it is
-    /// not, and a copy saved by an earlier check is there, that check never finished — the app was quit or ended
-    /// while it ran, after Velopack had put the package's Update.exe in place — so the saved one is put back, every
+    /// not, and a copy saved by an earlier check is there, that check never finished - the app was quit or ended
+    /// while it ran, after Velopack had put the package's Update.exe in place - so the saved one is put back, every
     /// package in packages\ (none of which that check passed) is deleted, and that is logged; then the installed one
     /// is checked again. Once it passes, it is read and saved to disk, staged, so a check that is interrupted in its
     /// turn can be recovered the same way. Returns the bytes to restore if this check refuses the package.
@@ -178,7 +183,8 @@ public sealed class VelopackUpdater : IUpdater
 
     /// <summary>The package check, then the saved Update.exe goes: the check ended, in acceptance or refusal, and the
     /// restore it was kept for has happened or is not needed. A refusal whose restore failed keeps the copy, so the next
-    /// launch or check puts it back (<see cref="RecoverInterruptedCheck"/>); so does anything else that ends the check.</summary>
+    /// launch or check puts it back (<see cref="RecoverInterruptedCheck"/>); so does anything else that ends the check.
+    /// That refusal also says the package's updater is still in place, and whether a copy is kept to put back.</summary>
     internal void FinishCheck(UpdateInfo info, byte[]? knownGoodUpdater, UpdateVerifier.RunningIdentity identity)
     {
         try
@@ -187,20 +193,23 @@ public sealed class VelopackUpdater : IUpdater
         }
         catch (UpdateVerificationException ex)
         {
-            if (ex.UpdaterLeftInPlace)
-            {
-                log(savedUpdaterPath is not null && File.Exists(savedUpdaterPath)
-                    ? "The refused update's updater is still in place: the copy saved before the download is kept, to be put back at the next launch or update check."
-                    : "The refused update's updater is still in place, and no copy was saved before the download to put back.");
-            }
-            else
+            if (!ex.UpdaterLeftInPlace)
             {
                 DeleteSavedUpdater();
+                throw;
             }
-            throw;
+            var kept = savedUpdaterPath is not null && File.Exists(savedUpdaterPath);
+            log(kept
+                ? "The refused update's updater is still in place: the copy saved before the download is kept, to be put back at the next launch or update check."
+                : "The refused update's updater is still in place, and no copy was saved before the download to put back.");
+            throw new UpdateVerificationException(UpdateRefusals.UpdaterLeftInPlace(ex.Message, kept)) { UpdaterLeftInPlace = true };
         }
         DeleteSavedUpdater();
     }
+
+    /// <summary>At launch, once this is the app's only instance: <see cref="RecoverInterruptedCheck"/>, off the calling thread
+    /// (it reads signatures, and may wait on revocation). Every check waits for it to finish before it starts.</summary>
+    public void StartRecovery() => startupRecovery = Task.Run(RecoverInterruptedCheck);
 
     /// <summary>
     /// At launch, once this is the app's only instance, and before every check: when a copy of the updater saved by an

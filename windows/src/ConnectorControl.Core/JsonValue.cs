@@ -8,7 +8,7 @@ using System.Text.Json;
 namespace ConnectorControl.Core;
 
 /// <summary>
-/// Immutable JSON tree with structural equality — the C# twin of the Swift
+/// Immutable JSON tree with structural equality - the C# twin of the Swift
 /// <c>JSONValue</c> enum. Objects keep their keys ordinally sorted, which is
 /// also the order Apple's JSONEncoder emits with <c>.sortedKeys</c>.
 /// </summary>
@@ -126,7 +126,7 @@ public sealed class JsonValue : IEquatable<JsonValue>
     /// writes it on the Swift side, which this reproduces byte for byte
     /// (<c>AppleJsonFormat.SerializationCompact</c>, pinned by the serialization-compact goldens).
     /// Platform idiom: the Mac writer answers <c>"null"</c> for a value JSON cannot hold (NaN,
-    /// infinity); a C# <see cref="JsonValue"/> cannot hold one — <see cref="Double"/> refuses them — so
+    /// infinity); a C# <see cref="JsonValue"/> cannot hold one - <see cref="Double"/> refuses them - so
     /// this never does.
     /// <c>escapeSlashes: false</c> is for what the command line prints under <c>--json</c>, which people and
     /// scripts read: a path comes out as written. The wire is always escaped.
@@ -205,6 +205,7 @@ public sealed class JsonValue : IEquatable<JsonValue>
             case JsonTokenType.StartObject:
             {
                 var builder = EmptyObject.ToBuilder();
+                var seen = new HashSet<string>(Collection.NameComparer);
                 while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
                 {
                     var key = ReadString(ref reader);
@@ -214,9 +215,11 @@ public sealed class JsonValue : IEquatable<JsonValue>
                     }
                     var propertyValue = ReadValue(ref reader);
                     // Apple's JSONSerialization and JSONDecoder both keep the FIRST of two
-                    // duplicate object keys; the Mac test testFirstDuplicateKeyWins pins it,
-                    // and re-parsing our own sorted-key output must never disagree with them.
-                    if (!builder.ContainsKey(key))
+                    // duplicate object keys, and a Swift String key is one however its accents
+                    // are composed; the Mac tests testFirstDuplicateKeyWins and
+                    // testFirstSpellingOfADuplicateKeyWins pin both, and re-parsing our own
+                    // sorted-key output must never disagree with them.
+                    if (seen.Add(key))
                     {
                         builder[key] = propertyValue;
                     }

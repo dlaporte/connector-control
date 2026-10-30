@@ -17,7 +17,7 @@ import ConnectorControlCore
 extension ControlTools {
     public static let restartToUseText = "Restart Claude to use it."
     public static let restartToApplyText = "Restart Claude to apply the change."
-    public static let keepCountError = "backups-to-keep takes a number from 5 to 100."
+    public static let keepCountError = "backups-to-keep takes a number from \(ControlSettingKey.keepCountRange)."
 
     public static func savedNotAppliedText(_ message: String) -> String { "Saved, but Claude’s config wasn’t updated: \(message)" }
 
@@ -40,6 +40,18 @@ extension ControlTools {
     public static func duplicatedText(_ source: String, _ copy: String) -> String { "Copied “\(source)” as “\(copy)”." }
 
     public static func duplicateSubscribedError(_ collection: String) -> String { "“\(collection)” is subscribed; copy it in Connector Control with Make Local Copy." }
+
+    /// add_connector on a subscribed collection: the collection named, and the two ways round it,
+    /// in the house style of the refusal above.
+    public static func subscribedAddError(_ collection: String) -> String {
+        "“\(collection)” is subscribed, so it’s read-only; add the connector to a local collection, or copy this one in Connector Control with Make Local Copy."
+    }
+
+    /// update_connector and delete_connectors on a subscribed collection: the way round is a local
+    /// copy, since the connector has to be in a collection you own to be changed.
+    public static func subscribedChangeError(_ collection: String) -> String {
+        "“\(collection)” is subscribed, so it’s read-only; copy it in Connector Control with Make Local Copy to change its connectors."
+    }
 
     public static func settingChangedText(_ key: String, _ value: String) -> String { "\(key) is now \(value)." }
 
@@ -106,10 +118,9 @@ extension ControlTools {
         // A write that never touches Claude's config (a window's setting) must not report a retry
         // an earlier, unrelated write left pending.
         let reachesClaude = touchesClaude && (collection == nil || collection == state.activeCollection)
-        // Platform idiom: compared scalar by scalar, as the Windows mirror compares ordinally; Swift's
-        // == holds canonically equivalent text equal, and would miss a change only in how a
-        // character is composed.
-        let applied = !ControlTools.identical(.object(state.appliedServers), .object(mark))
+        // Compared scalar by scalar (`JSONValue.identical`), keys too, so a change only in how a
+        // character is composed counts.
+        let applied = !JSONValue.identical(state.appliedServers, mark)
         var then: String?
         if reachesClaude, state.applyRetryNeeded {
             text.append(ControlTools.savedNotAppliedText(state.lastError ?? ""))

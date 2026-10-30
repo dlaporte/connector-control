@@ -77,7 +77,7 @@ final class MasterStoreTests: XCTestCase {
         // Missing file → nil, nothing created.
         XCTAssertNil(MasterStoreIO.read(from: url))
         // Corrupt file → nil, file left exactly in place (unlike load, which
-        // moves it aside — the watcher must be able to peek at a sync tool's
+        // moves it aside - the watcher must be able to peek at a sync tool's
         // mid-write partial without destroying it).
         try Data("{not json!!".utf8).write(to: url)
         XCTAssertNil(MasterStoreIO.read(from: url))
@@ -87,6 +87,43 @@ final class MasterStoreTests: XCTestCase {
         store.mcps["s"] = MCPEntry(config: .object(["command": .string("npx")]))
         try MasterStoreIO.save(store, to: url)
         XCTAssertEqual(MasterStoreIO.read(from: url), store)
+    }
+
+    /// A master list holding one connector whose config opens `depth - 6` arrays, so the file nests to `depth`.
+    private static func storeText(depth: Int, comma: String = "") -> String {
+        let arrays = String(repeating: "[", count: depth - 6) + String(repeating: "]", count: depth - 6)
+        return #"{"version":2,"activeProfile":"Default","profiles":{"Default":{"mcps":{"a":"#
+            + #"{"enabled":true,"lastEditView":"form","config":{"k":"# + arrays + "}" + comma + "}}}}}"
+    }
+
+    /// The master list is read as Claude's config is, and as Windows reads both: nesting past 64, a trailing
+    /// comma, and UTF-16 or UTF-32 are refused, so the file is unreadable alike on both, and the watcher's peek
+    /// refuses what the load does. A UTF-8 byte-order mark is read.
+    func testTheMasterListIsReadAsClaudesConfigIs() throws {
+        let refused: [(String, Data)] = [
+            ("65 deep", Data(Self.storeText(depth: 65).utf8)),
+            ("a trailing comma", Data(Self.storeText(depth: 7, comma: ",").utf8)),
+            ("UTF-16", Self.storeText(depth: 7).data(using: .utf16)!),
+            ("UTF-16 without a mark", Self.storeText(depth: 7).data(using: .utf16LittleEndian)!),
+            ("UTF-32", Self.storeText(depth: 7).data(using: .utf32)!),
+        ]
+        for (what, data) in refused {
+            try data.write(to: url)
+            XCTAssertNil(MasterStoreIO.read(from: url), what)
+            XCTAssertNotNil(MasterStoreIO.load(from: url).corruptFileURL, what)
+        }
+        let read: [(String, Data)] = [
+            ("64 deep", Data(Self.storeText(depth: 64).utf8)),
+            ("a comma in a string", Data(Self.storeText(depth: 7).replacingOccurrences(of: #""k""#, with: #"",}""#).utf8)),
+            ("a byte-order mark", Data([0xEF, 0xBB, 0xBF]) + Data(Self.storeText(depth: 7).utf8)),
+        ]
+        for (what, data) in read {
+            try data.write(to: url)
+            XCTAssertNotNil(MasterStoreIO.read(from: url), what)
+            let loaded = MasterStoreIO.load(from: url)
+            XCTAssertNil(loaded.corruptFileURL, what)
+            XCTAssertNotNil(loaded.store.mcps["a"], what)
+        }
     }
 
     func testBackupTimestampFormat() throws {
@@ -160,7 +197,7 @@ final class MasterStoreTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 
-    /// MasterStore has no custom `init(from:)` — decoding is exactly as
+    /// MasterStore has no custom `init(from:)` - decoding is exactly as
     /// strict as the synthesized Codable conformance, so every one of these
     /// malformed shapes fails to decode and flows through the same
     /// corrupt-file path as garbage bytes: moved aside, empty store returned.

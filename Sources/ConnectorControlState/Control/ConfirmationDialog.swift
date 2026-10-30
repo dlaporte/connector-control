@@ -4,8 +4,8 @@ import Foundation
 ///
 /// A confirmation as the app draws it, from the question the tools put: the title and message with
 /// every name set apart and none longer than `nameLimit`, the lines of what would run, each with its
-/// kind, and the closing line. The views draw it with Don’t Allow the default — Return and Escape
-/// answer it, and so does closing the window — and every paragraph left to right, whatever a name
+/// kind, and the closing line. The views draw it with Don’t Allow the default - Return and Escape
+/// answer it, and so does closing the window - and every paragraph left to right, whatever a name
 /// begins with, so a name that starts right to left cannot turn the sentence around it. What is
 /// compared on Allow is the request, never this: the cut is drawing only.
 public struct ConfirmationDialog: Equatable, Sendable {
@@ -39,8 +39,8 @@ public struct ConfirmationDialog: Equatable, Sendable {
 
     /// How much room every code line's box adds above and below the code face's own line of `lineHeight`: a
     /// quarter of a line, rounded up, when any of `lines` holds a letter of a script the code face may not
-    /// have (`holdsOtherScript`), drawn in a fallback face that can reach past the code face's line — Chinese,
-    /// Arabic, Devanagari, Thai and the like — and none otherwise, so Latin text reads as tightly as ever. The
+    /// have (`holdsOtherScript`), drawn in a fallback face that can reach past the code face's line - Chinese,
+    /// Arabic, Devanagari, Thai and the like - and none otherwise, so Latin text reads as tightly as ever. The
     /// room is fixed rather than measured: the Windows text engine reports a fallback face's letters with the
     /// code face's own line metrics, so neither platform can measure it alike, and a fixed room is the same on
     /// both. Marks never make room, so a line's box, which clips what it holds, stays bounded.
@@ -61,7 +61,7 @@ public struct ConfirmationDialog: Equatable, Sendable {
         }
     }
 
-    /// Whether `line` holds a character of the blocks where the strong right-to-left letters are —
+    /// Whether `line` holds a character of the blocks where the strong right-to-left letters are -
     /// Hebrew, Arabic, Syriac, Thaana, NKo and the rest to U+08FF, their presentation forms, and their
     /// ranges beyond the Basic Plane. Explicit ranges, the same as the Windows mirror's, so neither
     /// platform leans on its own Unicode tables; a mark or digit inside them only wraps a line that
@@ -91,11 +91,11 @@ public struct ConfirmationDialog: Equatable, Sendable {
     // equivalent text equal, and a name composed another way is another name.
     public static func == (one: ConfirmationDialog, other: ConfirmationDialog) -> Bool {
         one.title == other.title && one.message == other.message
-            && one.code.count == other.code.count && zip(one.code, other.code).allSatisfy { TextRun.same($0, $1) }
+            && one.code.count == other.code.count && zip(one.code, other.code).allSatisfy { $0.hasSameScalars(as: $1) }
             && one.codeKinds == other.codeKinds && one.footer == other.footer
     }
 
-    /// A line a change removes or adds, by the prefix the change lines give it — at the line's start,
+    /// A line a change removes or adds, by the prefix the change lines give it - at the line's start,
     /// or after the one indent an update's lines take under their heading; any other is plain. Only a
     /// change line starts so: a line that continues a field is padded past the widest label, deeper
     /// than either. A key that itself reads as a change line is coloured as one, which says nothing its
@@ -144,7 +144,7 @@ public final class DialogConfirmer: ControlConfirmer {
     // modal entered from a run-loop turn of its own runs them all. WPF's nested frame runs the
     // dispatcher's queue whatever called it, so the Windows mirror's presenter only posts.
     /// The Mac's presenter, for this confirmer and for any other modal the app enters: `work` on the next
-    /// turn of the main run loop, in the default mode or while another of the app's alerts is up —
+    /// turn of the main run loop, in the default mode or while another of the app's alerts is up -
     /// never inside the block that asked, and never during a menu or a drag. Nonisolated: it only posts.
     public nonisolated static func nextRunLoopTurn(_ work: @escaping MainActorAction) {
         RunLoop.main.perform(inModes: [.default, modalPanelMode]) { MainActor.assumeIsolated(work) }

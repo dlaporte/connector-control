@@ -7,15 +7,29 @@
   <views:DialogWindow.Resources>
     <views:UnansweredNoteConverter x:Key="UnansweredNote" />
   </views:DialogWindow.Resources>
-  <StackPanel Margin="16">
+  <!-- One row per region. Every region but the preview is as tall as it asks; the preview is the one that gives way
+       when the dialog is capped at the screen's work area (the code-behind's MaxHeight), so the footer's buttons stay on
+       screen. Below the cap it is 180 tall, as the hidden spacer in its row asks. -->
+  <Grid Margin="16">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" MinHeight="96" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
     <!-- The sheet's own heading, as well as the title bar's: the Mac sheet has no chrome to put
          it in, and both platforms read the same sentence. -->
-    <TextBlock x:Name="TitleText" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,12" />
+    <TextBlock x:Name="TitleText" Grid.Row="0" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,12" />
 
     <!-- Folder row: the folder this collection would write into, and what it writes there.
          Export needs no folder, so the code-behind collapses the whole row in the model's export
          mode. -->
-    <StackPanel x:Name="FolderRow" Margin="0,0,0,12">
+    <StackPanel x:Name="FolderRow" Grid.Row="1" Margin="0,0,0,12">
       <StackPanel Orientation="Horizontal">
         <!-- Trimmed at the end, as the footer is, since WPF has no middle ellipsis; the Mac sheet
              elides the middle of both. -->
@@ -26,7 +40,7 @@
       <TextBlock Text="{Binding FolderSentence}" Style="{StaticResource CaptionText}" Margin="0,6,0,0" />
     </StackPanel>
 
-    <ScrollViewer MaxHeight="210" VerticalScrollBarVisibility="Auto">
+    <ScrollViewer Grid.Row="2" MaxHeight="210" VerticalScrollBarVisibility="Auto">
       <StackPanel>
         <!-- Environment values: a tick per variable, and a hint for every one that stays here. -->
         <StackPanel x:Name="EnvSection" Visibility="{Binding HasEnvRows, Converter={StaticResource Vis}}">
@@ -57,8 +71,10 @@
                              Visibility="{Binding IsChecked, ElementName=ShareTick, Converter={StaticResource Vis}}"
                              VerticalAlignment="Center" Margin="0,0,10,0" />
                   <CheckBox x:Name="ShareTick" Grid.Column="3" Content="{x:Static state:PublishModel.ShareValueLabel}" FontSize="12"
-                            IsChecked="{Binding Share, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            IsChecked="{Binding Share, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,10,0"
+                            AutomationProperties.Name="{Binding ShareLabel}" />
                   <TextBox x:Name="HintBox" Grid.Column="4" Text="{Binding Hint, UpdateSourceTrigger=PropertyChanged}" FontSize="12"
+                           AutomationProperties.Name="{Binding HintLabel}"
                            Style="{StaticResource Watermarked}" Tag="{x:Static state:PublishModel.HintPlaceholder}" />
                 </Grid>
                 <DataTemplate.Triggers>
@@ -93,7 +109,7 @@
                     <!-- The tick carries no visible label: the row it sits on says what marking it
                          replaces. Narrator gets the sentence the label would have been. -->
                     <CheckBox x:Name="MarkTick" IsChecked="{Binding Marked, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,8,0"
-                              AutomationProperties.Name="{x:Static state:PublishModel.MarkPathLabel}" />
+                              AutomationProperties.Name="{Binding MarkLabel}" />
                     <TextBlock Grid.Column="1" Text="{Binding Connector}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="2" Text="{Binding Pointer}" Style="{StaticResource CaptionText}" FontFamily="{StaticResource MonoFont}" VerticalAlignment="Center" Margin="8,0" />
                     <TextBlock Grid.Column="3" Text="{Binding Value}" FontFamily="{StaticResource MonoFont}" FontSize="12"
@@ -102,8 +118,10 @@
                   <StackPanel x:Name="MarkedFields" Orientation="Horizontal" Margin="28,6,0,0"
                               Visibility="{Binding IsChecked, ElementName=MarkTick, Converter={StaticResource Vis}}">
                     <TextBox x:Name="PathNameBox" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="150" FontSize="12"
+                             AutomationProperties.Name="{Binding NameLabel}"
                              Style="{StaticResource Watermarked}" Tag="{x:Static state:PublishModel.PathNamePlaceholder}" />
                     <TextBox x:Name="PathHintBox" Text="{Binding Hint, UpdateSourceTrigger=PropertyChanged}" Width="210" FontSize="12" Margin="8,0,0,0"
+                             AutomationProperties.Name="{Binding HintLabel}"
                              Style="{StaticResource Watermarked}" Tag="{x:Static state:PublishModel.HintPlaceholder}" />
                   </StackPanel>
                 </StackPanel>
@@ -125,7 +143,7 @@
          Every line has the same two columns: the note, and a horizontal panel of the answers that
          entry takes. An entry that offers a second kind of answer adds a button to its panel and
          changes nothing else. -->
-    <ScrollViewer MaxHeight="96" VerticalScrollBarVisibility="Auto">
+    <ScrollViewer Grid.Row="3" MaxHeight="96" VerticalScrollBarVisibility="Auto">
       <StackPanel>
         <ItemsControl x:Name="UnresolvedList" ItemsSource="{Binding UnresolvedMarks}">
           <ItemsControl.ItemTemplate>
@@ -144,7 +162,8 @@
                   </TextBlock.Text>
                 </TextBlock>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                  <Button x:Name="ForgetMark" Content="{x:Static state:PublishModel.ForgetMarkButton}" Click="OnForgetMark" />
+                  <Button x:Name="ForgetMark" Content="{x:Static state:PublishModel.ForgetMarkButton}" Click="OnForgetMark"
+                          AutomationProperties.Name="{Binding ForgetLabel}" />
                 </StackPanel>
               </Grid>
             </DataTemplate>
@@ -171,8 +190,10 @@
                   </TextBlock.Text>
                 </TextBlock>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                  <Button x:Name="ReleaseValue" Content="{x:Static state:PublishModel.ReleaseValueButton}" Click="OnReleaseValue" />
-                  <Button x:Name="UseDirectoryToken" Content="{x:Static state:PublishModel.UseDirectoryTokenButton}" Click="OnUseDirectoryToken" />
+                  <Button x:Name="ReleaseValue" Content="{x:Static state:PublishModel.ReleaseValueButton}" Click="OnReleaseValue"
+                          AutomationProperties.Name="{Binding ReleaseLabel}" />
+                  <Button x:Name="UseDirectoryToken" Content="{x:Static state:PublishModel.UseDirectoryTokenButton}" Click="OnUseDirectoryToken"
+                          AutomationProperties.Name="{Binding UseTokenLabel}" />
                 </StackPanel>
               </Grid>
               <DataTemplate.Triggers>
@@ -195,15 +216,17 @@
     </ScrollViewer>
 
     <!-- The document itself: every byte that leaves this PC, read-only. -->
-    <TextBlock Text="{x:Static state:PublishModel.PreviewTitle}" Style="{StaticResource SectionTitle}" Margin="0,12,0,8" />
-    <TextBox x:Name="PreviewBox" Text="{Binding Preview, Mode=OneWay}" Height="180" IsReadOnly="True" IsReadOnlyCaretVisible="False"
+    <TextBlock Grid.Row="4" Text="{x:Static state:PublishModel.PreviewTitle}" Style="{StaticResource SectionTitle}" Margin="0,12,0,8" />
+    <!-- Asks 180 for the row whatever the document's length; given less, it asks for what it is given. -->
+    <Border Grid.Row="5" Height="180" Visibility="Hidden" />
+    <TextBox x:Name="PreviewBox" Grid.Row="5" Text="{Binding Preview, Mode=OneWay}" MaxHeight="180" IsReadOnly="True" IsReadOnlyCaretVisible="False"
              FontFamily="{StaticResource MonoFont}" FontSize="12" TextWrapping="NoWrap"
              HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top" />
 
     <!-- One line per credential-looking value, and a connector that passes keys as arguments can
          produce many: the list scrolls rather than pushing the footer buttons off a dialog that
          sizes to its content and cannot be resized. -->
-    <ScrollViewer MaxHeight="72" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+    <ScrollViewer Grid.Row="6" MaxHeight="72" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
       <ItemsControl x:Name="WarningList" ItemsSource="{Binding Warnings}">
         <ItemsControl.ItemTemplate>
           <DataTemplate>
@@ -213,11 +236,11 @@
       </ItemsControl>
     </ScrollViewer>
 
-    <TextBlock x:Name="FailureText" Style="{StaticResource ErrorText}" Margin="0,8,0,0" Visibility="Collapsed" />
+    <TextBlock x:Name="FailureText" Grid.Row="7" Style="{StaticResource ErrorText}" Margin="0,8,0,0" Visibility="Collapsed" />
 
     <!-- Two columns, because a collection's name is the user's: the footer sentence keeps to its
          own column and trims, rather than being drawn under the buttons. -->
-    <Grid Margin="0,16,0,0">
+    <Grid Grid.Row="8" Margin="0,16,0,0">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
@@ -234,5 +257,5 @@
                 IsEnabled="{Binding CanFinish}" Style="{DynamicResource AccentButtonStyle}" Click="OnFinish" />
       </StackPanel>
     </Grid>
-  </StackPanel>
+  </Grid>
 </views:DialogWindow>

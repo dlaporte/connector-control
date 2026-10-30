@@ -40,6 +40,16 @@ final class FormMapperTests: XCTestCase {
         XCTAssertEqual(analysis.model.command, "")
     }
 
+    /// Ordinal, by UTF-16 unit, as the Windows mirror sorts: a key past the Basic Multilingual Plane
+    /// (a surrogate pair, 0xD83D…) lists before U+FF61, where Swift's own `<` would put it after.
+    func testTheLossListIsInOrdinalOrder() {
+        let analysis = FormMapper.analyze(.object([
+            "command": .string("x"),
+            "env": .object(["\u{FF61}": .int(1), "\u{1F600}": .int(2)]),
+        ]))
+        XCTAssertEqual(analysis.lost, ["env.\u{1F600} (number)", "env.\u{FF61} (number)"])
+    }
+
     func testNonObjectArgsOrEnvAreLost() {
         let analysis = FormMapper.analyze(.object([
             "command": .string("x"),

@@ -7,7 +7,7 @@ import ConnectorControlCore
 /// windows/tests/ConnectorControl.App.Tests/ConfirmationDialogTests.cs.
 ///
 /// The app's alert is modal, and on the Mac a modal's nested run loop entered from inside a block on
-/// the main queue runs no other main-queue block — and every line from the socket arrives in one.
+/// the main queue runs no other main-queue block - and every line from the socket arrives in one.
 /// Here the call arrives that way, each dialog holds the main thread in a nested run loop in AppKit's
 /// modal-panel mode, as `NSAlert.runModal` does, and the tools' delays are the main queue's own, a
 /// thousand times faster.
@@ -60,7 +60,7 @@ final class DialogConfirmerRunLoopTests: XCTestCase {
         func promptForName(title: String, initial: String) -> String? { nil }
 
         /// Ends with a wake-up for the main run loop: the run this one is nested in lent its own wake-up
-        /// to the nested runs, and without one it would sleep on — minutes, measured — until something
+        /// to the nested runs, and without one it would sleep on - minutes, measured - until something
         /// else stirred the main thread.
         private func hold(until: () -> Bool) {
             let deadline = Date().addingTimeInterval(5)
@@ -93,8 +93,8 @@ final class DialogConfirmerRunLoopTests: XCTestCase {
         XCTAssertEqual(rig.h.notifier.sent.map(\.body), [ControlTools.addedNotification("Claude", "x", "Default")])
     }
 
-    /// A question that arrives while another of the app's alerts is up — Settings' refusal, shown as the
-    /// app shows it — is put on top of it at once, and its call's wait goes on inside both. The modal-panel
+    /// A question that arrives while another of the app's alerts is up - Settings' refusal, shown as the
+    /// app shows it - is put on top of it at once, and its call's wait goes on inside both. The modal-panel
     /// mode in the presenter's modes is what lets it in; without it the question would wait for the other
     /// alert's answer. (Claude's own questions never stack: a second waits its turn behind the first.)
     func testAQuestionThatArrivesWhileAnotherAlertIsUpIsShownOnTopOfIt() {

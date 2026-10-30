@@ -6,21 +6,21 @@ import ConnectorControlCore
 /// collection's connectors as rows in the right one, the connector count below them, and the controls
 /// that follow the selection: the sidebar's +, the header's ⋯ menu and the + under it, and the
 /// selection bar. Everything is derived from AppState; the model owns only what the window itself
-/// knows — which collection is showing and which rows are ticked.
+/// knows - which collection is showing and which rows are ticked.
 ///
 /// Mirror: windows/src/ConnectorControl.Core/State/CollectionsModel.cs
 @MainActor
 public final class CollectionsModel: ObservableObject {
     public static let windowTitle = "Collections"
-    public static let importButton = "Import"
-    public static let subscribeButton = "Subscribe"
-    public static let publishButton = "Start Publishing"
+    public static let importButton = "Import…"
+    public static let subscribeButton = "Subscribe…"
+    public static let publishButton = "Start Publishing…"
     /// The same sheet, reached from a collection that already publishes.
-    public static let publishSettingsButton = "Publishing Settings"
+    public static let publishSettingsButton = "Publishing Settings…"
     public static let refreshButton = "Refresh"
-    public static let makeLocalCopyButton = "Make Local Copy"
-    public static let newButton = "New Collection"
-    public static let renameAction = "Rename"
+    public static let makeLocalCopyButton = "Make Local Copy…"
+    public static let newButton = "New Collection…"
+    public static let renameAction = "Rename…"
     public static let deleteAction = "Delete"
     public static let stopPublishingAction = "Stop Publishing"
     public static let stopSyncingAction = "Stop Syncing"
@@ -35,7 +35,6 @@ public final class CollectionsModel: ObservableObject {
     /// than a collection, whose button could come to say something else.
     public static let deleteFileButton = "Delete"
     public static let keepFileButton = "Keep"
-    public static let remoteType = "remote"
     /// The sidebar's double-click, and the same action in its context menu.
     public static let makeActiveAction = "Make Active"
     /// The lock at the head of a synced collection's row, and on the popover's rows too, which
@@ -46,11 +45,17 @@ public final class CollectionsModel: ObservableObject {
     // MARK: - Selection bar
 
     public static let copyToButton = "Copy to"
-    public static let exportCheckedButton = "Export"
+    public static let exportCheckedButton = "Export…"
     public static let deleteCheckedButton = "Delete"
 
     /// The bar's own tally, e.g. "2 selected".
     public static func selectedCount(_ n: Int) -> String { "\(n) selected" }
+
+    /// What the count line adds after a copy lands, the window staying on the collection the rows
+    /// came from: the only sign, once the ticks have cleared, that the copy happened and where to.
+    public static func copiedNote(_ n: Int, to collection: String) -> String {
+        n == 1 ? "Copied 1 connector to “\(collection)”" : "Copied \(n) connectors to “\(collection)”"
+    }
 
     /// Names the connector when there is exactly one ticked, and states the count otherwise: a
     /// removal of one row deserves the same specificity the editor's old delete confirmation gave it,
@@ -59,14 +64,14 @@ public final class CollectionsModel: ObservableObject {
         names.count == 1 ? "Delete “\(names[0])”?" : "Delete \(names.count) connectors?"
     }
 
-    /// Lifted from the editor's old delete confirmation, which the list now replaces: the sentence —
-    /// the most useful thing in that confirmation — survives here unchanged. Delete Collection's
+    /// Lifted from the editor's old delete confirmation, which the list now replaces: the sentence -
+    /// the most useful thing in that confirmation - survives here unchanged. Delete Collection's
     /// confirmation ends with it too.
     public static let deleteCheckedInformative = "A copy remains in Backups."
 
     /// The sidebar's chain glyph, or nil when there is no chain to explain: a local collection
     /// has no source, and a synced one whose file is still to be found has no path to name. The
-    /// sentence is the popover chip's, borrowed rather than copied — one fact, one wording.
+    /// sentence is the popover chip's, borrowed rather than copied - one fact, one wording.
     ///
     /// Takes the item rather than the path so that "which items have a tooltip" stays here; a
     /// view mapping over an optional path would be the same rule, kept somewhere worse.
@@ -140,12 +145,12 @@ public final class CollectionsModel: ObservableObject {
         }
     }
 
-    /// The menu's annotation beside a disabled destination — why a synced collection is listed
+    /// The menu's annotation beside a disabled destination - why a synced collection is listed
     /// but cannot be chosen.
     public static let readOnlyNote = "read-only"
 
-    /// One connector of the selected collection. `checked` is the window's own state — an export
-    /// tick, not anything the store holds — so it is the one field the model fills in itself.
+    /// One connector of the selected collection. `checked` is the window's own state - an export
+    /// tick, not anything the store holds - so it is the one field the model fills in itself.
     public struct Row: Identifiable, Equatable, Sendable {
         public let id: String
         public let name: String
@@ -165,8 +170,16 @@ public final class CollectionsModel: ObservableObject {
     }
 
     /// What the last action AppState refused reported, cleared by the next one that succeeds, is
-    /// cancelled, declined at its confirmation, or finds nothing to do.
-    @Published public private(set) var lastError: String?
+    /// cancelled, declined at its confirmation, or finds nothing to do. Every verb writes it, which
+    /// is what makes it the place a copy's confirmation is cleared by the next verb run from the window
+    /// (opening Import, Export or the editor is not one).
+    @Published public private(set) var lastError: String? {
+        didSet { copyConfirmation = nil }
+    }
+
+    /// The last copy's `copiedNote`, shown on the count line until the next verb (see `lastError`), the next tick
+    /// or another collection is chosen. Set after the copy's own `report`, which clears it.
+    @Published public private(set) var copyConfirmation: String?
 
     private let state: AppState
     private let dialogs: Dialogs
@@ -210,10 +223,10 @@ public final class CollectionsModel: ObservableObject {
     // MARK: - Selection
 
     /// The collection the right pane is showing. It defaults to the active one and falls back to
-    /// it whenever the chosen name stops being a collection — deleted here, or renamed from
+    /// it whenever the chosen name stops being a collection - deleted here, or renamed from
     /// anywhere else.
     ///
-    /// An assignment that would show the collection already showing does nothing at all — no
+    /// An assignment that would show the collection already showing does nothing at all - no
     /// republish, no cleared ticks, not even the name remembered. A view that writes its selection
     /// straight back would otherwise feed itself, and remembering the name would pin the window
     /// to a collection it was only showing because it was the active one.
@@ -228,13 +241,14 @@ public final class CollectionsModel: ObservableObject {
             selection = newValue
             checkedNames_ = []
             checkedCollection = nil
+            copyConfirmation = nil
         }
     }
 
     private var selectedCollection: String { effectiveCollection(for: selection) }
 
-    /// Lets go of a remembered name that no longer names a collection. Nothing on screen changes —
-    /// the window was already showing the fallback — so nothing is republished. Without it, a
+    /// Lets go of a remembered name that no longer names a collection. Nothing on screen changes -
+    /// the window was already showing the fallback - so nothing is republished. Without it, a
     /// collection renamed away and later renamed back would pull the window to it unprompted,
     /// because the name would start resolving again.
     private func forgetUnresolvedSelection(in store: MasterStore) {
@@ -253,7 +267,7 @@ public final class CollectionsModel: ObservableObject {
     }
 
     /// Moves the window to a collection this model just created or renamed, keeping the ticks
-    /// with it — unlike `selected`, which is the user picking a different collection.
+    /// with it - unlike `selected`, which is the user picking a different collection.
     private func retarget(to name: String) {
         objectWillChange.send()
         if checkedCollection != nil { checkedCollection = name }
@@ -284,261 +298,32 @@ public final class CollectionsModel: ObservableObject {
         return mcps.keys.sorted(by: { $0.ordinallyPrecedes($1) }).map { name in
             Row(name: name, caution: state.connectorCaution(name, in: collection), isLocked: locked,
                 checked: checks.contains(name),
-                target: CollectionsModel.target(of: mcps[name]?.config ?? .object([:])))
+                target: ConnectorTarget.target(of: mcps[name]?.config ?? .object([:])))
         }
     }
 
-    /// What a row says the connector runs, never a secret: a remote connector's host; a local
-    /// one's launcher and arguments, shortened. Public and pure so both platforms test the same
-    /// inputs. `home` is the user's home folder, abbreviated to "~".
-    ///
-    /// An allowlist, not a mask: an argument is shown only when it is a URL, an explicit path or
-    /// a named artefact, and every other argument — a flag, a flag's value, `KEY=value`, a header,
-    /// a shell string, a bare word — is left out. A list of secret shapes to hide would leak
-    /// every shape it did not foresee. The one exception is backed by a name rather than a shape:
-    /// whatever follows a flag named for a secret is left out too, since a password can look
-    /// like a package.
-    public static func target(of config: JSONValue, home: String = NSHomeDirectory()) -> String {
-        // A connector Claude reaches by URL has no command to read: its URL's scheme and host, as
-        // a URL argument shows them, or only that it is remote when that host is in doubt.
-        if case .object(let object) = config, object["command"] == nil,
-           object["url"] != nil || [.string("http"), .string("sse")].contains(object["type"]) {
-            guard case .string(let url)? = object["url"], let origin = urlOrigin(url) else { return remoteType }
-            return "\(origin.scheme)://\(origin.host)"
-        }
-        let model = FormMapper.analyze(config).model
-        var (command, commandArgs) = splitCommandLine(model.command, model.args)
-        // Windows' `cmd /c npx …`: what cmd runs is the launcher, and the rule applies to what
-        // follows it.
-        if launcherName(command).lowercased() == "cmd", let first = commandArgs.first,
-           ["/c", "/k"].contains(first.lowercased()) {
-            commandArgs.removeFirst()
-            if !commandArgs.isEmpty {
-                let inner = commandArgs.removeFirst()
-                (command, commandArgs) = splitCommandLine(inner, commandArgs)
-            }
-        }
-        let runner = launcherName(command).lowercased()
-        // Read through the unwrapping and the launcher's extension, so the same bridge is a remote
-        // connector however it is spelled, and on both platforms. The decoder's URL is checked
-        // like any other: it vouches for a URL, not for a host free of userinfo.
-        if runner == "npx",
-           let remote = RemotePattern.decode(.object(["command": .string("npx"), "args": .array(commandArgs.map(JSONValue.string))])) {
-            return urlOrigin(remote.url)?.host ?? remoteType
-        }
-        // The slot where a package runner names the server it fetches: the one place a bare
-        // hyphenated word is a package rather than, as likely, a password. It can land on the
-        // value of a flag named for a secret, which the first check below drops before it counts.
-        let serverSlot = packageRunners.contains(runner)
-            ? commandArgs.firstIndex { !startsWith($0, "-") } : nil
-        let args = commandArgs.enumerated().compactMap { index, arg -> String? in
-            if index > 0, isSecretNamedFlag(commandArgs[index - 1]) { return nil }
-            return shown(arg, home: home, isServerSlot: index == serverSlot)
-        }
-        let tokens = [launcher(command)].compactMap { $0 } + args
-        return tokens.joined(separator: " ")
-    }
-
-    /// Launchers whose first positional argument names the package they fetch and run.
-    private static let packageRunners: Set<String> = ["npx", "uvx", "pipx", "bunx", "pnpx"]
-
-    /// A launcher written as a whole command line — `npx -y server --token x` in one string —
-    /// split into arguments the way a shell passes them: its first argument is the launcher and
-    /// the rest are arguments ahead of `args`, each held to the same rule, so a flag named for a
-    /// secret at its end guards `args[0]` as it would any value.
-    ///
-    /// A command that is a path is not tokenized, since a Windows path holds spaces. It keeps its
-    /// launcher — the last component of the path, which runs to the last word holding a separator
-    /// — only when the words after its first are plainly more path or plain words: none starts
-    /// with `-` or `/` or holds `:` (which covers `://`), `=` or a quote. Otherwise that last
-    /// component could be the tail of a packed argument, and the launcher is omitted. The packed
-    /// words are never shown, but a flag named for a secret at their end, read with its quotes
-    /// removed as a shell would pass it, still guards `args[0]`. A path-shaped raw secret that
-    /// passes these checks (`C:\x\tool.exe abc\cd.ef`) is accepted: residual 2 in the B1 report.
-    private static func splitCommandLine(_ text: String, _ args: [String]) -> (String, [String]) {
-        guard isExplicitPath(text) else {
-            let words = shellWords(text)
-            return (words.first ?? "", Array(words.dropFirst()) + args)
-        }
-        let words = text.split(whereSeparator: \.isWhitespace).map(String.init)
-        guard let last = words.last, words.count > 1 else { return (text, args) }
-        let flag = shellWords(last).joined()
-        let guarded = isSecretNamedFlag(flag) ? [flag] : []
-        let isPlain = !words.dropFirst().contains {
-            startsWith($0, "-") || startsWith($0, "/") || $0.contains(":") || $0.contains("=")
-                || $0.contains("\"") || $0.contains("'")
-        }
-        let pathEnd = words.lastIndex { $0.contains("/") || $0.contains("\\") } ?? 0
-        return (isPlain ? words[...pathEnd].joined(separator: " ") : "", guarded + args)
-    }
-
-    /// `text` as a shell passes it: whitespace separates arguments, a `"…"` or `'…'` run belongs
-    /// to the argument it touches and loses its quotes, `\"` inside double quotes is a quote, and
-    /// a backslash anywhere else is itself, as a Windows path needs. An unterminated quote runs to
-    /// the end.
-    static func shellWords(_ text: String) -> [String] {
-        var words: [String] = []
-        var word: String.UnicodeScalarView?
-        var quote: Unicode.Scalar?
-        var scalars = text.unicodeScalars.makeIterator()
-        var pending: Unicode.Scalar? = scalars.next()
-        while let scalar = pending {
-            pending = scalars.next()
-            if let open = quote {
-                if scalar == open {
-                    quote = nil
-                } else if open == "\"", scalar == "\\", pending == "\"" {
-                    word?.append("\"")
-                    pending = scalars.next()
-                } else {
-                    word?.append(scalar)
-                }
-            } else if scalar.properties.isWhitespace {
-                if let finished = word { words.append(String(finished)) }
-                word = nil
-            } else if scalar == "\"" || scalar == "'" {
-                quote = scalar
-                if word == nil { word = String.UnicodeScalarView() }
-            } else {
-                if word == nil { word = String.UnicodeScalarView() }
-                word?.append(scalar)
-            }
-        }
-        if let finished = word { words.append(String(finished)) }
-        return words
-    }
-
-    /// The launcher, named the way it would be typed, or nil when it could be a secret — or when
-    /// it holds whitespace, a path with arguments packed into its last component.
-    private static func launcher(_ command: String) -> String? {
-        let name = launcherName(command)
-        guard !name.isEmpty, !name.contains(where: \.isWhitespace), !name.contains("="),
-              !CredentialHeuristics.looksLikeCredential(name), !CredentialHeuristics.looksLikeRandomToken(name) else { return nil }
-        return name
-    }
-
-    /// One argument as the target column shows it, or nil when it is none of the three shapes
-    /// known to be safe: a URL, as its scheme and host; an explicit path, with the home folder
-    /// abbreviated; or a named artefact — a package, image, script or module. A bare word, one
-    /// with no `/`, `@` or `.`, is an artefact only in the server slot.
-    private static func shown(_ arg: String, home: String, isServerSlot: Bool) -> String? {
-        if arg.contains("://") {
-            return urlOrigin(arg).map { "\($0.scheme)://\($0.host)" }
-        }
-        guard !CredentialHeuristics.looksLikeCredential(arg), !CredentialHeuristics.looksLikeRandomToken(arg) else { return nil }
-        if isExplicitPath(arg) {
-            // A colon anywhere but a drive letter's is a Windows switch's value, `/p:secret`.
-            let colonIsDrive = isDriveRoot(arg) && !arg.dropFirst(2).contains(":")
-            guard !arg.contains("="), !arg.contains(":") || colonIsDrive else { return nil }
-            let root = trimmingOneTrailingSeparator(home)
-            // Case-insensitive, as both platforms' default file systems are.
-            guard !root.isEmpty, let prefix = arg.range(of: root, options: [.anchored, .caseInsensitive]) else { return arg }
-            let remainder = String(arg[prefix.upperBound...])
-            return remainder.isEmpty || startsWith(remainder, "/") || startsWith(remainder, "\\") ? "~" + remainder : arg
-        }
-        guard arg.count <= 100, arg.first.map({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "@") }) == true,
-              arg.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "._@/-".contains($0)) }),
-              arg.contains(where: { "/.@".contains($0) }) || (isServerSlot && arg.contains(where: { "-_".contains($0) }))
-        else { return nil }
-        if arg.hasPrefix("@"), let slash = arg.firstIndex(of: "/"), slash > arg.index(after: arg.startIndex) {
-            let name = arg[arg.index(after: slash)...]
-            if !name.isEmpty, !name.contains("/") { return "…/" + name }
-        }
-        return arg
-    }
-
-    /// `path` without one trailing separator of either kind.
-    private static func trimmingOneTrailingSeparator(_ path: String) -> String {
-        guard let last = path.unicodeScalars.last, last == "/" || last == "\\" else { return path }
-        return String(String.UnicodeScalarView(path.unicodeScalars.dropLast()))
-    }
-
-    /// A flag without an attached value whose name says the next argument is a secret, whatever
-    /// its dashes and case.
-    private static func isSecretNamedFlag(_ arg: String) -> Bool {
-        guard startsWith(arg, "-"), !arg.contains("=") else { return false }
-        return CredentialHeuristics.namesASecret(arg)
-    }
-
-    /// Starts with `/`, `~`, `./`, `../` or a drive root (`X:\` or `X:/`). Internal rather than
-    /// private because the Publish sheet offers a path row by the same rule.
-    static func isExplicitPath(_ arg: String) -> Bool {
-        ["/", "~", "./", "../"].contains { startsWith(arg, $0) } || isDriveRoot(arg)
-    }
-
-    /// `X:\` or `X:/`.
-    private static func isDriveRoot(_ arg: String) -> Bool {
-        let scalars = Array(arg.unicodeScalars.prefix(3))
-        return scalars.count == 3 && (("A"..."Z").contains(scalars[0]) || ("a"..."z").contains(scalars[0]))
-            && scalars[1] == ":" && (scalars[2] == "/" || scalars[2] == "\\")
-    }
-
-    /// Compared by Unicode scalar rather than by character, as the Windows mirror compares by
-    /// UTF-16 unit: a combining mark after a leading `-` must not make the two disagree about
-    /// whether an argument is a flag.
-    private static func startsWith(_ text: String, _ prefix: String) -> Bool {
-        text.unicodeScalars.starts(with: prefix.unicodeScalars)
-    }
-
-    /// The scheme and the host of the URL in `text`, the host with its port when one is written;
-    /// nil when either is not plainly one. The authority runs from `://` to the first `/`, `?` or
-    /// `#`, and the host is what follows its last `@`. What remains must be a bare host and
-    /// optional port: a password holding an unencoded `/`, `?` or `#` ends the authority early,
-    /// and whatever of it is left is refused rather than shown as the host, as is any URL with an
-    /// `@` past its authority, where the boundary is in doubt. Taken from the text
-    /// by hand rather than by a URL parser, because the two platforms' parsers disagree about
-    /// case and default ports.
-    private static func urlOrigin(_ text: String) -> (scheme: String, host: String)? {
-        guard let separator = text.range(of: "://") else { return nil }
-        let scheme = Array(text[..<separator.lowerBound].unicodeScalars)
-        guard (2...16).contains(scheme.count), ("a"..."z").contains(scheme[0]),
-              scheme.allSatisfy({ ("a"..."z").contains($0) || ("0"..."9").contains($0) || $0 == "+" })
-        else { return nil }
-        let rest = text[separator.upperBound...]
-        let authorityEnd = rest.firstIndex(where: { "/?#".contains($0) }) ?? rest.endIndex
-        // An `@` after the authority ends means the boundary cannot be trusted: `u:p/w@h` is a
-        // password holding a `/`, not a host `u:p` with an `@` in its path.
-        guard !rest[authorityEnd...].contains("@") else { return nil }
-        let authority = rest[..<authorityEnd]
-        let host = authority.lastIndex(of: "@").map { authority[authority.index(after: $0)...] } ?? authority
-        let parts = host.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
-        let name = parts[0].unicodeScalars
-        guard !name.isEmpty,
-              name.allSatisfy({ ("A"..."Z").contains($0) || ("a"..."z").contains($0) || ("0"..."9").contains($0) || $0 == "." || $0 == "-" }),
-              parts.count == 1 || ((1...5).contains(parts[1].unicodeScalars.count) && parts[1].unicodeScalars.allSatisfy { ("0"..."9").contains($0) })
-        else { return nil }
-        return (String(text[..<separator.lowerBound]), String(host))
-    }
-
-    /// The last component of a command, splitting on both separators rather than this platform's:
-    /// a collection carries connectors authored on either, and a Windows command's launcher is
-    /// still worth naming on a Mac. Split by hand, because the path APIs on the two platforms
-    /// disagree about which separators count. A Windows launcher's `.cmd`, `.exe` or `.bat` is
-    /// dropped: `npx.cmd` is `npx`, both to name and to recognise.
-    private static func launcherName(_ command: String) -> String {
-        let name = command.split(whereSeparator: { $0 == "/" || $0 == "\\" }).last.map(String.init) ?? command
-        let isWindowsLauncher = name.count > 4 && [".cmd", ".exe", ".bat"].contains(name.suffix(4).lowercased())
-        return isWindowsLauncher ? String(name.dropLast(4)) : name
-    }
-
-    /// The idle selection bar: how many connectors the collection holds, and nothing else — the
+    /// The idle selection bar: how many connectors the collection holds, and nothing else - the
     /// pills, the banner and the `⋯` menu say what kind it is and where its file is. The one
     /// addition is a synced source that could not be read, which no banner reports: without it
-    /// the window would not say why a subscription has stopped updating.
+    /// the window would not say why a subscription has stopped updating. The other is a copy's
+    /// `copyConfirmation`, while it lasts.
     public var connectorCount: String {
         let collection = selectedCollection
         let tally = CollectionsModel.connectorTally(state.store.collections[collection]?.mcps.count ?? 0)
+        // A synced collection's rows cannot be ticked, so a copy's note and a source failure
+        // never share the line.
+        if let copyConfirmation { return tally + " · " + copyConfirmation }
         guard state.isSynced(collection), let failure = state.sourceErrors[collection] else { return tally }
         return tally + " · " + failure
     }
 
     /// The synced document as this machine can name it, or nil when it cannot: not synced, no
     /// binding, or a sidecar entry that records neither a path nor a file name. The last of those
-    /// takes a hand-edited or foreign collections file — every writer here sets a file name — but
+    /// takes a hand-edited or foreign collections file - every writer here sets a file name - but
     /// the decoder accepts one, and there is nothing to refresh or to report about a document
     /// nobody can point at.
     ///
-    /// Still its own rule — Refresh and Show Source File both need a document to point at — but
+    /// Still its own rule - Refresh and Show Source File both need a document to point at - but
     /// the naming is `AppState.sourceLocation(of:)`'s, so the derivation lives in one place.
     private func locatedSource(of collection: String) -> String? {
         state.isLocated(collection) ? state.sourceLocation(of: collection) : nil
@@ -565,7 +350,7 @@ public final class CollectionsModel: ObservableObject {
     /// The strip's button. True says the news is an update, so the view has only to put the
     /// Review sheet in front of the selected collection. False says the view decides by the
     /// banner's kind: a picker for the file or folder, handed to `locateSource` or
-    /// `choosePublishFolder`, or — for a publish blocked for review — the Publish sheet, since
+    /// `choosePublishFolder`, or - for a publish blocked for review - the Publish sheet, since
     /// another folder is no answer to that.
     ///
     /// Deliberately not `@discardableResult`, unlike the popover's, which sets the window request
@@ -636,7 +421,7 @@ public final class CollectionsModel: ObservableObject {
 
     /// Marks an exception to the ordinary local collection: `Published` and `Subscribed` are
     /// mutually exclusive, since a subscribed collection has an author elsewhere and cannot also
-    /// publish. There is no case for the default — an ordinary local collection carries no pill.
+    /// publish. There is no case for the default - an ordinary local collection carries no pill.
     public enum Pill: Equatable, Sendable {
         case active, published, subscribed
     }
@@ -672,8 +457,8 @@ public final class CollectionsModel: ObservableObject {
              stopSyncing, delete(enabled: Bool), separator
     }
 
-    public static let duplicateAction = "Duplicate"
-    public static let exportAllAction = "Export All"
+    public static let duplicateAction = "Duplicate…"
+    public static let exportAllAction = "Export All…"
     public static let showPublishedFileAction = "Show Published File"
     public static let showSourceFileAction = "Show Source File"
 
@@ -742,7 +527,7 @@ public final class CollectionsModel: ObservableObject {
     }
 
     /// Duplicate: the whole collection as it stands, every connector's switch kept and nothing
-    /// marked as imported — unlike every other copy in this window, it is the user's own (see
+    /// marked as imported - unlike every other copy in this window, it is the user's own (see
     /// `AppState.duplicateCollection`). The selection stays where it was rather than following the
     /// new one the way `makeLocalCopy()` and `create()` do.
     @discardableResult
@@ -766,7 +551,7 @@ public final class CollectionsModel: ObservableObject {
         return URL(fileURLWithPath: folder).appendingPathComponent(fileName).path
     }
 
-    /// A located synced collection's document — `locatedSource(of:)` again, named for the menu's
+    /// A located synced collection's document - `locatedSource(of:)` again, named for the menu's
     /// `showSourceFile` and the header's own use, both of which want the same nil for a file not
     /// located on this machine.
     public var sourceFilePath: String? { locatedSource(of: selectedCollection) }
@@ -800,6 +585,7 @@ public final class CollectionsModel: ObservableObject {
         let collection = selectedCollection
         guard !state.isSynced(collection) else { return }
         objectWillChange.send()
+        copyConfirmation = nil
         if checkedCollection != collection {
             checkedNames_ = []
             checkedCollection = collection
@@ -851,10 +637,10 @@ public final class CollectionsModel: ObservableObject {
     }
 
     /// Copy to ▸ New Collection: asks for a name, makes an empty local collection, and copies the
-    /// ticked connectors into it. The window stays on the collection the rows came from and the
-    /// ticks clear, exactly as a copy into an existing collection does. An empty collection rather
-    /// than a copy of the active one, because the point is to start one from the ticked rows alone.
-    /// true when the copies landed.
+    /// ticked connectors into it. The window stays on the collection the rows came from, the
+    /// ticks clear and the count line confirms, exactly as a copy into an existing collection
+    /// does. An empty collection rather than a copy of the active one, because the point is to
+    /// start one from the ticked rows alone. true when the copies landed.
     @discardableResult
     public func copyCheckedIntoNewCollection() -> Bool {
         let names = checkedNames
@@ -880,6 +666,9 @@ public final class CollectionsModel: ObservableObject {
             return false
         }
         uncheck(names)
+        // A clash answered Skip stays where it was, so it is not counted; nothing landed, nothing said.
+        let landed = names.filter { choices[$0] != .skip }.count
+        copyConfirmation = landed > 0 ? CollectionsModel.copiedNote(landed, to: collection) : nil
         return true
     }
 
@@ -945,7 +734,7 @@ public final class CollectionsModel: ObservableObject {
 
     /// What Delete takes with the collection and what it leaves: its connectors (copies elsewhere
     /// stay), the collection that becomes active if this one is, a synced source it never
-    /// touches, and the backup the store keeps before it saves — said only when it held
+    /// touches, and the backup the store keeps before it saves - said only when it held
     /// connectors, since an empty collection has nothing in it to get back.
     public func deleteInformative(for collection: String) -> String {
         let count = state.store.collections[collection]?.mcps.count ?? 0

@@ -11,14 +11,14 @@ public static class PasswordBoxHelper
         // The box → model direction is wired here, once for the class, and NOT from
         // OnBoundPasswordChanged: WPF skips a PropertyChangedCallback when the incoming value
         // equals the current one, and every secret on a NEW connector arrives as "" over a
-        // default of "" — so that subscription never happened and the field was inert.
+        // default of "" - so that subscription never happened and the field was inert.
         EventManager.RegisterClassHandler(typeof(PasswordBox), PasswordBox.PasswordChangedEvent, new RoutedEventHandler(OnPasswordChanged));
     }
 
     /// <summary>
     /// Default null, not "": it doubles as the "this box is bridged" marker. A PasswordBox
     /// nobody attached this to must never have its text written into the property, and the
-    /// marker has to survive every value precedence — a binding declared inside a DataTemplate
+    /// marker has to survive every value precedence - a binding declared inside a DataTemplate
     /// (the masked env-value row) is not a local value, so ReadLocalValue cannot see it.
     /// </summary>
     public static readonly DependencyProperty BoundPasswordProperty = DependencyProperty.RegisterAttached(

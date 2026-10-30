@@ -145,7 +145,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
-          # Must run AFTER stapling — the EdDSA signature covers the final DMG bytes.
+          # Must run AFTER stapling - the EdDSA signature covers the final DMG bytes.
           ./scripts/mac/make-appcast.sh "$VERSION" "$TAG" notes/notes.md
 
       # The caller's publish job posts these; nothing is uploaded to GitHub from here. A run

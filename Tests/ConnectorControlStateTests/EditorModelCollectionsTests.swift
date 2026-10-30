@@ -242,7 +242,7 @@ final class EditorModelCollectionsTests: XCTestCase {
         let published = rig.editor("scoutbook", in: "Team")
         XCTAssertEqual(published.headerState, .published(folder: folder.path))
         XCTAssertEqual(published.headerNote,
-                       "Published to \(folder.path) — saving updates the file your team reads. Secrets stay here.")
+                       "Published to \(folder.path) - saving updates the file your team reads. Secrets stay here.")
         XCTAssertFalse(published.isReadOnly)
     }
 
@@ -283,6 +283,28 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertTrue(updated.enabled)
     }
 
+    /// The save and every twin it reaches are one change to the master list: written once, with one
+    /// backup of what came before, not one per collection for states that were only ever halfway.
+    func testAPropagatedSaveWritesTheMasterListOnce() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let state = rig.state
+        rig.twin("Backup")
+        rig.twin("Spare")
+
+        let editor = rig.editor("scoutbook", in: "Default")
+        XCTAssertEqual(editor.propagateTargets, ["Backup", "Spare"])
+        editor.propagate = true
+        editor.remoteURL = "https://scoutbook.example.com/mcp/v2"
+        let before = try state.service.backups.backups(series: "mcps").count
+        XCTAssertTrue(editor.save())
+
+        XCTAssertEqual(try state.service.backups.backups(series: "mcps").count, before + 1)
+        let updated = try XCTUnwrap(state.store.collections["Default"]?.mcps["scoutbook"]?.config)
+        XCTAssertEqual(state.store.collections["Backup"]?.mcps["scoutbook"]?.config, updated)
+        XCTAssertEqual(state.store.collections["Spare"]?.mcps["scoutbook"]?.config, updated)
+    }
+
     func testAnUntickedPropagateLeavesTheTwinAlone() throws {
         let rig = EditorRig()
         defer { rig.dispose() }
@@ -305,7 +327,7 @@ final class EditorModelCollectionsTests: XCTestCase {
 
         let editor = rig.editor("scoutbook", in: "Default")
         XCTAssertEqual(editor.propagateTargets, ["Backup"])
-        // A second window on the twin saved first — the checkbox's promise no longer holds for it.
+        // A second window on the twin saved first - the checkbox's promise no longer holds for it.
         let moved = MCPEntry(config: AppStateHarness.remote("https://scoutbook.example.com/mcp/other"))
         XCTAssertNil(state.upsert(name: "scoutbook", entry: moved, renamedFrom: "scoutbook", in: "Backup"))
 

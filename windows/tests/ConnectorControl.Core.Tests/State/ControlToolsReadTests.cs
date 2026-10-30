@@ -91,7 +91,7 @@ public class ControlToolsReadTests
         Assert.Equal(string.Join("\n",
             "     NAME          RUNS",
             "on   aws-mcp       aws-mcp.us-east-1.api.aws",
-            $"on   github        {CollectionsModel.TargetOf(Github.Config)}",
+            $"on   github        {ConnectorTarget.TargetOf(Github.Config)}",
             "on   scoutbook     scoutbook.example.com",
             "on   service-now   snow.example.com"), result.Text);
         Assert.DoesNotContain("ghp_", result.Text, StringComparison.Ordinal);
@@ -222,7 +222,7 @@ public class ControlToolsReadTests
         string[] files = [rig.H.MasterStorePath, Path.Combine(rig.H.StoreDir, CollectionsFile.FileName),
                           rig.H.ClaudeConfigPath, rig.State.Service.Paths.CollectionsCachePath];
         List<byte[]?> Bytes() => files.Select(file => File.Exists(file) ? File.ReadAllBytes(file) : null).ToList();
-        // Platform idiom: each side lists its own settings seam, which differ — the Mac keeps Claude's
+        // Platform idiom: each side lists its own settings seam, which differ - the Mac keeps Claude's
         // app path, Windows its config path, launch target, tray tip and declined update.
         List<string> Settings()
         {

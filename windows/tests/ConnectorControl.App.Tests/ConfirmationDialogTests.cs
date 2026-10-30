@@ -255,7 +255,7 @@ public class ConfirmationDialogTests
         });
     }
 
-    /// <summary>Ordinary text in scripts the code face does not have — Chinese, Arabic, Devanagari, Thai — is drawn whole:
+    /// <summary>Ordinary text in scripts the code face does not have - Chinese, Arabic, Devanagari, Thai - is drawn whole:
     /// its ink stays clear of its box's edges. A line of stacked marks is cut off by its own box, and the line
     /// beside it stays blank.</summary>
     [Fact]
@@ -520,7 +520,7 @@ public class ConfirmationDialogTests
     /// <summary>The dialog is modal: ShowDialog holds the UI thread in a nested frame until the user answers. The
     /// call arrives as a line from the pipe does, posted to the UI thread; the tools' delays are dispatcher
     /// timers a thousand times faster; Allow is clicked once the caller has had its early answer. WPF's nested
-    /// frame runs the dispatcher's queue whatever called ShowDialog, so this holds with an inline presenter too —
+    /// frame runs the dispatcher's queue whatever called ShowDialog, so this holds with an inline presenter too -
     /// the Mac's counterpart is the one a presenter can break. A nested frame keeps the pump below from
     /// checking its own deadline, so the clicker gives up on the early answer at one of its own and closes the
     /// dialog, Don’t Allow, which ends the test on its asserts rather than leaving it hung.</summary>

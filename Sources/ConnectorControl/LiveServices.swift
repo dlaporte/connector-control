@@ -4,7 +4,7 @@ import ConnectorControlState
 import ConnectorControlTransport
 
 /// The composition root: the platform services, then the one AppState, in the
-/// order the old AppState.init did it — Sparkle starts only with a bundle — then
+/// order the old AppState.init did it - Sparkle starts only with a bundle - then
 /// the control layer Claude and the command-line tool reach.
 @MainActor
 final class LiveServices {
@@ -19,7 +19,7 @@ final class LiveServices {
     let host: AppHost
     let state: AppState
     /// The one ControlTools every connection shares, the server that gives each its own session, and
-    /// the socket it listens on — nil when it could not listen: another copy of the app serves, or a
+    /// the socket it listens on - nil when it could not listen: another copy of the app serves, or a
     /// development run's store folder makes too long a path.
     let controlTools: ControlTools
     let controlServer: ControlServer

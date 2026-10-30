@@ -5,8 +5,8 @@ import ConnectorControlCore
 ///
 /// The control layer's tools: one list Claude sees through MCP and the command-line tool runs as
 /// commands, each a thin handler on AppState's own operations with the rules the windows apply. It
-/// knows nothing about transport — `McpSession` and the command-line client reach it through
-/// `ControlToolHost` — and the gate is decided here, once, for every caller.
+/// knows nothing about transport - `McpSession` and the command-line client reach it through
+/// `ControlToolHost` - and the gate is decided here, once, for every caller.
 ///
 /// Reads answer at once. Writes run one at a time, in the order they arrive. One that asks the user
 /// holds the line until the user answers, however long that takes, while its caller hears progress
@@ -35,7 +35,7 @@ public final class ControlTools {
     public static let listKind = "a list of names"
     public static let objectKind = "a JSON object"
     public static let helpUsage = "Usage: connector-control <command> [options]"
-    public static let relayUsage = "mcp"
+    public static let relayUsage = ClaudeIntegration.relayArgument
     public static let relaySummary = "The relay Claude Desktop runs; not for direct use"
     public static let helpOptions = "Options: --json  --version  --help"
     /// The width of the usage field in `help`: two spaces of indent, then the usage padded to this, then the
@@ -239,7 +239,7 @@ public final class ControlTools {
     /// The user's answer. What they allowed is what they were shown: the change is prepared again
     /// against the state as it is now and must ask the very same question, and stand for the very
     /// same thing where the question cannot show it (its fingerprint), or nothing happens.
-    /// An answer to a call that has already ended — the Windows mirror ends one whose dialog threw —
+    /// An answer to a call that has already ended - the Windows mirror ends one whose dialog threw -
     /// changes nothing.
     private func answered(_ call: Call, _ request: ConfirmationRequest, _ fingerprint: String?, _ allowed: Bool) {
         guard !call.answered, !call.finished else { return }
@@ -301,8 +301,8 @@ public final class ControlTools {
 
     // MARK: Waiting
 
-    /// Progress every `progressInterval` while a call waits — for its turn, or for the user's
-    /// answer — and, at `confirmationWait`, the early answer that says so. The call carries on: its
+    /// Progress every `progressInterval` while a call waits - for its turn, or for the user's
+    /// answer - and, at `confirmationWait`, the early answer that says so. The call carries on: its
     /// turn still comes, and the user's answer still counts. The command line is never answered
     /// early, and a call whose connection has closed hears nothing more and gets no early answer.
     private func startWaiting(_ call: Call) {
@@ -313,7 +313,7 @@ public final class ControlTools {
 
     private func scheduleTick(_ call: Call) {
         host.delay(ControlTools.progressInterval) { [weak self] in
-            // A call whose connection has closed hears nothing more — no progress, no early answer — so
+            // A call whose connection has closed hears nothing more - no progress, no early answer - so
             // one still waiting its turn stays untold, and is dropped when its turn comes.
             guard let self, !call.delivered, !call.isAbandoned() else { return }
             call.ticks += 1
@@ -339,7 +339,7 @@ public final class ControlTools {
         let progress: (Double) -> Void
         let completion: (ControlResult) -> Void
         let isAbandoned: () -> Bool
-        /// The caller has its answer — perhaps the early one that says the user's is awaited.
+        /// The caller has its answer - perhaps the early one that says the user's is awaited.
         var delivered = false
         /// Its confirmation has been put to the user.
         var asking = false
@@ -415,12 +415,12 @@ public final class ControlTools {
     }
 }
 
-/// A write, prepared against the state as it is now: refused with the reason, or ready — with the
+/// A write, prepared against the state as it is now: refused with the reason, or ready - with the
 /// question to ask when the tool asks, and the change itself. The Windows mirror has no enum
 /// payloads, so its two steps are records.
 ///
 /// `fingerprint`, never shown, stands for what the change would land where the question cannot
-/// show it — a document's or a backup's bytes, whose secrets the dialog masks — so an Allow lands
+/// show it - a document's or a backup's bytes, whose secrets the dialog masks - so an Allow lands
 /// only while that is unchanged too. The Windows mirror declares it last, where C# puts an
 /// optional parameter.
 enum ControlStep {

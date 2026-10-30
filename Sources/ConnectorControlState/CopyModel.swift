@@ -4,7 +4,7 @@ import ConnectorControlCore
 
 /// The copy clash sheet: opened only when `CollectionsModel.checkedNamesClashing(in:)` says the
 /// ticked connectors are not all clean, to ask what to do about the ones the destination already
-/// holds. Not `ImportModel`, which is bound to a document path — the copy already has its own
+/// holds. Not `ImportModel`, which is bound to a document path - the copy already has its own
 /// engine, `CollectionsModel.copyChecked(into:choices:)`; this model only builds the rows and
 /// hands its answers back to it.
 ///

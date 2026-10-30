@@ -263,7 +263,7 @@ public class ControlMaskingTests
 
     /// <summary>In the dialog a single value reads one way only, as an argument does: the command, a URL, a
     /// key's text value and a variable's name are quoted, with \ and ' escaped, when they hold a space, a
-    /// quote or anything shown as an escape — so a newline and the two characters \n read apart, and a run
+    /// quote or anything shown as an escape - so a newline and the two characters \n read apart, and a run
     /// of spaces cannot pass for the start of another row. What Claude and the command line read is
     /// unchanged.</summary>
     [Fact]
@@ -570,8 +570,8 @@ public class ControlMaskingTests
         }
     }
 
-    /// <summary>Every masked view of <paramref name="config"/> — its structured form, its code lines and its change lines
-    /// from nothing — without any of <paramref name="secrets"/>.</summary>
+    /// <summary>Every masked view of <paramref name="config"/> - its structured form, its code lines and its change lines
+    /// from nothing - without any of <paramref name="secrets"/>.</summary>
     private static void AssertHidden(string[] secrets, JsonValue config)
     {
         var structured = System.Text.Encoding.UTF8.GetString(ControlMasking.MaskedConfig(config).Serialize());
@@ -747,7 +747,7 @@ public class ControlMaskingTests
         }
     }
 
-    /// <summary>JSON passed as an argument — Smithery's <c>run &lt;server&gt; --config '{"apiKey":"…"}'</c> — is masked
+    /// <summary>JSON passed as an argument - Smithery's <c>run &lt;server&gt; --config '{"apiKey":"…"}'</c> - is masked
     /// leaf by leaf, by key, as a config is; JSON with nothing to mask reads as written.</summary>
     [Fact]
     public void AJSONArgumentIsMaskedByKey()
@@ -936,12 +936,173 @@ public class ControlMaskingTests
         Assert.Equal(["--token=•••", "server.js"], ControlMasking.Arguments(["--token=abc", "server.js"]));
     }
 
-    /// <summary>Text that starts with a bracket but is not JSON — an IPv6 literal, a glob — reads as written.</summary>
+    /// <summary>Text that starts with a bracket but is not JSON - an IPv6 literal, a glob, a template, an INI
+    /// section, a PowerShell type literal, a test bracket - reads as written, as an argument, inside
+    /// a shell line and as any other string in a config.</summary>
     [Fact]
     public void BracketedValuesThatAreNotJsonReadAsWritten()
     {
         Assert.Equal(["--host", "[::1]"], ControlMasking.Arguments(["--host", "[::1]"]));
         Assert.Equal(["--listen", "[::]:8080"], ControlMasking.Arguments(["--listen", "[::]:8080"]));
         Assert.Equal("{src,lib}/**/*.ts", ControlMasking.Argument("{src,lib}/**/*.ts"));
+        string[][] plain =
+        [
+            ["-c", "exec server --bind [::1]:8080"], ["--include", "{src,lib}/**/*.ts"], ["--format", "{{json .}}"], ["[default]"],
+            ["-Command", "[Net.ServicePointManager]::SecurityProtocol = 'Tls12'; iex x"],
+            ["-c", "python -c '[print(i) for i in x]'"], ["-c", "[ -f x ] && run"], ["--config", "{region: 'us'}"],
+        ];
+        foreach (var args in plain)
+        {
+            Assert.Equal(args, ControlMasking.Arguments(args));
+        }
+        var config = JsonValue.Object(("command", S("x")), ("cwd", S("[workspace]")), ("glob", S("{a,b}")));
+        Assert.Equal(config, ControlMasking.MaskedConfig(config));
+    }
+
+    /// <summary>A <c>Name: value</c> argument whose name is a secret's or signs in is a header wherever it stands
+    /// (M-1a), so its value is hidden after a flag the masking doesn't know; another reads as written.</summary>
+    [Fact]
+    public void AHeaderShapedArgumentIsMaskedAfterAnyFlag()
+    {
+        Assert.Equal(["--http-header", "X-Api-Key: •••"], ControlMasking.Arguments(["--http-header", "X-Api-Key: hunter2"]));
+        Assert.Equal("x-api-key: •••", ControlMasking.Argument("x-api-key: hunter2"));
+        Assert.Equal("Cookie: •••", ControlMasking.Argument("Cookie: sid=hunter2"));
+        Assert.Equal("--http-header=X-Api-Key: •••", ControlMasking.Argument("--http-header=X-Api-Key: hunter2"));
+        foreach (var text in new[] { "X-Team: blue", "localhost:8080", "C:\\Users\\x", "X-Api-Key: ${KEY}", "12:30" })
+        {
+            Assert.Equal(text, ControlMasking.Argument(text));
+        }
+        // Only a whole word of the name counts, and a scope word or a path is not a header's value.
+        string[][] plain =
+        [
+            ["-v", "secrets:/run/secrets"], ["-v", "ssh-keys:/root/.ssh:ro"], ["--opt", "keycloak:8080"], ["--opt", "keydb:6379"],
+            ["--opt", "author:x"], ["--opt", "keyword:x"], ["--scopes", "token:read"],
+            ["--scopes", "tokens:read users:write"],
+        ];
+        foreach (var args in plain)
+        {
+            Assert.Equal(args, ControlMasking.Arguments(args));
+        }
+        // A digit ends a word of the name, so `auth0` reads as `auth` and its value is hidden.
+        foreach (var (text, shown) in new[] { ("password:admin", "password: •••"), ("passphrase:admin", "passphrase: •••"), ("pwd:all", "pwd: •••"), ("password:/hunter2", "password: •••"), ("X-Api-Key:/Abc9xYz1QwErTy7UiOp3AsDf", "X-Api-Key: •••"), ("token1:hunter2", "token1: •••"), ("apiKey2:hunter2", "apiKey2: •••"), ("auth0:domain", "auth0: •••"), ("apiKey:hunter2", "apiKey: •••"), ("Authorization: hunter2", "Authorization: •••"),
+                     ("password:hunter2", "password: •••"), ("X-Auth-Token: hunter2", "X-Auth-Token: •••") })
+        {
+            Assert.Equal(["--opt", shown], ControlMasking.Arguments(["--opt", text]));
+        }
+        AssertHidden(["hunter2"], Local("npx", ["s", "--http-header", "X-Api-Key: hunter2", "x-api-key: hunter2"]));
+        AssertHidden(["hunter2"], Local("sh", ["-c", "npx s --http-header 'Cookie: sid=hunter2'"]));
+    }
+
+    /// <summary>A user and password with no scheme (M-1b) - after curl's <c>-u</c> or <c>--user</c>, or before an <c>@</c>
+    /// as a URL's user info - hides the password; a uid:gid pair and an address read as written.</summary>
+    [Fact]
+    public void ACredentialPairWithNoSchemeIsMasked()
+    {
+        Assert.Equal(["--user", "admin:•••"], ControlMasking.Arguments(["--user", "admin:hunter2"]));
+        Assert.Equal(["-u", "admin:•••"], ControlMasking.Arguments(["-u", "admin:hunter2"]));
+        Assert.Equal("--user=admin:•••", ControlMasking.Argument("--user=admin:hunter2"));
+        Assert.Equal("curl -u admin:••• https://x", ControlMasking.Argument("curl -u admin:hunter2 https://x"));
+        Assert.Equal(["--dsn", "admin:•••@db/x"], ControlMasking.Arguments(["--dsn", "admin:hunter2@db/x"]));
+        string[][] plain =
+        [
+            ["-u", "1000:1000"], ["-u", "admin"], ["--user", "admin:${PW}"], ["-u", "${CC_NEEDS:creds}"], ["--user=${CC_NEEDS:creds}"], ["git@github.com:org/repo.git"], ["a@b.example"],
+            ["--user", "node:node"], ["--user", "1000:node"], ["--user", "1000:www-data"], ["--user", "www-data:www-data"], ["-update:true"], ["-useLegacy:yes"],
+            ["-url=http://localhost:8080"], ["-upstream=localhost:8080"], ["-user=node:node"],
+        ];
+        foreach (var args in plain)
+        {
+            Assert.Equal(args, ControlMasking.Arguments(args));
+        }
+        Assert.Equal(["-u", "admin:•••"], ControlMasking.Arguments(["-u", "admin:123456"]));
+        Assert.Equal(["-u", "123456:•••"], ControlMasking.Arguments(["-u", "123456:hunter2"]));
+        Assert.Equal("--user=123:•••", ControlMasking.Argument("--user=123:hunter2"));
+        Assert.Equal("-uadmin:•••", ControlMasking.Argument("-uadmin:pa=ss"));
+        AssertHidden(["hunter2"], Local("sh", ["-c", "curl -u 123456:hunter2 https://x"]));
+        Assert.Equal(["-u", "https://u:•••@h"], ControlMasking.Arguments(["-u", "https://u:hunter2@h"]));
+        Assert.Equal(["-uadmin:•••", "--proxy-user", "admin:•••"], ControlMasking.Arguments(["-uadmin:hunter2", "--proxy-user", "admin:hunter2"]));
+        Assert.Equal(["-c", "admin:•••@db --token •••"], ControlMasking.Arguments(["-c", "admin:hunter2@db --token mysecretvalue"]));
+        Assert.Equal("--db=admin:•••@db --token •••", ControlMasking.Argument("--db=admin:hunter2@db --token mysecretvalue"));
+        AssertHidden(["hunter2", "mysecretvalue"], Local("sh", ["-c", "curl -uadmin:hunter2 https://x; admin:hunter2@db --token mysecretvalue"]));
+        AssertHidden(["hunter2"], Local("curl", ["-u", "admin:hunter2", "--user", "root:hunter2", "--dsn", "admin:hunter2@db/x"]));
+        AssertHidden(["hunter2"], Local("sh", ["-c", "curl -u admin:hunter2 https://x"]));
+    }
+
+    /// <summary>Text that starts with <c>{</c> or <c>[</c> and is not JSON - JSON5, unquoted keys, broken JSON - is
+    /// hidden whole when a key in it is named for a secret (M-1c), and reads as written otherwise.</summary>
+    [Fact]
+    public void JsonLikeTextWithASecretNamedKeyIsHidden()
+    {
+        Assert.Equal(["--config", "•••"], ControlMasking.Arguments(["--config", "{apiKey: 'hunter2'}"]));
+        Assert.Equal("•••", ControlMasking.Argument("{\"apiKey\": \"hunter2\""));
+        Assert.Equal("•••", ControlMasking.Argument("{password=hunter2}"));
+        Assert.Equal("•••", ControlMasking.Argument("[{'token': 'hunter2'}]"));
+        Assert.Equal("•••", ControlMasking.Argument("{env: {DB_URL: 'hunter2'}}"));
+        Assert.Equal("•••", ControlMasking.Argument("{Headers: {X: 'hunter2'}}"));
+        Assert.Equal("{region: 'us', port: 8080}", ControlMasking.Argument("{region: 'us', port: 8080}"));
+        AssertHidden(["hunter2"], Local("npx", ["-y", "@smithery/cli", "run", "x", "--config", "{apiKey: 'hunter2'}"]));
+        AssertHidden(["hunter2"], Bare("npx -y @smithery/cli run x --config \"{apiKey: 'hunter2'}\""));
+        AssertHidden(["hunter2"], JsonValue.Object(("command", S("x")), ("opts", S("{apiKey: 'hunter2'}"))));
+        // Known gap: unquoted in a shell line, the shell splits it at the space, so the value is a
+        // word of its own after a word that is only a key.
+        Assert.Equal("npx s --config ••• hunter2}", ControlMasking.Argument("npx s --config {apiKey: hunter2}"));
+    }
+
+    /// <summary>A shell default for a variable named for a secret (M-1d), or one that reads as a secret, is
+    /// hidden; the reference itself, and any other default, read as written.</summary>
+    [Fact]
+    public void AShellDefaultForASecretIsMasked()
+    {
+        Assert.Equal("${DB_PASSWORD:-•••}", ControlMasking.Argument("${DB_PASSWORD:-hunter2}"));
+        Assert.Equal("${API_TOKEN-•••}", ControlMasking.Argument("${API_TOKEN-hunter2}"));
+        Assert.Equal("--db=${DB_PASSWORD:-•••}", ControlMasking.Argument("--db=${DB_PASSWORD:-hunter2}"));
+        Assert.Equal("${PATH_X:-•••}", ControlMasking.Argument("${PATH_X:-sk-live-abc}"));
+        foreach (var text in new[] { "${PORT:-8080}", "${DB_PASSWORD:-${OTHER}}", "${DB_PASSWORD}", "${HOME:-/tmp}" })
+        {
+            Assert.Equal(text, ControlMasking.Argument(text));
+        }
+        AssertHidden(["hunter2"], Local("node", ["s.js", "${DB_PASSWORD:-hunter2}", "${API_TOKEN:=hunter2}", "${X_KEY=hunter2}"]));
+        AssertHidden(["hunter2"], Local("sh", ["-c", "exec srv ${DB_PASSWORD:-hunter2}"]));
+    }
+
+    /// <summary>In a shell line, a backslash before a space joins the words a hidden value spans (M-1e), so
+    /// the rest of it is hidden too; a backslash elsewhere is a Windows path's and reads as written.</summary>
+    [Fact]
+    public void ABackslashEscapedSpaceInAHiddenValueHidesTheRest()
+    {
+        Assert.Equal("srv --api-key ••• •••", ControlMasking.Argument("srv --api-key hunter\\ two"));
+        Assert.Equal("srv --api-key ••• ••• ••• --port 80", ControlMasking.Argument("srv --api-key a\\ b\\ c --port 80"));
+        Assert.Equal("dir C:\\ /s", ControlMasking.Argument("dir C:\\ /s"));
+        AssertHidden(["two"], Local("sh", ["-c", "srv --api-key hunter\\ two"]));
+    }
+
+    /// <summary>Known gap (M-1f, over-masking, not a leak): <c>API_KEY=x npx s</c> in one argument is masked past
+    /// its first word, since it cannot be told from <c>API_KEY=my secret value</c>, which must stay hidden whole.</summary>
+    [Fact]
+    public void AnAssignmentBeforeACommandInOneArgumentIsMaskedWhole()
+    {
+        Assert.Equal(["-c", "API_KEY=•••"], ControlMasking.Arguments(["-c", "API_KEY=x npx s"]));
+    }
+
+    /// <summary><c>env</c> and <c>headers</c> in any case, and <c>envs</c>, hold secrets (M-1g), wherever they sit.</summary>
+    [Fact]
+    public void MisCasedEnvironmentAndHeaderKeysAreMasked()
+    {
+        var config = JsonValue.Object(
+            ("command", S("x")), ("Env", JsonValue.Object(("A", S("hunter2")))), ("envs", JsonValue.Object(("B", S("hunter2")))),
+            ("HEADERS", JsonValue.Object(("C", S("hunter2")))), ("nested", JsonValue.Object(("Env", JsonValue.Object(("D", S("hunter2")))))));
+        Assert.Equal(S("set"), ControlMasking.MaskedConfig(config).ValueAt(new JsonPointer(["Env", "A"])));
+        AssertHidden(["hunter2"], config);
+    }
+
+    /// <summary>A run of scheme words after a flag named for a secret hides the word after it (M-a). Known
+    /// gaps, each a config that does not work as written: a value after <c>--</c>, and a second word
+    /// after the scheme word and its value, read as any argument does.</summary>
+    [Fact]
+    public void ARunOfSchemeWordsHidesTheValueAfterIt()
+    {
+        Assert.Equal(["--auth", "•••", "•••", "•••"], ControlMasking.Arguments(["--auth", "Token", "Token", "hunter2"]));
+        AssertHidden(["hunter2"], Local("sh", ["--auth", "Token", "Token", "hunter2"]));
+        Assert.Equal(["--password", "•••", "--", "hunter2"], ControlMasking.Arguments(["--password", "Basic", "--", "hunter2"]));
+        Assert.Equal(["--auth", "•••", "•••", "def"], ControlMasking.Arguments(["--auth", "Token", "abc", "def"]));
     }
 }

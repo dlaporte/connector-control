@@ -77,6 +77,23 @@ public class BackupManagerTests : IDisposable
         Assert.Equal("v2", File.ReadAllText(kept[2]));
     }
 
+    /// <summary>Only files are backups: a folder named like the oldest one is neither listed nor pruned, nor is
+    /// anything inside it, as on the Mac.</summary>
+    [Fact]
+    public void AFolderNamedLikeABackupIsNeitherListedNorPruned()
+    {
+        var folder = Path.Combine(dir.File("backups"), $"{Series}.{BackupTimestamp.From(At(1_752_500_000))}.json");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "inside.txt"), "keep");
+        for (int i = 0; i < 4; i++)
+        {
+            File.WriteAllText(source, $"v{i}");
+            manager.BackUp(source, Series, At(1_752_600_000 + i));
+        }
+        Assert.Equal(["v3", "v2", "v1"], manager.Backups(Series).Select(File.ReadAllText));
+        Assert.Equal("keep", File.ReadAllText(Path.Combine(folder, "inside.txt")));
+    }
+
     /// <summary>Pruning is best effort: a stale backup that refuses deletion must not fail the write it trails.</summary>
     [Fact]
     public void RotationSkipsAStaleBackupThatCannotBeDeleted()
@@ -151,6 +168,23 @@ public class BackupManagerTests : IDisposable
         // An unchanged file dedups against the -2 backup, the newest.
         Assert.Equal(kept[0], limited.BackUp(source, Series, now));
         Assert.Equal(kept, limited.Backups(Series));
+    }
+
+    /// <summary>Once every same-millisecond name is taken the write replaces the last one, which is
+    /// already in the listing: prune counts it once, so exactly keepCount backups stay.</summary>
+    [Fact]
+    public void AnExhaustedCollisionBoundPrunesNoBackupTooMany()
+    {
+        var full = new BackupManager(dir.File("backups"), keepCount: 100);
+        var now = At(1_752_600_000.123);
+        for (var i = 0; i <= 100; i++)
+        {
+            File.WriteAllText(source, $"v{i}");
+            full.BackUp(source, Series, now);
+        }
+        var kept = full.Backups(Series);
+        Assert.Equal(100, kept.Count);
+        Assert.Equal("v100", File.ReadAllText(kept[0]));   // the last write replaced the -100 backup
     }
 
     /// <summary>The counter compares as a number: the tenth backup of a millisecond is newer than the second.</summary>

@@ -34,7 +34,7 @@ public enum ControlCommandRunner {
 
     /// Connects through `client`, runs the call over that connection and closes it: what the command line
     /// prints. A connection that cannot be had ends the command as unreachable, with the reason the client
-    /// gave — the app is not running, could not be started, or the tool runs elevated.
+    /// gave - the app is not running, could not be started, or the tool runs elevated.
     public static func run(tool: String, arguments: JSONValue, json: Bool, version: String,
                            client: ControlClient, notice: () -> Void) -> ControlOutput {
         let stream: ControlStream
@@ -49,7 +49,7 @@ public enum ControlCommandRunner {
     }
 
     /// Runs the call over `stream` and says what to print. `notice` runs once, at the first progress
-    /// report: the change is waiting its turn. An error answered with no id — a message too large —
+    /// report: the change is waiting its turn. An error answered with no id - a message too large -
     /// can only be the call's, the one request still open. A line past `limit` can never be read
     /// whole, so the command cannot say what happened: it ends as if the app had gone.
     public static func run(tool: String, arguments: JSONValue, json: Bool, version: String,

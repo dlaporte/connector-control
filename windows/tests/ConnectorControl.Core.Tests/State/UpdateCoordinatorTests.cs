@@ -119,6 +119,126 @@ public class UpdateCoordinatorTests
         Assert.Empty(notifier.Sent);
     }
 
+    /// <summary>
+    /// Install and Relaunch keeps the dialog up while the package downloads: the download runs inside the
+    /// offer, as the dialog's busy state, and so does ApplyAndRestart, so the dialog is never gone before
+    /// the app relaunches. Windows only: Sparkle shows the Mac's progress.
+    /// </summary>
+    [Fact]
+    public async Task InstallDownloadsAndRestartsWhileTheDialogIsStillUp()
+    {
+        updater.Next = Update();
+        dialogs.NextOffer = true;
+        var duringOffer = (Downloads: -1, Restarts: -1);
+        dialogs.AfterInstall = () => duringOffer = (updater.Downloads, updater.AppliedAndRestarted);
+        using var coordinator = Coordinator();
+        Assert.Equal(UpdateOutcome.Installing, await coordinator.CheckAsync(interactive: true));
+        Assert.Equal((1, 1), duringOffer);
+        Assert.Equal(1, updater.AppliedAndRestarted);
+        Assert.Empty(dialogs.Informs);
+    }
+
+    /// <summary>A failed download closes the busy dialog, then says why with the failure dialogs it always used.</summary>
+    [Fact]
+    public async Task AFailedDownloadClosesTheDialogAndThenSaysWhy()
+    {
+        updater.Next = Update();
+        dialogs.NextOffer = true;
+        updater.DownloadFailure = new UpdateVerificationException("not signed by this app's publisher");
+        using var coordinator = Coordinator();
+        Assert.Equal(UpdateOutcome.Failed, await coordinator.CheckAsync(interactive: true));
+        Assert.Equal(new FakeDialogs.InformCall("The update was not installed.", "not signed by this app's publisher"), Assert.Single(dialogs.Informs));
+        Assert.Equal(0, updater.AppliedAndRestarted);
+
+        updater.DownloadFailure = new HttpRequestException("connection reset");
+        Assert.Equal(UpdateOutcome.Failed, await coordinator.CheckAsync(interactive: true));
+        Assert.Equal(new FakeDialogs.InformCall("Couldn’t install the update.", "connection reset"), dialogs.Informs[1]);
+        Assert.Equal(0, updater.AppliedAndRestarted);
+    }
+
+    /// <summary>Cancel while Downloading…: the download is given the dialog's token, nothing is reported, nothing
+    /// relaunches, and the dialog is back at its offer, answered here with Later.</summary>
+    [Theory]
+    [InlineData(true)]    // the download stops, as Velopack's does
+    [InlineData(false)]   // the download had already finished: the relaunch is still not started
+    public async Task CancelWhileDownloadingReturnsToTheOfferWithNothingToReport(bool downloadStops)
+    {
+        updater.Next = Update();
+        updater.HonoursCancellation = downloadStops;
+        dialogs.CancelledInstalls = 1;
+        dialogs.NextOffer = false;
+        using var coordinator = Coordinator();
+        Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: true));
+        Assert.Equal(1, updater.Downloads);
+        Assert.True(Assert.Single(updater.DownloadTokens).IsCancellationRequested);
+        Assert.Equal(0, updater.AppliedAndRestarted);
+        Assert.Empty(dialogs.Informs);
+    }
+
+    /// <summary>
+    /// Cancel pressed while the downloaded package was being checked, and the check refused it: the dialog went back to
+    /// its offer, but Later still reports the refusal (its text may ask for a reinstall), and a background offer does
+    /// not record the version as declined.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ARefusalReachedWithACancelIsStillReportedAndNotDeclined(bool interactive)
+    {
+        updater.Next = Update();
+        updater.HonoursCancellation = false;   // the download had finished; the check ran on and refused
+        updater.DownloadFailure = new UpdateVerificationException("not signed by this app's publisher");
+        dialogs.CancelledInstalls = 1;
+        dialogs.NextOffer = false;             // then Later
+        using var coordinator = Coordinator();
+        Assert.Equal(UpdateOutcome.Failed, await coordinator.CheckAsync(interactive));
+        Assert.Equal(new FakeDialogs.InformCall("The update was not installed.", "not signed by this app's publisher"), Assert.Single(dialogs.Informs));
+        Assert.Null(settings.DeclinedUpdateVersion);
+        Assert.Null(coordinator.DeclinedVersion);
+        Assert.Equal(0, updater.AppliedAndRestarted);
+    }
+
+    /// <summary>Install and Relaunch pressed again after a Cancel starts afresh: the cancelled attempt leaves nothing behind.</summary>
+    [Fact]
+    public async Task InstallAfterACancelStillInstalls()
+    {
+        updater.Next = Update();
+        dialogs.CancelledInstalls = 1;
+        dialogs.NextOffer = true;
+        using var coordinator = Coordinator();
+        Assert.Equal(UpdateOutcome.Installing, await coordinator.CheckAsync(interactive: true));
+        Assert.Equal(2, updater.Downloads);
+        Assert.Equal(1, updater.AppliedAndRestarted);
+        Assert.Empty(dialogs.Informs);
+    }
+
+    /// <summary>
+    /// A check is in flight from the moment it starts until its slot is cleared on the UI thread, and says so each time
+    /// that changes, so Check for Updates can read Checking… and refuse a second click rather than silently join.
+    /// </summary>
+    [Fact]
+    public async Task IsCheckingFollowsTheInFlightCheck()
+    {
+        settings.AutoUpdate = true;
+        var ui = new MarshalQueue();
+        var host = new AppHost(ui.Post, delays.Add, () => DateTime.UtcNow, a => a());
+        updater.Next = Update();
+        using var coordinator = new UpdateCoordinator(updater, settings, notifier, dialogs, host);
+        var changes = new List<bool>();
+        coordinator.CheckingChanged += () => changes.Add(coordinator.IsChecking);
+        Assert.False(coordinator.IsChecking);
+
+        var check = coordinator.CheckAsync(interactive: false);
+        Assert.True(coordinator.IsChecking);
+        Assert.Equal(1, ui.PumpOne());   // the staging block: still checking
+        Assert.True(coordinator.IsChecking);
+        await ui.WhenPostedAsync().WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken);
+        ui.Pump();   // the clear
+        Assert.False(coordinator.IsChecking);
+        Assert.Equal([true, false], changes);
+        Assert.Equal(UpdateOutcome.StagedForQuit, await check.WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken));
+    }
+
     [Fact]
     public async Task LaterDefersWithoutDownloading()
     {
@@ -228,7 +348,7 @@ public class UpdateCoordinatorTests
         Assert.Equal(UpdateOutcome.StagedForQuit, await first.WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken));
 
         // Two marshalled actions reached the UI thread: the staging block, then the in-flight
-        // clear — and the task completed only after the pump ran the second one. (A clear on
+        // clear - and the task completed only after the pump ran the second one. (A clear on
         // the pool thread posts nothing, so this count is what tells the two apart.)
         Assert.Equal(2, Volatile.Read(ref posted));
         Assert.Equal(0, ui.Pending);
@@ -383,7 +503,7 @@ public class UpdateCoordinatorTests
 
     /// <summary>
     /// The decline is persisted (ISettings.DeclinedUpdateVersion), not held only in the
-    /// coordinator's memory, so it survives a relaunch — a fresh coordinator over the same
+    /// coordinator's memory, so it survives a relaunch - a fresh coordinator over the same
     /// settings still treats the version as declined.
     /// </summary>
     [Fact]

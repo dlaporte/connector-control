@@ -15,8 +15,8 @@ public enum CollectionDocumentError: Error, Equatable {
 /// Why a document was not produced from a publish intent.
 ///
 /// Mirror: `PublishIntentException` in windows/src/ConnectorControl.Core/CollectionDocument.cs, one
-/// subclass per case: `PathMarkMovedException`, `PublishFolderCarriedException` and
-/// `KeptPathCarriedException`.
+/// subclass per case: `PathMarkMovedException`, `PublishFolderCarriedException`,
+/// `KeptPathCarriedException`, `UnreviewedConnectorException` and `NewCredentialException`.
 public enum PublishIntentError: Error, Equatable {
     /// A path the author marked on this connector can no longer be found where it was marked.
     /// The argument it stood for may be anywhere, so no document is written rather than one that
@@ -138,8 +138,8 @@ public enum KeptValue {
         return found
     }
 
-    /// `value` as a JSON string spells it — backslashes and quotes escaped, with and without the
-    /// slash escaped too — and as written, longest first, each once.
+    /// `value` as a JSON string spells it - backslashes and quotes escaped, with and without the
+    /// slash escaped too - and as written, longest first, each once.
     static func writtenForms(_ value: String) -> [String] {
         let escaped = value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
         var forms: [String] = []
@@ -208,8 +208,8 @@ public struct PublishIntent: Equatable, Sendable {
     ///
     /// A mark stays on the argument at its pointer while that argument still reads as it did
     /// when it was marked. Failing that, it follows its value to the one argument that holds it.
-    /// A mark that finds neither — its value edited away, held by two arguments, or already
-    /// claimed by another mark — is unresolved: the argument it was made on could be anywhere,
+    /// A mark that finds neither - its value edited away, held by two arguments, or already
+    /// claimed by another mark - is unresolved: the argument it was made on could be anywhere,
     /// and nothing may be published over it.
     ///
     /// A mark with no recorded value is placed where its pointer points, and one pointing past
@@ -274,6 +274,13 @@ extension String {
     /// where C# puts it before, so anything both platforms must list alike sorts by this.
     public func ordinallyPrecedes(_ other: String) -> Bool {
         utf16.lexicographicallyPrecedes(other.utf16)
+    }
+
+    /// The same text, scalar for scalar: what C#'s ordinal equality compares. Swift's own `==`
+    /// holds canonically equivalent text equal, and a name composed another way is another name.
+    /// Nonisolated, so a value compared off the main actor can use it as well as the masking can.
+    public func hasSameScalars(as other: String) -> Bool {
+        unicodeScalars.elementsEqual(other.unicodeScalars)
     }
 }
 
@@ -385,8 +392,8 @@ public struct CollectionDocument: Equatable, Sendable {
     }
 
     public enum Auth: Equatable, Sendable {
-        /// C# has no case value of this name to write — a record type's name isn't an
-        /// expression there — so it exposes the same case through a static `Auto` instead.
+        /// C# has no case value of this name to write - a record type's name isn't an
+        /// expression there - so it exposes the same case through a static `Auto` instead.
         case automatic
         case bearer
         case header(name: String)
@@ -505,8 +512,8 @@ public struct CollectionDocument: Equatable, Sendable {
     }
 
     /// A remote connector's `additional` fields (whatever the form the config came from cannot
-    /// represent) merged into the freshly encoded launcher config; the encoded keys — always
-    /// `command`/`args`, sometimes `env` — win on a collision, since they are what makes the
+    /// represent) merged into the freshly encoded launcher config; the encoded keys - always
+    /// `command`/`args`, sometimes `env` - win on a collision, since they are what makes the
     /// connector run.
     private static func merging(additional: [String: JSONValue], into config: JSONValue) -> JSONValue {
         guard !additional.isEmpty, case .object(let encoded) = config else { return config }
@@ -520,9 +527,9 @@ public struct CollectionDocument: Equatable, Sendable {
     /// that still carries a mark with a value: a remote connector's arguments are built by each
     /// importer, so a mark there was made while it was a local one, and the path it stood for may
     /// now be travelling in its extra arguments. Throws `PublishIntentError.keptPathCarried` for a
-    /// local connector that also holds a placed mark's text somewhere unmarked that travels —
+    /// local connector that also holds a placed mark's text somewhere unmarked that travels -
     /// another argument, the command, a shared environment value or a field the form has no widget
-    /// for — since a duplicate of a marked path is that path. With `refusingCopies` false the copy
+    /// for - since a duplicate of a marked path is that path. With `refusingCopies` false the copy
     /// travels as written instead: the Publish sheet reads such a document for what else it keeps
     /// back, and lists the copies itself (`copiesOfMarkedPaths(in:intent:)`).
     public static func export(name: String, author: String?, origin: String?, exported: String,
@@ -556,8 +563,8 @@ public struct CollectionDocument: Equatable, Sendable {
                     needs.updateValue(hints[clientSecretNeed], forKey: clientSecretNeed)
                 }
                 let env = remote.passthroughEnv.reduce(into: [String: EnvValue]()) { $0[$1.key] = envValue($1.key, $1.value) }
-                // Whatever the form has no widget for — a key `RemotePattern.decode` doesn't
-                // read — travels too, the same way a local connector's does.
+                // Whatever the form has no widget for - a key `RemotePattern.decode` doesn't
+                // read - travels too, the same way a local connector's does.
                 let additional = FormMapper.analyze(config).model.additional
                 out[connectorName] = Connector(launcher: .remote(Remote(url: remote.url, auth: auth, package: remote.package,
                                                                         extraArgs: remote.extraArgs)),
@@ -577,7 +584,7 @@ public struct CollectionDocument: Equatable, Sendable {
                     needs.updateValue(mark.hint, forKey: mark.name)
                 }
                 // A marker the author already typed, or one an imported copy still carries, is a
-                // need too — otherwise re-exporting a collection would drop what it asks for.
+                // need too - otherwise re-exporting a collection would drop what it asks for.
                 for n in (args + [model.command]).flatMap(Placeholder.names(in:)) where needs.index(forKey: n) == nil {
                     needs.updateValue(hints[n], forKey: n)
                 }
@@ -621,8 +628,8 @@ public struct CollectionDocument: Equatable, Sendable {
 
     /// Every place, connector by connector in ordinal order and field by field, where one of
     /// `values` stands as written (`KeptValue.holds`). The field is the place in the connector's
-    /// document form — `local.command`, `local.args[1]`, `env.LOG_DIR.value`, `env.LOG_DIR.hint`,
-    /// `needs.server_path.hint`, `additional.cwd`, `remote.extraArgs[0]` — so the author can find it
+    /// document form - `local.command`, `local.args[1]`, `env.LOG_DIR.value`, `env.LOG_DIR.hint`,
+    /// `needs.server_path.hint`, `additional.cwd`, `remote.extraArgs[0]` - so the author can find it
     /// in the preview; an environment variable's, a need's or an additional field's own name counts
     /// as a place too. Empty values are ignored.
     public func findings(of values: Set<String>) -> [KeptValueFinding] {
@@ -773,8 +780,8 @@ public struct CollectionDocument: Equatable, Sendable {
     /// colon too, since the heuristic's own space check would otherwise hide a credential sitting
     /// right after one; an arg that is a header, with or without that space (`headerArgument`), is
     /// read as a header is; and an arg that is a URL is read part by part as `url` is. Env is only
-    /// tested for names in `sharedEnv` — the ones the author ticked to travel as a value rather than a
-    /// hint — since a hint-only value never leaves this machine. A connector Claude reaches by URL
+    /// tested for names in `sharedEnv` - the ones the author ticked to travel as a value rather than a
+    /// hint - since a hint-only value never leaves this machine. A connector Claude reaches by URL
     /// keeps its secret in `headers` or in `url`: a header is read as `credentialKind(named:holding:)`
     /// reads it, and the URL's parts are those `credentialParts(ofURL:)` names.
     public static func credentialWarnings(_ config: JSONValue, sharedEnv: Set<String>) -> [String] {
@@ -837,7 +844,7 @@ public struct CollectionDocument: Equatable, Sendable {
         }
     }
 
-    /// How a value under `name` — a header, or a URL parameter — holds a credential, or nil when it
+    /// How a value under `name` - a header, or a URL parameter - holds a credential, or nil when it
     /// holds none: a reference where it only refers to one under a name named for a secret, a literal
     /// where it looks like one or its name is named for one.
     static func credentialKind(named name: String, holding value: String) -> CredentialKind? {
@@ -934,15 +941,11 @@ public struct CollectionDocument: Equatable, Sendable {
     // Every failure names the key it read, so a hand-edited document says what is wrong with it.
 
     static func requiredString(_ value: JSONValue?, _ what: String) throws -> String {
-        guard let value else { throw CollectionDocumentError.malformed("\(what) is missing") }
-        guard case .string(let s) = value else { throw CollectionDocumentError.malformed("\(what) is not a string") }
-        return s
+        try JSONField.requiredString(value, what, CollectionDocumentError.malformed)
     }
 
     static func optionalString(_ value: JSONValue?, _ what: String) throws -> String? {
-        guard let value, value != .null else { return nil }
-        guard case .string(let s) = value else { throw CollectionDocumentError.malformed("\(what) is not a string") }
-        return s
+        try JSONField.optionalString(value, what, CollectionDocumentError.malformed)
     }
 
     static func stringArray(_ value: JSONValue?, _ what: String) throws -> [String] {
@@ -955,9 +958,7 @@ public struct CollectionDocument: Equatable, Sendable {
     }
 
     static func objectValue(_ value: JSONValue?, _ what: String) throws -> [String: JSONValue] {
-        guard let value else { return [:] }
-        guard case .object(let object) = value else { throw CollectionDocumentError.malformed("\(what) is not a JSON object") }
-        return object
+        try JSONField.objectValue(value, what, CollectionDocumentError.malformed)
     }
 }
 

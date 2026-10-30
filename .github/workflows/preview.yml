@@ -2,7 +2,7 @@
 # and the Velopack packages for win-x64 and win-arm64, versioned <next>-preview.<n>, where <next>
 # is the top "## vX.Y.Z" heading of CHANGELOG.md and <n> names the preview.
 #
-# TRIGGERS — two tag shapes and a manual dispatch:
+# TRIGGERS - two tag shapes and a manual dispatch:
 #
 #   preview-<n>        tag push:  real preview:  prepare -> test -> build both -> publish
 #   preview-dry-<n>    tag push:  dry run:       the same, with publish skipped
@@ -12,7 +12,7 @@
 # A tag push runs the workflow file AS IT EXISTS AT THE TAGGED COMMIT, so a preview can be cut
 # from any branch and a change to this workflow can be proved from a branch with a
 # preview-dry-<n> tag before it reaches master. A dispatch runs the file from the ref you choose,
-# but the dispatch menu only lists workflow files that exist on the default branch — which is why
+# but the dispatch menu only lists workflow files that exist on the default branch - which is why
 # both shapes are kept.
 #
 # Both build version <next>-preview.<n>; pick <n> with `git tag -l 'preview-*'`. Neither tag
@@ -37,12 +37,12 @@
 # Apple certificate and notarization account from the "signing" GitHub Environment, whose
 # deployment branch policy must therefore allow the ref a preview is cut from: the tag pattern
 # preview-* and any branch previews are dispatched from, beside master and v*. The Windows
-# build — test, package (win-x64, win-arm64), smoke — is .github/workflows/windows-build.yml,
+# build - test, package (win-x64, win-arm64), smoke - is .github/workflows/windows-build.yml,
 # the same file release.yml calls; its own gate job proves all six Azure Artifact Signing
 # secrets are there before the signed packaging jobs start, so a preview is signed exactly like
 # a release. Nothing here is ever unsigned.
 #   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SIGNING_ENDPOINT,
-#   AZURE_SIGNING_ACCOUNT, AZURE_SIGNING_PROFILE — documented once, with windows-build.yml's gate.
+#   AZURE_SIGNING_ACCOUNT, AZURE_SIGNING_PROFILE - documented once, with windows-build.yml's gate.
 name: Preview
 
 on:
@@ -220,8 +220,8 @@ jobs:
   publish:
     name: Publish prerelease
     needs: [prepare, mac, windows]
-    # With preview-feed after it, the only jobs that write anything. A dry run — a
-    # preview-dry-<n> tag or a dispatch with dry_run — skips both entirely, so it creates no
+    # With preview-feed after it, the only jobs that write anything. A dry run - a
+    # preview-dry-<n> tag or a dispatch with dry_run - skips both entirely, so it creates no
     # release, uploads no assets and leaves the preview feed alone.
     if: needs.prepare.outputs.dry != 'true'
     runs-on: ubuntu-24.04
@@ -232,7 +232,6 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ needs.prepare.outputs.tag }}
       VERSION: ${{ needs.prepare.outputs.version }}
-      REPO_URL: ${{ github.server_url }}/${{ github.repository }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -263,7 +262,7 @@ jobs:
       # resolving to the last stable release. --latest is NEVER passed here, in any form. The
       # DMG and its appcast are attached at creation, together, so the prerelease is never
       # visible without its Mac download, and a re-run keeps (or refuses to half-complete) the
-      # published pair — the appcast the preview feed is copied from always signs the DMG
+      # published pair - the appcast the preview feed is copied from always signs the DMG
       # testers download.
       - name: Create the prerelease, with the DMG and its appcast attached
         run: |
@@ -273,34 +272,16 @@ jobs:
             "mac/ConnectorControl_$VERSION.dmg" mac/appcast.xml
 
       # gh, not vpk, uploads everything; a re-run skips a RID whose assets are all published
-      # (and refuses to complete a half-published one) — the reasons are in the script, which
+      # (and refuses to complete a half-published one) - the reasons are in the script, which
       # release.yml calls too.
       - name: Upload the Windows assets
         run: ./scripts/release/upload-release-assets.sh "$TAG" "$VERSION" artifacts
 
+      # The preview-feed job, which runs next, checks releases/latest too, but only on the runs
+      # where update-preview-feed.sh goes on to change the feed (it exits early when the feed is
+      # left unchanged). verify-release.sh's isPrerelease check is what always applies.
       - name: Verify the release
-        run: |
-          ./scripts/release/verify-release.sh "$TAG" --prerelease \
-            "ConnectorControl_$VERSION.dmg" appcast.xml \
-            ConnectorControl-win-x64-Setup.exe ConnectorControl-win-arm64-Setup.exe \
-            "ConnectorControl-$VERSION-win-x64-full.nupkg" "ConnectorControl-$VERSION-win-arm64-full.nupkg" \
-            releases.win-x64.json releases.win-arm64.json
-
-          # `gh release view --json isLatest` does not exist (gh 2.99.0: "Unknown JSON field"),
-          # and "Latest" is a repository-level pointer anyway. This endpoint IS what the Mac
-          # appcast URL resolves through, so asking it is the real check.
-          LATEST=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
-          [ "$LATEST" != "$TAG" ] || { echo "::error::$TAG became releases/latest — the Mac appcast would break"; exit 1; }
-          case "$LATEST" in
-            v[0-9]*) echo "releases/latest is still $LATEST (a stable release)" ;;
-            *) echo "::error::releases/latest is '$LATEST', which is not a stable v* release"; exit 1 ;;
-          esac
-          {
-            echo "## Preview $TAG ($VERSION)"
-            echo
-            echo "- Release: $REPO_URL/releases/tag/$TAG"
-            echo "- releases/latest unchanged: $LATEST"
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: ./scripts/release/verify-release.sh "$TAG" --prerelease --version "$VERSION"
 
   preview-feed:
     name: Update the Mac preview feed

@@ -20,9 +20,19 @@ public sealed class PublishModel : ObservableObject
     public const string ExportButton = "Export";
     public const string CancelButton = "Cancel";
     /// <summary>This dialog's own folder picker, not the failed-publish banner's button of the same words: a dialog's buttons are its model's, as Settings' and the Import dialog's already are.</summary>
-    public const string ChooseFolderButton = "Choose Folder";
+    public const string ChooseFolderButton = "Choose Folder…";
     /// <summary>What a screen reader says for the bare tick beside a path row, which has no visible label.</summary>
     public const string MarkPathLabel = "Mark as a path this machine supplies";
+    // A screen reader's names for a row's controls: the visible row says which connector and
+    // variable it is by position alone, and the tick's own words are a bare "share value".
+    public static string ShareValueRowLabel(string connector, string name) => $"Share value of {name} in {connector}";
+    public static string HintRowLabel(string connector, string subject) => $"Hint for {subject} in {connector}";
+    public static string PathNameRowLabel(string connector, string subject) => $"Placeholder name for {subject} in {connector}";
+    public static string MarkPathRowLabel(string connector, string value) => $"Mark {value} in {connector} as a path this machine supplies";
+    // The dialog's lists of entries it holds on: each answer is named by the entry it answers.
+    public static string ForgetMarkRowLabel(string connector, string name) => $"Forget mark {name} in {connector}";
+    public static string ReleaseValueRowLabel(string connector, string value) => $"Release {value} in {connector}";
+    public static string UseDirectoryTokenRowLabel(string connector, string value) => $"Use ${{COLLECTION_DIR}} for {value} in {connector}";
     /// <summary>The button beside an unresolved mark's note: drop the mark and let the path travel as the preview shows it.</summary>
     public const string ForgetMarkButton = "Forget Mark";
     /// <summary>The button beside a kept path's note: let that path travel as written in this collection's document, which the preview above shows.</summary>
@@ -72,6 +82,9 @@ public sealed class PublishModel : ObservableObject
     public sealed record UnresolvedMark(string Id, string Connector, string Name, string? Hint)
     {
         internal JsonPointer Pointer { get; init; } = new([]);
+
+        /// <summary><see cref="ForgetMarkRowLabel"/> for this mark: the Forget Mark button's spoken name.</summary>
+        public string ForgetLabel => ForgetMarkRowLabel(Connector, Name);
     }
 
     /// <summary>
@@ -97,6 +110,12 @@ public sealed class PublishModel : ObservableObject
     public sealed record KeptPath(string Value, string Connector, string Field, KeptPathKind Kind = KeptPathKind.Path)
     {
         public string Id => Connector + "\0" + Field + "\0" + Value;
+
+        /// <summary><see cref="ReleaseValueRowLabel"/> for this entry: the Release button's spoken name.</summary>
+        public string ReleaseLabel => ReleaseValueRowLabel(Connector, Value);
+
+        /// <summary><see cref="UseDirectoryTokenRowLabel"/> for this entry: the Use token button's spoken name.</summary>
+        public string UseTokenLabel => UseDirectoryTokenRowLabel(Connector, Value);
     }
 
     /// <summary>
@@ -123,6 +142,12 @@ public sealed class PublishModel : ObservableObject
 
         public bool Share { get => share; set => Set(ref share, value); }
 
+        /// <summary><see cref="ShareValueRowLabel"/> for this row: the tick's spoken name.</summary>
+        public string ShareLabel => ShareValueRowLabel(Connector, Name);
+
+        /// <summary><see cref="HintRowLabel"/> for this row: the hint box's spoken name.</summary>
+        public string HintLabel => HintRowLabel(Connector, Name);
+
         public string Hint { get => hint; set => Set(ref hint, value); }
     }
 
@@ -144,6 +169,15 @@ public sealed class PublishModel : ObservableObject
         public string Value { get; } = value;
 
         public bool Marked { get => marked; set => Set(ref marked, value); }
+
+        /// <summary><see cref="MarkPathRowLabel"/> for this row: the tick's spoken name.</summary>
+        public string MarkLabel => MarkPathRowLabel(Connector, Value);
+
+        /// <summary><see cref="HintRowLabel"/> for this row, named by where its path sits: the hint box's spoken name.</summary>
+        public string HintLabel => HintRowLabel(Connector, Pointer.ToString());
+
+        /// <summary><see cref="PathNameRowLabel"/> for this row, named by where its path sits: the name box's spoken name.</summary>
+        public string NameLabel => PathNameRowLabel(Connector, Pointer.ToString());
 
         public string Name { get => name; set => Set(ref name, value); }
 
@@ -171,7 +205,7 @@ public sealed class PublishModel : ObservableObject
     private readonly Dictionary<string, string> namesAtOpen = new(StringComparer.Ordinal);
     /// <summary>
     /// Each connector as the dialog showed it, by name: what its Publish reviews. One that arrives or
-    /// changes under the open dialog — from the other machine, or an editor — was never in front of the
+    /// changes under the open dialog - from the other machine, or an editor - was never in front of the
     /// author as it stands (<c>AppState.SheetReview</c>). The dialog's own rewrite of a connector
     /// refreshes its entry, as it refreshes the rows.
     /// </summary>
@@ -180,7 +214,7 @@ public sealed class PublishModel : ObservableObject
     /// <summary>
     /// Publishing binds the collection to a folder it rewrites on every change; exporting writes
     /// the same document once, wherever the save dialog says, and binds nothing. The dialog is the
-    /// same dialog because the decision the author is making — what travels — is the same one, so
+    /// same dialog because the decision the author is making - what travels - is the same one, so
     /// the mode is the model's, and with it which title, which gate and which verb.
     /// </summary>
     public enum Mode
@@ -205,8 +239,8 @@ public sealed class PublishModel : ObservableObject
         var lost = new List<UnresolvedMark>();
         // What this machine keeps back from the collection's document: its lists of marked paths
         // and the folders it binds. A row holding one of them starts ticked even when the record no
-        // longer marks it — the other machine may have dropped the mark while this one still sends
-        // the path — so the author unticks it on purpose, in view of the preview, or it stays a
+        // longer marks it - the other machine may have dropped the mark while this one still sends
+        // the path - so the author unticks it on purpose, in view of the preview, or it stays a
         // placeholder.
         var denied = state.KeptBack(collection).Values.Select(KeptValue.Nfc).ToHashSet(StringComparer.Ordinal);
         var seeded = Held(state, collection, connectors);
@@ -302,7 +336,7 @@ public sealed class PublishModel : ObservableObject
     /// <summary>
     /// The connectors this dialog speaks for: the Export dialog's ticked subset, or null for the
     /// whole collection. Publishing always writes the whole collection, so a model built with a
-    /// subset is an export's — <see cref="Publish"/> on one would record an intent that speaks
+    /// subset is an export's - <see cref="Publish"/> on one would record an intent that speaks
     /// for only part of what the document carries.
     /// </summary>
     public IReadOnlyList<string>? Connectors { get; }
@@ -446,7 +480,7 @@ public sealed class PublishModel : ObservableObject
     public string FolderSentence => FolderLine(FileName);
 
     /// <summary>
-    /// The eight characters of the origin the footer shows — enough to tell one publisher's
+    /// The eight characters of the origin the footer shows - enough to tell one publisher's
     /// document from another's at a glance, which is all the footer is for. Empty until the
     /// collection has published once, because that is when the origin is minted. Read from the
     /// publish record rather than through <c>ExportDocument</c>, which carries the same value and
@@ -495,9 +529,9 @@ public sealed class PublishModel : ObservableObject
 
     /// <summary>
     /// The lost marks still unanswered, one note each, in connector then pointer order. A lost mark
-    /// is answered by its own tick — a path row of its connector ticked since the dialog opened,
+    /// is answered by its own tick - a path row of its connector ticked since the dialog opened,
     /// with a name the placeholder can carry, each tick answering the next lost mark in pointer
-    /// order — or by forgetting it. Unticking the row puts it back.
+    /// order - or by forgetting it. Unticking the row puts it back.
     /// </summary>
     public IReadOnlyList<UnresolvedMark> UnresolvedMarks
     {
@@ -570,7 +604,7 @@ public sealed class PublishModel : ObservableObject
     /// answered by <see cref="UseDirectoryToken"/>, or by writing <c>${COLLECTION_DIR}</c> in the
     /// connector's editor. null when the path is released; otherwise a folder entry's note for where
     /// it sits, and nothing changes. A folder's note even where the list shows it as a path kept
-    /// back — a copy of a ticked one — since that note's own answer is the Release just refused.
+    /// back - a copy of a ticked one - since that note's own answer is the Release just refused.
     /// </para>
     /// </summary>
     public string? ReleaseKeptPath(string value)
@@ -615,7 +649,7 @@ public sealed class PublishModel : ObservableObject
     /// own, sits: in the dialog's own hint for a hint, and otherwise in the connector itself, saved as
     /// an editor save is and applied to Claude's config when the collection is the active one. The
     /// author's own edit, in view of the preview. null when the token is written; otherwise the
-    /// entry's note, which says what does answer it — Release for a path kept back, the connector's
+    /// entry's note, which says what does answer it - Release for a path kept back, the connector's
     /// editor for a folder this dialog cannot reach.
     /// </summary>
     public string? UseDirectoryToken(KeptPath kept)
@@ -796,8 +830,8 @@ public sealed class PublishModel : ObservableObject
     /// <summary>
     /// The document itself, as the editor would show it. Every byte that leaves this machine is in
     /// here, kept paths included, so the author reads them before releasing any
-    /// (<see cref="KeptPaths"/>). When the ticks can no longer be placed — the collection changed
-    /// under the open dialog, or a ticked path is also copied unticked — there is no document, and
+    /// (<see cref="KeptPaths"/>). When the ticks can no longer be placed - the collection changed
+    /// under the open dialog, or a ticked path is also copied unticked - there is no document, and
     /// the preview says why rather than showing one that would not be written.
     /// </summary>
     public string Preview
@@ -828,7 +862,7 @@ public sealed class PublishModel : ObservableObject
 
     /// <summary>
     /// What the exporter cannot know is a secret: a value that looks like a credential and is
-    /// about to travel. Never an edit — the author decides.
+    /// about to travel. Never an edit - the author decides.
     /// </summary>
     public IReadOnlyList<string> Warnings
     {
@@ -902,7 +936,7 @@ public sealed class PublishModel : ObservableObject
         }
         // The same folder, already publishing: the ticks go on record, and then the document is
         // written whether or not it changed. Pressing Publish again is how a write that failed is
-        // retried, and by then nothing about the document is different — only the folder is.
+        // retried, and by then nothing about the document is different - only the folder is.
         state.UpdatePublishIntent(Collection, Intent, ReviewedValues, LetGo, shown);
         return state.Republish(Collection);
     }
@@ -933,28 +967,17 @@ public sealed class PublishModel : ObservableObject
 
     /// <summary>
     /// An argument worth offering as machine-specific: it is written as a path, by the same rule
-    /// the Collections window's target column uses, or something by that name is on this disk. A
-    /// flag or a URL is neither.
+    /// the Collections window's target column uses, or it is <c>.</c> or <c>..</c>, or starts with
+    /// <c>.\</c>, <c>..\</c> or a network path's <c>\\</c>. Read from the text alone: the disk is
+    /// never asked about a relative argument, since it would be resolved against this process's
+    /// working directory - which depends on how the app was started - and offer a different set of
+    /// words on each launch. A bare word, a flag or a URL is none of these.
     /// </summary>
-    private static bool LooksLikeAPath(string argument)
-    {
-        if (Placeholder.ContainsMarker(argument))
-        {
-            return false;
-        }
-        if (CollectionsModel.IsExplicitPath(argument))
-        {
-            return true;
-        }
-        try
-        {
-            return File.Exists(argument) || Directory.Exists(argument);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        {
-            return false;
-        }
-    }
+    private static bool LooksLikeAPath(string argument) =>
+        !Placeholder.ContainsMarker(argument)
+        && (ConnectorTarget.IsExplicitPath(argument) || argument is "." or ".."
+            || argument.StartsWith(".\\", StringComparison.Ordinal) || argument.StartsWith("..\\", StringComparison.Ordinal)
+            || argument.StartsWith("\\\\", StringComparison.Ordinal));
 
     /// <summary>A connector's recorded marks by the text each was made on, in NFC; where two share a text, the first in pointer order speaks for both.</summary>
     private static Dictionary<string, PublishIntent.PathMark> MarksByValue(IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark> marks)
@@ -970,14 +993,14 @@ public sealed class PublishModel : ObservableObject
         return byValue;
     }
 
-    /// <summary>"path", then "path_2", "path_3" — numbered inside each connector, since a recipient fills one connector's placeholders at a time.</summary>
+    /// <summary>"path", then "path_2", "path_3" - numbered inside each connector, since a recipient fills one connector's placeholders at a time.</summary>
     private static string DefaultPathName(int index) =>
         index <= 1 ? "path" : "path_" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// A legal placeholder name out of whatever the author typed: anything outside
     /// <c>[A-Za-z0-9_]</c> becomes "_" (a leading digit is legal in a marker name). Empty for a
-    /// name that is only whitespace — there is nothing there to make a name out of.
+    /// name that is only whitespace - there is nothing there to make a name out of.
     /// </summary>
     internal static string PlaceholderName(string typed)
     {

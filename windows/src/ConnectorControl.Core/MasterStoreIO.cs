@@ -18,8 +18,8 @@ public static class MasterStoreIO
         try
         {
             // A decoded-but-inconsistent activeCollection (hand-edited or corrupted
-            // file) is self-healed by the MasterStore constructor itself — see
-            // its comment — so FromJson always returns a store whose
+            // file) is self-healed by the MasterStore constructor itself - see
+            // its comment - so FromJson always returns a store whose
             // ActiveCollection names an existing collection.
             var store = MasterStore.FromJson(JsonValue.Parse(File.ReadAllBytes(path)));
             return (store, null);
@@ -33,7 +33,7 @@ public static class MasterStoreIO
                 File.Move(path, aside, overwrite: false);
                 return (MasterStore.Empty(), aside);
             }
-            catch (Exception moveEx) when (moveEx is IOException or UnauthorizedAccessException)
+            catch (Exception moveEx) when (FileSystemErrors.IsTransient(moveEx))
             {
                 return (MasterStore.Empty(), path);   // couldn't move it aside; it stays in place
             }
@@ -44,7 +44,7 @@ public static class MasterStoreIO
 
     /// <summary>
     /// Side-effect-free peek: null when missing or undecodable. Unlike
-    /// <see cref="Load"/>, never moves a corrupt file aside — used by the
+    /// <see cref="Load"/>, never moves a corrupt file aside - used by the
     /// store watcher to classify an on-disk change (own write echo, external
     /// edit, or a sync tool's mid-write partial) before deciding to adopt it.
     /// </summary>

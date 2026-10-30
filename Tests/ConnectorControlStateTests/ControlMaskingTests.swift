@@ -223,7 +223,7 @@ final class ControlMaskingTests: XCTestCase {
 
     /// In the dialog a single value reads one way only, as an argument does: the command, a URL, a
     /// key's text value and a variable's name are quoted, with \ and ' escaped, when they hold a
-    /// space, a quote or anything shown as an escape — so a newline and the two characters \n read
+    /// space, a quote or anything shown as an escape - so a newline and the two characters \n read
     /// apart, and a run of spaces cannot pass for the start of another row. What Claude and the
     /// command line read is unchanged.
     func testTheDialogShowsASingleValueOneWayOnly() {
@@ -474,8 +474,8 @@ final class ControlMaskingTests: XCTestCase {
         }
     }
 
-    /// Every masked view of `config` — its structured form, its code lines and its change lines
-    /// from nothing — without any of `secrets`.
+    /// Every masked view of `config` - its structured form, its code lines and its change lines
+    /// from nothing - without any of `secrets`.
     private func assertHidden(_ secrets: [String], in config: JSONValue,
                               file: StaticString = #filePath, line: UInt = #line) throws {
         let structured = try XCTUnwrap(String(data: try ControlMasking.maskedConfig(config).serialized(), encoding: .utf8))
@@ -627,7 +627,7 @@ final class ControlMaskingTests: XCTestCase {
         }
     }
 
-    /// JSON passed as an argument — Smithery's `run <server> --config '{"apiKey":"…"}'` — is masked
+    /// JSON passed as an argument - Smithery's `run <server> --config '{"apiKey":"…"}'` - is masked
     /// leaf by leaf, by key, as a config is; JSON with nothing to mask reads as written.
     func testAJSONArgumentIsMaskedByKey() throws {
         let smithery = ["-y", "@smithery/cli", "run", "@x/server", "--config", #"{"apiKey":"sk_abc123","region":"us"}"#]
@@ -785,10 +785,138 @@ final class ControlMaskingTests: XCTestCase {
         XCTAssertEqual(ControlMasking.arguments(["--token=abc", "server.js"]), ["--token=•••", "server.js"])
     }
 
-    /// Text that starts with a bracket but is not JSON — an IPv6 literal, a glob — reads as written.
+    /// Text that starts with a bracket but is not JSON - an IPv6 literal, a glob, a template, an INI
+    /// section, a PowerShell type literal, a test bracket - reads as written, as an argument, inside
+    /// a shell line and as any other string in a config.
     func testBracketedValuesThatAreNotJSONReadAsWritten() {
         XCTAssertEqual(ControlMasking.arguments(["--host", "[::1]"]), ["--host", "[::1]"])
         XCTAssertEqual(ControlMasking.arguments(["--listen", "[::]:8080"]), ["--listen", "[::]:8080"])
         XCTAssertEqual(ControlMasking.argument("{src,lib}/**/*.ts"), "{src,lib}/**/*.ts")
+        let plain = [
+            ["-c", "exec server --bind [::1]:8080"], ["--include", "{src,lib}/**/*.ts"], ["--format", "{{json .}}"], ["[default]"],
+            ["-Command", "[Net.ServicePointManager]::SecurityProtocol = 'Tls12'; iex x"],
+            ["-c", "python -c '[print(i) for i in x]'"], ["-c", "[ -f x ] && run"], ["--config", "{region: 'us'}"],
+        ]
+        for args in plain { XCTAssertEqual(ControlMasking.arguments(args), args) }
+        let config = JSONValue.object(["command": .string("x"), "cwd": .string("[workspace]"), "glob": .string("{a,b}")])
+        XCTAssertEqual(ControlMasking.maskedConfig(config), config)
+    }
+
+    /// A `Name: value` argument whose name is a secret's or signs in is a header wherever it stands
+    /// (M-1a), so its value is hidden after a flag the masking doesn't know; another reads as written.
+    func testAHeaderShapedArgumentIsMaskedAfterAnyFlag() throws {
+        XCTAssertEqual(ControlMasking.arguments(["--http-header", "X-Api-Key: hunter2"]), ["--http-header", "X-Api-Key: •••"])
+        XCTAssertEqual(ControlMasking.argument("x-api-key: hunter2"), "x-api-key: •••")
+        XCTAssertEqual(ControlMasking.argument("Cookie: sid=hunter2"), "Cookie: •••")
+        XCTAssertEqual(ControlMasking.argument("--http-header=X-Api-Key: hunter2"), "--http-header=X-Api-Key: •••")
+        for text in ["X-Team: blue", "localhost:8080", "C:\\Users\\x", "X-Api-Key: ${KEY}", "12:30"] {
+            XCTAssertEqual(ControlMasking.argument(text), text)
+        }
+        // Only a whole word of the name counts, and a scope word or a path is not a header's value.
+        let plain = [["-v", "secrets:/run/secrets"], ["-v", "ssh-keys:/root/.ssh:ro"], ["--opt", "keycloak:8080"], ["--opt", "keydb:6379"],
+                     ["--opt", "author:x"], ["--opt", "keyword:x"], ["--scopes", "token:read"],
+                     ["--scopes", "tokens:read users:write"]]
+        for args in plain { XCTAssertEqual(ControlMasking.arguments(args), args) }
+        // A digit ends a word of the name, so `auth0` reads as `auth` and its value is hidden.
+        for (text, shown) in [("password:admin", "password: •••"), ("passphrase:admin", "passphrase: •••"), ("pwd:all", "pwd: •••"), ("password:/hunter2", "password: •••"), ("X-Api-Key:/Abc9xYz1QwErTy7UiOp3AsDf", "X-Api-Key: •••"), ("token1:hunter2", "token1: •••"), ("apiKey2:hunter2", "apiKey2: •••"), ("auth0:domain", "auth0: •••"), ("apiKey:hunter2", "apiKey: •••"), ("Authorization: hunter2", "Authorization: •••"),
+                              ("password:hunter2", "password: •••"), ("X-Auth-Token: hunter2", "X-Auth-Token: •••")] {
+            XCTAssertEqual(ControlMasking.arguments(["--opt", text]), ["--opt", shown])
+        }
+        try assertHidden(["hunter2"], in: local("npx", ["s", "--http-header", "X-Api-Key: hunter2", "x-api-key: hunter2"]))
+        try assertHidden(["hunter2"], in: local("sh", ["-c", "npx s --http-header 'Cookie: sid=hunter2'"]))
+    }
+
+    /// A user and password with no scheme (M-1b) - after curl's `-u` or `--user`, or before an `@`
+    /// as a URL's user info - hides the password; a uid:gid pair and an address read as written.
+    func testACredentialPairWithNoSchemeIsMasked() throws {
+        XCTAssertEqual(ControlMasking.arguments(["--user", "admin:hunter2"]), ["--user", "admin:•••"])
+        XCTAssertEqual(ControlMasking.arguments(["-u", "admin:hunter2"]), ["-u", "admin:•••"])
+        XCTAssertEqual(ControlMasking.argument("--user=admin:hunter2"), "--user=admin:•••")
+        XCTAssertEqual(ControlMasking.argument("curl -u admin:hunter2 https://x"), "curl -u admin:••• https://x")
+        XCTAssertEqual(ControlMasking.arguments(["--dsn", "admin:hunter2@db/x"]), ["--dsn", "admin:•••@db/x"])
+        for args in [["-u", "1000:1000"], ["-u", "admin"], ["--user", "admin:${PW}"], ["-u", "${CC_NEEDS:creds}"], ["--user=${CC_NEEDS:creds}"], ["git@github.com:org/repo.git"], ["a@b.example"],
+                     ["--user", "node:node"], ["--user", "1000:node"], ["--user", "1000:www-data"], ["--user", "www-data:www-data"], ["-update:true"], ["-useLegacy:yes"],
+                     ["-url=http://localhost:8080"], ["-upstream=localhost:8080"], ["-user=node:node"]] {
+            XCTAssertEqual(ControlMasking.arguments(args), args)
+        }
+        XCTAssertEqual(ControlMasking.arguments(["-u", "admin:123456"]), ["-u", "admin:•••"])
+        XCTAssertEqual(ControlMasking.arguments(["-u", "123456:hunter2"]), ["-u", "123456:•••"])
+        XCTAssertEqual(ControlMasking.argument("--user=123:hunter2"), "--user=123:•••")
+        XCTAssertEqual(ControlMasking.argument("-uadmin:pa=ss"), "-uadmin:•••")
+        try assertHidden(["hunter2"], in: local("sh", ["-c", "curl -u 123456:hunter2 https://x"]))
+        XCTAssertEqual(ControlMasking.arguments(["-u", "https://u:hunter2@h"]), ["-u", "https://u:•••@h"])
+        XCTAssertEqual(ControlMasking.arguments(["-uadmin:hunter2", "--proxy-user", "admin:hunter2"]), ["-uadmin:•••", "--proxy-user", "admin:•••"])
+        XCTAssertEqual(ControlMasking.arguments(["-c", "admin:hunter2@db --token mysecretvalue"]), ["-c", "admin:•••@db --token •••"])
+        XCTAssertEqual(ControlMasking.argument("--db=admin:hunter2@db --token mysecretvalue"), "--db=admin:•••@db --token •••")
+        try assertHidden(["hunter2", "mysecretvalue"], in: local("sh", ["-c", "curl -uadmin:hunter2 https://x; admin:hunter2@db --token mysecretvalue"]))
+        try assertHidden(["hunter2"], in: local("curl", ["-u", "admin:hunter2", "--user", "root:hunter2", "--dsn", "admin:hunter2@db/x"]))
+        try assertHidden(["hunter2"], in: local("sh", ["-c", "curl -u admin:hunter2 https://x"]))
+    }
+
+    /// Text that starts with `{` or `[` and is not JSON - JSON5, unquoted keys, broken JSON - is
+    /// hidden whole when a key in it is named for a secret (M-1c), and reads as written otherwise.
+    func testJSONLikeTextWithASecretNamedKeyIsHidden() throws {
+        XCTAssertEqual(ControlMasking.arguments(["--config", "{apiKey: 'hunter2'}"]), ["--config", "•••"])
+        XCTAssertEqual(ControlMasking.argument(#"{"apiKey": "hunter2""#), "•••")
+        XCTAssertEqual(ControlMasking.argument("{password=hunter2}"), "•••")
+        XCTAssertEqual(ControlMasking.argument("[{'token': 'hunter2'}]"), "•••")
+        XCTAssertEqual(ControlMasking.argument("{env: {DB_URL: 'hunter2'}}"), "•••")
+        XCTAssertEqual(ControlMasking.argument("{Headers: {X: 'hunter2'}}"), "•••")
+        XCTAssertEqual(ControlMasking.argument("{region: 'us', port: 8080}"), "{region: 'us', port: 8080}")
+        try assertHidden(["hunter2"], in: local("npx", ["-y", "@smithery/cli", "run", "x", "--config", "{apiKey: 'hunter2'}"]))
+        try assertHidden(["hunter2"], in: bare("npx -y @smithery/cli run x --config \"{apiKey: 'hunter2'}\""))
+        try assertHidden(["hunter2"], in: .object(["command": .string("x"), "opts": .string("{apiKey: 'hunter2'}")]))
+        // Known gap: unquoted in a shell line, the shell splits it at the space, so the value is a
+        // word of its own after a word that is only a key.
+        XCTAssertEqual(ControlMasking.argument("npx s --config {apiKey: hunter2}"), "npx s --config ••• hunter2}")
+    }
+
+    /// A shell default for a variable named for a secret (M-1d), or one that reads as a secret, is
+    /// hidden; the reference itself, and any other default, read as written.
+    func testAShellDefaultForASecretIsMasked() throws {
+        XCTAssertEqual(ControlMasking.argument("${DB_PASSWORD:-hunter2}"), "${DB_PASSWORD:-•••}")
+        XCTAssertEqual(ControlMasking.argument("${API_TOKEN-hunter2}"), "${API_TOKEN-•••}")
+        XCTAssertEqual(ControlMasking.argument("--db=${DB_PASSWORD:-hunter2}"), "--db=${DB_PASSWORD:-•••}")
+        XCTAssertEqual(ControlMasking.argument("${PATH_X:-sk-live-abc}"), "${PATH_X:-•••}")
+        for text in ["${PORT:-8080}", "${DB_PASSWORD:-${OTHER}}", "${DB_PASSWORD}", "${HOME:-/tmp}"] {
+            XCTAssertEqual(ControlMasking.argument(text), text)
+        }
+        try assertHidden(["hunter2"], in: local("node", ["s.js", "${DB_PASSWORD:-hunter2}", "${API_TOKEN:=hunter2}", "${X_KEY=hunter2}"]))
+        try assertHidden(["hunter2"], in: local("sh", ["-c", "exec srv ${DB_PASSWORD:-hunter2}"]))
+    }
+
+    /// In a shell line, a backslash before a space joins the words a hidden value spans (M-1e), so
+    /// the rest of it is hidden too; a backslash elsewhere is a Windows path's and reads as written.
+    func testABackslashEscapedSpaceInAHiddenValueHidesTheRest() throws {
+        XCTAssertEqual(ControlMasking.argument("srv --api-key hunter\\ two"), "srv --api-key ••• •••")
+        XCTAssertEqual(ControlMasking.argument("srv --api-key a\\ b\\ c --port 80"), "srv --api-key ••• ••• ••• --port 80")
+        XCTAssertEqual(ControlMasking.argument("dir C:\\ /s"), "dir C:\\ /s")
+        try assertHidden(["two"], in: local("sh", ["-c", "srv --api-key hunter\\ two"]))
+    }
+
+    /// Known gap (M-1f, over-masking, not a leak): `API_KEY=x npx s` in one argument is masked past
+    /// its first word, since it cannot be told from `API_KEY=my secret value`, which must stay hidden whole.
+    func testAnAssignmentBeforeACommandInOneArgumentIsMaskedWhole() {
+        XCTAssertEqual(ControlMasking.arguments(["-c", "API_KEY=x npx s"]), ["-c", "API_KEY=•••"])
+    }
+
+    /// `env` and `headers` in any case, and `envs`, hold secrets (M-1g), wherever they sit.
+    func testMisCasedEnvironmentAndHeaderKeysAreMasked() throws {
+        let config = JSONValue.object([
+            "command": .string("x"), "Env": .object(["A": .string("hunter2")]), "envs": .object(["B": .string("hunter2")]),
+            "HEADERS": .object(["C": .string("hunter2")]), "nested": .object(["Env": .object(["D": .string("hunter2")])]),
+        ])
+        XCTAssertEqual(ControlMasking.maskedConfig(config).value(at: JSONPointer(["Env", "A"])), .string("set"))
+        try assertHidden(["hunter2"], in: config)
+    }
+
+    /// A run of scheme words after a flag named for a secret hides the word after it (M-a). Known
+    /// gaps, each a config that does not work as written: a value after `--`, and a second word
+    /// after the scheme word and its value, read as any argument does.
+    func testARunOfSchemeWordsHidesTheValueAfterIt() throws {
+        XCTAssertEqual(ControlMasking.arguments(["--auth", "Token", "Token", "hunter2"]), ["--auth", "•••", "•••", "•••"])
+        try assertHidden(["hunter2"], in: local("sh", ["--auth", "Token", "Token", "hunter2"]))
+        XCTAssertEqual(ControlMasking.arguments(["--password", "Basic", "--", "hunter2"]), ["--password", "•••", "--", "hunter2"])
+        XCTAssertEqual(ControlMasking.arguments(["--auth", "Token", "abc", "def"]), ["--auth", "•••", "•••", "def"])
     }
 }

@@ -21,9 +21,19 @@ public final class PublishModel: ObservableObject {
     public static let cancelButton = "Cancel"
     /// This sheet's own folder picker, not the failed-publish banner's button of the same words:
     /// a sheet's buttons are its model's, as Settings' and the Import sheet's already are.
-    public static let chooseFolderButton = "Choose Folder"
+    public static let chooseFolderButton = "Choose Folder…"
     /// What a screen reader says for the bare tick beside a path row, which has no visible label.
     public static let markPathLabel = "Mark as a path this machine supplies"
+    // A screen reader's names for a row's controls: the visible row says which connector and
+    // variable it is by position alone, and the tick's own words are a bare "share value".
+    public static func shareValueRowLabel(_ connector: String, _ name: String) -> String { "Share value of \(name) in \(connector)" }
+    public static func hintRowLabel(_ connector: String, _ subject: String) -> String { "Hint for \(subject) in \(connector)" }
+    public static func pathNameRowLabel(_ connector: String, _ subject: String) -> String { "Placeholder name for \(subject) in \(connector)" }
+    public static func markPathRowLabel(_ connector: String, _ value: String) -> String { "Mark \(value) in \(connector) as a path this machine supplies" }
+    // The sheet's lists of entries it holds on: each answer is named by the entry it answers.
+    public static func forgetMarkRowLabel(_ connector: String, _ name: String) -> String { "Forget mark \(name) in \(connector)" }
+    public static func releaseValueRowLabel(_ connector: String, _ value: String) -> String { "Release \(value) in \(connector)" }
+    public static func useDirectoryTokenRowLabel(_ connector: String, _ value: String) -> String { "Use ${COLLECTION_DIR} for \(value) in \(connector)" }
     /// The button beside an unresolved mark's note: drop the mark and let the path travel as the
     /// preview shows it.
     public static let forgetMarkButton = "Forget Mark"
@@ -152,7 +162,7 @@ public final class PublishModel: ObservableObject {
 
     /// Publishing binds the collection to a folder it rewrites on every change; exporting writes
     /// the same document once, wherever the save panel says, and binds nothing. The sheet is the
-    /// same sheet because the decision the author is making — what travels — is the same one, so
+    /// same sheet because the decision the author is making - what travels - is the same one, so
     /// the mode is the model's, and with it which title, which gate and which verb.
     public enum Mode {
         case publish
@@ -165,7 +175,7 @@ public final class PublishModel: ObservableObject {
     public let mode: Mode
     /// The connectors this sheet speaks for: the Export sheet's ticked subset, or nil for the
     /// whole collection. Publishing always writes the whole collection, so a model built with a
-    /// subset is an export's — `publish()` on one would record an intent that speaks for only
+    /// subset is an export's - `publish()` on one would record an intent that speaks for only
     /// part of what the document carries.
     public let connectors: [String]?
     /// Where the document is written, nil until the user chooses. Settable: the sheet's Choose
@@ -203,7 +213,7 @@ public final class PublishModel: ObservableObject {
     /// mark's name only while the author has not typed one of their own.
     private let namesAtOpen: [String: String]
     /// Each connector as the sheet showed it, by name: what its Publish reviews. One that arrives or
-    /// changes under the open sheet — from the other machine, or an editor — was never in front of
+    /// changes under the open sheet - from the other machine, or an editor - was never in front of
     /// the author as it stands (`AppState.sheetReview(of:intent:shown:after:)`). The sheet's own
     /// rewrite of a connector refreshes its entry, as it refreshes the rows.
     private var shown: [String: JSONValue]
@@ -223,8 +233,8 @@ public final class PublishModel: ObservableObject {
         var lost: [UnresolvedMark] = []
         // What this machine keeps back from the collection's document: its lists of marked paths
         // and the folders it binds. A row holding one of them starts ticked even when the record
-        // no longer marks it — the other machine may have dropped the mark while this one still
-        // sends the path — so the author unticks it on purpose, in view of the preview, or it
+        // no longer marks it - the other machine may have dropped the mark while this one still
+        // sends the path - so the author unticks it on purpose, in view of the preview, or it
         // stays a placeholder.
         let denied = Set(state.keptBack(for: collection).values.map(KeptValue.nfc))
         let held = PublishModel.held(in: state, collection, only: connectors)
@@ -315,7 +325,7 @@ public final class PublishModel: ObservableObject {
 
     public var hasPathRows: Bool { !pathRows.isEmpty }
 
-    /// The eight characters of the origin the footer shows — enough to tell one publisher's
+    /// The eight characters of the origin the footer shows - enough to tell one publisher's
     /// document from another's at a glance, which is all the footer is for. Empty until the
     /// collection has published once, because that is when the origin is minted. Read from the
     /// publish record rather than through `exportDocument`, which carries the same value and
@@ -355,9 +365,9 @@ public final class PublishModel: ObservableObject {
     }
 
     /// The lost marks still unanswered, one note each, in connector then pointer order. A lost
-    /// mark is answered by its own tick — a path row of its connector ticked since the sheet
+    /// mark is answered by its own tick - a path row of its connector ticked since the sheet
     /// opened, with a name the placeholder can carry, each tick answering the next lost mark in
-    /// pointer order — or by forgetting it. Unticking the row puts it back.
+    /// pointer order - or by forgetting it. Unticking the row puts it back.
     public var unresolvedMarks: [UnresolvedMark] {
         let answered = Set(pathRows.compactMap { row in
             row.marked && !PublishModel.placeholderName(row.name).isEmpty ? answers[row.id] : nil
@@ -420,7 +430,7 @@ public final class PublishModel: ObservableObject {
     /// sheet's own hint for a hint, and otherwise in the connector itself, saved as an editor
     /// save is and applied to Claude's config when the collection is the active one. The author's
     /// own edit, in view of the preview. nil when the token is written; otherwise the entry's
-    /// note, which says what does answer it — Release for a path kept back, the connector's
+    /// note, which says what does answer it - Release for a path kept back, the connector's
     /// editor for a folder this sheet cannot reach.
     public func useDirectoryToken(_ kept: KeptPath) -> String? {
         guard kept.kind == .folder else { return note(for: kept) }
@@ -493,8 +503,8 @@ public final class PublishModel: ObservableObject {
     /// A folder of this collection's own is never released, whatever the view offers: it is
     /// answered by `useDirectoryToken`, or by writing `${COLLECTION_DIR}` in the connector's
     /// editor. nil when the path is released; otherwise a folder entry's note for where it sits,
-    /// and nothing changes. A folder's note even where the list shows it as a path kept back — a
-    /// copy of a ticked one — since that note's own answer is the Release just refused.
+    /// and nothing changes. A folder's note even where the list shows it as a path kept back - a
+    /// copy of a ticked one - since that note's own answer is the Release just refused.
     @discardableResult
     public func releaseKeptPath(_ value: String) -> String? {
         let text = KeptValue.nfc(value)
@@ -569,8 +579,8 @@ public final class PublishModel: ObservableObject {
 
     /// The document itself, as the editor would show it. Every byte that leaves this machine is
     /// in here, kept paths included, so the author reads them before releasing any
-    /// (`keptPaths`). When the ticks can no longer be placed — the collection changed under the
-    /// open sheet, or a ticked path is also copied unticked — there is no document, and the
+    /// (`keptPaths`). When the ticks can no longer be placed - the collection changed under the
+    /// open sheet, or a ticked path is also copied unticked - there is no document, and the
     /// preview says why rather than showing one that would not be written.
     public var preview: String {
         do {
@@ -609,7 +619,7 @@ public final class PublishModel: ObservableObject {
     }
 
     /// What the exporter cannot know is a secret: a value that looks like a credential and is
-    /// about to travel. Never an edit — the author decides.
+    /// about to travel. Never an edit - the author decides.
     public var warnings: [String] {
         let intent = self.intent
         let held = PublishModel.held(in: state, collection, only: connectors)
@@ -639,7 +649,7 @@ public final class PublishModel: ObservableObject {
         }
         // The same folder, already publishing: the ticks go on record, and then the document is
         // written whether or not it changed. Pressing Publish again is how a write that failed is
-        // retried, and by then nothing about the document is different — only the folder is.
+        // retried, and by then nothing about the document is different - only the folder is.
         _ = state.updatePublishIntent(collection, intent: intent, reviewedValues: reviewedValues, releasedValues: letGo,
                                       shown: shown)
         return state.republish(collection)
@@ -682,11 +692,16 @@ public final class PublishModel: ObservableObject {
     }
 
     /// An argument worth offering as machine-specific: it is written as a path, by the same rule
-    /// the Collections window's target column uses, or something by that name is on this disk. A
-    /// flag or a URL is neither.
+    /// the Collections window's target column uses, or it is `.` or `..`, or starts with `.\`,
+    /// `..\` or a network path's `\\`. Read from the text alone: the disk is never asked about a
+    /// relative argument, since it would be resolved against this process's working directory - "/"
+    /// for an app the Finder starts - and offer `usr` or `tmp` on one machine and not another. A
+    /// bare word, a flag or a URL is none of these.
     private static func looksLikeAPath(_ argument: String) -> Bool {
         if Placeholder.containsMarker(argument) { return false }
-        return CollectionsModel.isExplicitPath(argument) || FileManager.default.fileExists(atPath: argument)
+        // By Unicode scalar, as the Windows mirror compares by UTF-16 unit.
+        return ConnectorTarget.isExplicitPath(argument) || argument == "." || argument == ".."
+            || [".\\", "..\\", "\\\\"].contains { argument.unicodeScalars.starts(with: $0.unicodeScalars) }
     }
 
     /// A connector's recorded marks by the text each was made on, in NFC; where two share a text,
@@ -703,7 +718,7 @@ public final class PublishModel: ObservableObject {
         marks.sorted { $0.key.description.ordinallyPrecedes($1.key.description) }
     }
 
-    /// "path", then "path_2", "path_3" — numbered inside each connector, since a recipient fills
+    /// "path", then "path_2", "path_3" - numbered inside each connector, since a recipient fills
     /// one connector's placeholders at a time.
     private static func defaultPathName(_ index: Int) -> String {
         index <= 1 ? "path" : "path_\(index)"
@@ -711,7 +726,7 @@ public final class PublishModel: ObservableObject {
 
     /// A legal placeholder name out of whatever the author typed: anything outside
     /// `[A-Za-z0-9_]` becomes "_" (a leading digit is legal in a marker name). Empty for a name
-    /// that is only whitespace — there is nothing there to make a name out of.
+    /// that is only whitespace - there is nothing there to make a name out of.
     static func placeholderName(_ typed: String) -> String {
         let trimmed = typed.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return "" }

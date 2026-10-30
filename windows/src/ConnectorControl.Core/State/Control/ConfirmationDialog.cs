@@ -3,8 +3,8 @@ namespace ConnectorControl.Core.State;
 /// <summary>
 /// A confirmation as the app draws it, from the question the tools put: the title and message with
 /// every name set apart and none longer than <see cref="NameLimit"/>, the lines of what would run, each with its
-/// kind, and the closing line. The views draw it with Don’t Allow the default — Return and Escape
-/// answer it, and so does closing the window — and every paragraph left to right, whatever a name
+/// kind, and the closing line. The views draw it with Don’t Allow the default - Return and Escape
+/// answer it, and so does closing the window - and every paragraph left to right, whatever a name
 /// begins with, so a name that starts right to left cannot turn the sentence around it. What is
 /// compared on Allow is the request, never this: the cut is drawing only.
 ///
@@ -51,8 +51,8 @@ public sealed class ConfirmationDialog : IEquatable<ConfirmationDialog>
 
     /// <summary>How much room every code line's box adds above and below the code face's own line of <paramref name="lineHeight"/>:
     /// a quarter of a line, rounded up, when any of <paramref name="lines"/> holds a letter of a script the code face may not
-    /// have (<see cref="HoldsOtherScript"/>), drawn in a fallback face that can reach past the code face's line — Chinese,
-    /// Arabic, Devanagari, Thai and the like — and none otherwise, so Latin text reads as tightly as ever. The room is
+    /// have (<see cref="HoldsOtherScript"/>), drawn in a fallback face that can reach past the code face's line - Chinese,
+    /// Arabic, Devanagari, Thai and the like - and none otherwise, so Latin text reads as tightly as ever. The room is
     /// fixed rather than measured: WPF reports a fallback face's letters with the code face's own line metrics, so
     /// neither platform can measure it alike, and a fixed room is the same on both. Marks never make room, so a
     /// line's box, which clips what it holds, stays bounded.</summary>
@@ -68,7 +68,7 @@ public sealed class ConfirmationDialog : IEquatable<ConfirmationDialog>
             or (>= 0xFF00 and <= 0xFFEF) or (>= 0x10000 and <= 0x10FFFF));
 
     /// <summary>Whether <paramref name="line"/> holds a character of the blocks where the strong right-to-left letters
-    /// are — Hebrew, Arabic, Syriac, Thaana, NKo and the rest to U+08FF, their presentation forms, and their
+    /// are - Hebrew, Arabic, Syriac, Thaana, NKo and the rest to U+08FF, their presentation forms, and their
     /// ranges beyond the Basic Plane. Explicit ranges, the same as the Mac mirror's, so neither platform leans
     /// on its own Unicode tables; a mark or digit inside them only wraps a line that needed no wrapper, which
     /// changes nothing it shows.</summary>
@@ -76,7 +76,7 @@ public sealed class ConfirmationDialog : IEquatable<ConfirmationDialog>
         scalar is (>= 0x0590 and <= 0x08FF) or (>= 0xFB1D and <= 0xFDFF) or (>= 0xFE70 and <= 0xFEFF)
             or (>= 0x10800 and <= 0x10FFF) or (>= 0x1E800 and <= 0x1EFFF));
 
-    /// <summary>A line a change removes or adds, by the prefix the change lines give it — at the line's start,
+    /// <summary>A line a change removes or adds, by the prefix the change lines give it - at the line's start,
     /// or after the one indent an update's lines take under their heading; any other is plain. Only a
     /// change line starts so: a line that continues a field is padded past the widest label, deeper
     /// than either. A key that itself reads as a change line is coloured as one, which says nothing its

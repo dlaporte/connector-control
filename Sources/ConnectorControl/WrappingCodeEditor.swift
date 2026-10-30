@@ -17,6 +17,13 @@ struct WrappingCodeEditor: NSViewRepresentable {
         tv.isAutomaticQuoteSubstitutionEnabled = false
         tv.isAutomaticDashSubstitutionEnabled = false
         tv.isAutomaticTextReplacementEnabled = false
+        // Hand-edited JSON: nothing may rewrite tokens, and Cmd-Z must work.
+        tv.isAutomaticSpellingCorrectionEnabled = false
+        tv.isContinuousSpellCheckingEnabled = false
+        tv.isAutomaticLinkDetectionEnabled = false
+        tv.isAutomaticDataDetectionEnabled = false
+        tv.isAutomaticTextCompletionEnabled = false
+        tv.allowsUndo = true
         tv.font = .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
         tv.textContainerInset = NSSize(width: 4, height: 6)
         tv.isVerticallyResizable = true

@@ -13,7 +13,6 @@ namespace ConnectorControl.App.Services;
 public sealed class ClaudeProcess : IClaudeProcess
 {
     public const string MainWindowTitle = "Claude";
-    public const string DidNotQuitMessage = "Claude didn’t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again.";
     public const string NotInstalledMessage = "Claude Desktop was not found on this PC.";
     /// <summary>
     /// The reason a settings.json AUMID is refused. Phrased for the user who typed it: the fix is the
@@ -52,7 +51,7 @@ public sealed class ClaudeProcess : IClaudeProcess
 
     /// <summary>
     /// Whether Claude is running and, when it is, the earliest start time across its processes
-    /// (Electron spawns several within a couple of seconds), in UTC — from one process
+    /// (Electron spawns several within a couple of seconds), in UTC - from one process
     /// enumeration rather than two.
     /// </summary>
     public ClaudeProcessSnapshot Snapshot() =>
@@ -151,7 +150,7 @@ public sealed class ClaudeProcess : IClaudeProcess
             var quit = await Task.Run(() => QuitAndWait(info, cancellationToken), cancellationToken).ConfigureAwait(false);
             if (!quit)
             {
-                return DidNotQuitMessage;
+                return ClaudePublisher.DidNotQuitMessage;
             }
         }
         return Launch(target, aumid);
@@ -198,8 +197,8 @@ public sealed class ClaudeProcess : IClaudeProcess
     }
 
     /// <summary>
-    /// Claude's processes: the right image name, in this logon session, and —
-    /// when the install location is known — running from it. Without the
+    /// Claude's processes: the right image name, in this logon session, and -
+    /// when the install location is known - running from it. Without the
     /// location filter the Claude Code CLI (also <c>claude.exe</c>) and another
     /// logged-on user's Claude Desktop would both count as ours.
     /// </summary>

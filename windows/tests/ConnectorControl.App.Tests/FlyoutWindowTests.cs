@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ConnectorControl.App.Services;
@@ -40,8 +41,8 @@ public class FlyoutWindowTests
 
     /// <summary>
     /// One flyout with its pickers recorded instead of shown, hidden however the body ends, and
-    /// never both visible and active while it lives. Closing it only hides it — OnClosing cancels
-    /// while the app is alive — so the helper does both. <paramref name="rows"/> buys the real
+    /// never both visible and active while it lives. Closing it only hides it - OnClosing cancels
+    /// while the app is alive - so the helper does both. <paramref name="rows"/> buys the real
     /// layout pass an ItemsControl needs before it generates any container.
     /// </summary>
     private static void Showing(AppStateHarness h, AppState state,
@@ -58,7 +59,7 @@ public class FlyoutWindowTests
         {
             // Bindings settle first, while nothing of ours is on screen, because that is the step
             // that pumps. Between Show and Hide there is no pump at all: UpdateLayout runs the
-            // real layout pass — the one that generates the rows — synchronously.
+            // real layout pass - the one that generates the rows - synchronously.
             Layout(window);
             if (rows)
             {
@@ -185,7 +186,9 @@ public class FlyoutWindowTests
             var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates, h.Dialogs));
             Layout(window);
             Assert.Equal(Visibility.Visible, window.FooterPanel.Visibility);
-            Assert.Equal("Apply Failed — Retry", window.FooterTitle.Text);
+            Assert.Equal("Apply Failed - Retry", window.FooterTitle.Text);
+            // A button built from a glyph and a title has no name of its own: it speaks the title.
+            Assert.Equal("Apply Failed - Retry", AutomationProperties.GetName(window.FooterButton));
             Assert.Equal(Visibility.Visible, window.ErrorBanner.Visibility);
         });
     }
@@ -264,6 +267,7 @@ public class FlyoutWindowTests
         WpfApp.Invoke(() => Showing(h, state, (window, model, _) =>
         {
             Assert.Equal("Default", window.CollectionChipName.Text);
+            Assert.Equal("Default", AutomationProperties.GetName(window.CollectionChip));
             Assert.Equal(Visibility.Collapsed, window.CollectionChipChain.Visibility);
             Assert.Equal(Visibility.Collapsed, window.CollectionChipDot.Visibility);
 
@@ -278,6 +282,9 @@ public class FlyoutWindowTests
             Assert.NotNull(source);
             Assert.Equal(FlyoutModel.SourceTooltipFormat(source), window.CollectionChipChain.ToolTip);
             Assert.Equal(FlyoutModel.SourceTooltipFormat(source), AutomationProperties.GetName(window.CollectionChipChain));
+            // The chip itself speaks its collection, with where the document is as help text.
+            Assert.Equal("Data team", AutomationProperties.GetName(window.CollectionChip));
+            Assert.Equal(FlyoutModel.SourceTooltipFormat(source), AutomationProperties.GetHelpText(window.CollectionChip));
             Assert.Equal(Visibility.Collapsed, window.CollectionChipDot.Visibility);   // nothing waiting yet
 
             state.SwitchCollection("Default");
@@ -354,7 +361,7 @@ public class FlyoutWindowTests
         using var state = h.Create();
         SubscribeToDataTeam(h, state);
         state.SwitchCollection("Data team");
-        // The document changes under the collection, read back through Refresh — the same read
+        // The document changes under the collection, read back through Refresh - the same read
         // the watcher would drive, without waiting for one.
         File.WriteAllBytes(DataTeamPath(h), Without("github").Serialize());
         state.RefreshSource("Data team");
@@ -370,6 +377,7 @@ public class FlyoutWindowTests
             Assert.Equal(Visibility.Collapsed, window.CollectionBannerSecondary.Visibility);
             Assert.Equal(Visibility.Visible, window.CollectionChipDot.Visibility);
             Assert.Equal(FlyoutModel.PendingSpokenLabel, AutomationProperties.GetName(window.CollectionChipDot));
+            Assert.Equal("Data team" + FlyoutModel.PendingMenuMark, AutomationProperties.GetName(window.CollectionChip));
 
             // So does the menu: a dot that speaks, and a row whose name carries the same words.
             var row = window.BuildCollectionMenu().Items.OfType<MenuItem>().First();
@@ -505,7 +513,7 @@ public class FlyoutWindowTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         SubscribeToDataTeam(h, state);
-        // This machine forgets where the document is — the state a second machine is in when the
+        // This machine forgets where the document is - the state a second machine is in when the
         // collection arrives through the synced master list. The file sits outside the store's
         // folder, so nothing binds it again on its own.
         File.Delete(state.Service.Paths.CollectionsCachePath);
@@ -669,12 +677,59 @@ public class FlyoutWindowTests
                 Assert.NotNull(state.LastError);
                 Assert.Equal(Visibility.Collapsed, window.ClaudeOfferStrip.Visibility);
                 Assert.Equal(Visibility.Visible, window.FooterPanel.Visibility);
-                Assert.Equal("Apply Failed — Retry", window.FooterTitle.Text);
+                Assert.Equal("Apply Failed - Retry", window.FooterTitle.Text);
             }
             finally
             {
                 window.Close();
             }
         });
+    }
+
+    /// <summary>
+    /// A key pressed on an element as the keyboard delivers it - tunnelling first, then bubbling
+    /// unless something took it on the way down. The window's source stands in for the element's:
+    /// an open menu's own popup window may not exist yet.
+    /// </summary>
+    private static void Press(Window window, UIElement target, Key key)
+    {
+        var source = PresentationSource.FromVisual(window)!;
+        var preview = new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, key) { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+        target.RaiseEvent(preview);
+        if (!preview.Handled)
+        {
+            target.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, key) { RoutedEvent = Keyboard.KeyDownEvent });
+        }
+    }
+
+    /// <summary>
+    /// Escape in the open collection menu closes the menu and leaves the flyout up, as on the Mac;
+    /// with nothing open, Escape dismisses the flyout. An open menu routes its keys through the
+    /// chip to this window, which used to take Escape on its way down, ahead of the menu.
+    /// </summary>
+    [Fact]
+    public void EscapeClosesTheCollectionMenuBeforeItHidesTheFlyout()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        WpfApp.Invoke(() => Showing(h, state, (window, _, _) =>
+        {
+            window.ShowActivated = false;   // visible, never active: see Showing
+            window.Show();
+            window.UpdateLayout();
+            var menu = window.OpenCollectionMenu();
+            try
+            {
+                Press(window, menu, Key.Escape);
+                Assert.True(window.IsVisible);
+            }
+            finally
+            {
+                menu.IsOpen = false;   // leave nothing behind in the shared WPF host
+            }
+
+            Press(window, window.CollectionChip, Key.Escape);
+            Assert.False(window.IsVisible);
+        }));
     }
 }

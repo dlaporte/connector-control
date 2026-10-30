@@ -98,7 +98,7 @@ final class RemoteAuthTests: XCTestCase {
     func testBearerPlusExtraHeaderPreservesBoth() {
         // A bearer auth (our sentinel pattern) plus a hand-added literal header.
         // The bearer must decode as auth; the extra header must survive verbatim
-        // as an extra arg — not clobber the bearer or steal its env var.
+        // as an extra arg - not clobber the bearer or steal its env var.
         let config = JSONValue.object([
             "command": .string("npx"),
             "args": .array([.string("-y"), .string("mcp-remote"),
@@ -122,7 +122,7 @@ final class RemoteAuthTests: XCTestCase {
 
     func testUnrecognizedHeaderEnvVarIsPreservedNotFabricated() {
         // A header using a NON-sentinel env var must be left as an extra arg and
-        // its env var kept in passthrough — never resolved into the auth slot.
+        // its env var kept in passthrough - never resolved into the auth slot.
         let config = JSONValue.object([
             "command": .string("npx"),
             "args": .array([.string("-y"), .string("mcp-remote"),

@@ -90,6 +90,7 @@ struct PopoverView: View {
                 }
                 if model.activeHasPendingUpdate { PendingDot() }
                 Text(PopoverView.disclosureMark)
+                    .accessibilityHidden(true)
             }
             .font(.caption2.weight(.semibold))
             .foregroundStyle(.secondary)
@@ -99,12 +100,12 @@ struct PopoverView: View {
         .padding(.top, 1)
     }
 
-    /// The collections to switch between, then the window that owns everything else —
+    /// The collections to switch between, then the window that owns everything else -
     /// creating, renaming, deleting, and the document commands included.
     @ViewBuilder private var collectionMenu: some View {
         ForEach(model.collectionItems) { item in
             // A macOS menu row is one title and one image. The check is the item's state rather
-            // than an image — which is what a Toggle in a menu becomes — so the image is free for
+            // than an image - which is what a Toggle in a menu becomes - so the image is free for
             // the chain, and a pending update is words in the model's title instead of a dot.
             Toggle(isOn: activeBinding(item)) {
                 if item.isSynced {
@@ -185,7 +186,7 @@ struct PopoverView: View {
 
     /// The banner's first button. True says the news needs nothing from the file system and the
     /// Collections window is the whole answer; false says this view owes a panel, and which one
-    /// is what the banner is — the model then refuses anything that is not what it asked for.
+    /// is what the banner is - the model then refuses anything that is not what it asked for.
     private func runBannerAction() {
         if model.collectionBannerAction() {
             openCollections()
@@ -235,7 +236,7 @@ struct PopoverView: View {
         // A bare ScrollView collapses here: the MenuBarExtra window sizes to
         // the content's IDEAL height and a ScrollView's ideal is zero. So the
         // list's natural height is measured and the ScrollView gets an
-        // explicit frame — growing with content up to the cap, scrolling past.
+        // explicit frame - growing with content up to the cap, scrolling past.
         ScrollView {
             VStack(spacing: 0) {
                 ForEach(model.rows) { row in

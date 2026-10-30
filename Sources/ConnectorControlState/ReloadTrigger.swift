@@ -1,4 +1,4 @@
-/// Why a reload is running — controls reconciliation authority and which
+/// Why a reload is running - controls reconciliation authority and which
 /// notifications may fire.
 public enum ReloadTrigger: Sendable {
     /// Launch, popover open, or the Claude-config watcher.

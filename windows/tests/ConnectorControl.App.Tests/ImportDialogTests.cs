@@ -35,8 +35,8 @@ public class ImportDialogTests
 
     /// <summary>
     /// A click, in the two halves WPF splits it into: the state the tick lands in, and the Click a
-    /// real one also raises. The sheet listens to neither — the tick writes through to the row,
-    /// which notifies — so the raise is here to keep the test a click rather than an assignment.
+    /// real one also raises. The sheet listens to neither - the tick writes through to the row,
+    /// which notifies - so the raise is here to keep the test a click rather than an assignment.
     /// </summary>
     private static void ClickTick(ToggleButton tick, bool on)
     {
@@ -83,10 +83,11 @@ public class ImportDialogTests
             Assert.Equal(Visibility.Visible, window.CopiesBody.Visibility);
             Assert.Equal(Visibility.Collapsed, window.SyncBody.Visibility);
             Assert.Equal(new ImportModel.Target("Default"), window.TargetBox.SelectedItem);
-            // Every local collection, then New Collection, drawn by its title.
+            // Every local collection, then New Collection, drawn by its title (no "…": choosing it
+            // asks for nothing until Import is pressed).
             Assert.Equal([new ImportModel.Target("Default"), ImportModel.Target.NewCollection],
                 window.TargetBox.Items.Cast<ImportModel.Target>());
-            Assert.Equal(CollectionsModel.NewButton, ImportModel.Target.NewCollection.ToString());
+            Assert.Equal(AppState.NewCollectionTitle, ImportModel.Target.NewCollection.ToString());
             // What is already there is not imported by default, so three of the four are ticked.
             Assert.Equal(ImportModel.ImportButton(3), window.ImportButton.Content);
             Assert.True(window.ImportButton.IsEnabled);
@@ -177,7 +178,7 @@ public class ImportDialogTests
             Assert.Equal(ImportModel.ReplaceKeepsValues, replaceNote.Text);
             Assert.Equal(Visibility.Visible, replaceNote.Visibility);
 
-            // Only Replace keeps what the user filled in, so only Replace says so — and the
+            // Only Replace keeps what the user filled in, so only Replace says so - and the
             // choice reaches the row it was made on.
             choiceBox.SelectedItem = ImportChoice.KeepBoth;
             Layout(window);

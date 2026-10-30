@@ -8,16 +8,17 @@
     windows-build.yml's smoke job, for both a release and a preview, runs this two ways:
       * The win-x64 package it just built: the full flow below.
       * The win-arm64 package, which cannot be installed on the x64 runner that job uses:
-        -SignatureOnly -SetupExe <path> only — no install, no launch, just the signature check.
+        -SignatureOnly -SetupExe <path> only - no install, no launch, just the signature check.
 
     The full flow:
       1. INSTALL assertions, always run. Setup.exe --silent →
          %LOCALAPPDATA%\ConnectorControl\{Update.exe, current\ConnectorControl.exe, current\sq.version},
          with the version and channel read back out of sq.version. The Run key relies on
-         current\ConnectorControl.exe being the stable path it records: asserted here.
+         current\ConnectorControl.exe being the stable path it records: asserted here. So is the
+         Start-menu shortcut's target: current\ConnectorControl.exe itself, not a launcher that runs Update.exe.
       2. LAUNCH assertions. This starts current\ConnectorControl.exe against a throwaway Claude
-         config and master-list folder (CONNECTOR_CONTROL_CLAUDE_CONFIG / CONNECTOR_CONTROL_STORE_DIR
-         — the same env overrides AppPaths honours), polls up to -Seconds for the first-run
+         config and master-list folder (CONNECTOR_CONTROL_CLAUDE_CONFIG / CONNECTOR_CONTROL_STORE_DIR -
+         the same env overrides AppPaths honours), polls up to -Seconds for the first-run
          import to write <store>\mcps.json, and asserts:
            a. the process is still alive;
            b. no crash.log under %LOCALAPPDATA%\Connector Control;
@@ -30,15 +31,15 @@
            h. the relay, fed a handshake and a call on standard input, answers the call.
          The relay is bounded: one that does not answer in time is killed and fails the run.
          Deliberately NOT asserted, because a passive first run does not produce them:
-           * backups\claude_desktop_config.original.json — ConfigService.Apply is the only caller
+           * backups\claude_desktop_config.original.json - ConfigService.Apply is the only caller
              of EnsureOriginalSnapshot, and AppState.Reload calls PerformApply only when the file
              and the store disagree, which they do not immediately after an import. (It would also
              be in the wrong place: with CONNECTOR_CONTROL_STORE_DIR set, AppPaths puts backups
              under the sandbox store, not under %LOCALAPPDATA%\Connector Control.)
-           * settings.json — written last of all, by FirstRunTip, so asserting it turns any
+           * settings.json - written last of all, by FirstRunTip, so asserting it turns any
              tray-layer problem into a confusing store-layer failure.
          Both are on the manual PC checklist instead, after a real toggle.
-      3. With -ExpectSigned: the installed exe's own signature, then a package verification —
+      3. With -ExpectSigned: the installed exe's own signature, then a package verification -
          the installed exe checks this build's own full package with --verify-package, the same
          rule VelopackUpdater applies to a downloaded update. Running the app's own check here,
          rather than a second copy of it in PowerShell, means the two cannot drift apart.
@@ -46,10 +47,9 @@
          ends the app's processes first and only then runs the uninstall hook, so the app is gone when the
          hook takes the entry out of Claude's config, the copy's folder out of the user PATH and deletes the
          copy. Asserted: the app exited, the entry is gone and the rest of the config kept, bin\ is gone,
-         the PATH is clean, nothing wrote to Claude's config afterwards, and crash.log (in the data folder,
-         which the uninstall keeps) is still absent, since the hook logs only a failure.
-      5. a safety stop of the process if it somehow still runs. (The logs are copied to -LogDir before the
-         uninstall, which deletes the install root.)
+         the PATH is clean, nothing wrote to Claude's config afterwards, the Start-menu shortcut is gone, and crash.log (in the data folder,
+         which the uninstall keeps) is still absent, since the hook logs only a failure. (The logs are
+         copied to -LogDir before the uninstall, which deletes the install root.)
     Prints "SMOKE PASS" and exits 0; any failed assertion throws.
 
 .PARAMETER SetupExe      The ConnectorControl-<rid>-Setup.exe to check or install.
@@ -77,9 +77,9 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-# `taskkill` without /F legitimately exits non-zero against a process with no window to close,
-# and PowerShell 7.4+ (the runner has 7.6) would turn that into a terminating error while
-# $ErrorActionPreference is 'Stop'. Native exit codes are handled explicitly below instead.
+# PowerShell 7.4+ (the runner has 7.6) turns a non-zero native exit code into a terminating error
+# while $ErrorActionPreference is 'Stop'. Native exit codes are asserted explicitly below instead,
+# so a failure names the command.
 $PSNativeCommandUseErrorActionPreference = $false
 
 function Assert-True {
@@ -124,6 +124,17 @@ Assert-True (Test-Path (Join-Path $installRoot 'Update.exe')) "Update.exe sits b
 $manifest = Get-Content (Join-Path $installRoot 'current/sq.version') -Raw
 Assert-True ($manifest -match "<version>$([regex]::Escape($Version))</version>") "sq.version carries version $Version"
 Assert-True ($manifest -match "<channel>$([regex]::Escape($Channel))</channel>") "sq.version carries channel $Channel"
+# Velopack 1.2.x points the Start-menu shortcut at current\ConnectorControl.exe itself (shortcuts.rs, get_main_exe_path).
+# The install root also gets a stub launcher named after the pack title, which starts Update.exe, but nothing Velopack
+# makes points at it. Asserted because the updater's recovery (VelopackUpdater) counts on it: an Update.exe a refused
+# update left in place is run only by an uninstall or an apply, never by an ordinary launch.
+$startMenuShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Connector Control.lnk'
+Assert-True (Test-Path $startMenuShortcut) "the Start-menu shortcut is $startMenuShortcut"
+$link = (New-Object -ComObject WScript.Shell).CreateShortcut($startMenuShortcut)
+Write-Host "     shortcut: $($link.TargetPath) in $($link.WorkingDirectory)"
+Assert-True ([System.IO.Path]::GetFullPath($link.TargetPath) -eq [System.IO.Path]::GetFullPath($exe)) "the shortcut starts $exe, not a launcher that runs Update.exe (got '$($link.TargetPath)')"
+$stubLauncher = Join-Path $installRoot 'Connector Control.exe'
+Write-Host "     stub launcher at the install root: $(if (Test-Path $stubLauncher) { $stubLauncher } else { '(none)' })"
 if ($ExpectSigned) {
     $exeSignature = Get-AuthenticodeSignature -FilePath $exe
     Assert-True ($exeSignature.Status -eq 'Valid') "installed ConnectorControl.exe is signed"
@@ -287,28 +298,15 @@ while ((Get-Date) -lt $settleUntil) { Start-Sleep -Milliseconds 500 }
 Assert-True ((Get-FileHash $claudeConfig).Hash -eq $configAfterHook -and (Get-Item $claudeConfig).LastWriteTimeUtc -eq $writtenAfterHook) "nothing touched Claude's config after the hook"
 Assert-True (-not ((Get-ServerNames) -contains 'connector-control')) "and the entry has not come back"
 Assert-True (-not (Test-Path $bin)) "nor the copy"
+Assert-True (-not (Test-Path $startMenuShortcut)) "the uninstall took the Start-menu shortcut"
 
-Write-Host "== Stop"
-$stopTimeoutMs = 15000   # generous margin over how long a graceful WM_CLOSE-style shutdown should ever take
-# The uninstall has normally ended the app already; taskkill on a dead PID would leave $LASTEXITCODE at 128, which
-# the CI shell's trailing `exit $LASTEXITCODE` would turn into a failed step after SMOKE PASS.
-if (-not $app.HasExited) {
-    & taskkill.exe /PID $app.Id | Out-Null      # graceful first: posts WM_CLOSE to the process's windows
-    if (-not $app.WaitForExit($stopTimeoutMs)) {
-        # Expected for a tray app: with no top-level window, taskkill reports "can only be
-        # terminated forcefully" and exits non-zero. That is the normal path here, not a failure.
-        Write-Host "     graceful taskkill did not stop it (a tray app has no window to close); forcing"
-        & taskkill.exe /PID $app.Id /F | Out-Null
-    }
-}
-Assert-True ($app.WaitForExit($stopTimeoutMs)) "the process exited within $($stopTimeoutMs / 1000) s"
-# A clean run says nothing to crash.log: not the copy, not the hook (which logs only a failure), not the stop.
+# A clean run says nothing to crash.log: not the copy, not the hook (which logs only a failure).
 if (Test-Path $crashLog) {
     Write-Host "--- crash.log ---"
     Get-Content $crashLog | Write-Host
     Copy-Item $crashLog (Join-Path $LogDir 'crash.log')
 }
-Assert-True (-not (Test-Path $crashLog)) "still no crash.log after the uninstall and the stop"
+Assert-True (-not (Test-Path $crashLog)) "still no crash.log after the uninstall"
 
 Write-Host "SMOKE PASS"
 # Explicit: the CI shell ends with $LASTEXITCODE, which a native command above may have left non-zero.

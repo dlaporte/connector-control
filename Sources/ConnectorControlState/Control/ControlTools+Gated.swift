@@ -5,14 +5,14 @@ import ConnectorControlCore
 ///
 /// The writes that change what a connector runs, or what Claude could run: connectors, deleting a
 /// collection, importing, subscribing, applying an update, restoring a backup, and the restart.
-/// Each is prepared in full before anyone is asked: every refusal, then the question — who is
-/// asking, for what, and exactly what would run, with secrets masked — then the change itself,
+/// Each is prepared in full before anyone is asked: every refusal, then the question - who is
+/// asking, for what, and exactly what would run, with secrets masked - then the change itself,
 /// which runs only on Allow (or with confirmations off, or for the command-line tool; never
 /// unasked for the restart Claude asks for) and is announced when nobody was asked.
 ///
 /// The question, the answer and the announcement name connectors, collections and the asker as
-/// others chose them — Claude names connectors, creates and renames collections without asking, and
-/// any client names itself — so every name goes through `ControlText.escapedName(_:)`, and the asker
+/// others chose them - Claude names connectors, creates and renames collections without asking, and
+/// any client names itself - so every name goes through `ControlText.escapedName(_:)`, and the asker
 /// arrives as `ControlCaller.shownAsker`, escaped and framed already: none can break a line, reorder
 /// or hide text, or close its own quotes.
 extension ControlTools {
@@ -74,27 +74,6 @@ extension ControlTools {
         return nil
     }
 
-    // Platform idiom: text is compared scalar by scalar, as the Windows mirror compares it ordinally;
-    // Swift's == holds canonically equivalent text equal, which would refuse a change as no change.
-    /// Whether two configs are the same, value for value.
-    static func identical(_ one: JSONValue, _ other: JSONValue) -> Bool {
-        switch (one, other) {
-        case (.string(let a), .string(let b)):
-            return ControlMasking.same(a, b)
-        case (.array(let a), .array(let b)):
-            return a.count == b.count && zip(a, b).allSatisfy { identical($0, $1) }
-        case (.object(let a), .object(let b)):
-            let keys = a.keys.sorted { $0.ordinallyPrecedes($1) }
-            let otherKeys = b.keys.sorted { $0.ordinallyPrecedes($1) }
-            return keys.count == otherKeys.count && zip(keys, otherKeys).allSatisfy { key, otherKey in
-                guard ControlMasking.same(key, otherKey), let value = a[key], let otherValue = b[otherKey] else { return false }
-                return identical(value, otherValue)
-            }
-        default:
-            return one == other
-        }
-    }
-
     /// The collection a connector tool works in: the one named, else the active one.
     func targetCollection(_ arguments: ControlArguments) -> String {
         arguments.string("collection") ?? state.activeCollection
@@ -104,7 +83,7 @@ extension ControlTools {
         let collection = targetCollection(arguments)
         let shownCollection = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shownCollection)) }
-        guard !state.isSynced(collection) else { return .refused(CollectionsModel.addConnectorDisabledTooltip) }
+        guard !state.isSynced(collection) else { return .refused(ControlTools.subscribedAddError(shownCollection)) }
         let name = (arguments.string("name") ?? "").trimmingCharacters(in: .whitespaces)
         let shownName = ControlText.escapedName(name)
         guard !name.isEmpty else { return .refused(AppState.nameEmptyError) }
@@ -141,7 +120,7 @@ extension ControlTools {
         let collection = targetCollection(arguments)
         let shownCollection = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shownCollection)) }
-        guard !state.isSynced(collection) else { return .refused(CollectionsModel.lockedGlyphTooltip) }
+        guard !state.isSynced(collection) else { return .refused(ControlTools.subscribedChangeError(shownCollection)) }
         let name = arguments.string("name") ?? ""
         let shownName = ControlText.escapedName(name)
         guard let current = held.mcps[name] else { return .refused(ControlTools.noConnectorError(shownName, shownCollection)) }
@@ -158,7 +137,7 @@ extension ControlTools {
         let after = config ?? current.config
         // "Unchanged" compares the configs themselves, not the rendered lines: every difference is a
         // change, whether or not a line can show it.
-        let reconfigured = !ControlTools.identical(after, current.config)
+        let reconfigured = after != current.config
         guard renamed || reconfigured else { return .refused(ControlTools.unchangedError(shownName)) }
         let changes = ControlMasking.changeLines(from: current.config, to: after, exposure: .dialog)
         let active = collection == state.activeCollection
@@ -191,7 +170,7 @@ extension ControlTools {
         let collection = targetCollection(arguments)
         let shownCollection = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shownCollection)) }
-        guard !state.isSynced(collection) else { return .refused(CollectionsModel.lockedGlyphTooltip) }
+        guard !state.isSynced(collection) else { return .refused(ControlTools.subscribedChangeError(shownCollection)) }
         var names: [String] = []
         for name in arguments.strings("names") ?? [] where !names.contains(name) { names.append(name) }
         guard !names.isEmpty else { return .refused(ControlTools.missingArgumentError("names")) }
@@ -314,9 +293,9 @@ extension ControlTools {
 
     public static func restartTitle(_ shownAsker: String) -> String { "\(shownAsker) wants to restart Claude Desktop" }
 
-    /// A connector as a question lists it: its name in quotes, through `ControlText.quotedList(_:)`
-    /// — so no name can close its quotes, break its line, or pass for a line of what a connector
-    /// runs, which are indented under it — then what becomes of it, when that is said.
+    /// A connector as a question lists it: its name in quotes, through `ControlText.quotedList(_:)` -
+    /// so no name can close its quotes, break its line, or pass for a line of what a connector
+    /// runs, which are indented under it - then what becomes of it, when that is said.
     static func connectorHeading(_ name: String, _ detail: String? = nil) -> String {
         let quoted = ControlText.quotedList([name])
         return detail.map { ControlTools.detail(quoted, ControlText.escaped($0)) } ?? quoted
@@ -358,7 +337,7 @@ extension ControlTools {
     }
 
     /// The collection's own Delete: the window's question, refused first for what the window
-    /// refuses. A subscribed collection's file is never touched, nor a published one's — the window
+    /// refuses. A subscribed collection's file is never touched, nor a published one's - the window
     /// asks whether that one goes too, and nothing here asks twice, so it stays, as Keep leaves it.
     func deleteCollection(_ arguments: ControlArguments, _ shownAsker: String) -> ControlStep {
         let collection = arguments.string("collection") ?? ""
@@ -397,7 +376,7 @@ extension ControlTools {
 
     /// Why the document at `url` is not read, or nil to read it, found with a stat before anything
     /// opens it, so no path can stall the app or reach what is not a file: it must be a regular
-    /// file, or a link to one — not a folder, a FIFO, a device, or a link to one — of at most
+    /// file, or a link to one - not a folder, a FIFO, a device, or a link to one - of at most
     /// `McpSession.maxMessageBytes`, the most a message carries. A path with nothing there is left
     /// to the read, which says so in the system's words.
     static func documentFileRefusal(_ url: URL) -> String? {
@@ -411,6 +390,39 @@ extension ControlTools {
         return status.st_size > Int64(McpSession.maxMessageBytes) ? documentTooLargeError(file) : nil
     }
 
+    /// A collection document `import_document` and `subscribe_document` were asked to read, read.
+    struct DocumentArgument {
+        let url: URL
+        /// The file's name, escaped for the app's quotes.
+        let file: String
+        let document: CollectionDocument
+        /// The bytes that stand for what the question cannot show, the document's masked values among them.
+        let bytes: Data
+    }
+
+    /// The document a non-empty `path` argument names, read, or why it is not: the one way both
+    /// import_document and subscribe_document reach a file, so a guard added here holds for both.
+    static func readDocumentArgument(_ path: String) -> (read: DocumentArgument?, refusal: String?) {
+        // Platform idiom: a URL takes any text, and the read below refuses what names no file; the
+        // Windows mirror first refuses a path .NET cannot make full.
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        // Platform idiom: the Windows mirror first refuses, by its form, a path that reaches another computer
+        // or a device: the relay any that starts with \\ or \??\ once made full - opening one has Windows
+        // sign in to that host as the user, with nothing asked - and every caller a \\.\ path or a
+        // \\?\ or \??\ path to anything but a drive or a share. A Mac path has no such form, so this takes
+        // no caller. A path under /Volumes is a share the person mounted themselves; one under /net is
+        // mounted by autofs on first access, but as an NFS mount that sends none of the person's
+        // credentials, so neither signs in anywhere on their behalf. A device is refused below as not a
+        // regular file.
+        if let refusal = documentFileRefusal(url) { return (nil, refusal) }
+        let file = ControlText.escapedName(url.lastPathComponent)
+        let (read, bytes, failure) = AppState.readDocument(at: url)
+        guard let document = read, let bytes else {
+            return (nil, shown(failure ?? EditorModel.notValidJSON, leadingWith: url.lastPathComponent))
+        }
+        return (DocumentArgument(url: url, file: file, document: document, bytes: bytes), nil)
+    }
+
     func importDocument(_ arguments: ControlArguments, _ caller: ControlCaller) -> ControlStep {
         let path = arguments.string("path") ?? ""
         // An empty path names the working folder here and is no path at all on Windows: refused
@@ -420,22 +432,9 @@ extension ControlTools {
         guard arguments.string("into") == nil || arguments.string("newCollection") == nil else {
             return .refused(ControlTools.intoOrNewCollectionError)
         }
-        // Platform idiom: a URL takes any text, and the read below refuses what names no file; the
-        // Windows mirror first refuses a path .NET cannot make full.
-        let url = URL(fileURLWithPath: path).standardizedFileURL
-        // Platform idiom: the Windows mirror first refuses, by its form, a path that reaches another computer
-        // or a device: the relay any that starts with \\ or \??\ once made full — opening one has Windows
-        // sign in to that host as the user, with nothing asked — and every caller a \\.\ path or a
-        // \\?\ or \??\ path to anything but a drive or a share. A Mac path has no such form. A path under
-        // /Volumes is a share the person mounted themselves; one under /net is mounted by autofs on first
-        // access, but as an NFS mount that sends none of the person's credentials, so neither signs in
-        // anywhere on their behalf. A device is refused below as not a regular file.
-        if let refusal = ControlTools.documentFileRefusal(url) { return .refused(refusal) }
-        let file = ControlText.escapedName(url.lastPathComponent)
-        let (read, bytes, failure) = AppState.readDocument(at: url)
-        guard let document = read, let bytes else {
-            return .refused(ControlTools.shown(failure ?? EditorModel.notValidJSON, leadingWith: url.lastPathComponent))
-        }
+        let (read, refusal) = ControlTools.readDocumentArgument(path)
+        guard let read else { return .refused(refusal ?? EditorModel.notValidJSON) }
+        let (url, file, document, bytes) = (read.url, read.file, read.document, read.bytes)
         let newCollection = arguments.string("newCollection").map(MasterStore.collectionName)
         let target: String
         if let newCollection {
@@ -499,15 +498,9 @@ extension ControlTools {
         let path = arguments.string("path") ?? ""
         // As import_document refuses it.
         guard !path.isEmpty else { return .refused(ControlTools.missingArgumentError("path")) }
-        // Platform idiom: as import_document reads it.
-        let url = URL(fileURLWithPath: path).standardizedFileURL
-        // As import_document checks it.
-        if let refusal = ControlTools.documentFileRefusal(url) { return .refused(refusal) }
-        let file = ControlText.escapedName(url.lastPathComponent)
-        let (read, bytes, failure) = AppState.readDocument(at: url)
-        guard let document = read, let bytes else {
-            return .refused(ControlTools.shown(failure ?? EditorModel.notValidJSON, leadingWith: url.lastPathComponent))
-        }
+        let (read, refusal) = ControlTools.readDocumentArgument(path)
+        guard let read else { return .refused(refusal ?? EditorModel.notValidJSON) }
+        let (url, file, document, bytes) = (read.url, read.file, read.document, read.bytes)
         // AppState's own rules, asked here as well, so the refusal comes before the question.
         if let origin = document.origin, state.collectionsFile.collections.values.contains(where: { $0.publish?.origin == origin }) {
             return .refused(AppState.ownCollectionError)
@@ -543,11 +536,7 @@ extension ControlTools {
         let shown = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shown)) }
         guard state.isSynced(collection) else { return .refused(ControlTools.notSubscribedError(shown)) }
-        if let problem = state.sourceErrors[collection] {
-            // The problem names the document's file.
-            let file = state.sourceBinding(of: collection)?.path.map { URL(fileURLWithPath: $0).lastPathComponent }
-            return .refused(file.map { ControlTools.shown(problem, leadingWith: $0) } ?? ControlText.escaped(problem))
-        }
+        if let problem = sourceProblem(collection) { return .refused(problem) }
         guard let diff = state.pendingUpdates[collection] else { return .refused(ControlTools.noUpdateError(shown)) }
         // Connector by connector, as the Review sheet shows an update: every entry is a command
         // Claude will run. A document that moves under the question then asks a different one, so
@@ -602,7 +591,7 @@ extension ControlTools {
         }
         // Only an id the list gives: never a path, so nothing outside the backups folder is read.
         // Compared scalar by scalar, as the Windows mirror compares ordinally.
-        guard let backup = urls.first(where: { ControlMasking.same($0.lastPathComponent, id) }) else {
+        guard let backup = urls.first(where: { $0.lastPathComponent.hasSameScalars(as: id) }) else {
             return .refused(ControlTools.noBackupError(shownID))
         }
         // The backup's record, read once: the refusal, the question and the restore all follow it.

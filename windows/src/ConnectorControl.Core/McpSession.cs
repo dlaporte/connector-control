@@ -42,8 +42,6 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
     public const int InternalErrorCode = -32603;
     public const string InternalErrorMessage = "Internal error";
 
-    public static string UnknownToolMessage(string name) => $"Unknown tool: {name}";
-
     /// <summary>The client's own name from <c>initialize</c>, which the gate names as the asker.</summary>
     public string? ClientName { get; private set; }
     public bool IsInitialized { get; private set; }
@@ -68,7 +66,7 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
         JsonValue message;
         try
         {
-            if (!Nests(MaxNestingDepth, trimmed)) { throw new JsonException("Nested too deeply."); }
+            // JsonValue.Parse's reader refuses nesting past MaxNestingDepth itself.
             message = JsonValue.Parse(trimmed);
         }
         catch (JsonException)
@@ -271,8 +269,8 @@ public sealed class McpSession(IMcpToolHost host, string version, Action<string>
         var line = JsonValue.Object(("jsonrpc", JsonValue.String("2.0")), ("id", id), ("result", result)).CompactLine();
         // An answer no client can read is refused, as the client must still hear about its request or it
         // waits on that id for good: one nested deeper than MaxNestingDepth, which every reader of ours
-        // refuses. Platform idiom: a C# JsonValue cannot hold NaN or infinity — JsonValue.Double refuses
-        // them — so the Mac mirror's check for a value JSON cannot hold has nothing to catch here.
+        // refuses. Platform idiom: a C# JsonValue cannot hold NaN or infinity - JsonValue.Double refuses
+        // them - so the Mac mirror's check for a value JSON cannot hold has nothing to catch here.
         if (!Nests(MaxNestingDepth, line))
         {
             Reply(InternalErrorCode, InternalErrorMessage, id);

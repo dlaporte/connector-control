@@ -1,3 +1,5 @@
+using ConnectorControl.Core.Tests.TestSupport;
+
 namespace ConnectorControl.Core.Tests;
 
 /// <summary>Mirror: Tests/ConnectorControlCoreTests/CollectionTests.swift</summary>
@@ -44,7 +46,7 @@ public class CollectionTests
     [Fact]
     public void AddCollectionStartsBlankAndLeavesTheActiveOne()
     {
-        var store = new MasterStore(new Dictionary<string, McpEntry> { ["a"] = Entry("https://a.example/mcp") });
+        var store = MasterStore.Single(new Dictionary<string, McpEntry> { ["a"] = Entry("https://a.example/mcp") });
         Assert.Null(store.AddCollection(" Fresh "));
         Assert.Empty(store.Collections["Fresh"].Mcps);
         Assert.Equal("Default", store.ActiveCollection);

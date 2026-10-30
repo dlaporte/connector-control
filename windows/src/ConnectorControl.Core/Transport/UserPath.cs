@@ -3,7 +3,7 @@ namespace ConnectorControl.Core.Transport;
 /// <summary>
 /// Windows only: the Mac puts the tool on PATH with a link in /usr/local/bin.
 ///
-/// The user PATH as Windows keeps it — entries between semicolons, unexpanded — and one folder in it. An
+/// The user PATH as Windows keeps it - entries between semicolons, unexpanded - and one folder in it. An
 /// entry is the folder whatever its case, quotes, trailing backslash or %VARIABLES%; every other entry is
 /// left exactly as it was written.
 /// </summary>

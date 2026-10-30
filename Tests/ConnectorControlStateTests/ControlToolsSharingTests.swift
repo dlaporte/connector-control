@@ -265,8 +265,8 @@ final class ControlToolsSharingTests: XCTestCase {
     }
 
     /// A FIFO would hold the read until something writes to it, stalling the app: it is refused for
-    /// what it is, before anything opens it. The Windows mirror has no such file — a pipe there is a
-    /// `\\.\` path, which it refuses by its form — so there is no such test there.
+    /// what it is, before anything opens it. The Windows mirror has no such file - a pipe there is a
+    /// `\\.\` path, which it refuses by its form - so there is no such test there.
     func testADocumentPathNamingAFIFOIsRefusedWithoutOpeningIt() throws {
         let rig = rig(); defer { rig.dispose() }
         let fifo = rig.h.dir.file("pipe.json")

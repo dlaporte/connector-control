@@ -6,7 +6,7 @@ public sealed class FormModel : IEquatable<FormModel>
     public string Command { get; }
     public IReadOnlyList<string> Args { get; }
     public IReadOnlyDictionary<string, string> Env { get; }
-    /// <summary>Keys the form has no widget for — preserved verbatim, shown read-only.</summary>
+    /// <summary>Keys the form has no widget for - preserved verbatim, shown read-only.</summary>
     public IReadOnlyDictionary<string, JsonValue> Additional { get; }
 
     public FormModel(

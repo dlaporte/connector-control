@@ -3,7 +3,7 @@ namespace ConnectorControl.Core;
 /// <summary>
 /// How one field of a connector is named to the author.
 ///
-/// The document names a field by its own shape — <c>local.args[1]</c>, <c>remote.auth.clientId</c> —
+/// The document names a field by its own shape - <c>local.args[1]</c>, <c>remote.auth.clientId</c> -
 /// and that shape need not be the one the author edits: a connector the document calls remote opens
 /// in the local form whenever its command line is not the canonical shape the remote form rebuilds.
 /// Where the editor opens a connector in the local form, a field is named as that form shows it;
@@ -61,7 +61,7 @@ public static class FieldName
             return EnvValue(shared);
         }
         // A remote field on a connector the editor opens locally: the text sits in the command line,
-        // where the author edits it. Anything else — an additional field, the platform — has no row
+        // where the author edits it. Anything else - an additional field, the platform - has no row
         // of its own, and the document's name is the honest one.
         if (!field.StartsWith("remote.", StringComparison.Ordinal) || config.Kind != JsonKind.Object)
         {

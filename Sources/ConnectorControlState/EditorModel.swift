@@ -11,10 +11,10 @@ import ConnectorControlCore
 /// Mirror: windows/src/ConnectorControl.Core/State/EditorModel.cs
 @MainActor
 public final class EditorModel: ObservableObject {
-    public static let notValidJSON = "Not valid JSON — check for a stray brace, missing comma, or unquoted value."
-    public static let jsonTip = "Tip: paste a README snippet or an mcpServers stanza — a wrapper or a bare \"name\": {…} entry is unwrapped automatically, and the name filled in."
+    public static let notValidJSON = "Not valid JSON - check for a stray brace, missing comma, or unquoted value."
+    public static let jsonTip = "Tip: paste a README snippet or an mcpServers stanza - a wrapper or a bare \"name\": {…} entry is unwrapped automatically, and the name filled in."
     public static let urlHint = "Enter a valid http(s) URL, e.g. https://example.com/mcp"
-    public static let remoteFooter = "Runs via npx mcp-remote — managed for you."
+    public static let remoteFooter = "Runs via npx mcp-remote - managed for you."
     public static let automaticCaption = "Uses the server's OAuth (a browser window opens on first use), or no auth if the server is open."
     public static let bearerCaption = "Sent as Authorization: Bearer …"
     /// mcp-remote reads --static-oauth-client-info literally (or from an @file); it has no
@@ -64,7 +64,18 @@ public final class EditorModel: ObservableObject {
     /// A screen reader's name for an argument's field, from the row's index: the number beside
     /// it, which the field carries no other label for.
     public static func argumentLabel(_ index: Int) -> String { "Argument \(index + 1)" }
+    /// The delete button beside an argument's field, named by the same number.
+    public static func deleteArgumentRowLabel(_ index: Int) -> String { "Delete argument \(index + 1)" }
     public static let environmentHeader = "Environment Variables"
+
+    // A screen reader's names for an environment row's three controls, from the row's index, for
+    // the reason `argumentLabel` is: nothing visible says which row a bare "Name" belongs to, and
+    // the variable's own name is the author's to retype under the reader's cursor.
+    public static func variableNameLabel(_ index: Int) -> String { "Variable \(index + 1) name" }
+    public static func variableValueLabel(_ index: Int) -> String { "Variable \(index + 1) value" }
+    public static func showVariableValueLabel(_ index: Int) -> String { "Show value of variable \(index + 1)" }
+    public static func hideVariableValueLabel(_ index: Int) -> String { "Hide value of variable \(index + 1)" }
+    public static func deleteVariableRowLabel(_ index: Int) -> String { "Delete variable \(index + 1)" }
     public static let valueLabel = "Value"
     public static let tokenLabel = "Token"
     public static let headerNameLabel = "Header name"
@@ -92,7 +103,7 @@ public final class EditorModel: ObservableObject {
     public static func lockedFieldsNote(_ collection: String) -> String { "Synced from \(collection) · read-only" }
 
     public static func publishedNote(_ folder: String) -> String {
-        "Published to \(folder) — saving updates the file your team reads. Secrets stay here."
+        "Published to \(folder) - saving updates the file your team reads. Secrets stay here."
     }
 
     public static func importedNote(_ collection: String, _ date: String) -> String {
@@ -114,7 +125,7 @@ public final class EditorModel: ObservableObject {
 
     public static func deletedOutsideMessage(_ name: String) -> String { "“\(name)” was deleted outside this editor." }
 
-    public static func additionalTitle(count: Int, keys: [String]) -> String { "\(count) field(s) not editable here: \(keys.joined(separator: ", ")) — switch to JSON to edit" }
+    public static func additionalTitle(count: Int, keys: [String]) -> String { "\(count) field(s) not editable here: \(keys.joined(separator: ", ")) - switch to JSON to edit" }
 
     /// The grey line above the fields, and what it means for what the window may change.
     ///
@@ -140,7 +151,7 @@ public final class EditorModel: ObservableObject {
     /// template's placeholder command/args. Set at open; consumed by the
     /// first discard (below) or by adopting an edited JSON view into the
     /// form, since from then on the command/args are the user's own, not a
-    /// re-derivable property of the current fields — a later Type toggle
+    /// re-derivable property of the current fields - a later Type toggle
     /// must not wipe what they typed. An unchanged JSON round trip (open
     /// JSON, switch straight back) leaves it set.
     private var isUntouchedTemplate: Bool
@@ -163,7 +174,7 @@ public final class EditorModel: ObservableObject {
     private var snapshotWasReadOnly = false
     /// Where each argument sat in the config the window opened on, by row identity. The publish
     /// record keys a path mark by its pointer, so a hint belongs to a position in the document
-    /// that was published, not to whatever position the row holds now — and a published
+    /// that was published, not to whatever position the row holds now - and a published
     /// collection's editor is fully editable, so rows move. Fixed at open and never retaken,
     /// unlike the asked-for snapshot, on the assumption that the published document does not
     /// change under the window. A republish from the Collections window while this editor is
@@ -373,7 +384,7 @@ public final class EditorModel: ObservableObject {
     private static func twins(of target: EditTarget, in state: AppState) -> [String] {
         let collection = target.collection
         // A connector that does not exist yet has no twins, and a synced collection's copy is
-        // its author's — neither offers the checkbox.
+        // its author's - neither offers the checkbox.
         guard !target.isNew, state.kind(of: collection) == .local else { return [] }
         return state.localCollectionNames.filter { other in
             other != collection && state.store.collections[other]?.mcps[target.name]?.config == target.entry.config
@@ -589,7 +600,7 @@ public final class EditorModel: ObservableObject {
         return isRemote ? .npx : ToolRequirement.requiredTool(command: command, args: args.map(\.value))
     }
 
-    /// A change to a different tool re-probes it even if cached — the user may have just installed it.
+    /// A change to a different tool re-probes it even if cached - the user may have just installed it.
     private func evaluateRequiredTool() {
         guard !suppressToolEvaluation else { return }
         let tool = computeRequiredTool()
@@ -599,14 +610,14 @@ public final class EditorModel: ObservableObject {
     }
 
     /// Only a user's picker tap reaches the re-seed below: adoptForm assigns
-    /// isRemote while `view` is still `.json`, so the guard skips it — the same
+    /// isRemote while `view` is still `.json`, so the guard skips it - the same
     /// outcome as the old view (its Type picker is out of the hierarchy while
     /// the JSON view shows) and as EditorModel.cs (which bypasses the setter).
     /// Both directions are tested.
     private func isRemoteChanged(from oldValue: Bool) {
         guard oldValue != isRemote else { return }
         if !isRemote, view == .form, isUntouchedTemplate {
-            // Discard the remote template's bridge invocation — a local
+            // Discard the remote template's bridge invocation - a local
             // server has nothing to do with mcp-remote. The template is
             // consumed by this one discard; from here on the fields are
             // the user's own local form, so a later switch back and forth
@@ -624,7 +635,7 @@ public final class EditorModel: ObservableObject {
 
     public func deleteArg(id: UUID) { args.removeAll { $0.id == id } }
 
-    /// A fresh row's value is shown in clear — the user is typing it, not
+    /// A fresh row's value is shown in clear - the user is typing it, not
     /// inspecting a stored secret. Returns the row the view should focus.
     @discardableResult
     public func addEnvRow() -> UUID {
@@ -646,7 +657,7 @@ public final class EditorModel: ObservableObject {
         guard requested != view else { return }
         if requested == .json {
             // The JSON view renders collapsedEnv(), which cannot represent duplicate
-            // or nameless rows — switching would silently drop them, bypassing the
+            // or nameless rows - switching would silently drop them, bypassing the
             // same validation Save enforces.
             if !isRemote, let envError = envValidationError() {
                 validationError = envError
@@ -685,7 +696,7 @@ public final class EditorModel: ObservableObject {
 
     /// JSON → Form: `load` runs before `view` becomes `.form` (the caller
     /// flips it after this returns), which is what keeps `isRemoteChanged`'s
-    /// bridge-discard branch — gated on `view == .form` — from firing mid-load.
+    /// bridge-discard branch - gated on `view == .form` - from firing mid-load.
     private func adoptForm(_ config: JSONValue) {
         let carried = carriedRecords()
         let argsBefore = args.map(\.value)
@@ -693,7 +704,7 @@ public final class EditorModel: ObservableObject {
         restore(carried)
         if args.map(\.value) != argsBefore { argRowsFollowOpen = false }
         // A JSON edit that changed the config consumes the template, exactly
-        // like a discard would — so a later Type toggle to Local re-derives
+        // like a discard would - so a later Type toggle to Local re-derives
         // nothing and leaves what the user typed alone. An unchanged round
         // trip (config still equal to the template as opened) leaves the
         // flag set.
@@ -703,13 +714,13 @@ public final class EditorModel: ObservableObject {
 
     /// Both row-keyed records, re-keyed onto something a rebuilt row still has. `load` gives every
     /// row a new identity, so without this a JSON round trip would leave the asked-for record and
-    /// the published positions recognising no row at all — a synced form's placeholders would
+    /// the published positions recognising no row at all - a synced form's placeholders would
     /// lock, a published form's argument hints would vanish. They are carried, never retaken: a
     /// retake reads current values and so would unlock nothing the user has already filled.
     ///
     /// Env rows are keyed by name, which is unique within a connector. Arguments are keyed by
-    /// position, which is exact in a synced form — its JSON is read-only, so the round trip is
-    /// always unchanged — and approximate only in an editable published form after a JSON edit
+    /// position, which is exact in a synced form - its JSON is read-only, so the round trip is
+    /// always unchanged - and approximate only in an editable published form after a JSON edit
     /// that inserts, removes or reorders arguments, which is the one case this cannot follow.
     private struct Carried {
         let askedEnvNames: Set<String>
@@ -737,7 +748,7 @@ public final class EditorModel: ObservableObject {
     /// Loads `config` into every form/remote field and (re)computes `isRemote`.
     /// The one shared place `init` and `adoptForm` funnel through, so they
     /// cannot disagree on the isRemote rule or which fields a config fills in.
-    /// Tool evaluation is suppressed for the duration — both callers evaluate
+    /// Tool evaluation is suppressed for the duration - both callers evaluate
     /// once themselves, after `view` (for `computeRequiredTool`'s JSON branch)
     /// is in its final state.
     private func load(_ config: JSONValue) {
@@ -751,7 +762,7 @@ public final class EditorModel: ObservableObject {
         isRemote = detected != nil || (target.forcesRemote && RemotePattern.isRemoteShaped(config))
         // Quirk kept intentionally: remoteURL comes ONLY from detect()'s
         // canonical 2-arg shape, even when isRemote is true via the
-        // forcesRemote/isRemoteShaped fallback above — decode() may have found
+        // forcesRemote/isRemoteShaped fallback above - decode() may have found
         // a real URL past extra flags, but the Server URL field stays blank
         // until the user (re)types it.
         remoteURL = detected ?? ""
@@ -878,7 +889,7 @@ public final class EditorModel: ObservableObject {
 
     // MARK: - Save
 
-    /// The config this window opened on, with the `${CC_NEEDS:…}` leaves — and only those —
+    /// The config this window opened on, with the `${CC_NEEDS:…}` leaves - and only those -
     /// carrying whatever the form now holds at the same JSON pointers. Anything else the fields
     /// have been talked into saying is dropped on the floor, which is the whole point: the
     /// author owns every other byte, and the next refresh would overwrite it anyway.
@@ -979,11 +990,11 @@ public final class EditorModel: ObservableObject {
                              lastEditView: readOnly ? target.entry.lastEditView : view)
         if let error = state.upsert(name: saved, entry: entry, renamedFrom: target.isNew ? nil : target.name,
                                     in: target.collection,
-                                    pathMarks: followedPathMarks(in: collection, saving: config)) {
+                                    pathMarks: followedPathMarks(in: collection, saving: config),
+                                    alsoIn: propagate ? propagatedSaves(of: config) : []) {
             validationError = error
             return false
         }
-        if propagate { propagateSavedConfig(config, as: saved) }
         // Apply, then let the view dismiss on `true`. The old view dismissed first
         // and applied after (and EditorModel.cs raises CloseRequested before it
         // applies); performApply shows no UI, so the order is not observable.
@@ -994,21 +1005,23 @@ public final class EditorModel: ObservableObject {
     /// The ticked checkbox: the same change again in each collection that held an identical
     /// copy when this window opened. Each twin keeps its own on/off state, which is this
     /// machine's business and not part of "this change"; a name already taken in one of them
-    /// leaves that collection alone rather than failing a save that has already landed.
+    /// leaves that collection alone rather than failing the save.
     ///
     /// The checkbox promised these collections held an identical copy, and that was measured when
-    /// the window opened. A twin that has moved since — a second editor window on it saved first,
-    /// or an external edit reconciled in — is no longer the connector the user agreed to change,
+    /// the window opened. A twin that has moved since - a second editor window on it saved first,
+    /// or an external edit reconciled in - is no longer the connector the user agreed to change,
     /// so it is skipped in silence. The same care the primary save takes over its own snapshot.
-    private func propagateSavedConfig(_ config: JSONValue, as saved: String) {
-        for other in propagateTargets {
+    ///
+    /// The twins go to the store with the save itself (`AppState.upsert(…, alsoIn:)`), so the
+    /// master list is written once for all of them.
+    private func propagatedSaves(of config: JSONValue) -> [AppState.PropagatedSave] {
+        propagateTargets.compactMap { other in
             guard let twin = state.store.collections[other]?.mcps[target.name],
-                  twin.config == target.entry.config else { continue }
+                  twin.config == target.entry.config else { return nil }
             // The twin held this window's opening config, so its marks follow the same rows.
-            _ = state.upsert(name: saved,
-                             entry: MCPEntry(enabled: twin.enabled, config: config, lastEditView: view),
-                             renamedFrom: target.name, in: other,
-                             pathMarks: followedPathMarks(in: other, saving: config))
+            return AppState.PropagatedSave(collection: other,
+                                           entry: MCPEntry(enabled: twin.enabled, config: config, lastEditView: view),
+                                           pathMarks: followedPathMarks(in: other, saving: config))
         }
     }
 
@@ -1018,7 +1031,7 @@ public final class EditorModel: ObservableObject {
     /// Each mark is first placed on the arguments the window opened on, the way the exporter
     /// places it, so a mark that had already moved before the window opened is followed from
     /// where it really was. It then goes with its row: to wherever the row sits now, recording
-    /// the row's text as its value — the author may have corrected the path in place — or away
+    /// the row's text as its value - the author may have corrected the path in place - or away
     /// with the row when the row was deleted.
     ///
     /// nil whenever this window cannot vouch for its rows, and publishing then places each mark

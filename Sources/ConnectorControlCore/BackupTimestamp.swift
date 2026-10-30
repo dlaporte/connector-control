@@ -5,7 +5,7 @@ import Foundation
 public enum BackupTimestamp {
     /// UTC, not local time: backup recency is derived from a lexicographic
     /// sort of these stamps, and local wall-clock repeats an hour every DST
-    /// fall-back — during which newer backups would sort older, breaking
+    /// fall-back - during which newer backups would sort older, breaking
     /// dedup's newest-snapshot comparison and prune's keep-newest contract.
     /// Built once: DateFormatter's own setup is not free, and every call here
     /// only reads it.

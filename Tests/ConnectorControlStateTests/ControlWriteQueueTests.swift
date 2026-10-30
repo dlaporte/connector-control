@@ -174,7 +174,7 @@ final class ControlWriteQueueTests: XCTestCase {
         XCTAssertEqual(performed, ["c"])
     }
 
-    /// A write whose connection closed before its turn — a command line stopped with Control-C — is
+    /// A write whose connection closed before its turn - a command line stopped with Control-C - is
     /// dropped unrun: nobody is left to hear of it, and the queue moves on.
     func testAWriteWhoseConnectionClosedBeforeItsTurnIsDroppedUnrun() {
         let rig = ControlRig(); defer { rig.dispose() }
@@ -209,8 +209,8 @@ final class ControlWriteQueueTests: XCTestCase {
     }
 
     /// A relay write waiting its turn whose connection closes before its early answer hears nothing
-    /// more — no progress, no "queued" — and is dropped when its turn comes: Claude was never told it
-    /// was waiting, and a retry after "restarted — try again" must not land it twice.
+    /// more - no progress, no "queued" - and is dropped when its turn comes: Claude was never told it
+    /// was waiting, and a retry after "restarted - try again" must not land it twice.
     func testARelayWriteWhoseConnectionClosesBeforeItsEarlyAnswerIsDropped() {
         let rig = ControlRig(); defer { rig.dispose() }
         controlWrites(rig)

@@ -8,7 +8,7 @@ public struct ConnectorRow: Identifiable, Equatable, Sendable {
     public let name: String
     public let enabled: Bool
     /// The caution glyph's tooltip, or nil for no glyph: this connector's
-    /// launcher is not where Claude Desktop looks. Advisory only — the row
+    /// launcher is not where Claude Desktop looks. Advisory only - the row
     /// still toggles.
     public let toolWarning: String?
     /// Leads the row with a lock: this connector belongs to the author of a synced collection's

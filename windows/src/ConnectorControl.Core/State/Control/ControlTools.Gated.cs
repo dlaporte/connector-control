@@ -5,14 +5,14 @@ namespace ConnectorControl.Core.State;
 /// <summary>
 /// The writes that change what a connector runs, or what Claude could run: connectors, deleting a
 /// collection, importing, subscribing, applying an update, restoring a backup, and the restart.
-/// Each is prepared in full before anyone is asked: every refusal, then the question — who is
-/// asking, for what, and exactly what would run, with secrets masked — then the change itself,
+/// Each is prepared in full before anyone is asked: every refusal, then the question - who is
+/// asking, for what, and exactly what would run, with secrets masked - then the change itself,
 /// which runs only on Allow (or with confirmations off, or for the command-line tool; never
 /// unasked for the restart Claude asks for) and is announced when nobody was asked.
 ///
 /// The question, the answer and the announcement name connectors, collections and the asker as
-/// others chose them — Claude names connectors, creates and renames collections without asking, and
-/// any client names itself — so every name goes through <see cref="ControlText.EscapedName"/>, and the asker
+/// others chose them - Claude names connectors, creates and renames collections without asking, and
+/// any client names itself - so every name goes through <see cref="ControlText.EscapedName"/>, and the asker
 /// arrives as <see cref="ControlCaller.ShownAsker"/>, escaped and framed already: none can break a line, reorder
 /// or hide text, or close its own quotes.
 ///
@@ -99,11 +99,6 @@ public sealed partial class ControlTools
         return null;
     }
 
-    // Platform idiom: JsonValue already compares text ordinally, as the Mac mirror compares it scalar by
-    // scalar; Swift's == would hold canonically equivalent text equal and refuse a change as no change.
-    /// <summary>Whether two configs are the same, value for value.</summary>
-    internal static bool Identical(JsonValue one, JsonValue other) => one == other;
-
     /// <summary>The collection a connector tool works in: the one named, else the active one.</summary>
     internal string TargetCollection(ControlArguments arguments) => arguments.String("collection") ?? state.ActiveCollection;
 
@@ -117,7 +112,7 @@ public sealed partial class ControlTools
         }
         if (state.IsSynced(collection))
         {
-            return new ControlStep.Refused(CollectionsModel.AddConnectorDisabledTooltip);
+            return new ControlStep.Refused(SubscribedAddError(shownCollection));
         }
         var name = (arguments.String("name") ?? "").TrimSpaces();
         var shownName = ControlText.EscapedName(name);
@@ -177,7 +172,7 @@ public sealed partial class ControlTools
         }
         if (state.IsSynced(collection))
         {
-            return new ControlStep.Refused(CollectionsModel.LockedGlyphTooltip);
+            return new ControlStep.Refused(SubscribedChangeError(shownCollection));
         }
         var name = arguments.String("name") ?? "";
         var shownName = ControlText.EscapedName(name);
@@ -197,7 +192,7 @@ public sealed partial class ControlTools
         {
             return new ControlStep.Refused(AppState.NameEmptyError);
         }
-        var renamed = newName != name;
+        var renamed = !Collection.NameComparer.Equals(newName, name);
         if (renamed && newName == ClaudeIntegration.EntryName)
         {
             return new ControlStep.Refused(ClaudeIntegration.ReservedNameError);
@@ -213,7 +208,7 @@ public sealed partial class ControlTools
         var after = config ?? current.Config;
         // "Unchanged" compares the configs themselves, not the rendered lines: every difference is a
         // change, whether or not a line can show it.
-        var reconfigured = !Identical(after, current.Config);
+        var reconfigured = after != current.Config;
         if (!renamed && !reconfigured)
         {
             return new ControlStep.Refused(UnchangedError(shownName));
@@ -262,7 +257,7 @@ public sealed partial class ControlTools
         }
         if (state.IsSynced(collection))
         {
-            return new ControlStep.Refused(CollectionsModel.LockedGlyphTooltip);
+            return new ControlStep.Refused(SubscribedChangeError(shownCollection));
         }
         var names = new List<string>();
         foreach (var name in arguments.Strings("names") ?? [])
@@ -391,9 +386,9 @@ public sealed partial class ControlTools
 
     public static string RestartTitle(string shownAsker) => $"{shownAsker} wants to restart Claude Desktop";
 
-    /// <summary>A connector as a question lists it: its name in quotes, through <see cref="ControlText.QuotedList"/>
-    /// — so no name can close its quotes, break its line, or pass for a line of what a connector
-    /// runs, which are indented under it — then what becomes of it, when that is said.</summary>
+    /// <summary>A connector as a question lists it: its name in quotes, through <see cref="ControlText.QuotedList"/> -
+    /// so no name can close its quotes, break its line, or pass for a line of what a connector
+    /// runs, which are indented under it - then what becomes of it, when that is said.</summary>
     internal static string ConnectorHeading(string name, string? detail = null)
     {
         var quoted = ControlText.QuotedList([name]);
@@ -451,7 +446,7 @@ public sealed partial class ControlTools
     }
 
     /// <summary>The collection's own Delete: the window's question, refused first for what the window
-    /// refuses. A subscribed collection's file is never touched, nor a published one's — the window
+    /// refuses. A subscribed collection's file is never touched, nor a published one's - the window
     /// asks whether that one goes too, and nothing here asks twice, so it stays, as Keep leaves it.</summary>
     private ControlStep DeleteCollection(ControlArguments arguments, string shownAsker)
     {
@@ -528,8 +523,8 @@ public sealed partial class ControlTools
     // one under /net is mounted by autofs on first access, but as an NFS mount that sends none of the person's
     // credentials, so neither signs in anywhere on their behalf, as opening a UNC path here does.
     /// <summary>Why <paramref name="caller"/> may not read the document at <paramref name="full"/>, a full path,
-    /// by its form alone, or null. The relay is refused any path that starts with <c>\\</c> or <c>\??\</c> — a UNC
-    /// or WebDAV path, or another device form — since opening one has Windows sign in to that host as the user, with nothing asked, while the
+    /// by its form alone, or null. The relay is refused any path that starts with <c>\\</c> or <c>\??\</c> - a UNC
+    /// or WebDAV path, or another device form - since opening one has Windows sign in to that host as the user, with nothing asked, while the
     /// command-line tool keeps its team shares; and a <c>\\.\</c> path, Windows' way to a device or a pipe,
     /// or a <c>\\?\</c> or <c>\??\</c> path to anything but a drive or a share, is refused to everyone, since
     /// the rule cannot tell where it leads. Pure, so it is tested on any platform.</summary>
@@ -551,7 +546,7 @@ public sealed partial class ControlTools
 
     /// <summary>Whether <paramref name="full"/> is a <c>\\?\</c> or <c>\??\</c> path to anything but a drive
     /// (<c>\\?\C:\</c>) or a share (<c>\\?\UNC\</c>): a volume by its GUID, <c>GLOBALROOT</c>, a pipe or a
-    /// device. The rule cannot tell where these lead — a volume path can be a real file — so they are
+    /// device. The rule cannot tell where these lead - a volume path can be a real file - so they are
     /// refused to every caller, the command line included.</summary>
     private static bool IsDeviceNamespace(string full)
     {
@@ -566,7 +561,7 @@ public sealed partial class ControlTools
 
     /// <summary>Why the document at <paramref name="full"/> is not read, or null to read it, found before anything
     /// opens it, so no path can stall the app or reach what is not a file: it must be a regular file, or a link
-    /// to one — not a folder, a device, or a link to one — of at most <see cref="McpSession.MaxMessageBytes"/>,
+    /// to one - not a folder, a device, or a link to one - of at most <see cref="McpSession.MaxMessageBytes"/>,
     /// the most a message carries. A path with nothing there is left to the read, which says so in the
     /// system's words.</summary>
     private static string? DocumentFileRefusal(string full)
@@ -596,11 +591,40 @@ public sealed partial class ControlTools
             }
             return info is FileInfo { Exists: true } found && found.Length > McpSession.MaxMessageBytes ? DocumentTooLargeError(file) : null;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             // A link that loops, or a path that cannot be looked at, is the read's to report.
             return null;
         }
+    }
+
+    /// <summary>A collection document <c>import_document</c> and <c>subscribe_document</c> were asked to read,
+    /// read: its full path, its file's name escaped for the app's quotes, the document, and the bytes that
+    /// stand for what the question cannot show, the document's masked values among them.</summary>
+    private sealed record DocumentArgument(string Full, string File, CollectionDocument Document, byte[] Bytes);
+
+    /// <summary>The document a non-empty <c>path</c> argument names, read for <paramref name="caller"/>, or why
+    /// it is not: the one way both import_document and subscribe_document reach a file, so a guard added here
+    /// holds for both. Platform idiom: the Mac mirror takes no caller, since a Mac path has no form
+    /// <see cref="PathRefusal"/> refuses.</summary>
+    private static (DocumentArgument? Read, string? Refusal) ReadDocumentArgument(string path, ControlCaller caller)
+    {
+        var (full, unusable) = DocumentPath(path);
+        if (full is null)
+        {
+            return (null, Shown(unusable ?? EditorModel.NotValidJson, Path.GetFileName(path)));
+        }
+        if ((PathRefusal(full, caller) ?? DocumentFileRefusal(full)) is { } refusal)
+        {
+            return (null, refusal);
+        }
+        var file = ControlText.EscapedName(Path.GetFileName(full));
+        var (document, bytes, failure) = AppState.ReadDocument(full);
+        if (document is null || bytes is null)
+        {
+            return (null, Shown(failure ?? EditorModel.NotValidJson, Path.GetFileName(full)));
+        }
+        return (new DocumentArgument(full, file, document, bytes), null);
     }
 
     private ControlStep ImportDocument(ControlArguments arguments, ControlCaller caller)
@@ -617,21 +641,12 @@ public sealed partial class ControlTools
         {
             return new ControlStep.Refused(IntoOrNewCollectionError);
         }
-        var (full, unusable) = DocumentPath(path);
-        if (full is null)
+        var (read, refusal) = ReadDocumentArgument(path, caller);
+        if (read is null)
         {
-            return new ControlStep.Refused(Shown(unusable ?? EditorModel.NotValidJson, Path.GetFileName(path)));
+            return new ControlStep.Refused(refusal ?? EditorModel.NotValidJson);
         }
-        if ((PathRefusal(full, caller) ?? DocumentFileRefusal(full)) is { } refusal)
-        {
-            return new ControlStep.Refused(refusal);
-        }
-        var file = ControlText.EscapedName(Path.GetFileName(full));
-        var (document, bytes, failure) = AppState.ReadDocument(full);
-        if (document is null || bytes is null)
-        {
-            return new ControlStep.Refused(Shown(failure ?? EditorModel.NotValidJson, Path.GetFileName(full)));
-        }
+        var (full, file, document, bytes) = read;
         var newCollection = arguments.String("newCollection") is { } requested ? MasterStore.CollectionName(requested) : null;
         string target;
         if (newCollection is not null)
@@ -720,23 +735,12 @@ public sealed partial class ControlTools
         {
             return new ControlStep.Refused(MissingArgumentError("path"));
         }
-        var (full, unusable) = DocumentPath(path);
-        if (full is null)
+        var (read, refusal) = ReadDocumentArgument(path, caller);
+        if (read is null)
         {
-            return new ControlStep.Refused(Shown(unusable ?? EditorModel.NotValidJson, Path.GetFileName(path)));
+            return new ControlStep.Refused(refusal ?? EditorModel.NotValidJson);
         }
-        // As import_document checks it.
-        if ((PathRefusal(full, caller) ?? DocumentFileRefusal(full)) is { } refusal)
-        {
-            return new ControlStep.Refused(refusal);
-        }
-        // Platform idiom: as import_document reads it.
-        var file = ControlText.EscapedName(Path.GetFileName(full));
-        var (document, bytes, failure) = AppState.ReadDocument(full);
-        if (document is null || bytes is null)
-        {
-            return new ControlStep.Refused(Shown(failure ?? EditorModel.NotValidJson, Path.GetFileName(full)));
-        }
+        var (full, file, document, bytes) = read;
         // AppState's own rules, asked here as well, so the refusal comes before the question.
         if (document.Origin is { } origin && state.CollectionsFile.Collections.Values.Any(entry => entry.Publish?.Origin == origin))
         {
@@ -761,9 +765,9 @@ public sealed partial class ControlTools
         return new ControlStep.Ready(request, Fingerprint: ContentHash.Sha256(bytes), Perform: () =>
         {
             var mark = state.AppliedServers;
-            if (state.Subscribe(document, bytes, full, arguments.String("name")) is { } refusal)
+            if (state.Subscribe(document, bytes, full, arguments.String("name")) is { } failure)
             {
-                return new ControlOutcome(ControlResult.Refusal(Shown(refusal, Path.GetFileName(full), [name])), null);
+                return new ControlOutcome(ControlResult.Refusal(Shown(failure, Path.GetFileName(full), [name])), null);
             }
             return Done([SubscribedText(shownName, file), ArrivedOffText(count)],
                 [("collection", JsonValue.String(name)), ("count", JsonValue.Int(count))],
@@ -784,11 +788,9 @@ public sealed partial class ControlTools
         {
             return new ControlStep.Refused(NotSubscribedError(shown));
         }
-        if (state.SourceErrors.TryGetValue(collection, out var problem))
+        if (SourceProblem(collection) is { } problem)
         {
-            // The problem names the document's file.
-            var file = state.SourceBinding(collection)?.Path is { } source ? Path.GetFileName(source) : null;
-            return new ControlStep.Refused(file is null ? ControlText.Escaped(problem) : Shown(problem, file));
+            return new ControlStep.Refused(problem);
         }
         if (state.PendingUpdates.GetValueOrDefault(collection) is not { } diff)
         {

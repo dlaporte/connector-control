@@ -15,7 +15,7 @@ public static class AtomicFile
     /// file. Mirrors Swift AtomicFile.write: the temp file is created owner-only in the create
     /// call itself (never with the folder's inherited permissions, not even briefly), a
     /// directory this call has to create is owner-only too, and the rename carries the temp
-    /// file's DACL onto the target — ReplaceFile would have kept the replaced file's. When the
+    /// file's DACL onto the target - ReplaceFile would have kept the replaced file's. When the
     /// create-time DACL is refused, <see cref="OwnerOnlyAcl.WriteNewProtectedFile"/> has already
     /// retried on the temp file, in the same directory under the same identity, so the outcome
     /// it reports is final.
@@ -24,11 +24,11 @@ public static class AtomicFile
     {
         var target = Path.GetFullPath(path);
         // A target that is itself a symlink (a config synced into a dotfiles repo, say) is
-        // written through to the real file, not replaced by a plain file in the rename below —
+        // written through to the real file, not replaced by a plain file in the rename below -
         // mirrors the Mac writer's realpath resolution. LinkTarget (unlike File.Exists) reads
-        // the reparse point itself, so a link whose target does not exist yet — the common
+        // the reparse point itself, so a link whose target does not exist yet - the common
         // first-run case for a config linked into a dotfiles repo before the real file is ever
-        // created — is still followed instead of being silently replaced. A path that is not a
+        // created - is still followed instead of being silently replaced. A path that is not a
         // link at all (including one that does not exist yet) leaves target as is.
         var targetInfo = new FileInfo(target);
         if (targetInfo.LinkTarget is not null)
@@ -40,7 +40,7 @@ public static class AtomicFile
                     target = real;
                 }
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
             {
                 // the target vanished, or was replaced by something that is not a link, between
                 // the LinkTarget check above and the resolve: write to the literal path instead
@@ -49,7 +49,7 @@ public static class AtomicFile
         }
         var dir = Path.GetDirectoryName(target)
             ?? throw new ArgumentException("Path has no parent directory.", nameof(path));
-        // Throws IOException when a file sits where the directory should be —
+        // Throws IOException when a file sits where the directory should be -
         // before any temp file exists.
         OwnerOnlyAcl.CreateDirectoryProtected(dir);
         var tmp = Path.Combine(dir, $".{Path.GetFileName(target)}.tmp-{Guid.NewGuid().ToString("D").ToUpperInvariant()}");
@@ -65,7 +65,7 @@ public static class AtomicFile
         {
             if (File.Exists(tmp))
             {
-                try { File.Delete(tmp); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                FileSystemErrors.TryDelete(tmp);
             }
         }
     }

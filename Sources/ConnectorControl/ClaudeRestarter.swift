@@ -8,7 +8,7 @@ enum ClaudeRestarter {
 
     /// Gracefully terminate Claude (never force-kill), wait up to quitTimeout,
     /// relaunch. Calls completion with nil on success or an error message; the
-    /// ClaudeProcess protocol says any thread is fine — AppState marshals it.
+    /// ClaudeProcess protocol says any thread is fine - AppState marshals it.
     static func restart(appURL: URL, completion: @escaping (String?) -> Void) {
         guard FileManager.default.fileExists(atPath: appURL.path) else {
             completion(ClaudeSignature.notFoundMessage(path: appURL.path))
@@ -62,18 +62,19 @@ enum ClaudeRestarter {
                 .forEach { $0.terminate() }
         }
 
+        // One test for the wait loop and the check after it.
+        func stillRunning() -> Bool {
+            ClaudeSignature.isStillRunning(instancesTerminated:
+                NSRunningApplication.runningApplications(withBundleIdentifier: ClaudeSignature.bundleID)
+                    .map(\.isTerminated))
+        }
         let deadline = Date().addingTimeInterval(quitTimeout)
         while Date() < deadline {
-            let still = NSRunningApplication.runningApplications(
-                withBundleIdentifier: ClaudeSignature.bundleID)
-            if still.allSatisfy(\.isTerminated) || still.isEmpty { break }
+            if !stillRunning() { break }
             Thread.sleep(forTimeInterval: pollInterval)
         }
-        let stillRunning = !NSRunningApplication.runningApplications(
-            withBundleIdentifier: ClaudeSignature.bundleID).isEmpty
-        if stillRunning {
-            completion("Claude didn’t quit (it may be showing a dialog). "
-                       + "Quit it manually, then click Restart Claude again.")
+        if stillRunning() {
+            completion(ClaudeSignature.didNotQuitMessage)
             return
         }
         NSWorkspace.shared.openApplication(

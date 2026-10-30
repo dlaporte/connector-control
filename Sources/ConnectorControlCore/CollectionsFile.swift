@@ -11,7 +11,7 @@ public enum CollectionsFileError: Error, Equatable {
 /// The sidecar written beside the master list: for each collection that has something to say,
 /// whether it is synced or published, where its document is relative to the store, and the
 /// placeholders it carries. It travels with the master list, so it holds only what is true on
-/// every machine — the per-machine bindings live in `CollectionsLocalCache`.
+/// every machine - the per-machine bindings live in `CollectionsLocalCache`.
 ///
 /// Mirror: windows/src/ConnectorControl.Core/CollectionsFile.cs
 public struct CollectionsFile: Equatable, Sendable {
@@ -88,7 +88,7 @@ public struct CollectionsFile: Equatable, Sendable {
         }
     }
 
-    /// A collection with no entry is local — a profile the master list has and the sidecar has
+    /// A collection with no entry is local - a profile the master list has and the sidecar has
     /// never had anything to add about.
     public func kind(of name: String) -> CollectionKind { collections[name]?.kind ?? .local }
 
@@ -119,16 +119,22 @@ public struct CollectionsFile: Equatable, Sendable {
 
     // MARK: Disk
 
-    /// The sidecar, or nil when it exists and cannot be read, parsed or decoded — a file a sync
+    /// The sidecar, or nil when it exists and cannot be read, parsed or decoded - a file a sync
     /// tool is halfway through writing, which must not be taken for one with no entries. The file
     /// on disk is left exactly as it was. A missing sidecar loads as empty: nothing has been written
     /// yet, so nothing is being lost.
     public static func loadIfReadable(from url: URL) -> CollectionsFile? {
-        guard FileManager.default.fileExists(atPath: url.path) else { return CollectionsFile(collections: [:]) }
-        guard let data = try? Data(contentsOf: url),
-              let json = try? JSONValue.parse(data),
-              let file = try? decode(json) else { return nil }
-        return file
+        loadReadingHash(from: url).file
+    }
+
+    /// `loadIfReadable(from:)`, with the hash of the bytes it read - nil when there was no file to
+    /// read - so a caller that has to know what is on disk does not read the file a second time.
+    public static func loadReadingHash(from url: URL) -> (file: CollectionsFile?, hash: String?) {
+        guard FileManager.default.fileExists(atPath: url.path) else { return (CollectionsFile(collections: [:]), nil) }
+        guard let data = try? Data(contentsOf: url) else { return (nil, nil) }
+        let hash = ContentHash.sha256(data)
+        guard let json = try? JSONValue.parse(data), let file = try? decode(json) else { return (nil, hash) }
+        return (file, hash)
     }
 
     public func save(to url: URL, staging: URL?) throws {
@@ -145,21 +151,15 @@ public struct CollectionsFile: Equatable, Sendable {
     // Every failure names the key it read, so a hand-edited sidecar says what is wrong with it.
 
     static func requiredString(_ value: JSONValue?, _ what: String) throws -> String {
-        guard let value else { throw CollectionsFileError.malformed("\(what) is missing") }
-        guard case .string(let s) = value else { throw CollectionsFileError.malformed("\(what) is not a string") }
-        return s
+        try JSONField.requiredString(value, what, CollectionsFileError.malformed)
     }
 
     static func optionalString(_ value: JSONValue?, _ what: String) throws -> String? {
-        guard let value, value != .null else { return nil }
-        guard case .string(let s) = value else { throw CollectionsFileError.malformed("\(what) is not a string") }
-        return s
+        try JSONField.optionalString(value, what, CollectionsFileError.malformed)
     }
 
     static func objectValue(_ value: JSONValue?, _ what: String) throws -> [String: JSONValue] {
-        guard let value else { return [:] }
-        guard case .object(let object) = value else { throw CollectionsFileError.malformed("\(what) is not a JSON object") }
-        return object
+        try JSONField.objectValue(value, what, CollectionsFileError.malformed)
     }
 
     static func stringSet(_ value: JSONValue?, _ what: String) throws -> Set<String> {

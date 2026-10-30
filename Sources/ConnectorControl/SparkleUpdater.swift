@@ -3,12 +3,12 @@ import Foundation
 import Sparkle
 import ConnectorControlState
 
-/// Created not-started; started only from a real app bundle — bare `swift run`
+/// Created not-started; started only from a real app bundle - bare `swift run`
 /// has none and Sparkle requires one.
 @MainActor
 final class SparkleUpdater: Updater {
     /// Sparkle persists "Skip This Version" itself (`SUSkippedVersion` in user
-    /// defaults) — this app has no field for it, unlike Windows, which has no
+    /// defaults) - this app has no field for it, unlike Windows, which has no
     /// framework equivalent and so mirrors that persistence itself through
     /// `ISettings.DeclinedUpdateVersion`.
     private let controller = SPUStandardUpdaterController(

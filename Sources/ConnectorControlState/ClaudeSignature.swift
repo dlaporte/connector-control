@@ -7,10 +7,18 @@ import Foundation
 /// fails that check. Kept here (not on `ClaudeRestarter`) so the strings can
 /// be pinned by a State-layer test without pulling in AppKit/Security.
 public enum ClaudeSignature {
+    /// The one "is Claude still running?" test: it is, unless every instance
+    /// listed has terminated (an empty list counts as none running). The quit
+    /// wait loop and the check after it must both use this, or they can
+    /// disagree and report a quit Claude as "didn't quit".
+    public static func isStillRunning(instancesTerminated: [Bool]) -> Bool {
+        !instancesTerminated.allSatisfy { $0 }
+    }
+
     public static let bundleID = "com.anthropic.claudefordesktop"
     /// Anthropic PBC's Developer ID team, as on every shipped Claude.app.
     public static let teamIdentifier = "Q6L2SF6YDW"
-    /// Claude Desktop, signed by Anthropic — under either a Developer ID or an
+    /// Claude Desktop, signed by Anthropic - under either a Developer ID or an
     /// App Store certificate chained to Apple. The path this app launches is a
     /// plain string in UserDefaults, so before it quits Claude and starts
     /// whatever sits at that path, the bundle has to prove it is Claude.
@@ -28,6 +36,10 @@ public enum ClaudeSignature {
     public static func uninspectableMessage(name: String) -> String {
         "\(name) is not an app bundle this app can inspect."
     }
+
+    /// What Restart Claude says when Claude is still running after the wait for it to quit.
+    public static let didNotQuitMessage =
+        "Claude didn\u{2019}t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again."
 
     public static let requirementCompileFailure = "The Claude Desktop signing requirement could not be compiled."
 }

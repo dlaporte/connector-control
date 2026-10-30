@@ -12,7 +12,7 @@ namespace ConnectorControl.App.Tray;
 public static class TrayIconRenderer
 {
     /// <summary>
-    /// A plug seen from the side — prongs pointing right, body, cable stub to the left — in a
+    /// A plug seen from the side - prongs pointing right, body, cable stub to the left - in a
     /// 24×24 box: the same orientation as the Mac's SF Symbol <c>powerplug.fill</c>, so the two
     /// apps read as one product in a screenshot side by side.
     /// </summary>
@@ -70,7 +70,7 @@ public static class TrayIconRenderer
     }
 
     /// <summary>
-    /// A one-image .ico wrapping a PNG frame — the PNG-compressed icon entry Windows has
+    /// A one-image .ico wrapping a PNG frame - the PNG-compressed icon entry Windows has
     /// accepted since Vista, and the only .ico shape needed for a single-size tray glyph.
     /// Building the bytes (rather than handing over a raw HICON) keeps the Icon the owner of
     /// its own handle, so disposing it really frees it.

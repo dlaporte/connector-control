@@ -117,8 +117,11 @@ final class ControlCommandLineTests: XCTestCase {
 
     func testWhatTheToolCannotRunIsAUsageError() {
         XCTAssertEqual(parse("frobnicate"), .usage(ControlCommandLine.unknownCommandError("frobnicate")))
-        XCTAssertEqual(parse("collection", "frob"), .usage(ControlCommandLine.unknownCommandError("collection frob")))
-        XCTAssertEqual(parse("collection"), .usage(ControlCommandLine.unknownCommandError("collection")))
+        let group = ControlCommandLine.usageError(["collection new <name>", "collection rename <old> <new>",
+                                                   "collection duplicate <name> <new>", "collection delete <name>"]
+            .joined(separator: ControlCommandLine.usageContinuation))
+        XCTAssertEqual(parse("collection"), .usage(group), "a group with no subcommand lists its subcommands")
+        XCTAssertEqual(parse("collection", "frob"), .usage(ControlCommandLine.unknownSubcommandError("frob", "collection") + "\n" + group))
         XCTAssertEqual(parse("show"), .usage(ControlCommandLine.usageError("show <name> [--reveal]")))
         XCTAssertEqual(parse("status", "extra"), .usage(ControlCommandLine.usageError("status")))
         XCTAssertEqual(parse("status", "--reveal"), .usage(ControlCommandLine.unknownOptionError("--reveal")))
@@ -126,7 +129,7 @@ final class ControlCommandLineTests: XCTestCase {
         XCTAssertEqual(parse("connectors", "--\u{301}x"), .usage(ControlCommandLine.unknownOptionError("--\u{301}x")),
                        "a combining mark after the dashes does not make the word a name")
         XCTAssertEqual(parse("mcp", "extra"), .usage(ControlCommandLine.unknownOptionError("extra")))
-        XCTAssertEqual(parse("help", "status"), .usage(ControlCommandLine.unknownOptionError("status")))
+        XCTAssertEqual(parse("help", "status"), .usage(ControlCommandLine.helpTakesNoArgumentsError))
     }
 
     func testAfterTwoDashesEveryWordIsAName() {

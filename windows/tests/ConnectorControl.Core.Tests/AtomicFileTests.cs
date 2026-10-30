@@ -125,7 +125,7 @@ public class AtomicFileTests : IDisposable
     [Fact]
     public void WritesThroughADanglingSymlinkedTarget()
     {
-        var real = dir.File("real.json");   // never created — the link's target does not exist yet
+        var real = dir.File("real.json");   // never created - the link's target does not exist yet
         var link = dir.File("link.json");
         try
         {
@@ -145,7 +145,7 @@ public class AtomicFileTests : IDisposable
         Assert.Equal("through", File.ReadAllText(link));
     }
 
-    /// <summary>Sources/ConnectorControlCore/AtomicFile.swift — testWritesThroughARelativeSymlinkedTarget.
+    /// <summary>Sources/ConnectorControlCore/AtomicFile.swift - testWritesThroughARelativeSymlinkedTarget.
     /// A relative symlink target (resolved relative to the link's own directory) is written
     /// through just like an absolute one.</summary>
     [Fact]

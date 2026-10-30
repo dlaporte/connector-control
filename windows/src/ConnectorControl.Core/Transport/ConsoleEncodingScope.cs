@@ -3,7 +3,7 @@ using System.Text;
 namespace ConnectorControl.Core.Transport;
 
 /// <summary>
-/// Windows only: the Mac has no counterpart — its terminals take UTF-8 as they are.
+/// Windows only: the Mac has no counterpart - its terminals take UTF-8 as they are.
 ///
 /// The console's output encoding set to UTF-8 and put back, once, by whichever comes first of the tool
 /// finishing, Ctrl-C and an error: the restore is idempotent and may be called from the thread that handles
@@ -23,7 +23,7 @@ public sealed class ConsoleEncodingScope : IDisposable
             set(new UTF8Encoding(false));
             previous = before;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             // no console to change: the bytes are UTF-8 regardless
         }
@@ -40,7 +40,7 @@ public sealed class ConsoleEncodingScope : IDisposable
         {
             set(before);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             // the console has gone
         }

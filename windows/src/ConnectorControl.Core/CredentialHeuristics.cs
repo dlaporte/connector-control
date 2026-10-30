@@ -48,7 +48,7 @@ public static class CredentialHeuristics
     private static readonly string[] SecretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"];
 
     /// <summary>Whether <paramref name="word"/> is an authentication scheme that comes before a credential in a header's
-    /// value — <c>Bearer</c>, <c>Basic</c> or <c>Token</c> — whatever its case.</summary>
+    /// value - <c>Bearer</c>, <c>Basic</c> or <c>Token</c> - whatever its case.</summary>
     public static bool IsSchemeWord(string word) =>
         SchemeWords.Contains(word.ToLowerInvariant(), StringComparer.Ordinal);
 
@@ -82,8 +82,8 @@ public static class CredentialHeuristics
 
     /// <summary>
     /// Whether <paramref name="value"/> takes its secret from somewhere else rather than holding it: one
-    /// or more <c>${NAME}</c> or <c>$NAME</c> references — an environment variable, a
-    /// <c>${CC_NEEDS:NAME}</c> placeholder — with, beside them, at most one word of letters before them, an
+    /// or more <c>${NAME}</c> or <c>$NAME</c> references - an environment variable, a
+    /// <c>${CC_NEEDS:NAME}</c> placeholder - with, beside them, at most one word of letters before them, an
     /// authentication scheme such as <c>Bearer</c>, <c>SSWS</c> or <c>Bot</c>. Text after a reference
     /// (<c>${CC_NEEDS:PW}hunter</c>) can be the secret itself. A <c>$NAME</c> without braces counts only as
     /// <see cref="ShellVariableEnd"/> reads one. Walked one UTF-16 unit at a time, as the Mac walks

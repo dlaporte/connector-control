@@ -84,7 +84,7 @@ public final class ReviewModel: ObservableObject {
     }
 
     /// nil when the update landed and the sheet can close, else the message to show with the
-    /// sheet still open — the same way the Import sheet's `perform()` answers. A sheet whose
+    /// sheet still open - the same way the Import sheet's `perform()` answers. A sheet whose
     /// update has already been applied elsewhere reports success too: there is nothing left to
     /// do and nothing went wrong. A document that changed while the sheet was open is refused
     /// instead, because applying it would land connectors nobody read, which is the one thing
@@ -100,7 +100,7 @@ public final class ReviewModel: ObservableObject {
         return error
     }
 
-    /// Added first, then removed, then changed, each alphabetical — the order the summary
+    /// Added first, then removed, then changed, each alphabetical - the order the summary
     /// sentence reads in, so the list under it is in the same order.
     private func rebuild() {
         sourceHash = state.pendingSourceHash(for: collection)

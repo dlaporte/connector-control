@@ -9,7 +9,7 @@ namespace ConnectorControl.Cli;
 /// Sources/ConnectorControlTransport/ControlEndpoint.swift, which asks <c>open</c> to do this.
 ///
 /// Starts the app as a process of its own. Claude Desktop runs the relay in a job object, and a child
-/// that inherited the relay's handles — Claude's pipes among them — or stayed in that job could hold
+/// that inherited the relay's handles - Claude's pipes among them - or stayed in that job could hold
 /// Claude's pipes open after the relay ends, or be ended when Claude quits. So nothing is inherited,
 /// and the app leaves the job where the job allows it; where it does not, it starts inside it. Nor does it
 /// inherit the tool's environment, which is Claude's or a terminal's: it gets the block

@@ -1,7 +1,7 @@
 import SwiftUI
 import ConnectorControlState
 
-/// Layout only — the row's facts arrive in a ConnectorRow and its one action
+/// Layout only - the row's facts arrive in a ConnectorRow and its one action
 /// goes back through the closure.
 struct MCPRow: View {
     let row: ConnectorRow

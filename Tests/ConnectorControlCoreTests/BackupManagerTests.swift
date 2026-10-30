@@ -49,7 +49,7 @@ final class BackupManagerTests: XCTestCase {
             fileAt: source, series: "claude_desktop_config",
             now: Date(timeIntervalSince1970: 1_752_600_001))
         // resolvingSymlinksInPath: the directory listing returns /private/var
-        // URLs while the write path builds /var ones — same file.
+        // URLs while the write path builds /var ones - same file.
         XCTAssertEqual(second?.resolvingSymlinksInPath(), first.resolvingSymlinksInPath(),
                        "identical content returns the existing newest backup")
         XCTAssertEqual(try manager.backups(series: "claude_desktop_config").count, 1)
@@ -62,7 +62,7 @@ final class BackupManagerTests: XCTestCase {
     }
 
     func testBackUpDedupsOnlyAgainstNewest() throws {
-        // A → B → back to A: the return to A still records — dedup compares
+        // A → B → back to A: the return to A still records - dedup compares
         // against the newest snapshot only, not the whole history.
         for (i, content) in ["A", "B", "A"].enumerated() {
             try Data(content.utf8).write(to: source)
@@ -87,6 +87,22 @@ final class BackupManagerTests: XCTestCase {
         XCTAssertEqual(kept.count, 3)
         XCTAssertEqual(try String(contentsOf: kept[0], encoding: .utf8), "v4")
         XCTAssertEqual(try String(contentsOf: kept[2], encoding: .utf8), "v2")
+    }
+
+    /// Only files are backups: a folder named like the oldest one is neither listed nor pruned, nor is
+    /// anything inside it, as on Windows.
+    func testAFolderNamedLikeABackupIsNeitherListedNorPruned() throws {
+        let folder = dir.appendingPathComponent("backups/claude_desktop_config.\(BackupTimestamp.string(from: Date(timeIntervalSince1970: 1_752_500_000))).json")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data("keep".utf8).write(to: folder.appendingPathComponent("inside.txt"))
+        for i in 0..<4 {
+            try Data("v\(i)".utf8).write(to: source)
+            try manager.backUp(fileAt: source, series: "claude_desktop_config",
+                               now: Date(timeIntervalSince1970: Double(1_752_600_000 + i)))
+        }
+        let kept = try manager.backups(series: "claude_desktop_config")
+        XCTAssertEqual(try kept.map { try String(contentsOf: $0, encoding: .utf8) }, ["v3", "v2", "v1"])
+        XCTAssertEqual(try String(contentsOf: folder.appendingPathComponent("inside.txt"), encoding: .utf8), "keep")
     }
 
     /// A stale backup pruning cannot delete (locked, read-only, whatever the
@@ -163,6 +179,20 @@ final class BackupManagerTests: XCTestCase {
         XCTAssertEqual(try limited.backups(series: "claude_desktop_config"), kept)
     }
 
+    /// Once every same-millisecond name is taken the write replaces the last one, which is already
+    /// in the listing: prune counts it once, so exactly keepCount backups stay.
+    func testAnExhaustedCollisionBoundPrunesNoBackupTooMany() throws {
+        let full = BackupManager(backupsDir: dir.appendingPathComponent("backups"), keepCount: 100)
+        let now = Date(timeIntervalSince1970: 1_752_600_000.123)
+        for i in 0...100 {
+            try Data("v\(i)".utf8).write(to: source)
+            try full.backUp(fileAt: source, series: "claude_desktop_config", now: now)
+        }
+        let kept = try full.backups(series: "claude_desktop_config")
+        XCTAssertEqual(kept.count, 100)
+        XCTAssertEqual(try String(contentsOf: kept[0], encoding: .utf8), "v100", "the last write replaced the -100 backup")
+    }
+
     /// The counter compares as a number: the tenth backup of a millisecond is newer than the second.
     func testASameMillisecondCounterComparesAsANumber() throws {
         let roomy = BackupManager(backupsDir: dir.appendingPathComponent("backups"), keepCount: 20)
@@ -201,7 +231,7 @@ final class BackupManagerTests: XCTestCase {
                                                      now: Date(timeIntervalSince1970: 1_752_600_001)))
         let original = try XCTUnwrap(manager.originalSnapshotURL(series: "claude_desktop_config"))
         // resolvingSymlinksInPath: the directory listing returns /private/var URLs while the write
-        // paths build /var ones — the same files.
+        // paths build /var ones - the same files.
         XCTAssertEqual(try manager.restorableBackups(series: "claude_desktop_config").map { $0.resolvingSymlinksInPath() },
                        [newer, older, original].map { $0.resolvingSymlinksInPath() })
     }

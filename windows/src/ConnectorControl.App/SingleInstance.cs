@@ -5,11 +5,11 @@ namespace ConnectorControl.App;
 /// <summary>
 /// One tray icon per logon session. The first instance owns the mutex and waits
 /// on a named event; a second launch sets that event so the running app shows
-/// its flyout and then exits — the Windows answer to re-opening a bundled app on
+/// its flyout and then exits - the Windows answer to re-opening a bundled app on
 /// the Mac, and the difference between "nothing happened" and "there it is".
 /// Two launches must stay silent: Windows starting us with <c>-ToastActivated</c> to
-/// deliver a toast click — the toolkit's COM server routes that to the running process
-/// on its own — and the command-line tool starting us with <c>--background</c>, which
+/// deliver a toast click - the toolkit's COM server routes that to the running process
+/// on its own - and the command-line tool starting us with <c>--background</c>, which
 /// asks only for the app to be running. The second instance just leaves.
 /// </summary>
 public sealed class SingleInstance : IDisposable
@@ -29,7 +29,7 @@ public sealed class SingleInstance : IDisposable
 
     /// <summary>
     /// Tests only: a suffix keeps a test's mutex and event apart from the shipped app's, which
-    /// may well be running on the same machine (the developer's PC, a reused runner) — with the
+    /// may well be running on the same machine (the developer's PC, a reused runner) - with the
     /// production names, the test would find "another instance" that is simply the real app.
     /// </summary>
     internal SingleInstance(string nameSuffix)
@@ -77,7 +77,7 @@ public sealed class SingleInstance : IDisposable
     /// <summary>Second instance: ask the running one to come forward.</summary>
     public void SignalShow() => showRequested.Set();
 
-    /// <summary>First instance: run <paramref name="show"/> each time another launch signals. The callback arrives on a pool thread — marshal.</summary>
+    /// <summary>First instance: run <paramref name="show"/> each time another launch signals. The callback arrives on a pool thread - marshal.</summary>
     public void OnShowRequested(Action show) =>
         registration = ThreadPool.RegisterWaitForSingleObject(showRequested, (_, _) => show(), null, Timeout.Infinite, executeOnlyOnce: false);
 

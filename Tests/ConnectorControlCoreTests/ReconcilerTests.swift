@@ -11,7 +11,7 @@ final class ReconcilerTests: XCTestCase {
         MasterStore.single(mcps)
     }
 
-    // MARK: ingestion — the only file→store flow
+    // MARK: ingestion - the only file→store flow
 
     func testUnknownServerIsImportedEnabled() {
         let outcome = Reconciler.reconcile(store: .empty, claudeServers: ["new": configA])
@@ -39,11 +39,31 @@ final class ReconcilerTests: XCTestCase {
         XCTAssertTrue(outcome.storeChanged)
     }
 
-    // MARK: store is the source of truth — the file never edits known entries
+    // MARK: store is the source of truth - the file never edits known entries
+
+    /// An entry the store no longer holds, changed in Claude's file only in how a character is
+    /// composed, is an edit made outside the app, as it is on Windows: taken in, not left for removal.
+    func testAnEditOnlyInHowACharacterIsComposedIsExternal() {
+        let composed = JSONValue.object(["command": .string("caf\u{E9}")])
+        let decomposed = JSONValue.object(["command": .string("cafe\u{301}")])
+        let outcome = Reconciler.reconcile(store: .empty, claudeServers: ["gone": decomposed], baseline: ["gone": composed])
+        XCTAssertEqual(outcome.store.mcps["gone"]?.config, decomposed)
+        XCTAssertTrue(outcome.storeChanged)
+    }
+
+    /// A name in Claude's file spelled another way, é decomposed where the store composes it, is the
+    /// store's own connector, as on Windows: nothing is taken in.
+    func testANameSpelledAnotherWayIsTheStoresConnector() {
+        let outcome = Reconciler.reconcile(store: store(["caf\u{E9}": MCPEntry(enabled: true, config: configA)]),
+                                           claudeServers: ["cafe\u{301}": configB])
+        XCTAssertEqual(outcome.store.mcps.count, 1)
+        XCTAssertEqual(outcome.store.mcps["caf\u{E9}"]?.config, configA)
+        XCTAssertFalse(outcome.storeChanged)
+    }
 
     func testExternalEditDoesNotChangeStore() {
         // Fresh launch (nil baseline): a hand-edit made while the app was off
-        // still loses — Claude's config is downstream.
+        // still loses - Claude's config is downstream.
         let outcome = Reconciler.reconcile(
             store: store(["s": MCPEntry(enabled: true, config: configA)]),
             claudeServers: ["s": configB])

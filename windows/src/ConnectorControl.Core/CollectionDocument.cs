@@ -231,7 +231,7 @@ public static class KeptValue
         return found;
     }
 
-    /// <summary><paramref name="value"/> as a JSON string spells it — backslashes and quotes escaped, with and without the slash escaped too — and as written, longest first, each once.</summary>
+    /// <summary><paramref name="value"/> as a JSON string spells it - backslashes and quotes escaped, with and without the slash escaped too - and as written, longest first, each once.</summary>
     internal static IReadOnlyList<string> WrittenForms(string value)
     {
         var escaped = value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
@@ -250,7 +250,7 @@ public static class KeptValue
 }
 
 /// <summary>
-/// What the author ticked in the Publish sheet: which env values travel as values rather than as
+/// What the author ticked in the Publish dialog: which env values travel as values rather than as
 /// stripped hints, which arguments become markers, and the hint text for each.
 /// </summary>
 public sealed class PublishIntent : IEquatable<PublishIntent>
@@ -338,8 +338,8 @@ public sealed class PublishIntent : IEquatable<PublishIntent>
     /// <para>
     /// A mark stays on the argument at its pointer while that argument still reads as it did when
     /// it was marked. Failing that, it follows its value to the one argument that holds it. A mark
-    /// that finds neither — its value edited away, held by two arguments, or already claimed by
-    /// another mark — is unresolved: the argument it was made on could be anywhere, and nothing
+    /// that finds neither - its value edited away, held by two arguments, or already claimed by
+    /// another mark - is unresolved: the argument it was made on could be anywhere, and nothing
     /// may be published over it.
     /// </para>
     /// <para>
@@ -1022,8 +1022,8 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
 
     /// <summary>
     /// A remote connector's <c>Additional</c> fields (whatever the form the config came from
-    /// cannot represent) merged into the freshly encoded launcher config; the encoded keys —
-    /// always <c>command</c>/<c>args</c>, sometimes <c>env</c> — win on a collision, since they
+    /// cannot represent) merged into the freshly encoded launcher config; the encoded keys -
+    /// always <c>command</c>/<c>args</c>, sometimes <c>env</c> - win on a collision, since they
     /// are what makes the connector run.
     /// </summary>
     private static JsonValue MergeAdditional(IReadOnlyDictionary<string, JsonValue> additional, JsonValue config)
@@ -1048,10 +1048,10 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     /// connector that still carries a mark with a value: a remote connector's arguments are built by
     /// each importer, so a mark there was made while it was a local one, and the path it stood for
     /// may now be travelling in its extra arguments. Throws <see cref="KeptPathCarriedException"/>
-    /// for a local connector that also holds a placed mark's text somewhere unmarked that travels —
+    /// for a local connector that also holds a placed mark's text somewhere unmarked that travels -
     /// another argument, the command, a shared environment value or a field the form has no widget
-    /// for — since a duplicate of a marked path is that path. With <paramref name="refusingCopies"/>
-    /// false the copy travels as written instead: the Publish sheet reads such a document for what
+    /// for - since a duplicate of a marked path is that path. With <paramref name="refusingCopies"/>
+    /// false the copy travels as written instead: the Publish dialog reads such a document for what
     /// else it keeps back, and lists the copies itself (<see cref="CopiesOfMarkedPaths"/>).
     /// </summary>
     public static CollectionDocument Export(string name, string? author, string? origin, string exported,
@@ -1098,7 +1098,7 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
                         throw new UnreachableException();
                 }
                 var env = remote.PassthroughEnv.ToDictionary(p => p.Key, p => EnvFor(p.Key, p.Value), StringComparer.Ordinal);
-                // Whatever the form has no widget for — a key RemotePattern.Decode doesn't read —
+                // Whatever the form has no widget for - a key RemotePattern.Decode doesn't read -
                 // travels too, the same way a local connector's does.
                 var additional = FormMapper.Analyze(config).Model.Additional;
                 result[connectorName] = new Connector(
@@ -1124,7 +1124,7 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
                     needs[mark.Name] = mark.Hint;
                 }
                 // A marker the author already typed, or one an imported copy still carries, is a
-                // need too — otherwise re-exporting a collection would drop what it asks for.
+                // need too - otherwise re-exporting a collection would drop what it asks for.
                 foreach (var n in args.Append(model.Command).SelectMany(Placeholder.NamesIn))
                 {
                     if (!needs.ContainsKey(n))
@@ -1144,7 +1144,7 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     /// <summary>
     /// Every copy of a marked path that would travel as written, connector by connector in ordinal
     /// order: another argument, the command, a shared environment value or a field the form has no
-    /// widget for holding a placed mark's text. The exporter refuses the first; the Publish sheet
+    /// widget for holding a placed mark's text. The exporter refuses the first; the Publish dialog
     /// lists them all.
     /// </summary>
     public static IReadOnlyList<KeptValueFinding> CopiesOfMarkedPaths(IEnumerable<KeyValuePair<string, JsonValue>> connectors,
@@ -1192,9 +1192,9 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     /// <summary>
     /// Every place, connector by connector in ordinal order and field by field, where one of
     /// <paramref name="values"/> stands as written (<see cref="KeptValue.Holds"/>). The field is the
-    /// place in the connector's document form — <c>local.command</c>, <c>local.args[1]</c>,
+    /// place in the connector's document form - <c>local.command</c>, <c>local.args[1]</c>,
     /// <c>env.LOG_DIR.value</c>, <c>env.LOG_DIR.hint</c>, <c>needs.server_path.hint</c>,
-    /// <c>additional.cwd</c>, <c>remote.extraArgs[0]</c> — so the author can find it in the preview;
+    /// <c>additional.cwd</c>, <c>remote.extraArgs[0]</c> - so the author can find it in the preview;
     /// an environment variable's, a need's or an additional field's own name counts as a place too.
     /// Empty values are ignored.
     /// </summary>
@@ -1411,8 +1411,8 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     /// colon too, since the heuristic's own space check would otherwise hide a credential sitting right
     /// after one; an arg that is a header, with or without that space (<see cref="HeaderArgument"/>), is
     /// read as a header is; and an arg that is a URL is read part by part as <c>url</c> is. Env is only
-    /// tested for names in <paramref name="sharedEnv"/> — the ones the author ticked to travel as a value
-    /// rather than a hint — since a hint-only value never leaves this machine. A connector Claude reaches
+    /// tested for names in <paramref name="sharedEnv"/> - the ones the author ticked to travel as a value
+    /// rather than a hint - since a hint-only value never leaves this machine. A connector Claude reaches
     /// by URL keeps its secret in <c>headers</c> or in <c>url</c>: a header is read as
     /// <see cref="CredentialKindOf"/> reads it, and the URL's parts are those
     /// <see cref="CredentialPartsOfUrl"/> names.
@@ -1504,7 +1504,7 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     };
 
     /// <summary>
-    /// How a value under <paramref name="name"/> — a header, or a URL parameter — holds a credential, or
+    /// How a value under <paramref name="name"/> - a header, or a URL parameter - holds a credential, or
     /// null when it holds none: a reference where it only refers to one under a name named for a secret,
     /// a literal where it looks like one or its name is named for one.
     /// </summary>
@@ -1643,31 +1643,11 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     // MARK: Decoding helpers
     // Every failure names the key it read, so a hand-edited document says what is wrong with it.
 
-    internal static string RequiredString(JsonValue? value, string what)
-    {
-        if (value is null)
-        {
-            throw CollectionDocumentException.Malformed($"{what} is missing");
-        }
-        if (value.Kind != JsonKind.String)
-        {
-            throw CollectionDocumentException.Malformed($"{what} is not a string");
-        }
-        return value.StringValue;
-    }
+    internal static string RequiredString(JsonValue? value, string what) =>
+        JsonField.RequiredString(value, what, CollectionDocumentException.Malformed);
 
-    internal static string? OptionalString(JsonValue? value, string what)
-    {
-        if (value is null || value.Kind == JsonKind.Null)
-        {
-            return null;
-        }
-        if (value.Kind != JsonKind.String)
-        {
-            throw CollectionDocumentException.Malformed($"{what} is not a string");
-        }
-        return value.StringValue;
-    }
+    internal static string? OptionalString(JsonValue? value, string what) =>
+        JsonField.OptionalString(value, what, CollectionDocumentException.Malformed);
 
     internal static IReadOnlyList<string> StringArray(JsonValue? value, string what)
     {
@@ -1692,16 +1672,6 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
         return items;
     }
 
-    internal static IReadOnlyDictionary<string, JsonValue> ObjectValue(JsonValue? value, string what)
-    {
-        if (value is null)
-        {
-            return new Dictionary<string, JsonValue>(StringComparer.Ordinal);
-        }
-        if (value.Kind != JsonKind.Object)
-        {
-            throw CollectionDocumentException.Malformed($"{what} is not a JSON object");
-        }
-        return value.ObjectProperties;
-    }
+    internal static IReadOnlyDictionary<string, JsonValue> ObjectValue(JsonValue? value, string what) =>
+        JsonField.ObjectValue(value, what, CollectionDocumentException.Malformed);
 }

@@ -8,8 +8,8 @@ namespace ConnectorControl.Cli;
 /// Sources/ConnectorControlCLI/ConnectorControlCLI.swift.
 ///
 /// The tool's text, as UTF-8 bytes on the console or a pipe alike: the same bytes the Mac tool prints. On
-/// a console the output code page is UTF-8 while the tool runs and put back after — also on Ctrl-C and on
-/// an error, where a <c>using</c> alone would not run — so the curly quotes and the ellipsis show as they
+/// a console the output code page is UTF-8 while the tool runs and put back after - also on Ctrl-C and on
+/// an error, where a <c>using</c> alone would not run - so the curly quotes and the ellipsis show as they
 /// are without changing the console for whatever runs next.
 /// </summary>
 internal sealed class ConsoleText : IDisposable

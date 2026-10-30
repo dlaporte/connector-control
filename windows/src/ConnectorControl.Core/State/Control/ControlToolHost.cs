@@ -27,19 +27,20 @@ public sealed class ControlToolHost(ControlTools tools, bool isCli) : IMcpToolHo
     /// <summary>What the session's <c>serverInfo</c> says.</summary>
     public string Version => Tools.Version;
 
-    /// <summary>Who is calling. A relay whose client gave no name — or whose session is gone — is
+    /// <summary>Who is calling. A relay whose client gave no name - or whose session is gone - is
     /// still the relay, and the gate guards it.</summary>
     public ControlCaller Caller => IsCli ? new ControlCaller.Cli() : new ControlCaller.Relay(Session?.ClientName ?? "");
 
     public IReadOnlyList<JsonValue> ListTools() => ControlTools.McpDescriptors;
 
-    /// <summary>A tool this app does not list. Asked for by a newer command-line tool or relay — an update
-    /// replaced the app on disk while this one still runs — it needs the newer app, which a restart
-    /// starts.</summary>
+    /// <summary>A tool this app does not list. Asked for by a newer command-line tool or relay - an update
+    /// replaced the app on disk while this one still runs - it needs the newer app, which a restart
+    /// starts. Otherwise it is the app's own sentence, with the name escaped as every name the
+    /// layer echoes is.</summary>
     public string UnknownToolMessage(string name) =>
         ClientVersion is { } clientVersion && ControlVersion.IsNewer(clientVersion, Tools.Version)
             ? ControlTools.NeedsNewerAppError(ControlVersion.Semantic(clientVersion) ?? clientVersion)
-            : McpSession.UnknownToolMessage(name);
+            : ControlTools.UnknownToolError(ControlText.EscapedName(name));
 
     public void CallTool(string name, JsonValue arguments, JsonValue? progressToken,
                          Action<double> progress, Action<JsonValue> completion) =>

@@ -78,7 +78,7 @@ public class CollectionsModelTests
         Assert.True(state.IsLocated("Default"));
 
         // Dispose cuts the republish: nothing repaints. What the kept list holds afterwards is not
-        // asserted — nobody reads it once the window is gone, and pinning a stale value would make
+        // asserted - nobody reads it once the window is gone, and pinning a stale value would make
         // a behaviour of it.
         model.Dispose();
         var before = repaints;
@@ -182,341 +182,6 @@ public class CollectionsModelTests
     }
 
     // MARK: target column
-
-    /// <summary>The target a local connector shows, which must not carry <paramref name="secret"/> whatever else it says.</summary>
-    private static void AssertTarget(McpEntry entry, string expected, string secret)
-    {
-        var target = CollectionsModel.TargetOf(entry.Config, "/Users/x");
-        Assert.DoesNotContain(secret, target);
-        Assert.Equal(expected, target);
-    }
-
-    [Fact]
-    public void TargetShowsARemoteConnectorsHostOnly()
-    {
-        Assert.Equal("api.githubcopilot.com",
-            CollectionsModel.TargetOf(AppStateHarness.Remote("https://u:p@api.githubcopilot.com/mcp?k=v"), "/Users/x"));
-        Assert.Equal("localhost:8080", CollectionsModel.TargetOf(AppStateHarness.Remote("http://localhost:8080/mcp"), "/Users/x"));
-    }
-
-    [Fact]
-    public void TargetShowsOnlyTheHostOfARemoteConnectorWithAHeader() =>
-        AssertTarget(AppStateHarness.LocalConnector("npx", "-y", "mcp-remote", "https://h.example/mcp", "--header", "Authorization: Bearer abc"),
-            "h.example", "abc");
-
-    /// <summary>
-    /// A connector Claude reaches by URL, with no command at all, shows the URL's scheme and host
-    /// through the same strict reading as a URL argument; one whose host is in doubt, or that has no
-    /// URL to read, shows only that it is remote.
-    /// </summary>
-    [Fact]
-    public void TargetShowsAUrlOnlyConnectorsSchemeAndHost()
-    {
-        (JsonValue Config, string Expected)[] cases =
-        [
-            (JsonValue.Object(("url", JsonValue.String("https://mcp.example.com/mcp"))), "https://mcp.example.com"),
-            (JsonValue.Object(("type", JsonValue.String("http")), ("url", JsonValue.String("https://u:SECRET@h.example:8443/mcp"))), "https://h.example:8443"),
-            (JsonValue.Object(("url", JsonValue.String("https://u:p@SECRET@h.example/mcp"))), "https://h.example"),
-            (JsonValue.Object(("url", JsonValue.String("https://u:p/SECRET@h.example/mcp"))), CollectionsModel.RemoteType),
-            (JsonValue.Object(("url", JsonValue.String("https://u:p?SECRET@h.example/mcp"))), CollectionsModel.RemoteType),
-            (JsonValue.Object(("url", JsonValue.String("https://u:p#SECRET@h.example/mcp"))), CollectionsModel.RemoteType),
-            (JsonValue.Object(("url", JsonValue.String("https://h.example/mcp?api_key=SECRET"))), "https://h.example"),
-            (JsonValue.Object(("type", JsonValue.String("sse")), ("url", JsonValue.String("https://h.example/sse")),
-                ("headers", JsonValue.Object(("Authorization", JsonValue.String("Bearer SECRET"))))), "https://h.example"),
-            (JsonValue.Object(("type", JsonValue.String("http")), ("url", JsonValue.String("h.example/SECRET"))), CollectionsModel.RemoteType),
-            (JsonValue.Object(("url", JsonValue.Int(5))), CollectionsModel.RemoteType),
-            (JsonValue.Object(("type", JsonValue.String("http"))), CollectionsModel.RemoteType),
-        ];
-        foreach (var (config, expected) in cases)
-        {
-            var target = CollectionsModel.TargetOf(config, "/Users/x");
-            Assert.Equal(expected, target);
-            Assert.DoesNotContain("SECRET", target);
-        }
-    }
-
-    [Fact]
-    public void TargetShortensAScopedPackageAndTheHomeFolder()
-    {
-        Assert.Equal("npx …/server-filesystem ~/Documents",
-            CollectionsModel.TargetOf(AppStateHarness.LocalConnector("npx", "-y", "@modelcontextprotocol/server-filesystem", "/Users/x/Documents").Config, "/Users/x"));
-    }
-
-    /// <summary>
-    /// A connector authored on Windows abbreviates its home folder the same way, whichever
-    /// separator follows it and however its letters are cased.
-    /// </summary>
-    [Fact]
-    public void TargetShortensAWindowsHomeFolder()
-    {
-        Assert.Equal(@"node ~\srv\index.js …/pkg@1.2 ~\a.js",
-            CollectionsModel.TargetOf(AppStateHarness.LocalConnector("node", @"C:\Users\x\srv\index.js", "@scope/pkg@1.2", @"c:\users\X\a.js").Config,
-                @"C:\Users\x"));
-    }
-
-    [Fact]
-    public void TargetShowsAUrlArgumentsSchemeAndHostOnly() =>
-        AssertTarget(AppStateHarness.LocalConnector("tool", "https://me:pw@h.example:8443/x?token=t#frag"), "tool https://h.example:8443", "pw");
-
-    [Fact]
-    public void TargetLeavesOutASlackWebhooksPath() =>
-        AssertTarget(AppStateHarness.LocalConnector("tool", "https://hooks.slack.com/services/T000/B000/XXXXsecret"), "tool https://hooks.slack.com", "XXXXsecret");
-
-    [Fact]
-    public void TargetLeavesOutFlagsAndTheirValues() =>
-        AssertTarget(AppStateHarness.LocalConnector("/usr/local/bin/tool", "--api-key", "abc", "--port", "80", "--token=abc"), "tool", "abc");
-
-    [Fact]
-    public void TargetLeavesOutAHeaderFlag() =>
-        AssertTarget(AppStateHarness.LocalConnector("tool", "-H", "X-Api-Key: abc", "https://h.example/x"), "tool https://h.example", "abc");
-
-    [Fact]
-    public void TargetLeavesOutAnEnvironmentAssignment() =>
-        AssertTarget(AppStateHarness.LocalConnector("docker", "run", "-i", "--rm", "-e", "GITHUB_TOKEN=abc", "ghcr.io/github/github-mcp-server"),
-            "docker ghcr.io/github/github-mcp-server", "abc");
-
-    [Fact]
-    public void TargetLeavesOutAShellString()
-    {
-        AssertTarget(AppStateHarness.LocalConnector("sh", "-c", "TOKEN=abc node srv.js"), "sh", "abc");
-        AssertTarget(AppStateHarness.LocalConnector("sh", "-c", "curl -H 'Authorization: Bearer abc' https://h.example/x"), "sh", "abc");
-    }
-
-    [Fact]
-    public void TargetLeavesOutAnAttachedShortFlagValue() => AssertTarget(AppStateHarness.LocalConnector("mysql-mcp", "-pSECRET"), "mysql-mcp", "SECRET");
-
-    [Fact]
-    public void TargetLeavesOutAShortPositionalSecret() => AssertTarget(AppStateHarness.LocalConnector("tool", "hunter2"), "tool", "hunter2");
-
-    [Fact]
-    public void TargetLeavesOutAnUnprefixedKey() => AssertTarget(AppStateHarness.LocalConnector("tool", "sk_live_abc123"), "tool", "sk_live");
-
-    [Fact]
-    public void TargetLeavesOutAConnectionString() => AssertTarget(AppStateHarness.LocalConnector("tool", "Server=h;Password=x"), "tool", "Password=x");
-
-    [Fact]
-    public void TargetLeavesOutInlineJson() => AssertTarget(AppStateHarness.LocalConnector("tool", "--config", """{"apiKey":"abc"}"""), "tool", "abc");
-
-    [Fact]
-    public void TargetLeavesOutTheValueOfASecretNamedFlagWhateverItsCase()
-    {
-        AssertTarget(AppStateHarness.LocalConnector("tool", "--token", "x.y"), "tool", "x.y");
-        AssertTarget(AppStateHarness.LocalConnector("tool", "--TOKEN", "abc.def"), "tool", "abc.def");
-    }
-
-    /// <summary>
-    /// A command line written as one string is split into launcher and arguments and each word
-    /// held to the rule, so its last word — often a flag's value — is never shown for the launcher.
-    /// </summary>
-    [Fact]
-    public void TargetSplitsACommandLineWrittenAsOneString()
-    {
-        AssertTarget(AppStateHarness.LocalConnector("cmd", "/c", "npx -y @acme/server --api-key hunter2"), "npx …/server", "hunter2");
-        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("npx -y server --token hunter2")))), "npx", "hunter2");
-        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("tool --token a.b")))), "tool", "a.b");
-        const string quoted = "npx -y mcp-remote https://h.example/mcp --header \"Authorization: Bearer abc\"";
-        AssertTarget(AppStateHarness.LocalConnector("cmd", "/c", quoted), "h.example", "abc");
-        Assert.DoesNotContain("Bearer", CollectionsModel.TargetOf(AppStateHarness.LocalConnector("cmd", "/c", quoted).Config, "/Users/x"));
-    }
-
-    /// <summary>
-    /// A quoted argument in a one-string command line — a header value, some JSON — is one
-    /// argument, and one holding whitespace fails every shape the column shows; an unterminated
-    /// quote runs to the end as part of its word.
-    /// </summary>
-    [Fact]
-    public void TargetLeavesOutAQuotedArgumentInACommandLine()
-    {
-        AssertTarget(AppStateHarness.LocalConnector("cmd", "/c", "tool --header \"X-Key: abc.def extra\""), "tool", "abc.def");
-        AssertTarget(AppStateHarness.LocalConnector("cmd", "/c", "npx -y @acme/server --config '{\"k\":\"v.w\"}'"), "npx …/server", "v.w");
-        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("tool \"abc.def extra")))), "tool", "abc.def");
-        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("\"hunter.2 x\" srv.js")))), "srv.js", "hunter");
-    }
-
-    /// <summary>
-    /// A command line is tokenized the way a shell passes it, so a quoted or partly quoted flag
-    /// is still a flag, its value still drops, and only the first argument is the launcher.
-    /// </summary>
-    [Fact]
-    public void TargetTokenizesACommandLineLikeAShell()
-    {
-        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String(@"""C:\Program Files\Tool\tool.exe"" --api-key hunter.2x")))),
-            "tool", "hunter.2x");
-        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("tool \"--token\" hunter.2x")))), "tool", "hunter.2x");
-        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("tool --to\"ken\" hunter.2x")))), "tool", "hunter.2x");
-        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String("tool \"a b\" x.y")))), "tool x.y", "a b");
-        // An escaped quote does not close the argument, so `c.d` stays inside it.
-        AssertTarget(new McpEntry(JsonValue.Object(("command", JsonValue.String(@"tool ""a\""b c.d""")))), "tool", "c.d");
-    }
-
-    /// <summary>
-    /// A command that is a path is never split, even with a space in it; one whose last component
-    /// holds a space had arguments packed into it, and names no launcher.
-    /// </summary>
-    [Fact]
-    public void TargetNamesALauncherUnderProgramFiles()
-    {
-        AssertTarget(AppStateHarness.LocalConnector(@"C:\Program Files\nodejs\node.exe", "index.js"), "node index.js", "Program");
-        AssertTarget(AppStateHarness.LocalConnector(@"""C:\Program Files\nodejs\node.exe""", "index.js"), "node index.js", "Program");
-        AssertTarget(AppStateHarness.LocalConnector(@"C:\Program Files\nodejs\npx.cmd", "-y", "mcp-remote", "https://h.example/mcp"), "h.example", "npx");
-        AssertTarget(AppStateHarness.LocalConnector("/opt/bin/tool --password hunter.2x", "srv.js"), "srv.js", "hunter.2x");
-        AssertTarget(AppStateHarness.LocalConnector(@"C:\Program Files (x86)\Tool\tool.exe", "index.js"), "tool index.js", "Program");
-        // Plain words packed after a Unix path do not cost it its launcher.
-        AssertTarget(AppStateHarness.LocalConnector("/usr/bin/tool srv"), "tool", "srv");
-    }
-
-    /// <summary>
-    /// A path command with a flag, a URL or a switch packed into it names no launcher: its last
-    /// component could be the tail of an argument.
-    /// </summary>
-    [Fact]
-    public void TargetNamesNoLauncherForAPathCommandWithAPackedArgument()
-    {
-        AssertTarget(AppStateHarness.LocalConnector("cmd", "/c", @"C:\tools\notify.exe https://hooks.slack.com/services/T000/B000/XXXXsecret"), "", "XXXXsecret");
-        AssertTarget(AppStateHarness.LocalConnector("/usr/local/bin/mcp --api-key abc/hunter.2x"), "", "hunter.2x");
-        AssertTarget(AppStateHarness.LocalConnector(@"C:\x\tool.exe --token ab\cd.ef"), "", "cd.ef");
-    }
-
-    /// <summary>
-    /// A flag named for a secret at the end of a command guards the first argument after it,
-    /// whether the command is a path or a tokenized line.
-    /// </summary>
-    [Fact]
-    public void TargetLeavesOutTheFirstArgumentAfterASecretNamedFlagInTheCommand()
-    {
-        AssertTarget(AppStateHarness.LocalConnector("/opt/bin/tool --password", "hunter.2x"), "", "hunter.2x");
-        AssertTarget(AppStateHarness.LocalConnector("tool --token", "abc.def"), "tool", "abc.def");
-    }
-
-    /// <summary>
-    /// A quote packed into a path command costs it its launcher, and a quoted or partly quoted
-    /// flag at its end is still a flag named for a secret.
-    /// </summary>
-    [Fact]
-    public void TargetReadsAQuotedFlagPackedIntoAPathCommand()
-    {
-        AssertTarget(AppStateHarness.LocalConnector(@"/opt/bin/tool ""--password""", "hunter.2x"), "", "hunter.2x");
-        AssertTarget(AppStateHarness.LocalConnector(@"C:\x\tool.exe ""--token"" ab\cd.ef"), "", "cd.ef");
-        AssertTarget(AppStateHarness.LocalConnector(@"/opt/bin/tool --to""ken""", "hunter.2x"), "", "hunter.2x");
-    }
-
-    /// <summary>
-    /// Each check that keeps a path command plain is load-bearing: a Windows switch and an
-    /// assignment packed in both cost it its launcher.
-    /// </summary>
-    [Fact]
-    public void TargetNamesNoLauncherForAPathCommandWithASwitchOrAnAssignment()
-    {
-        AssertTarget(AppStateHarness.LocalConnector(@"C:\x\tool.exe /key ab\cd.ef"), "", "cd.ef");
-        AssertTarget(AppStateHarness.LocalConnector("/opt/bin/tool key=ab/cd.ef"), "", "cd.ef");
-    }
-
-    /// <summary>
-    /// A password holding an unencoded <c>/</c>, <c>?</c> or <c>#</c> ends the authority early; what
-    /// is left of the userinfo is refused as a host rather than shown, and so is a scheme that is not one.
-    /// </summary>
-    [Fact]
-    public void TargetRefusesAUrlWhoseUserinfoHoldsADelimiter()
-    {
-        AssertTarget(AppStateHarness.LocalConnector("tool", "postgres://admin:hunter2#x@db.local/app"), "tool", "hunter2");
-        AssertTarget(AppStateHarness.LocalConnector("tool", "https://apikey:sk_live_abc/x@api.example.com"), "tool", "sk_live");
-        AssertTarget(AppStateHarness.LocalConnector("tool", "https://sk_live_abc/x@h"), "tool", "sk_live");
-        AssertTarget(AppStateHarness.LocalConnector("tool", "sk-proj-abc123://x"), "tool", "abc123");
-        AssertTarget(AppStateHarness.LocalConnector("tool", "mongodb+srv://u:p@cluster.example.net/db"), "tool mongodb+srv://cluster.example.net", "u:p");
-        // The remote decoder accepts this URL, and its host is still checked.
-        AssertTarget(AppStateHarness.LocalConnector("npx", "-y", "mcp-remote", "https://token123/x@h.example/mcp"), CollectionsModel.RemoteType, "token123");
-    }
-
-    /// <summary>
-    /// A long random token is left out even with a <c>/</c> in it, which <c>LooksLikeCredential</c>
-    /// would not consider; paths and names with a dot, a hyphen or no digits are kept.
-    /// </summary>
-    [Fact]
-    public void TargetLeavesOutARandomTokenEvenWithASlash()
-    {
-        AssertTarget(AppStateHarness.LocalConnector("tool", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"), "tool", "wJalr");
-        Assert.Equal("tool ~/Documents ghcr.io/github/github-mcp-server ./build/v2Server",
-            CollectionsModel.TargetOf(AppStateHarness.LocalConnector("tool", "/Users/x/Documents", "ghcr.io/github/github-mcp-server", "./build/v2Server").Config,
-                "/Users/x"));
-    }
-
-    /// <summary>A Windows switch's value is not a path: a colon anywhere but a drive letter's drops it.</summary>
-    [Fact]
-    public void TargetLeavesOutAWindowsSwitchesValue()
-    {
-        AssertTarget(AppStateHarness.LocalConnector("tool", "/p:Hunter2", "/token:abc", "/x:secret"), "tool", "secret");
-        AssertTarget(AppStateHarness.LocalConnector("tool", @"C:\Users\x\Docs"), @"tool C:\Users\x\Docs", "secret");
-    }
-
-    /// <summary>A secret shaped like a package still vanishes when a flag named for a secret precedes it.</summary>
-    [Fact]
-    public void TargetLeavesOutWhateverFollowsASecretNamedFlag() =>
-        AssertTarget(AppStateHarness.LocalConnector("tool", "--password", "s3cr3t-pass", "--pass", "./x.key", "index.js"), "tool index.js", "s3cr3t");
-
-    [Fact]
-    public void TargetLeavesOutAPathCarryingAnAssignment() => AssertTarget(AppStateHarness.LocalConnector("tool", "/usr/bin/env TOKEN=abc"), "tool", "abc");
-
-    [Fact]
-    public void TargetLeavesOutACredentialShapedArtefact() =>
-        AssertTarget(AppStateHarness.LocalConnector("tool", "sk-abc.def", "ghp_0123456789abcdef0123456789abcdef.js"), "tool", "abc");
-
-    [Fact]
-    public void TargetShowsTheServerAPackageRunnerNames()
-    {
-        Assert.Equal("uvx mcp-server-fetch", CollectionsModel.TargetOf(AppStateHarness.LocalConnector("uvx", "mcp-server-fetch").Config, "/Users/x"));
-        Assert.Equal("python mcp_server.py", CollectionsModel.TargetOf(AppStateHarness.LocalConnector("python", "mcp_server.py").Config, "/Users/x"));
-    }
-
-    /// <summary>A bare hyphenated word anywhere but the server slot is as likely a password as a package.</summary>
-    [Fact]
-    public void TargetLeavesOutABareHyphenatedWordOutsideTheServerSlot()
-    {
-        AssertTarget(AppStateHarness.LocalConnector("tool", "hunter-2"), "tool", "hunter-2");
-        AssertTarget(AppStateHarness.LocalConnector("tool", "-p", "s3cr3t-pass"), "tool", "s3cr3t");
-        AssertTarget(AppStateHarness.LocalConnector("tool", "correct-horse-battery-staple"), "tool", "horse");
-        AssertTarget(AppStateHarness.LocalConnector("uvx", "--from", "x", "my-server", "extra-word"), "uvx", "extra-word");
-    }
-
-    [Fact]
-    public void TargetLeavesOutThePwFlagsValue() => AssertTarget(AppStateHarness.LocalConnector("tool", "--pw", "a.b"), "tool", "a.b");
-
-    /// <summary>
-    /// The server slot is the first positional argument, whatever it holds: a bare word there is
-    /// shown because it cannot be told from a package name, and only there.
-    /// </summary>
-    [Fact]
-    public void TargetTrustsOnlyTheFirstPositionalAfterAPackageRunner()
-    {
-        Assert.Equal("npx hunter-2 …/pkg",
-            CollectionsModel.TargetOf(AppStateHarness.LocalConnector("npx", "-y", "hunter-2", "@scope/pkg", "other-word").Config, "/Users/x"));
-    }
-
-    /// <summary>
-    /// Claude Desktop on Windows runs a server through <c>cmd /c</c>: what cmd runs is the launcher,
-    /// named without its <c>.cmd</c>, and a bridge spelled that way is still a remote connector.
-    /// </summary>
-    [Fact]
-    public void TargetUnwrapsCmdAndAWindowsLaunchersExtension()
-    {
-        Assert.Equal(@"npx …/server-filesystem ~\Docs",
-            CollectionsModel.TargetOf(AppStateHarness.LocalConnector("cmd", "/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", @"C:\Users\x\Docs").Config,
-                @"C:\Users\x"));
-        Assert.Equal("npx mcp-server-fetch", CollectionsModel.TargetOf(AppStateHarness.LocalConnector("npx.cmd", "-y", "mcp-server-fetch").Config, "/Users/x"));
-        AssertTarget(AppStateHarness.LocalConnector("cmd", "/c", "tool", "--token", "abc"), "tool", "abc");
-        AssertTarget(AppStateHarness.LocalConnector("CMD.EXE", "/K", "npx", "-y", "mcp-remote", "https://h.example/mcp", "--header", "Authorization: Bearer abc"),
-            "h.example", "abc");
-    }
-
-    /// <summary>
-    /// A launcher that could itself be a secret is left out, and the arguments still show; a
-    /// command line's words after its first are arguments, held to the rule like any other.
-    /// </summary>
-    [Fact]
-    public void TargetLeavesOutALauncherThatCouldBeASecret()
-    {
-        AssertTarget(AppStateHarness.LocalConnector("TOKEN=abc node", "srv.js"), "srv.js", "abc");
-        AssertTarget(AppStateHarness.LocalConnector("ghp_0123456789abcdef0123456789abcdef", "srv.js"), "srv.js", "ghp_");
-    }
 
     /// <summary>
     /// End to end through the rows: a connector carrying secrets five ways shows none of them.
@@ -998,7 +663,7 @@ public class CollectionsModelTests
         Assert.Equal(CollectionsModel.ConnectorTally(3), model.ConnectorCount);
         Assert.False(model.CanRefresh);
 
-        // A synced entry that records no file name either — a hand-edited or foreign collections
+        // A synced entry that records no file name either - a hand-edited or foreign collections
         // file. Nothing asks to be located, but there is still no document to name or to read.
         h.Seed(state, File_(("Shared", Published("shared")), ("Team", new CollectionsFile.Entry(CollectionKind.Synced))),
             Cache(published: located.Published));
@@ -1211,7 +876,7 @@ public class CollectionsModelTests
         var raised = new List<string?>();
         model.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
 
-        // The active collection is what is showing, so naming it again is the same selection —
+        // The active collection is what is showing, so naming it again is the same selection -
         // as is naming a collection that does not exist, which falls back to the same one.
         model.Selected = "Default";
         model.Selected = null;
@@ -1305,7 +970,7 @@ public class CollectionsModelTests
         Assert.DoesNotContain(nameof(CollectionsModel.Items), raised);
         Assert.Same(items, model.Items);
 
-        // One that alters an item — which collection is active — replaces it.
+        // One that alters an item - which collection is active - replaces it.
         raised.Clear();
         state.SwitchCollection("Work");
         Assert.Contains(nameof(CollectionsModel.Items), raised);
@@ -1410,7 +1075,7 @@ public class CollectionsModelTests
     /// <summary>
     /// The kind guard specifically, not just an empty tick set: Selected clears the ticks on
     /// every switch, so a leg that ticks a row and only then switches to the synced collection
-    /// would find the predicate false regardless of the IsSynced term — the empty tick set
+    /// would find the predicate false regardless of the IsSynced term - the empty tick set
     /// alone would explain it. Reload does not clear ticks, so ticking first and letting the
     /// *same* collection turn synced underneath is the one path that isolates the guard.
     /// </summary>
@@ -1470,7 +1135,7 @@ public class CollectionsModelTests
 
     /// <summary>
     /// Delete(names, collection) persists but never applies on its own; the caller applies only
-    /// when the collection losing rows is the active one — the same rule AppState.SetEnabled follows.
+    /// when the collection losing rows is the active one - the same rule AppState.SetEnabled follows.
     /// </summary>
     [Fact]
     public void DeleteCheckedAppliesOnlyWhenTheActiveCollectionLosesRows()
@@ -1509,7 +1174,7 @@ public class CollectionsModelTests
     }
 
     /// <summary>
-    /// The copy lands in the target, disabled, and the ticks go with it — the same clearing
+    /// The copy lands in the target, disabled, and the ticks go with it - the same clearing
     /// DeleteChecked does on success. Every copy arrives disabled, so this never applies.
     /// </summary>
     [Fact]
@@ -1519,7 +1184,7 @@ public class CollectionsModelTests
         using var state = h.Create();
         // Created first: CreateActiveCopy starts a collection as a copy of whichever one is
         // active when it is made, so making Spare before alpha exists keeps alpha out of that
-        // starting snapshot — otherwise the copy below would collide with it and land as
+        // starting snapshot - otherwise the copy below would collide with it and land as
         // "alpha 2" instead, leaving the original untouched and this test green for the wrong
         // reason.
         Assert.Null(state.CreateActiveCopy("Spare"));
@@ -1537,8 +1202,8 @@ public class CollectionsModelTests
     }
 
     /// <summary>
-    /// The two early-outs CopyChecked documents: a target CopyDestinations does not enable —
-    /// the source itself, or a synced collection — and an empty tick set. Both return false without
+    /// The two early-outs CopyChecked documents: a target CopyDestinations does not enable -
+    /// the source itself, or a synced collection - and an empty tick set. Both return false without
     /// reaching AppState.MakeLocalCopy, so nothing lands anywhere and the ticks are left standing.
     /// The last error is cleared, so the window does not show it again as if this copy had failed.
     /// </summary>
@@ -1582,6 +1247,77 @@ public class CollectionsModelTests
 
         Assert.False(model.CopyChecked("Spare"));   // nothing ticked, so there is nothing to copy
         Assert.Equal(before, state.Store.Collections["Spare"]);   // and nothing about Spare changed
+    }
+
+    /// <summary>
+    /// A copy that lands says so on the count line, naming how many landed and where, since the
+    /// window stays on the source and the ticks clear. The note lasts until the next tick, the next
+    /// action or another collection; a copy that does not land, or one whose clashes were all
+    /// skipped, says nothing. The count line repaints each time.
+    /// </summary>
+    [Fact]
+    public void ACopyConfirmsOnTheCountLineUntilTheNextTickActionOrSelection()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateActiveCopy("Spare"));
+        Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Default"));
+        Assert.Null(state.Upsert("beta", AppStateHarness.LocalConnector("/bin/beta"), null, "Default"));
+        var model = h.CollectionsModel(state, "Default", "alpha");
+        var countRaises = 0;
+        model.PropertyChanged += (_, e) => countRaises += e.PropertyName == nameof(CollectionsModel.ConnectorCount) ? 1 : 0;
+        var tally = CollectionsModel.ConnectorTally(state.Store.Collections["Default"].Mcps.Count);
+        Assert.Null(model.CopyConfirmation);
+        Assert.Equal(tally, model.ConnectorCount);
+
+        Assert.True(model.CopyChecked("Spare"));
+        Assert.Equal("Copied 1 connector to “Spare”", model.CopyConfirmation);
+        Assert.Equal(tally + " · Copied 1 connector to “Spare”", model.ConnectorCount);
+        Assert.True(countRaises > 0);   // the count line repaints
+
+        countRaises = 0;
+        model.SetChecked("alpha", true);
+        Assert.Null(model.CopyConfirmation);   // the next tick clears it
+        Assert.Equal(tally, model.ConnectorCount);
+        Assert.True(countRaises > 0);
+
+        model.SetChecked("beta", true);
+        h.Dialogs.NextPromptAnswer = "Fresh";
+        Assert.True(model.CopyCheckedIntoNewCollection());
+        Assert.Equal("Copied 2 connectors to “Fresh”", model.CopyConfirmation);   // Copy to ▸ New Collection confirms too
+        model.Selected = "Spare";
+        Assert.Null(model.CopyConfirmation);   // another collection clears it
+
+        model.Selected = "Default";
+        model.SetChecked("alpha", true);
+        Assert.True(model.CopyChecked("Spare"));
+        Assert.NotNull(model.CopyConfirmation);
+        h.Dialogs.NextPromptAnswer = null;
+        model.Rename();
+        Assert.Null(model.CopyConfirmation);   // the next action clears it, even one cancelled
+
+        // Spare now holds alpha: skipping the clash copies nothing, so there is nothing to confirm.
+        model.SetChecked("alpha", true);
+        Assert.True(model.CopyChecked("Spare", new Dictionary<string, ImportChoice> { ["alpha"] = ImportChoice.Skip }));
+        Assert.Null(model.CopyConfirmation);   // a skipped clash is not counted
+
+        // Some clashes answered Skip: only what landed is counted. beta is new to Spare, alpha clashes.
+        model.SetChecked("alpha", true);
+        model.SetChecked("beta", true);
+        Assert.True(model.CopyChecked("Spare", new Dictionary<string, ImportChoice> { ["alpha"] = ImportChoice.Skip }));
+        Assert.Equal("Copied 1 connector to “Spare”", model.CopyConfirmation);   // the skipped clash is not counted
+        // Spare now holds both: replace one clash, skip the other, and the replaced one is counted.
+        model.SetChecked("alpha", true);
+        model.SetChecked("beta", true);
+        Assert.True(model.CopyChecked("Spare", new Dictionary<string, ImportChoice> { ["alpha"] = ImportChoice.Replace, ["beta"] = ImportChoice.Skip }));
+        Assert.Equal("Copied 1 connector to “Spare”", model.CopyConfirmation);   // a Replace lands, a Skip does not
+
+        // A copy that does not land confirms nothing.
+        model.SetChecked("alpha", true);
+        h.Dialogs.NextPromptAnswer = "Spare";
+        Assert.False(model.CopyCheckedIntoNewCollection());
+        Assert.NotNull(model.LastError);
+        Assert.Null(model.CopyConfirmation);
     }
 
     /// <summary>

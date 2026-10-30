@@ -2,7 +2,7 @@ public struct FormModel: Equatable, Sendable {
     public var command: String
     public var args: [String]
     public var env: [String: String]
-    /// Keys the form has no widget for — preserved verbatim, shown read-only.
+    /// Keys the form has no widget for - preserved verbatim, shown read-only.
     public var additional: [String: JSONValue]
 
     public init(command: String = "", args: [String] = [],
@@ -60,7 +60,7 @@ public enum FormMapper {
         }
 
         model.additional = object.filter { !formKeys.contains($0.key) }
-        return FormAnalysis(model: model, lost: lost.sorted())
+        return FormAnalysis(model: model, lost: lost.sorted { $0.ordinallyPrecedes($1) })
     }
 
     public static func serialize(_ model: FormModel) -> JSONValue {

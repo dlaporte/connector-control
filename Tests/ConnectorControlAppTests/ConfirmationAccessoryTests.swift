@@ -67,7 +67,7 @@ final class ConfirmationAccessoryTests: XCTestCase {
         XCTAssertLessThanOrEqual(other, plain * 1.5 + 1, "bounded: \(other) against \(plain)")
     }
 
-    /// Ordinary text in scripts the code face does not have — Chinese, Arabic, Devanagari, Thai — is drawn whole:
+    /// Ordinary text in scripts the code face does not have - Chinese, Arabic, Devanagari, Thai - is drawn whole:
     /// its ink stays clear of its box's edges. A line of stacked marks is cut off by its own box, and the line
     /// beside it stays blank.
     func testOrdinaryTextInOtherScriptsIsNotClippedAndMarksNeverReachTheNextLine() throws {

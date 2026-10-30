@@ -132,7 +132,7 @@ final class AppStateHarness {
     }
 
     /// Writes both collection files where the app reads them, then reloads so the state picks
-    /// them up — the shape a subscribe or a publish would leave behind.
+    /// them up - the shape a subscribe or a publish would leave behind.
     func seed(_ state: AppState, file: CollectionsFile, cache: CollectionsLocalCache? = nil) throws {
         try file.save(to: storeDir.appendingPathComponent(CollectionsFile.fileName), staging: nil)
         try (cache ?? CollectionsLocalCache(synced: [:], published: [:]))
@@ -189,7 +189,7 @@ final class AppStateHarness {
         dir.dispose()
     }
 
-    /// The harness plus its AppState, in one call — the shape most tests
+    /// The harness plus its AppState, in one call - the shape most tests
     /// need. `let (h, state) = AppStateHarness.started(); defer { h.dispose() }`.
     /// A test that must act on the harness BEFORE the AppState exists (seed a
     /// fake's state, change a setting) still uses `AppStateHarness()` +
@@ -201,7 +201,7 @@ final class AppStateHarness {
     }
 
     /// Advances the mtime of Claude's config and the master store (whichever
-    /// currently exist) past whatever they currently are — called after an
+    /// currently exist) past whatever they currently are - called after an
     /// action (direct or through AppState) that must be observably distinct,
     /// to the watchers, from whatever they last saw at arm time. Replaces
     /// `Thread.sleep` used only to separate two writes' mtimes by real

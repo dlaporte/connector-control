@@ -1,7 +1,9 @@
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security.Principal;
 using System.Text;
 using ConnectorControl.Core.State;
+using Microsoft.Win32.SafeHandles;
 
 namespace ConnectorControl.Core.Transport;
 
@@ -20,7 +22,7 @@ public static class ControlEndpoint
 
     /// <summary>The pipe: <c>ConnectorControl-&lt;user SID&gt;</c>, one per account on the PC; with
     /// CONNECTOR_CONTROL_STORE_DIR set, a suffix from that folder, so a development run or a test host never
-    /// meets the app the person is running — as the Mac's socket moves with the store folder.</summary>
+    /// meets the app the person is running - as the Mac's socket moves with the store folder.</summary>
     public static string PipeName(IReadOnlyDictionary<string, string> environment, string userSid)
     {
         var name = PipePrefix + userSid;
@@ -87,26 +89,41 @@ public static class ControlEndpoint
         return block.Append('\0').ToString();
     }
 
-    /// <summary>Whether a token runs elevated: its owner — who owns what it creates, the pipe among them — is not
-    /// its user, as for an administrator's elevated token, owned by BUILTIN\Administrators. Its pipe check admits
-    /// only a pipe of the same owner, so it cannot reach the person's app, and an app it started would serve a
-    /// pipe out of reach of everything the person runs as themselves. An owner or user Windows cannot name
-    /// counts as elevated: the tool then starts nothing.</summary>
-    public static bool IsElevated(string? ownerSid, string? userSid) =>
-        ownerSid is null || userSid is null || !string.Equals(ownerSid, userSid, StringComparison.OrdinalIgnoreCase);
+    /// <summary>The types <c>GetTokenInformation</c> gives for TokenElevationType: a token that was never split
+    /// (UAC off, the built-in Administrator account, a standard user), the elevated half of a split one, and its
+    /// filtered half, which an administrator runs with by default.</summary>
+    public const int TokenElevationTypeDefault = 1;
+    public const int TokenElevationTypeFull = 2;
+    public const int TokenElevationTypeLimited = 3;
 
-    /// <summary>Whether this process runs elevated, as <see cref="IsElevated(string?, string?)"/> reads it.</summary>
+    /// <summary>Whether a token runs elevated: it is the elevated half of a split token, what "Run as administrator"
+    /// gives with UAC on. Such a token's pipe check admits only a pipe of the same owner, so it cannot reach the
+    /// person's app, and an app it started would serve a pipe out of reach of everything the person runs as
+    /// themselves. A token that was never split is how everything the person runs starts - with UAC off, or as the
+    /// built-in Administrator account - so an app it starts serves them all. A type Windows does not give, or none
+    /// at all, counts as elevated: the tool then starts nothing.</summary>
+    public static bool IsElevated(int? elevationType) =>
+        elevationType is not (TokenElevationTypeDefault or TokenElevationTypeLimited);
+
+    /// <summary>Whether this process runs elevated, as <see cref="IsElevated(int?)"/> reads its token's elevation type.</summary>
     [SupportedOSPlatform("windows")]
     public static bool IsElevated()
     {
         using var identity = WindowsIdentity.GetCurrent();
-        return IsElevated(identity.Owner?.Value, identity.User?.Value);
+        return IsElevated(GetTokenInformation(identity.AccessToken, TokenElevationTypeClass, out var type, sizeof(int), out _) ? type : null);
     }
+
+    /// <summary>TOKEN_INFORMATION_CLASS's TokenElevationType.</summary>
+    private const int TokenElevationTypeClass = 18;
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetTokenInformation(SafeAccessTokenHandle token, int informationClass, out int information, int length, out int returnedLength);
 
     /// <summary>Where the app records its own executable, beside the copy of the tool it keeps.</summary>
     public const string AppPathFileName = "app-path.txt";
 
-    /// <summary>The app the tool starts: the one beside it — the packaged tool sits beside ConnectorControl.exe —
+    /// <summary>The app the tool starts: the one beside it - the packaged tool sits beside ConnectorControl.exe -
     /// else the one the app recorded beside the copy it keeps in bin\; null when neither is there, or the
     /// record names anything but a full path to ConnectorControl.exe: a relative one would resolve against
     /// whatever folder the tool was run from.</summary>
@@ -125,9 +142,9 @@ public static class ControlEndpoint
             && exists(recorded) ? recorded : null;
     }
 
-    /// <summary>What the tool says for the version a build stamped — .NET's informational version, which
-    /// carries the source revision after a "+": its SemVer, or "development build" for a stamp that is none
-    /// — an empty one — or for <c>0.0.0</c>, what a build nobody stamped carries (Directory.Build.props), so
+    /// <summary>What the tool says for the version a build stamped - .NET's informational version, which
+    /// carries the source revision after a "+": its SemVer, or "development build" for a stamp that is none -
+    /// an empty one - or for <c>0.0.0</c>, what a build nobody stamped carries (Directory.Build.props), so
     /// both platforms call such a build the same thing.</summary>
     public static string ToolVersion(string stamped) =>
         ControlVersion.Semantic(stamped) is { } version && version != "0.0.0" ? version : AppVersion.DevelopmentBuild;

@@ -32,7 +32,7 @@ public sealed class ConnectorRow : ObservableObject
 
     /// <summary>
     /// The caution glyph's tooltip, or null for no glyph: this connector's
-    /// launcher is not where Claude Desktop looks. Advisory only — the row
+    /// launcher is not where Claude Desktop looks. Advisory only - the row
     /// still toggles. <see cref="FlyoutModel"/> keeps it in step with AppState.ToolStatuses.
     /// </summary>
     public string? ToolWarning => toolWarning;

@@ -16,7 +16,7 @@ public sealed class TempDir : IDisposable
 
     /// <summary>
     /// Writes <paramref name="content"/> and pushes the file's modification time 2 seconds
-    /// past whatever the write itself just gave it — a deterministic stand-in for the
+    /// past whatever the write itself just gave it - a deterministic stand-in for the
     /// wall-clock sleep a file-watcher test would otherwise need so a second write's mtime is
     /// unambiguously later than the first's, even on file systems with coarse mtime
     /// resolution. <see cref="BumpModificationTime"/> is the half of this a caller needs on

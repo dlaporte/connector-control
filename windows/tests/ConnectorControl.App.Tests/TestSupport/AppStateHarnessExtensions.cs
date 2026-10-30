@@ -8,7 +8,7 @@ namespace ConnectorControl.App.Tests.TestSupport;
 /// PlatformServices bundle built from its fakes, for constructing windows
 /// (EditorWindow, SettingsWindow, FlyoutWindow) rather than passing fakes one by
 /// one. This lives here, not on AppStateHarness itself, because PlatformServices
-/// is an App type — the shared harness also compiles into Core.Tests, which
+/// is an App type - the shared harness also compiles into Core.Tests, which
 /// cannot reference the App project.
 /// </summary>
 internal static class AppStateHarnessExtensions

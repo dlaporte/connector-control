@@ -6,7 +6,7 @@ public static class StringExtensions
 {
     /// <summary>
     /// Swift's <c>trimmingCharacters(in: .whitespaces)</c>: strips Unicode
-    /// category Zs and TAB from both ends — but NOT newlines.
+    /// category Zs and TAB from both ends - but NOT newlines.
     /// </summary>
     public static string TrimSpaces(this string s)
     {

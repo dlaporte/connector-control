@@ -5,8 +5,8 @@ import ConnectorControlTransport
 
 /// Mirror: windows/tests/ConnectorControl.TestHost/Program.cs
 ///
-/// `connector-control-test-host <sandbox>`: the real control layer — AppState, ControlTools, the server
-/// and its socket — over a sandbox folder, with no window, no Claude and no updater, for the MCP
+/// `connector-control-test-host <sandbox>`: the real control layer - AppState, ControlTools, the server
+/// and its socket - over a sandbox folder, with no window, no Claude and no updater, for the MCP
 /// Inspector and the relay checks. Every path comes from the sandbox argument and none from this
 /// process's environment, so it never reaches a person's store or Claude's real config. The
 /// integration is on, confirmations are on, and every question is declined: gated changes are refused.

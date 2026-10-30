@@ -42,6 +42,17 @@ public class FormMapperTests
         Assert.Equal("", analysis.Model.Command);
     }
 
+    /// <summary>Ordinal, by UTF-16 unit, as the Mac mirror sorts: a key past the Basic Multilingual
+    /// Plane (a surrogate pair, 0xD83D…) lists before U+FF61.</summary>
+    [Fact]
+    public void TheLossListIsInOrdinalOrder()
+    {
+        var analysis = FormMapper.Analyze(JsonValue.Object(
+            ("command", JsonValue.String("x")),
+            ("env", JsonValue.Object(("\uFF61", JsonValue.Int(1)), ("\U0001F600", JsonValue.Int(2))))));
+        Assert.Equal(["env.\U0001F600 (number)", "env.\uFF61 (number)"], analysis.Lost);
+    }
+
     [Fact]
     public void NonObjectArgsOrEnvAreLost()
     {

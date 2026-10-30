@@ -8,9 +8,10 @@ import ConnectorControlState
 /// app. Where the person can write that folder (Homebrew on Intel makes it theirs) the link is made
 /// directly; elsewhere `osascript` makes it with administrator privileges, the paths and the prompt
 /// passed as the run handler's arguments and quoted with `quoted form of`, so no path is ever read as
-/// script or shell. A file at the link's path that is not a link is never replaced — the script checks
-/// again under the password, in case one appeared — and Remove takes away only this install's own link.
-/// An app run from where it will not stay installs nothing.
+/// script or shell. A file at the link's path that is not a link is never replaced - the script checks
+/// again under the password, in case one appeared - and Remove takes away only this install's own link.
+/// An app run from where it will not stay installs nothing, and nor does one in a folder that can be
+/// changed without an administrator: every account on the Mac runs the tool through the link.
 @MainActor
 public final class SymlinkCommandLineTool: CommandLineTool {
     public nonisolated static let defaultLinkPath = "/usr/local/bin/connector-control"
@@ -57,15 +58,18 @@ public final class SymlinkCommandLineTool: CommandLineTool {
     public var changes: AnyPublisher<Void, Never> { changed.eraseToAnyPublisher() }
     private let host: AppHost
     private let runScript: @Sendable ([String]) -> (Int32, String)
+    private let folderIsProtected: (String) -> Bool
 
     /// `runScript` runs `osascript` with its arguments, off the main actor, and gives back its exit status and
-    /// what it wrote on standard error; tests replace it.
+    /// what it wrote on standard error; `folderIsProtected` judges the folder holding the app. Tests replace both.
     public init(toolPath: String, linkPath: String = SymlinkCommandLineTool.defaultLinkPath, host: AppHost,
-                runScript: @escaping @Sendable ([String]) -> (Int32, String) = { SymlinkCommandLineTool.osascript($0) }) {
+                runScript: @escaping @Sendable ([String]) -> (Int32, String) = { SymlinkCommandLineTool.osascript($0) },
+                folderIsProtected: @escaping (String) -> Bool = { SymlinkCommandLineTool.folderIsProtected($0) }) {
         self.toolPath = toolPath
         self.linkPath = linkPath
         self.host = host
         self.runScript = runScript
+        self.folderIsProtected = folderIsProtected
     }
 
     private var destination: String? { try? FileManager.default.destinationOfSymbolicLink(atPath: linkPath) }
@@ -79,7 +83,7 @@ public final class SymlinkCommandLineTool: CommandLineTool {
 
     private var folder: String { (linkPath as NSString).deletingLastPathComponent }
 
-    private var isLink: Bool { (try? FileManager.default.destinationOfSymbolicLink(atPath: linkPath)) != nil }
+    private var isLink: Bool { destination != nil }
 
     public func install(completion: @escaping (String?) -> Void) {
         lastProblem = nil
@@ -89,6 +93,15 @@ public final class SymlinkCommandLineTool: CommandLineTool {
         // has neither state.
         guard !host.controlToolIsTransient else {
             completion(ClaudeIntegration.moveToApplicationsError)
+            return
+        }
+        // The link is on every account's PATH and, made under the password, is root's: an app in a folder that can
+        // be changed without an administrator - ~/Applications, Downloads - would let one account change what the
+        // others run. Platform idiom: Windows puts the tool on this person's own PATH only, so no other account
+        // ever runs it.
+        let appFolder = SymlinkCommandLineTool.appFolder(ofTool: toolPath)
+        guard folderIsProtected(appFolder) else {
+            completion(CommandLineToolText.unprotectedFolderError(appFolder))
             return
         }
         // Platform idiom: Windows refuses while its copy of the tool is missing; here the link points at the tool
@@ -181,6 +194,32 @@ public final class SymlinkCommandLineTool: CommandLineTool {
     /// here would still go, from the person's own folder: only the directory case is closed.
     private static func unlink(_ path: String) throws {
         guard Darwin.unlink(path) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+    }
+
+    /// The folder holding the app the tool is inside, or a development build's tool itself.
+    nonisolated static func appFolder(ofTool path: String) -> String {
+        ((ControlEndpoint.enclosingBundle(ofTool: path) ?? path) as NSString).deletingLastPathComponent
+    }
+
+    /// Whether a folder of this owner and these permissions can be changed only by an administrator: it is
+    /// root's, and not writable by everyone. /Applications, root's and writable by the admin group, is one.
+    nonisolated static func isProtected(owner: Int, permissions: Int) -> Bool {
+        owner == 0 && permissions & 0o002 == 0
+    }
+
+    /// Whether `folder`, links resolved, and every folder above it is protected (`isProtected`), as the disk
+    /// says: a protected folder inside one the person can change could be moved aside and replaced. A folder
+    /// that cannot be read is not.
+    public nonisolated static func folderIsProtected(_ folder: String) -> Bool {
+        var url = URL(fileURLWithPath: folder).resolvingSymlinksInPath()
+        while true {
+            guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+                  let owner = (attributes[.ownerAccountID] as? NSNumber)?.intValue,
+                  let permissions = (attributes[.posixPermissions] as? NSNumber)?.intValue,
+                  isProtected(owner: owner, permissions: permissions) else { return false }
+            if url.path == "/" { return true }
+            url.deleteLastPathComponent()
+        }
     }
 
     /// The reason in what `osascript` wrote: without its "7:332: execution error: " lead and its " (1)" exit status.

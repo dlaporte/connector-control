@@ -44,7 +44,7 @@ public enum ClaudeConfigIO {
         try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
     }
 
-    /// Refuses a config whose top level, or whose mcpServers object, names one key twice — exactly, or
+    /// Refuses a config whose top level, or whose mcpServers object, names one key twice - exactly, or
     /// in two spellings Unicode counts as the same text, such as an é composed and decomposed. This
     /// app's parser keeps one of them and Claude's may keep the other, so a file put back as it stands
     /// could run a server the question never listed. It reads the raw bytes, since a parser has
@@ -127,22 +127,10 @@ public enum ClaudeConfigIO {
     /// the one shape this app can never work with, so that alone throws.
     static func parseRoot(_ data: Data) throws -> [String: Any] {
         guard !data.isEmpty else { return [:] }
-        // Platform idiom: JSONSerialization also reads UTF-16 and UTF-32, which the Windows reader, UTF-8
-        // only, refuses; refused here alike, and before `requireUniqueKeys` would read their bytes as
-        // UTF-8. Either one's byte-order mark, or a zero byte among the first four, which UTF-8 JSON
-        // never has, marks one.
-        let head = [UInt8](data.prefix(4))
-        if head.starts(with: [0xFE, 0xFF]) || head.starts(with: [0xFF, 0xFE]) || head.contains(0) {
-            throw ClaudeConfigError.malformed(notJSONError)
-        }
-        // Platform idiom: the Windows reader refuses arrays and objects nested past 64, where
-        // JSONSerialization reads deeper; refused here alike, as JSONValue.parse refuses them.
-        let text = String(decoding: data, as: UTF8.self)
-        guard McpSession.nests(atMost: McpSession.maxNestingDepth, text) else {
-            throw ClaudeConfigError.malformed(notJSONError)
-        }
-        // A trailing comma, which JSONSerialization reads and Claude Desktop does not, is refused as on Windows.
-        guard !McpSession.hasTrailingComma(text) else { throw ClaudeConfigError.malformed(notJSONError) }
+        // Platform idiom: JSONSerialization also reads UTF-16 and UTF-32, nesting past 64 and a trailing
+        // comma (which Claude Desktop does not), all of which the Windows reader refuses; refused here
+        // alike, and before `requireUniqueKeys` would read UTF-16 or UTF-32 bytes as UTF-8.
+        guard !JSONValue.isRefusedByTheWindowsReader(data) else { throw ClaudeConfigError.malformed(notJSONError) }
         let parsed: Any
         do {
             parsed = try JSONSerialization.jsonObject(with: data)

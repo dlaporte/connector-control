@@ -3,9 +3,17 @@ using ConnectorControl.Core.Services;
 
 namespace ConnectorControl.Core.State;
 
-/// <summary>SettingsView state: three tabs, every toggle, path, and button.</summary>
+/// <summary>
+/// SettingsView state: three tabs, every toggle, path, and button.
+///
+/// Mirror: Sources/ConnectorControlState/SettingsModel.swift
+/// </summary>
 public sealed class SettingsModel : ObservableObject, IDisposable
 {
+    // Platform idiom: a Mac Settings window takes its title from the selected tab, so the Mac has
+    // no string for it.
+    /// <summary>The Settings window's own title, kept apart from the tray's Settings item.</summary>
+    public const string WindowTitle = "Settings";
     public const string GeneralTab = "General";
     public const string StorageTab = "Storage";
     public const string ClaudeTab = "Claude";
@@ -20,6 +28,8 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public const string UpdatesHeader = "Updates";
     public const string AutoUpdateTitle = "Automatically download and install updates";
     public const string CheckForUpdatesTitle = "Check for Updates";
+    /// <summary>Check for Updates while a check runs. Windows only: Sparkle shows the Mac's progress.</summary>
+    public const string CheckingTitle = "Checking…";
     public const string PreviewUpdatesCaption = "Previews update to later previews and the final release.";
     public const string MasterListHeader = "Master List Location";
     public const string MasterListFooter = "Holds mcps.json and collections.json. A synced folder shares them across your PCs.";
@@ -32,6 +42,12 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public const string BackupsTitle = "Backups of each file";
     public const string BackupsCaption = "Claude’s config, the master list and collections.json.";
     public const string BackupsFooter = "A backup is made automatically before every change.";
+    // Platform idiom: the Mac's Stepper is one control that VoiceOver names with the row's title; Windows draws two
+    // buttons, each named for what it does.
+    /// <summary>The − button's spoken name.</summary>
+    public const string FewerBackupsLabel = "Fewer backups";
+    /// <summary>The + button's spoken name.</summary>
+    public const string MoreBackupsLabel = "More backups";
     public const string ShowInExplorerTitle = "Show in Explorer";
     /// <summary>The Settings button that opens the restore sheet; the sheet's own button is RestoreModel.RestoreTitle.</summary>
     public const string RestoreButtonTitle = "Restore…";
@@ -88,6 +104,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     private readonly ICommandLineTool? commandLineTool;
     private bool launchAtStartup;
     private string? loginItemNote;
+    private bool isCheckingLaunchTarget;
     /// <summary>
     /// Windows only: the Mac has no install to detect. Null until the install is first read, and again after
     /// each <see cref="Refresh"/>: detecting walks every package registered for the user, too slow for the UI
@@ -113,6 +130,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         {
             commandLineTool.Changed += RaiseCommandLineTool;
         }
+        updates.CheckingChanged += RaiseChecking;
     }
 
     /// <summary>Called whenever the window opens: autostart is read fresh, and the install the next time it is
@@ -215,7 +233,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         set { state.SetClaudeIntegrationEnabled(value); RaiseAll(); }
     }
 
-    /// <summary>Dimmed while a connector holds the name, or the app runs from where it will not stay — unless
+    /// <summary>Dimmed while a connector holds the name, or the app runs from where it will not stay - unless
     /// the switch is on, so it can still go off.</summary>
     public bool CanChangeClaudeIntegration =>
         settings.ClaudeIntegrationEnabled || (!state.ClaudeIntegrationClash && !state.ControlToolIsTransient);
@@ -288,6 +306,21 @@ public sealed class SettingsModel : ObservableObject, IDisposable
 
     public Task CheckForUpdatesAsync() => updates.CheckAsync(interactive: true);
 
+    /// <summary>A check is running, scheduled or asked for. Windows only: Sparkle shows the Mac's.</summary>
+    public bool IsCheckingForUpdates => updates.IsChecking;
+
+    /// <summary>Check for Updates cannot be clicked again while a check runs, rather than silently joining it.</summary>
+    public bool CanCheckForUpdates => UpdatesEnabled && !updates.IsChecking;
+
+    public string CheckForUpdatesButtonTitle => updates.IsChecking ? CheckingTitle : CheckForUpdatesTitle;
+
+    private void RaiseChecking()
+    {
+        Raise(nameof(IsCheckingForUpdates));
+        Raise(nameof(CanCheckForUpdates));
+        Raise(nameof(CheckForUpdatesButtonTitle));
+    }
+
     // MARK: Storage
 
     public string StoreDirPath => state.Service.Paths.StoreDir;
@@ -316,16 +349,30 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         set
         {
             var clamped = Math.Clamp(value, MinKeepCount, MaxKeepCount);
-            if (clamped == settings.BackupKeepCount)
+            if (clamped != settings.BackupKeepCount)
             {
-                Raise();   // the stepper's own binding snaps back to the clamped value
-                return;
+                settings.BackupKeepCount = clamped;
+                state.RefreshServiceSettings();
             }
-            settings.BackupKeepCount = clamped;
-            state.RefreshServiceSettings();
+            // Raised even when nothing changed: the stepper's own binding snaps back to the clamped value.
             Raise();
+            Raise(nameof(CanDecrementKeepCount));
+            Raise(nameof(CanIncrementKeepCount));
+            Raise(nameof(BackupKeepCountHelpText));
         }
     }
+
+    // Platform idiom: the Mac Stepper dims its arrows at its bounds itself; Windows' two buttons bind these.
+    /// <summary>The − button, dimmed at the least count kept.</summary>
+    public bool CanDecrementKeepCount => settings.BackupKeepCount > MinKeepCount;
+
+    /// <summary>The + button, dimmed at the most count kept.</summary>
+    public bool CanIncrementKeepCount => settings.BackupKeepCount < MaxKeepCount;
+
+    /// <summary>What the −/+ buttons tell Narrator after their names: the count now, as the Mac Stepper's value.</summary>
+    public string BackupKeepCountHelpText => KeepCountHelpText(settings.BackupKeepCount);
+
+    public static string KeepCountHelpText(int count) => $"Keeps {count} backups of each file.";
 
     public void IncrementKeepCount() => BackupKeepCount = settings.BackupKeepCount + 1;
 
@@ -348,6 +395,8 @@ public sealed class SettingsModel : ObservableObject, IDisposable
 
     public string ClaudeConfigPath => state.Service.Paths.ClaudeConfigPath;
 
+    // Platform idiom: Windows only, as AppState.RepointClaudeConfig is: Claude's config can sit in
+    // an MSIX package's virtualized AppData or in the real AppData, and the Mac has one path.
     public bool CanUseDefaultClaudeConfig => !string.IsNullOrEmpty(settings.ClaudeConfigPath);
 
     public void ChooseClaudeConfig(string path)
@@ -362,10 +411,46 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         RaiseAll();
     }
 
+    /// <summary>The row's caption: the launch target, or "Checking…" while a chosen program's signature is read.</summary>
     public string LaunchTargetText =>
-        settings.ClaudeLaunchTarget is { Length: > 0 } overridden ? overridden : InstallInfo.LaunchTarget ?? ToolNote.NotFoundText;
+        isCheckingLaunchTarget ? ToolNote.CheckingText
+        : settings.ClaudeLaunchTarget is { Length: > 0 } overridden ? overridden : InstallInfo.LaunchTarget ?? ToolNote.NotFoundText;
 
     public bool CanUseDefaultLaunchTarget => !string.IsNullOrEmpty(settings.ClaudeLaunchTarget);
+
+    /// <summary>
+    /// Whether a chosen program is being verified as Claude. WinVerifyTrust reads the whole file,
+    /// which can take seconds on a slow or network path, so the row says so and Choose… waits
+    /// rather than letting a second click start a second check beside the first.
+    /// </summary>
+    public bool IsCheckingLaunchTarget
+    {
+        get => isCheckingLaunchTarget;
+        private set
+        {
+            if (Set(ref isCheckingLaunchTarget, value))
+            {
+                Raise(nameof(CanChooseLaunchTarget));
+                Raise(nameof(LaunchTargetText));
+            }
+        }
+    }
+
+    public bool CanChooseLaunchTarget => !isCheckingLaunchTarget;
+
+    /// <summary>Starts a check, or answers false when one is already running and this choice is dropped.</summary>
+    public bool BeginCheckingLaunchTarget()
+    {
+        if (isCheckingLaunchTarget)
+        {
+            return false;
+        }
+        IsCheckingLaunchTarget = true;
+        return true;
+    }
+
+    /// <summary>Ends the check, whatever it found: the window then refuses the program or calls <see cref="ChooseLaunchTarget"/>.</summary>
+    public void EndCheckingLaunchTarget() => IsCheckingLaunchTarget = false;
 
     public void ChooseLaunchTarget(string exe)
     {
@@ -406,7 +491,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>What to do with it: run <c>help</c> once installed; else the full path scripts can always use — left
+    /// <summary>What to do with it: run <c>help</c> once installed; else the full path scripts can always use - left
     /// out while Install is refused, since that path is about to be gone.</summary>
     public IReadOnlyList<TextRun> CommandLineToolCaption
     {
@@ -435,7 +520,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     /// so a window opened meanwhile sees it too.</summary>
     public bool CommandLineToolBusy => commandLineTool?.IsBusy == true;
 
-    /// <summary>Under the row: why the last try failed — the seam's, so a window opened meanwhile shows it — else
+    /// <summary>Under the row: why the last try failed - the seam's, so a window opened meanwhile shows it - else
     /// why Install cannot work here; null otherwise.</summary>
     public string? CommandLineToolMessage =>
         commandLineTool?.LastProblem ?? (InstallRefused ? ClaudeIntegration.MoveToApplicationsError : null);
@@ -514,8 +599,8 @@ public sealed class SettingsModel : ObservableObject, IDisposable
             Raise(nameof(ToolFooterLines));
             Raise(nameof(HasToolFooterLines));
         }
-        // The Claude group follows a change made anywhere — the command-line tool or MDM turning the
-        // integration on, a clash arriving with the store, the endpoint failing — as the Mac relays every
+        // The Claude group follows a change made anywhere - the command-line tool or MDM turning the
+        // integration on, a clash arriving with the store, the endpoint failing - as the Mac relays every
         // change AppState announces. Platform idiom: WPF bindings listen by name, so this raises the members
         // each change affects, where SwiftUI repaints from the Mac's one relay.
         if (ClaudeGroupSources.Any(name => Affects(e, name)))
@@ -542,6 +627,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public void Dispose()
     {
         state.PropertyChanged -= OnStateChanged;
+        updates.CheckingChanged -= RaiseChecking;
         if (commandLineTool is not null)
         {
             commandLineTool.Changed -= RaiseCommandLineTool;

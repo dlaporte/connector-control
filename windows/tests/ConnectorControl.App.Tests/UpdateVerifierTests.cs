@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using ConnectorControl.App.Services;
 using ConnectorControl.Core;
+using ConnectorControl.Core.Services;
 using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.App.Tests;
@@ -157,6 +158,16 @@ public class UpdateVerifierTests : IDisposable
         Assert.Contains("more than once", problem);
     }
 
+    [Theory]
+    [InlineData("lib/app/Update_ExecutionStub.exe")]              // would be written over the root Update.exe at apply
+    [InlineData("lib/app/Connector Control_ExecutionStub.exe")]
+    public void ALauncherStubThatIsNotAProgramIsRefused(string entry)
+    {
+        RequireSignedFramework();
+        Assert.Equal(UpdateRefusals.StubNotAProgram(entry),
+            UpdateVerifier.Verify(PackageWithBytes(entry, "not a program"u8.ToArray()), updateExePath: null, Identity, Older, FrameworkVersion));
+    }
+
     [Fact]
     public void NonExecutableEntriesAreUnpackedAndLeftAlone()
     {
@@ -172,6 +183,9 @@ public class UpdateVerifierTests : IDisposable
     [InlineData("Update.exe", true)]
     [InlineData("connector-control.exe", true)]
     [InlineData("Connector-Control.exe", true)]
+    [InlineData("Connector Control_ExecutionStub.exe", true)]   // vpk's launcher stub, named after the pack title
+    [InlineData("connector control_executionstub.exe", true)]
+    [InlineData("Connector Control.exe", false)]                 // not a name any package entry carries
     [InlineData("System.Runtime.dll", false)]
     [InlineData("Markdig.dll", false)]
     public void OnlyTheAppsOwnFilesAndTheUpdaterMustCarryItsSignature(string name, bool expected)
@@ -195,8 +209,8 @@ public class UpdateVerifierTests : IDisposable
     [Fact]
     public void AFileOfOursMustCarryTheWholeSubjectNotJustTheOrganization()
     {
-        // Another certificate naming the same O= — the same organization's other signing identity, or one a CA
-        // issued in error — is not this app's signer. The running app's own subject is the only one accepted.
+        // Another certificate naming the same O= - the same organization's other signing identity, or one a CA
+        // issued in error - is not this app's signer. The running app's own subject is the only one accepted.
         RequireSignedFramework();
         var sameOrganization = "CN=Someone Else, O=" + SignerIdentity.OrganizationOf(Identity.Subject!) + ", C=US";
         var problem = UpdateVerifier.VerifyFile(SignedSibling, sameOrganization, "ConnectorControl.dll", mustBeOurs: true);
@@ -256,9 +270,21 @@ public class UpdateVerifierTests : IDisposable
     [InlineData(null, "1.4.2", "1.5.0", false)]                                   // no product version at all
     [InlineData("1.5.1-preview.1", "1.5.0", "1.5.1-preview.1", false)]           // a release install never takes a preview
     [InlineData("1.5.1", "1.5.0", "1.5.1", true)]                                 // a release install takes the next release
+    [InlineData("1.5.1-preview.1", "", "1.5.1-preview.1", false)]                 // an unreadable install takes nothing:
+    [InlineData("1.5.1-preview.1", "garbage", "1.5.1-preview.1", false)]          // not a preview,
+    [InlineData("1.4.0", "", "1.4.0", false)]                                     // not what may be a downgrade,
+    [InlineData("1.5.1", "garbage", "1.5.1", false)]                              // nor a release
     public void TheEmbeddedVersionIsBoundByItsFullSemVer(string? embedded, string running, string feed, bool accepted)
     {
         Assert.Equal(accepted, UpdateVerifier.VersionProblem(embedded, running, feed) is null);
+    }
+
+    [Fact]
+    public void AnInstallWhoseVersionCannotBeReadSaysSo()
+    {
+        Assert.Equal(UpdateRefusals.UnknownInstalledVersion("1.4.0"), UpdateVerifier.VersionProblem("1.4.0", "", "1.4.0"));
+        Assert.Equal(UpdateRefusals.UnknownInstalledVersion("1.5.1-preview.1"), UpdateVerifier.VersionProblem("1.5.1-preview.1", "garbage", "1.5.1-preview.1"));
+        Assert.Equal(UpdateRefusals.PreviewForRelease("1.5.1-preview.1", "1.5.0"), UpdateVerifier.VersionProblem("1.5.1-preview.1", "1.5.0", "1.5.1-preview.1"));
     }
 
     [Theory]

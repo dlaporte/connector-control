@@ -98,11 +98,11 @@
     </Style>
     <DataTemplate x:Key="MaskedValue">
       <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                   AutomationProperties.Name="{x:Static state:EditorModel.ValueLabel}" />
+                   AutomationProperties.Name="{Binding ValueLabel}" />
     </DataTemplate>
     <DataTemplate x:Key="RevealedValue">
       <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}"
-               AutomationProperties.Name="{x:Static state:EditorModel.ValueLabel}" />
+               AutomationProperties.Name="{Binding ValueLabel}" />
     </DataTemplate>
     <Style x:Key="JsonBox" TargetType="TextBox">
       <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
@@ -167,7 +167,9 @@
         </CheckBox>
         <Grid>
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="{x:Static state:EditorModel.CancelButton}" MinWidth="80" Click="OnCancel" />
+            <!-- Escape is this button's, not the window's: an open drop-down takes the key first and
+                 closes, and only an Escape nothing else took reaches the window's cancel button. -->
+            <Button x:Name="CancelButton" Content="{x:Static state:EditorModel.CancelButton}" MinWidth="80" IsCancel="True" Click="OnCancel" />
             <Button Content="{x:Static state:EditorModel.SaveButton}" MinWidth="80" Margin="8,0,0,0" IsDefault="True" IsEnabled="{Binding CanSave}" Style="{DynamicResource AccentButtonStyle}" Click="OnSave" />
           </StackPanel>
         </Grid>
@@ -241,7 +243,7 @@
                     <TextBlock Text="{x:Static state:EditorModel.TypeLabel}" />
                     <TextBlock Style="{StaticResource LabelLock}" />
                   </StackPanel>
-                  <ComboBox Grid.Column="1" ItemsSource="{x:Static state:EditorModel.AuthKindTitles}" SelectedIndex="{Binding AuthKindIndex}" AutomationProperties.Name="{x:Static state:EditorModel.AuthenticationHeader}" HorizontalAlignment="Left" MinWidth="220" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
+                  <ComboBox x:Name="AuthPicker" Grid.Column="1" ItemsSource="{x:Static state:EditorModel.AuthKindTitles}" SelectedIndex="{Binding AuthKindIndex}" AutomationProperties.Name="{x:Static state:EditorModel.AuthenticationHeader}" HorizontalAlignment="Left" MinWidth="220" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
                 </Grid>
                 <TextBlock Text="{x:Static state:EditorModel.AutomaticCaption}" Style="{StaticResource CaptionText}" Visibility="{Binding IsAutomatic, Converter={StaticResource Vis}}" />
                 <StackPanel Visibility="{Binding IsBearer, Converter={StaticResource Vis}}">
@@ -387,7 +389,7 @@
                                      Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,2,0,0" />
                         </StackPanel>
                         <Button x:Name="DeleteArgButton" Grid.Column="2" Style="{StaticResource IconButton}" Content="&#xE711;" Margin="6,0,0,0" VerticalAlignment="Top" Click="OnDeleteArg"
-                                ToolTip="{x:Static state:EditorModel.DeleteArgumentLabel}" AutomationProperties.Name="{x:Static state:EditorModel.DeleteArgumentLabel}"
+                                ToolTip="{x:Static state:EditorModel.DeleteArgumentLabel}" AutomationProperties.Name="{Binding DeleteLabel}"
                                 IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}" />
                       </Grid>
                     </DataTemplate>
@@ -423,7 +425,7 @@
                              and the row itself are the author's even here: only a value the
                              document asked this machine for is live. -->
                         <TextBox x:Name="EnvName" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}" VerticalAlignment="Top"
-                                 AutomationProperties.Name="{x:Static state:EditorModel.NameLabel}"
+                                 AutomationProperties.Name="{Binding NameLabel}"
                                  IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}" />
                         <StackPanel Grid.Column="2">
                           <Border x:Name="EnvMark" Style="{StaticResource RowMark}">
@@ -433,7 +435,7 @@
                                    sight-only; the box carries the author's hint for anyone reading
                                    the form aloud. -->
                               <TextBox x:Name="EnvPlaceholder" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}"
-                                       AutomationProperties.Name="{x:Static state:EditorModel.ValueLabel}"
+                                       AutomationProperties.Name="{Binding ValueLabel}"
                                        Style="{StaticResource Watermarked}" Tag="{x:Static state:EditorModel.NeedsValue}"
                                        AutomationProperties.HelpText="{Binding Hint}"
                                        Visibility="{Binding Asks, Converter={StaticResource Vis}}" />
@@ -471,22 +473,20 @@
                         </StackPanel>
                         <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="6,0,0,0" VerticalAlignment="Top">
                           <!-- The eye's words follow what it would do next: show a masked value, or hide it again. -->
-                          <Button x:Name="RevealButton" Content="&#xE7B3;" Click="OnToggleReveal">
+                          <Button x:Name="RevealButton" Content="&#xE7B3;" Click="OnToggleReveal" AutomationProperties.Name="{Binding RevealLabel}">
                             <Button.Style>
                               <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
                                 <Setter Property="ToolTip" Value="{x:Static state:EditorModel.ShowValueLabel}" />
-                                <Setter Property="AutomationProperties.Name" Value="{x:Static state:EditorModel.ShowValueLabel}" />
                                 <Style.Triggers>
                                   <DataTrigger Binding="{Binding Revealed}" Value="True">
                                     <Setter Property="ToolTip" Value="{x:Static state:EditorModel.HideValueLabel}" />
-                                    <Setter Property="AutomationProperties.Name" Value="{x:Static state:EditorModel.HideValueLabel}" />
                                   </DataTrigger>
                                 </Style.Triggers>
                               </Style>
                             </Button.Style>
                           </Button>
                           <Button x:Name="DeleteEnvButton" Style="{StaticResource IconButton}" Content="&#xE711;" Click="OnDeleteEnv"
-                                  ToolTip="{x:Static state:EditorModel.DeleteVariableLabel}" AutomationProperties.Name="{x:Static state:EditorModel.DeleteVariableLabel}"
+                                  ToolTip="{x:Static state:EditorModel.DeleteVariableLabel}" AutomationProperties.Name="{Binding DeleteLabel}"
                                   IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}" />
                         </StackPanel>
                       </Grid>

@@ -24,7 +24,7 @@ public sealed class WindowRegistry
 
     /// <summary>
     /// <paramref name="dialogs"/> is what the Collections window's model asks its questions
-    /// through — AppState keeps its own copy private, so App hands over the ownerless instance it
+    /// through - AppState keeps its own copy private, so App hands over the ownerless instance it
     /// built for AppState, and a test hands over its fake. <paramref name="commandLineTool"/> gives the tool
     /// Settings' Command-Line Tool group installs and removes, asked for each time Settings opens, so it does
     /// not matter whether App made the tool before or after this registry.
@@ -65,8 +65,8 @@ public sealed class WindowRegistry
     }
 
     /// <summary>
-    /// One Collections window, re-activated rather than reopened. What the flyout wants of it —
-    /// a dialog in front of it the moment it appears — travels through
+    /// One Collections window, re-activated rather than reopened. What the flyout wants of it -
+    /// a dialog in front of it the moment it appears - travels through
     /// <see cref="AppState.CollectionsWindowRequest"/>, which the window reads on load and on
     /// every change, so opening it takes no arguments.
     /// </summary>

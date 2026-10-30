@@ -29,20 +29,21 @@ public final class ControlToolHost: McpToolHost {
     /// What the session's `serverInfo` says.
     public var version: String { tools.version }
 
-    /// Who is calling. A relay whose client gave no name — or whose session is gone — is still the
+    /// Who is calling. A relay whose client gave no name - or whose session is gone - is still the
     /// relay, and the gate guards it.
     public var caller: ControlCaller { isCLI ? .cli : .relay(clientName: session?.clientName ?? "") }
 
     public func listTools() -> [JSONValue] { ControlTools.mcpDescriptors }
 
-    /// A tool this app does not list. Asked for by a newer command-line tool or relay — an update
-    /// replaced the app on disk while this one still runs — it needs the newer app, which a restart
-    /// starts.
+    /// A tool this app does not list. Asked for by a newer command-line tool or relay - an update
+    /// replaced the app on disk while this one still runs - it needs the newer app, which a restart
+    /// starts. Otherwise it is the app's own sentence, with the name escaped as every name the
+    /// layer echoes is.
     public func unknownToolMessage(_ name: String) -> String {
         if let clientVersion, ControlVersion.isNewer(clientVersion, than: tools.version) {
             return ControlTools.needsNewerAppError(ControlVersion.semantic(clientVersion) ?? clientVersion)
         }
-        return McpSession.unknownToolMessage(name)
+        return ControlTools.unknownToolError(ControlText.escapedName(name))
     }
 
     public func callTool(name: String, arguments: JSONValue, progressToken: JSONValue?,

@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Threading;
 using ConnectorControl.Core;
 using ConnectorControl.Core.State;
@@ -9,7 +8,8 @@ namespace ConnectorControl.App.Views;
 
 /// <summary>
 /// Min 540×620, one window per target id (WindowRegistry
-/// enforces that), Enter saves, Escape cancels, dialogs owned by this window.
+/// enforces that), Enter saves, Escape cancels (the Cancel button's, so an open
+/// drop-down closes first), dialogs owned by this window.
 /// </summary>
 public partial class EditorWindow : Window
 {
@@ -24,7 +24,6 @@ public partial class EditorWindow : Window
         Title = Model.WindowTitle;
         this.CloseWhenAsked(handler => Model.CloseRequested += handler);
         Model.FocusEnvRowRequested += row => Dispatcher.BeginInvoke(new Action(() => FocusEnvRow(row)), DispatcherPriority.Loaded);
-        PreviewKeyDown += OnPreviewKeyDown;
         InitialFocus.OnFirstActivation(this);
         // The model watches AppState for everything the collection decides and raises it, so the
         // window has nothing of its own to subscribe to and nothing to re-seat.
@@ -32,15 +31,6 @@ public partial class EditorWindow : Window
     }
 
     public EditorModel Model { get; }
-
-    private void OnPreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Escape)
-        {
-            Model.Cancel();
-            e.Handled = true;
-        }
-    }
 
     private void OnSave(object sender, RoutedEventArgs e) => Model.Save();
 

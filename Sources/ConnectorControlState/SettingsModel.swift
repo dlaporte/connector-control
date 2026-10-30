@@ -5,6 +5,8 @@ import ConnectorControlCore
 /// SettingsView state: three tabs, every toggle, path, and button.
 /// Pass-through settings are computed properties that write the seam and send
 /// objectWillChange (the C# Raise()).
+///
+/// Mirror: windows/src/ConnectorControl.Core/State/SettingsModel.cs
 @MainActor
 public final class SettingsModel: ObservableObject {
     public static let generalTab = "General"
@@ -51,8 +53,9 @@ public final class SettingsModel: ObservableObject {
     /// says why keeps full opacity.
     public static let dimmedOpacity = 0.45
     public static let loginItemApprovalNote = "Approve Connector Control under System Settings → General → Login Items."
-    public static let minKeepCount = 5
-    public static let maxKeepCount = 100
+    // Nonisolated: ControlSettingKey builds set_setting's wording from them.
+    public nonisolated static let minKeepCount = 5
+    public nonisolated static let maxKeepCount = 100
 
     public static func versionText(_ version: String) -> String { "Version \(version)" }
 
@@ -253,7 +256,27 @@ public final class SettingsModel: ObservableObject {
 
     public var claudeAppParent: String { SettingsModel.shownParent(claudeApp.path) }
 
+    /// The row's note: the app's folder, or "Checking…" while a chosen app's signature is read.
+    public var claudeAppNote: String { isCheckingClaudeApp ? ToolNote.checkingText : claudeAppParent }
+
     public var canUseDefaultClaudeApp: Bool { claudeApp.path != AppState.defaultClaudeAppPath }
+
+    /// Whether a chosen app is being verified as Claude. The check reads the whole bundle, which
+    /// takes seconds on a cold disk, so the row says so and Choose… waits rather than letting a
+    /// second click start a second check beside the first.
+    @Published public private(set) var isCheckingClaudeApp = false
+
+    public var canChooseClaudeApp: Bool { !isCheckingClaudeApp }
+
+    /// Starts a check, or answers false when one is already running and this choice is dropped.
+    public func beginCheckingClaudeApp() -> Bool {
+        guard !isCheckingClaudeApp else { return false }
+        isCheckingClaudeApp = true
+        return true
+    }
+
+    /// Ends the check, whatever it found: the view then refuses the app or calls `chooseClaudeApp`.
+    public func endCheckingClaudeApp() { isCheckingClaudeApp = false }
 
     public func chooseClaudeApp(_ app: URL) {
         objectWillChange.send()
@@ -276,7 +299,7 @@ public final class SettingsModel: ObservableObject {
         }
     }
 
-    /// Dimmed while a connector holds the name, or the app runs from where it will not stay — unless
+    /// Dimmed while a connector holds the name, or the app runs from where it will not stay - unless
     /// the switch is on, so it can still go off.
     public var canChangeClaudeIntegration: Bool {
         settings.claudeIntegrationEnabled || (!state.claudeIntegrationClash && !state.controlToolIsTransient)
@@ -348,7 +371,7 @@ public final class SettingsModel: ObservableObject {
         return TextRun.runs(CommandLineToolText.installedInText(folder), settingApart: [folder])
     }
 
-    /// What to do with it: run `help` once installed; else the full path scripts can always use — left
+    /// What to do with it: run `help` once installed; else the full path scripts can always use - left
     /// out while Install is refused, since that path is about to be gone.
     public var commandLineToolCaption: [TextRun] {
         guard let tool = commandLineTool, !installRefused else { return [] }
@@ -370,7 +393,7 @@ public final class SettingsModel: ObservableObject {
     /// so a window opened meanwhile sees it too.
     public var commandLineToolBusy: Bool { commandLineTool?.isBusy == true }
 
-    /// Under the row: why the last try failed — the seam's, so a window opened meanwhile shows it — else
+    /// Under the row: why the last try failed - the seam's, so a window opened meanwhile shows it - else
     /// why Install cannot work here; nil otherwise.
     public var commandLineToolMessage: String? {
         commandLineTool?.lastProblem ?? (installRefused ? ClaudeIntegration.moveToApplicationsError : nil)

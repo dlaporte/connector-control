@@ -195,15 +195,32 @@ final class ControlToolsDirectTests: XCTestCase {
         XCTAssertTrue(window.launchAtLogin, "the one value the model keeps is read again")
         XCTAssertGreaterThan(repaints, 0)
 
-        repaints = 0
-        XCTAssertEqual(rig.call("set_setting", ["key": .string("backups-to-keep"), "value": .string("30")], as: .cli)?.isError, false)
-        XCTAssertGreaterThan(repaints, 0)
-        XCTAssertEqual(window.backupKeepCount, 30)
-
-        repaints = 0
-        XCTAssertEqual(rig.call("set_setting", ["key": .string("confirm-quit"), "value": .string("off")], as: .cli)?.isError, false)
-        XCTAssertGreaterThan(repaints, 0)
-        XCTAssertFalse(window.confirmBeforeQuit)
+        // Every other value the window reads through rather than keeps, so it is right as soon as it is read;
+        // what has to be proven is the repaint, sent once the new value is in place (a will-change sent before
+        // the write would repaint the old one). Each key is set to the opposite of what it starts as.
+        var shown: [String] = []
+        var read: (SettingsModel) -> String = { _ in "" }
+        let watcher = window.objectWillChange.sink { shown.append(read(window)) }
+        defer { watcher.cancel() }
+        let cases: [(key: String, value: String, read: (SettingsModel) -> String)] = [
+            (ControlSettingKey.confirmRestart, "off", { String($0.confirmBeforeRestart) }),
+            (ControlSettingKey.confirmQuit, "off", { String($0.confirmBeforeQuit) }),
+            (ControlSettingKey.notifyExternalChanges, String(!window.notifyExternalChanges), { String($0.notifyExternalChanges) }),
+            (ControlSettingKey.automaticUpdates, "true", { String($0.autoUpdate) }),
+            (ControlSettingKey.backupsToKeep, "30", { String($0.backupKeepCount) }),
+            (ControlSettingKey.confirmClaudeChanges, "off", { String($0.confirmClaudeChanges) }),
+            (ControlSettingKey.claudeIntegration, "off", { String($0.claudeIntegrationEnabled) }),
+        ]
+        XCTAssertEqual(Set(cases.map(\.key) + [ControlSettingKey.launchAtLogin]), Set(ControlSettingKey.all), "every setting")
+        for item in cases {
+            let expected = item.value == "on" ? "true" : item.value == "off" ? "false" : item.value
+            XCTAssertNotEqual(item.read(window), expected, "\(item.key) starts as the other value")
+            read = item.read
+            shown = []
+            XCTAssertEqual(rig.call("set_setting", ["key": .string(item.key), "value": .string(item.value)], as: .cli)?.isError, false)
+            XCTAssertEqual(item.read(window), expected, item.key)
+            XCTAssertTrue(shown.contains(expected), "\(item.key): a repaint after the change shows it, not only one before")
+        }
     }
 
     func testALoginItemThatCannotBeChangedIsRefusedWithTheAppsNote() {

@@ -21,7 +21,7 @@ struct EditorWindowView: View {
 
     /// What the lock glyph says to a screen reader. A glyph on its own reads as nothing, and a
     /// lock is only ever on screen while the collection is synced, so this is the very sentence
-    /// the header shows — which is what the Windows glyph names too.
+    /// the header shows - which is what the Windows glyph names too.
     private var lockLabel: String { EditorModel.lockedFieldsNote(model.collectionName) }
 
     var body: some View {
@@ -227,7 +227,7 @@ struct EditorWindowView: View {
                 .buttonStyle(.plain)
                 .disabled(model.isReadOnly)
                 .help(EditorModel.deleteArgumentLabel)
-                .accessibilityLabel(EditorModel.deleteArgumentLabel)
+                .accessibilityLabel(EditorModel.deleteArgumentRowLabel(index))
             }
         }
         Button(EditorModel.addArgumentTitle) { model.addArg() }
@@ -251,7 +251,10 @@ struct EditorWindowView: View {
                     // name and the row itself belong to the author even here: only a value the
                     // document asked this machine for is live.
                     GridRow(alignment: .top) {
-                        // Titles are kept for accessibility but hidden — the
+                        // Spoken names carry the row's number, which the visible "Name" and
+                        // "Value" columns leave to position.
+                        let position = model.envRows.firstIndex { $0.id == row.id } ?? 0
+                        // Titles are kept for accessibility but hidden - the
                         // grouped form would render them as per-field labels,
                         // duplicating the column headers above.
                         TextField(EditorModel.nameLabel, text: $row.name)
@@ -259,6 +262,7 @@ struct EditorWindowView: View {
                             .multilineTextAlignment(.leading)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(.body, design: .monospaced))
+                            .accessibilityLabel(EditorModel.variableNameLabel(position))
                             .focused($envFocus, equals: row.id)
                             .disabled(model.isReadOnly)
                         PlaceholderField(marked: model.isOwed(envRow: row.id),
@@ -281,6 +285,7 @@ struct EditorWindowView: View {
                             .labelsHidden()
                             .multilineTextAlignment(.leading)
                             .textFieldStyle(.roundedBorder)
+                            .accessibilityLabel(EditorModel.variableValueLabel(position))
                         }
                         HStack(spacing: 6) {
                             let reveal = row.revealed ? EditorModel.hideValueLabel : EditorModel.showValueLabel
@@ -289,14 +294,16 @@ struct EditorWindowView: View {
                             }
                             .buttonStyle(.plain)
                             .help(reveal)
-                            .accessibilityLabel(reveal)
+                            .accessibilityLabel(row.revealed
+                                ? EditorModel.hideVariableValueLabel(position)
+                                : EditorModel.showVariableValueLabel(position))
                             Button { model.deleteEnvRow(id: row.id) } label: {
                                 Image(systemName: "xmark.circle")
                             }
                             .buttonStyle(.plain)
                             .disabled(model.isReadOnly)
                             .help(EditorModel.deleteVariableLabel)
-                            .accessibilityLabel(EditorModel.deleteVariableLabel)
+                            .accessibilityLabel(EditorModel.deleteVariableRowLabel(position))
                         }
                     }
                 }
@@ -388,7 +395,7 @@ struct EditorWindowView: View {
             }
             if model.isReadOnly {
                 // WrappingCodeEditor wraps an editable NSTextView, and SwiftUI's disabled state
-                // does not reach inside an NSViewRepresentable — so the read-only view of the
+                // does not reach inside an NSViewRepresentable - so the read-only view of the
                 // same bytes is a selectable text pane rather than a greyed-out editor.
                 ScrollView {
                     Text(model.jsonText)

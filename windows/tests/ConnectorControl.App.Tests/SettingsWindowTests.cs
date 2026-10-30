@@ -31,6 +31,10 @@ public class SettingsWindowTests
                 Assert.Equal(3, window.Tabs.Items.Count);
                 var headers = window.Tabs.Items.Cast<TabItem>().Select(t => ((TextBlock)((StackPanel)t.Header).Children[1]).Text).ToArray();
                 Assert.Equal(["General", "Storage", "Claude"], headers);
+                // Each tab draws its glyph before its name, as the Mac's draw gearshape, externaldrive and Claude's icon; the
+                // Claude tab's generic glyph stays until its own icon is read, and wherever it cannot be.
+                var glyphs = window.Tabs.Items.Cast<TabItem>().Select(t => ((TextBlock)((StackPanel)t.Header).Children[0]).Text).ToArray();
+                Assert.Equal(["\uE713", "\uEDA2", "\uECAA"], glyphs);
                 Assert.Equal("Version 1.2.2", window.Model.VersionText);
                 Assert.Equal(Visibility.Collapsed, window.UpdatesCaption.Visibility);   // a release says nothing about previews
                 Assert.Equal(h.StoreDir, window.Model.StoreDirPath);
@@ -145,7 +149,7 @@ public class SettingsWindowTests
     public void AClashDimsTheSwitchRowButNotItsNote()
     {
         using var h = new AppStateHarness();
-        MasterStoreIO.Save(new MasterStore([new(ClaudeIntegration.EntryName, new McpEntry(true, JsonValue.Object(("command", JsonValue.String("x")))))]),
+        MasterStoreIO.Save(MasterStore.Single([new(ClaudeIntegration.EntryName, new McpEntry(true, JsonValue.Object(("command", JsonValue.String("x")))))]),
             h.MasterStorePath);
         using var state = h.Create();
         var services = h.Services();
@@ -426,6 +430,78 @@ public class SettingsWindowTests
         });
     }
 
+    /// <summary>The −/+ buttons say what they do and the count, and dim at the bounds; each Use Default/Choose… pair says
+    /// its row. Windows only: the Mac Stepper and rows do both themselves.</summary>
+    [Fact]
+    public void TheStorageAndClaudeRowButtonsAreNamedForNarrator()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var services = h.Services();
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            var window = new SettingsWindow(state, services, updates);
+            Laid(window, () =>
+            {
+                Assert.Equal(SettingsModel.FewerBackupsLabel, AutomationProperties.GetName(window.FewerBackupsButton));
+                Assert.Equal(SettingsModel.MoreBackupsLabel, AutomationProperties.GetName(window.MoreBackupsButton));
+                Assert.Equal(SettingsModel.KeepCountHelpText(20), AutomationProperties.GetHelpText(window.MoreBackupsButton));
+                Assert.True(window.FewerBackupsButton.IsEnabled);
+                window.Model.BackupKeepCount = SettingsModel.MinKeepCount;
+                WindowTestSupport.Layout(window, new Size(480, 560));
+                Assert.False(window.FewerBackupsButton.IsEnabled);
+                Assert.True(window.MoreBackupsButton.IsEnabled);
+                Assert.Equal(SettingsModel.KeepCountHelpText(SettingsModel.MinKeepCount), AutomationProperties.GetHelpText(window.FewerBackupsButton));
+                window.Model.BackupKeepCount = SettingsModel.MaxKeepCount;
+                WindowTestSupport.Layout(window, new Size(480, 560));
+                Assert.True(window.FewerBackupsButton.IsEnabled);
+                Assert.False(window.MoreBackupsButton.IsEnabled);
+
+                Assert.Equal(SettingsModel.MasterListHeader, AutomationProperties.GetHelpText(window.UseDefaultStoreButton));
+                Assert.Equal(SettingsModel.MasterListHeader, AutomationProperties.GetHelpText(window.ChooseStoreButton));
+                Assert.Equal(SettingsModel.ConfigPathLabel, AutomationProperties.GetHelpText(window.UseDefaultConfigButton));
+                Assert.Equal(SettingsModel.ConfigPathLabel, AutomationProperties.GetHelpText(window.ChooseConfigButton));
+                Assert.Equal(SettingsModel.LaunchTargetLabel, AutomationProperties.GetHelpText(window.UseDefaultLaunchTargetButton));
+                Assert.Equal(SettingsModel.LaunchTargetLabel, AutomationProperties.GetHelpText(window.ChooseLaunchTargetButton));
+
+                // While a chosen program is verified, Choose… waits.
+                Assert.True(window.ChooseLaunchTargetButton.IsEnabled);
+                Assert.True(window.Model.BeginCheckingLaunchTarget());
+                WindowTestSupport.Layout(window, new Size(480, 560));
+                Assert.False(window.ChooseLaunchTargetButton.IsEnabled);
+                window.Model.EndCheckingLaunchTarget();
+                WindowTestSupport.Layout(window, new Size(480, 560));
+                Assert.True(window.ChooseLaunchTargetButton.IsEnabled);
+            });
+        });
+    }
+
+    /// <summary>Check for Updates reads Checking… and cannot be clicked while a check runs. Windows only: Sparkle shows the Mac's.</summary>
+    [Fact]
+    public void CheckForUpdatesReadsCheckingWhileACheckRuns()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var updater = new FakeUpdater { CheckGate = new TaskCompletionSource<bool>() };
+        var services = new PlatformServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), updater);
+        using var updates = new UpdateCoordinator(updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            var window = new SettingsWindow(state, services, updates);
+            Laid(window, () =>
+            {
+                Assert.Equal(SettingsModel.CheckForUpdatesTitle, window.CheckForUpdatesButton.Content);
+                Assert.True(window.CheckForUpdatesButton.IsEnabled);
+                _ = window.Model.CheckForUpdatesAsync();
+                WindowTestSupport.Layout(window, new Size(480, 560));
+                Assert.Equal(SettingsModel.CheckingTitle, window.CheckForUpdatesButton.Content);
+                Assert.False(window.CheckForUpdatesButton.IsEnabled);
+            });
+        });
+        updater.CheckGate.SetResult(true);
+    }
+
     /// <summary>A footer line is one sentence: the family's tools, the link's title as a hyperlink, "or run", and the
     /// command in its own run, set apart as every command is.</summary>
     [Fact]
@@ -456,7 +532,7 @@ public class SettingsWindowTests
     public void NoTabScrollsAtTheWindowsOwnSize()
     {
         using var h = new AppStateHarness();
-        MasterStoreIO.Save(new MasterStore([new(ClaudeIntegration.EntryName, new McpEntry(true, JsonValue.Object(("command", JsonValue.String("x")))))]),
+        MasterStoreIO.Save(MasterStore.Single([new(ClaudeIntegration.EntryName, new McpEntry(true, JsonValue.Object(("command", JsonValue.String("x")))))]),
             h.MasterStorePath);
         h.ControlToolPath = @"C:\Users\me\AppData\Local\Connector Control\bin\connector-control.exe";
         h.Settings.ClaudeIntegrationEnabled = true;

@@ -35,7 +35,7 @@ public static class ControlCommandRunner
 
     /// <summary>Connects through <paramref name="client"/>, runs the call over that connection and closes it: what
     /// the command line prints. A connection that cannot be had ends the command as unreachable, with the reason
-    /// the client gave — the app is not running, could not be started, or the tool runs elevated.</summary>
+    /// the client gave - the app is not running, could not be started, or the tool runs elevated.</summary>
     public static ControlOutput Run(string tool, JsonValue arguments, bool json, string version, ControlClient client, Action notice)
     {
         IControlStream stream;
@@ -61,8 +61,8 @@ public static class ControlCommandRunner
     }
 
     /// <summary>Runs the call over <paramref name="stream"/> and says what to print. <paramref name="notice"/>
-    /// runs once, at the first progress report: the change is waiting its turn. An error answered with no id
-    /// — a message too large — can only be the call's, the one request still open. A line past
+    /// runs once, at the first progress report: the change is waiting its turn. An error answered with no id -
+    /// a message too large - can only be the call's, the one request still open. A line past
     /// <paramref name="limit"/> can never be read whole, so the command cannot say what happened: it ends as
     /// if the app had gone.</summary>
     public static ControlOutput Run(string tool, JsonValue arguments, bool json, string version, IControlStream stream,

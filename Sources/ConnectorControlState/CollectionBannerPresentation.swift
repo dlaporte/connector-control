@@ -3,7 +3,7 @@
 /// word the same news differently, and so only one place knows which collection a banner is
 /// about.
 ///
-/// The sentences are `AppState`'s statics and the button titles `PopoverModel`'s — where the
+/// The sentences are `AppState`'s statics and the button titles `PopoverModel`'s - where the
 /// string catalog already keys them, so nothing here owns wording of its own.
 ///
 /// Mirror: windows/src/ConnectorControl.Core/State/CollectionBannerPresentation.cs

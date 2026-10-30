@@ -77,7 +77,7 @@ final class ControlToolsGatedTests: XCTestCase {
             (["name": .string("x"), "config": .object(["url": .string(" ")])], ControlTools.configShapeError),
             (["name": .string("x"), "config": .object(["command": .string("npx"), "args": .array([.string("-y"), .string("mcp-remote"), .string("nope")])])],
              EditorModel.invalidURLError),
-            (["name": .string("x"), "config": notion, "collection": .string("Data team")], CollectionsModel.addConnectorDisabledTooltip),
+            (["name": .string("x"), "config": notion, "collection": .string("Data team")], ControlTools.subscribedAddError("Data team")),
             (["name": .string("x"), "config": notion, "collection": .string("Nope")], MasterStore.noCollectionError("Nope")),
         ]
         for (arguments, refusal) in cases {
@@ -126,6 +126,19 @@ final class ControlToolsGatedTests: XCTestCase {
         let result = try XCTUnwrap(rig.call("update_connector", ["name": .string("scoutbook"), "config": decomposed]))
         XCTAssertEqual(result.text, ControlTools.changedText("scoutbook", "Default"))
         XCTAssertEqual(rig.confirmer.requests.count, 1)
+        XCTAssertEqual(try rig.h.claudeServers()["scoutbook"], decomposed)
+    }
+
+    /// A name composed another way is the same name, as Claude's config counts it: adding under it
+    /// is refused as a duplicate, and renaming a connector to it changes nothing.
+    func testANameComposedAnotherWayIsTheSameName() throws {
+        let rig = rig(); defer { rig.dispose() }
+        XCTAssertNil(rig.state.upsert(name: "caf\u{E9}", entry: MCPEntry(config: composed), renamedFrom: nil))
+        let added = try XCTUnwrap(rig.call("add_connector", ["name": .string("cafe\u{301}"), "config": decomposed]))
+        XCTAssertEqual(added.text, AppState.duplicateNameError("cafe\u{301}"))
+        let renamed = try XCTUnwrap(rig.call("update_connector", ["name": .string("caf\u{E9}"), "newName": .string("cafe\u{301}")]))
+        XCTAssertEqual(renamed.text, ControlTools.unchangedError("caf\u{E9}"))
+        XCTAssertTrue(rig.confirmer.requests.isEmpty)
     }
 
     func testChangingIsRefusedBeforeAnyoneIsAsked() throws {
@@ -140,7 +153,7 @@ final class ControlToolsGatedTests: XCTestCase {
             (["name": .string("scoutbook"), "newName": .string("connector-control")], ClaudeIntegration.reservedNameError),
             (["name": .string("scoutbook"), "newName": .string(" ")], AppState.nameEmptyError),
             (["name": .string("scoutbook"), "config": .object([:])], ControlTools.configShapeError),
-            (["name": .string("github"), "config": notion, "collection": .string("Data team")], CollectionsModel.lockedGlyphTooltip),
+            (["name": .string("github"), "config": notion, "collection": .string("Data team")], ControlTools.subscribedChangeError("Data team")),
         ]
         for (arguments, refusal) in cases {
             XCTAssertEqual(rig.call("update_connector", arguments), .refusal(refusal), refusal)
@@ -168,7 +181,7 @@ final class ControlToolsGatedTests: XCTestCase {
                        .refusal(ControlTools.noConnectorError("nope", "Default")))
         XCTAssertEqual(rig.call("delete_connectors", ["names": .array([])]), .refusal(ControlTools.missingArgumentError("names")))
         XCTAssertEqual(rig.call("delete_connectors", ["names": .array([.string("github")]), "collection": .string("Data team")]),
-                       .refusal(CollectionsModel.lockedGlyphTooltip))
+                       .refusal(ControlTools.subscribedChangeError("Data team")))
         XCTAssertNotNil(rig.state.store.mcps["aws-mcp"], "nothing is deleted when one name is wrong")
         XCTAssertTrue(rig.confirmer.requests.isEmpty)
     }

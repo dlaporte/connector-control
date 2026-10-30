@@ -151,7 +151,7 @@ public class EditorModelViewSwitchTests
     }
 
     /// <summary>An unedited JSON round trip (straight to JSON and back without touching the text)
-    /// still counts as untouched — the discard on Type toggle to Local fires exactly as it did
+    /// still counts as untouched - the discard on Type toggle to Local fires exactly as it did
     /// before this template flag was scoped to actual edits.</summary>
     [Fact]
     public void AnUnchangedJsonRoundTripStillDiscardsTheTemplateOnSwitchToLocal()
@@ -173,7 +173,7 @@ public class EditorModelViewSwitchTests
         var editor = rig.Editor(TestTargets.New(rig.Local("node", ["x.js"])));
         editor.RequestView(EditView.Json);
         editor.JsonText = "{\"command\": ";
-        Assert.Equal("Not valid JSON — check for a stray brace, missing comma, or unquoted value.", editor.JsonError);
+        Assert.Equal("Not valid JSON - check for a stray brace, missing comma, or unquoted value.", editor.JsonError);
         // The error takes the tip's place.
         Assert.False(editor.ShowJsonTip);
         Assert.True(editor.HasJsonError);
@@ -184,7 +184,7 @@ public class EditorModelViewSwitchTests
     }
 
     /// <summary>Adopting a config with a different auth kind must clear the previous kind's
-    /// fields — otherwise a bearer token typed earlier stays readable behind Header auth.</summary>
+    /// fields - otherwise a bearer token typed earlier stays readable behind Header auth.</summary>
     [Fact]
     public void AdoptingAHeaderConfigClearsTheOldBearerToken()
     {

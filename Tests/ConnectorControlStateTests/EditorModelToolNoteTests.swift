@@ -4,7 +4,7 @@ import ConnectorControlCore
 
 /// Mirror: windows/tests/ConnectorControl.Core.Tests/State/EditorModelToolNoteTests.cs
 ///
-/// windows/tests/ConnectorControl.Core.Tests/State/EditorModelTests.cs — the
+/// windows/tests/ConnectorControl.Core.Tests/State/EditorModelTests.cs - the
 /// tool-probing/ToolNote slice.
 @MainActor
 final class EditorModelToolNoteTests: XCTestCase {
@@ -83,9 +83,9 @@ final class EditorModelToolNoteTests: XCTestCase {
         editor.command = "python"
         XCTAssertNil(editor.requiredTool)
         rig.h.drain()
-        XCTAssertEqual(rig.h.tools.probed.count, 2)   // node once, uvx once — the non-tools cost nothing
+        XCTAssertEqual(rig.h.tools.probed.count, 2)   // node once, uvx once - the non-tools cost nothing
         editor.command = "uvx"
-        // Back to a tool that is cached: probed again anyway — it may have been installed meanwhile.
+        // Back to a tool that is cached: probed again anyway - it may have been installed meanwhile.
         rig.h.drain()
         XCTAssertEqual(rig.h.tools.probed.count, 3)
         XCTAssertNotNil(editor.toolNote)

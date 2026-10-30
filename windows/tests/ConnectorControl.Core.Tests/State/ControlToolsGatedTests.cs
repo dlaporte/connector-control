@@ -92,7 +92,7 @@ public class ControlToolsGatedTests
             (Args(("name", Text("x")), ("config", JsonValue.Object(("command", Text("npx")),
                 ("args", JsonValue.Array([Text("-y"), Text("mcp-remote"), Text("nope")]))))),
              EditorModel.InvalidUrlError),
-            (Args(("name", Text("x")), ("config", Notion), ("collection", Text("Data team"))), CollectionsModel.AddConnectorDisabledTooltip),
+            (Args(("name", Text("x")), ("config", Notion), ("collection", Text("Data team"))), ControlTools.SubscribedAddError("Data team")),
             (Args(("name", Text("x")), ("config", Notion), ("collection", Text("Nope"))), MasterStore.NoCollectionError("Nope")),
         ];
         foreach (var (arguments, refusal) in cases)
@@ -160,6 +160,21 @@ public class ControlToolsGatedTests
         var result = rig.Call("update_connector", Args(("name", Text("scoutbook")), ("config", Decomposed)));
         Assert.Equal(ControlTools.ChangedText("scoutbook", "Default"), result?.Text);
         Assert.Single(rig.Confirmer.Requests);
+        Assert.Equal(Decomposed, rig.H.ClaudeServers()["scoutbook"]);
+    }
+
+    /// <summary>A name composed another way is the same name, as Claude's config counts it: adding under it
+    /// is refused as a duplicate, and renaming a connector to it changes nothing.</summary>
+    [Fact]
+    public void ANameComposedAnotherWayIsTheSameName()
+    {
+        using var rig = Rig();
+        Assert.Null(rig.State.Upsert("caf\u00E9", new McpEntry(Composed), null));
+        var added = rig.Call("add_connector", Args(("name", Text("cafe\u0301")), ("config", Decomposed)));
+        Assert.Equal(AppState.DuplicateNameError("cafe\u0301"), added?.Text);
+        var renamed = rig.Call("update_connector", Args(("name", Text("caf\u00E9")), ("newName", Text("cafe\u0301"))));
+        Assert.Equal(ControlTools.UnchangedError("caf\u00E9"), renamed?.Text);
+        Assert.Empty(rig.Confirmer.Requests);
     }
 
     [Fact]
@@ -177,7 +192,7 @@ public class ControlToolsGatedTests
             (Args(("name", Text("scoutbook")), ("newName", Text("connector-control"))), ClaudeIntegration.ReservedNameError),
             (Args(("name", Text("scoutbook")), ("newName", Text(" "))), AppState.NameEmptyError),
             (Args(("name", Text("scoutbook")), ("config", JsonValue.Object())), ControlTools.ConfigShapeError),
-            (Args(("name", Text("github")), ("config", Notion), ("collection", Text("Data team"))), CollectionsModel.LockedGlyphTooltip),
+            (Args(("name", Text("github")), ("config", Notion), ("collection", Text("Data team"))), ControlTools.SubscribedChangeError("Data team")),
         ];
         foreach (var (arguments, refusal) in cases)
         {
@@ -211,7 +226,7 @@ public class ControlToolsGatedTests
             rig.Call("delete_connectors", Args(("names", Names("aws-mcp", "nope")))));
         Assert.Equal(ControlResult.Refusal(ControlTools.MissingArgumentError("names")),
             rig.Call("delete_connectors", Args(("names", Names()))));
-        Assert.Equal(ControlResult.Refusal(CollectionsModel.LockedGlyphTooltip),
+        Assert.Equal(ControlResult.Refusal(ControlTools.SubscribedChangeError("Data team")),
             rig.Call("delete_connectors", Args(("names", Names("github")), ("collection", Text("Data team")))));
         // Nothing is deleted when one name is wrong.
         Assert.True(rig.State.Store.Mcps.ContainsKey("aws-mcp"));

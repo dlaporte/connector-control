@@ -3,14 +3,14 @@ namespace ConnectorControl.Core;
 /// <summary>
 /// The bindings only this machine knows: where a synced collection's document actually sits
 /// here, what it hashed to the last time it was read, and which folder a published collection
-/// writes to. Never synced — the sidecar beside the master list carries what every machine
+/// writes to. Never synced - the sidecar beside the master list carries what every machine
 /// shares.
 ///
 /// Mirror: Sources/ConnectorControlCore/CollectionsLocalCache.swift
 /// </summary>
 /// <remarks>
-/// Every property is <c>init</c>, so a change to one field is <c>cache with { … }</c> — the one
-/// field assigned in place, as Swift mutates it — rather than a rebuild that has to name every
+/// Every property is <c>init</c>, so a change to one field is <c>cache with { … }</c> - the one
+/// field assigned in place, as Swift mutates it - rather than a rebuild that has to name every
 /// other one. The collections copy what they are given, ordinally, however they are set.
 /// </remarks>
 public sealed record CollectionsLocalCache
@@ -58,7 +58,7 @@ public sealed record CollectionsLocalCache
     /// <summary>
     /// The connector names that apply wrote into Claude's file. They are what
     /// <see cref="LastAppliedCollection"/> rendered, so they still say which entries are its own
-    /// once the collection itself is gone — deleted here, or on another machine, which leaves
+    /// once the collection itself is gone - deleted here, or on another machine, which leaves
     /// nothing else behind. null until the first apply that records them.
     /// </summary>
     public IReadOnlySet<string>? LastAppliedNames
@@ -115,8 +115,8 @@ public sealed record CollectionsLocalCache
 
         /// <summary>
         /// The folders that collections which once bore this name, and have since left the store,
-        /// published into. They are this machine's paths to keep back — refused as a releasable
-        /// kept path, named in the dialog as that collection's folder — and never any collection's
+        /// published into. They are this machine's paths to keep back - refused as a releasable
+        /// kept path, named in the dialog as that collection's folder - and never any collection's
         /// own, so <c>${COLLECTION_DIR}</c> never stands for them and no publish consumes them.
         /// Kept apart from <see cref="PublishedFolders"/> because a Stop would otherwise fold them
         /// into the next collection's own, and withdraw the release the dialog offered for them.
@@ -153,13 +153,13 @@ public sealed record CollectionsLocalCache
 
         /// <summary>
         /// What a publish binding leaves behind when it goes, merged with anything already
-        /// remembered under that name. The binding goes three ways — Stop Publishing, a delete made
-        /// here, and a load finding the collection deleted or unpublished on another machine — and
+        /// remembered under that name. The binding goes three ways - Stop Publishing, a delete made
+        /// here, and a load finding the collection deleted or unpublished on another machine - and
         /// all three leave the same memory of what must not travel.
         /// </summary>
         /// <remarks>
         /// The earlier record's folders merge into the binding's own only where the two published
-        /// under one origin, none on either side counting as one — a binding and a record written
+        /// under one origin, none on either side counting as one - a binding and a record written
         /// before origins were kept are read as one collection's. Otherwise the record is another
         /// collection's, one that bore the name and left, and its folders go to
         /// <see cref="DepartedFolders"/> with whatever it already held there: the next publish must
@@ -194,8 +194,8 @@ public sealed record CollectionsLocalCache
 
         /// <summary>
         /// What a rename files under a name a departed collection left a record under. A rename
-        /// can land on a record only where the collection that left it has gone — a live
-        /// collection's name is refused — so the record already there is a departed collection's,
+        /// can land on a record only where the collection that left it has gone - a live
+        /// collection's name is refused - so the record already there is a departed collection's,
         /// or one written before origins were kept, read the same way, and the collection taking
         /// the name is a different one. Its folders are departed to it, as they would be to a
         /// collection made with the name, and its paths are inherited, as a re-used name inherits
@@ -380,7 +380,7 @@ public sealed record CollectionsLocalCache
         /// appear in it as written. Kept here, where nothing syncs it, so the publisher fails closed
         /// whatever the sidecar or the editor says: a publish that happens on its own only adds to
         /// it, the dialog's Publish adds what its rows tick, and a path leaves it only when the author
-        /// releases it there after reading the preview — never because the dialog had no row holding
+        /// releases it there after reading the preview - never because the dialog had no row holding
         /// it.
         /// </summary>
         public IReadOnlySet<string> MarkedValues
@@ -391,7 +391,7 @@ public sealed record CollectionsLocalCache
 
         /// <summary>
         /// Paths the author let travel as written in this collection's document, pressing Release
-        /// and then Publish in the sheet after reading the preview, although this machine keeps them
+        /// and then Publish in the dialog after reading the preview, although this machine keeps them
         /// back elsewhere: on another collection's list, or as a folder it binds.
         /// </summary>
         public IReadOnlySet<string> ReleasedValues
@@ -402,7 +402,7 @@ public sealed record CollectionsLocalCache
 
         /// <summary>
         /// Every folder this binding has published into, the current one included. A connector can
-        /// bring an earlier one back as written — a backup taken before the folder moved — and the
+        /// bring an earlier one back as written - a backup taken before the folder moved - and the
         /// author's old folder is no more a subscriber's than the current one.
         /// </summary>
         public IReadOnlySet<string> PublishedFolders
@@ -419,7 +419,7 @@ public sealed record CollectionsLocalCache
         public string? Origin { get; init; }
 
         /// <summary>
-        /// The connectors the author has reviewed for publishing, by name: what the sheet's Publish
+        /// The connectors the author has reviewed for publishing, by name: what the dialog's Publish
         /// showed them in the preview. A publish that happens on its own writes nothing about a
         /// connector outside this list, and holds for review instead. Null in a binding written
         /// before the list was kept, which the first publish after fills in from the document
@@ -690,7 +690,7 @@ public sealed record CollectionsLocalCache
     /// A publish binding dropped here is a collection deleted, or stopped, on another machine, which
     /// is how a collection disappears from a store that syncs. It leaves what stopping it here
     /// leaves: the paths it kept back, the paths the author released and the folders it published
-    /// into. Nothing else on this machine remembers them — there is no record to union, and the
+    /// into. Nothing else on this machine remembers them - there is no record to union, and the
     /// sidecar entry that carried its marks went with it.
     /// </remarks>
     public CollectionsLocalCache Reconciled(CollectionsFile file)
@@ -719,9 +719,9 @@ public sealed record CollectionsLocalCache
     /// Remembers every path the sidecar's publish records in <paramref name="file"/> mark, for every
     /// collection this machine has no publish binding for. A mark in the sidecar is kept back on every
     /// machine the sidecar reaches, and on one that does not publish the collection it is the only thing
-    /// that marks the path. The record losing it — the collection deleted or unpublished, or the
+    /// that marks the path. The record losing it - the collection deleted or unpublished, or the
     /// connector deleted, here or on another machine, or the collection dropped by a master list restored
-    /// from a backup that does not hold it — is not the author's word that the path may travel. It is
+    /// from a backup that does not hold it - is not the author's word that the path may travel. It is
     /// remembered when a load or an edit first sees it, not when it goes: the other machine's change can
     /// sync in while this one is off, and the launch after finds nothing left to remember it by. So a
     /// mark the author drops on the other machine stays kept back here until it is released in this

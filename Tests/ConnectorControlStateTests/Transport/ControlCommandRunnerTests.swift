@@ -109,7 +109,7 @@ final class ControlCommandRunnerTests: XCTestCase {
     }
 
     /// What the command line prints when the tool runs elevated and nothing answers: why it started nothing,
-    /// on stderr as text — under --json too — with exit 3, and no "Starting…" before it.
+    /// on stderr as text - under --json too - with exit 3, and no "Starting…" before it.
     func testAnElevatedToolPrintsWhyItStartedNothingAndExitsThree() {
         let seen = ControlClientTests.Seen()
         for json in [false, true] {

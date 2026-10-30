@@ -1,11 +1,12 @@
+using System.Runtime.ExceptionServices;
 using ConnectorControl.Core.Services;
 
 namespace ConnectorControl.Core.State;
 
 /// <summary>
 /// Checks 10 s after launch and every 24 h; with autoUpdate on,
-/// download silently, stage for quit, and toast once per version; otherwise —
-/// and always for Check for Updates — show the update dialog. A version the
+/// download silently, stage for quit, and toast once per version; otherwise -
+/// and always for Check for Updates - show the update dialog. A version the
 /// user declines from a background offer is not re-offered by later
 /// background checks (Sparkle's Skip This Version is the Mac counterpart);
 /// Check for Updates always offers, even a version already declined. Manual
@@ -16,18 +17,24 @@ public sealed class UpdateCoordinator : IDisposable
     public static readonly TimeSpan InitialDelay = TimeSpan.FromSeconds(10);
     public static readonly TimeSpan Interval = TimeSpan.FromHours(24);
 
+    /// <summary>The update dialog's window title, as Sparkle titles the Mac's.</summary>
+    public const string DialogTitle = "Software Update";
     public const string ReadyToastBody = "An update to Connector Control is ready and will install when you quit.";
     public const string UpToDateMessage = "You're up to date.";
     public const string CheckFailedMessage = "Couldn’t check for updates.";
+    /// <summary>A download or relaunch the user asked for with Install and Relaunch failed.</summary>
+    public const string InstallFailedMessage = "Couldn’t install the update.";
     public const string UpdateRefusedMessage = "The update was not installed.";
     public const string AvailableHeadline = "A new version of Connector Control is available!";
     public const string InstallButton = "Install and Relaunch";
     public const string LaterButton = "Later";
+    /// <summary>The Install and Relaunch button while the package downloads, the dialog still up and busy.</summary>
+    public const string DownloadingTitle = "Downloading…";
 
     public static string UpToDateDetail(string version) => $"Connector Control {version} is currently the newest version available.";
 
     public static string AvailableDetail(string newVersion, string currentVersion) =>
-        $"Connector Control {newVersion} is now available — you have {currentVersion}. Would you like to install it now?";
+        $"Connector Control {newVersion} is now available - you have {currentVersion}. Would you like to install it now?";
 
     private readonly IUpdater updater;
     private readonly ISettings settings;
@@ -62,6 +69,16 @@ public sealed class UpdateCoordinator : IDisposable
     /// <see cref="ISettings.DeclinedUpdateVersion"/> so a decline survives a relaunch.
     /// </summary>
     public string? DeclinedVersion => settings.DeclinedUpdateVersion;
+
+    /// <summary>
+    /// A check is in flight, scheduled or asked for, from its start until its slot is cleared: Check for Updates
+    /// reads "Checking…" and cannot be clicked meanwhile, rather than silently joining it. Windows only: Sparkle
+    /// shows the Mac's.
+    /// </summary>
+    public bool IsChecking => inFlightCheck is not null;
+
+    /// <summary>Raised on the UI thread whenever <see cref="IsChecking"/> changes.</summary>
+    public event Action? CheckingChanged;
 
     public void Start()
     {
@@ -104,6 +121,7 @@ public sealed class UpdateCoordinator : IDisposable
         // ever ran, resurrecting a stale, already-completed task for the next caller.
         var completion = new TaskCompletionSource<UpdateOutcome>(TaskCreationOptions.RunContinuationsAsynchronously);
         inFlightCheck = completion.Task;
+        CheckingChanged?.Invoke();
         _ = RunCheckAsync(interactive, completion);
         return completion.Task;
     }
@@ -122,7 +140,7 @@ public sealed class UpdateCoordinator : IDisposable
         }
         // inFlightCheck is UI-thread state (CheckAsync reads and writes it there) and this
         // continuation is on a pool thread, so the clear goes through the host like every
-        // other state write in this class — and the outcome is published only AFTER it has
+        // other state write in this class - and the outcome is published only AFTER it has
         // run, so a caller resuming on the UI thread never finds the finished task still
         // parked in the field and joins it instead of checking afresh. Installing is the one
         // outcome this never delivers on a real install: ApplyAndRestart, posted just before,
@@ -133,6 +151,7 @@ public sealed class UpdateCoordinator : IDisposable
             await host.MarshalAsync(() =>
             {
                 inFlightCheck = null;
+                CheckingChanged?.Invoke();
                 return true;
             }).ConfigureAwait(false);
         }
@@ -174,7 +193,7 @@ public sealed class UpdateCoordinator : IDisposable
         {
             // Stage each version once. The 24 h check keeps finding the same pending update
             // until the user quits; downloading it again and queueing a second Update.exe
-            // wait buys nothing — the first staging is the one that will run.
+            // wait buys nothing - the first staging is the one that will run.
             if (StagedVersion == update.Version)
             {
                 return UpdateOutcome.StagedForQuit;
@@ -228,15 +247,62 @@ public sealed class UpdateCoordinator : IDisposable
             return UpdateOutcome.Deferred;
         }
         // MarshalAsync, not Marshal-then-read-a-captured-local: AppHost.Marshal only POSTS,
-        // so the answer is not there when it returns.
+        // so the answer is not there when it returns. Install and Relaunch's work runs inside the
+        // offer, so the dialog stays up, busy, until the app relaunches; a failure ends it, and is
+        // reported once the dialog has closed. Cancel, while it runs, returns the dialog to its offer
+        // with nothing to report; the next Install and Relaunch starts afresh.
+        Exception? installFailure = null;
+        // A refusal from any attempt, kept past the next one: a Cancel pressed while the package was being checked
+        // returns the dialog to its offer even though the check went on to refuse it, and Later must not drop that.
+        UpdateVerificationException? refusal = null;
+        async Task InstallAsync(CancellationToken cancellationToken)
+        {
+            installFailure = null;
+            try
+            {
+                // The dialog calls this on the UI thread, and the updater checks signatures before its first
+                // await, so the download starts on the pool, as it did before the dialog waited for it. The
+                // token goes to the download only: given to Task.Run, a Cancel already pressed would skip it.
+                await Task.Run(() => updater.DownloadAsync(update, cancellationToken)).ConfigureAwait(false);
+                // ApplyAndRestart does not return: Velopack's ApplyUpdatesAndRestart exits the
+                // process from inside the call, so App.OnExit never runs. Everything this app owns
+                // is already durable at this point (settings persist per setter; watchers need no
+                // teardown), which is why there is nothing to flush here.
+                await host.MarshalAsync(() =>
+                {
+                    // A Cancel that came once the download had finished still stops the relaunch.
+                    cancellationToken.ThrowIfCancellationRequested();
+                    updater.ApplyAndRestart(update);
+                    return true;
+                }).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The user's Cancel: nothing failed, and the dialog is back at its offer.
+            }
+            catch (Exception ex)
+            {
+                // The dialog awaits this from a click handler, where an exception would crash the app.
+                installFailure = ex;
+                refusal = ex as UpdateVerificationException ?? refusal;
+            }
+        }
         bool install;
         try
         {
-            install = await host.MarshalAsync(() => dialogs.OfferUpdate(update.Version, updater.VersionDisplay, update.NotesMarkdown)).ConfigureAwait(false);
+            install = await host.MarshalAsync(() => dialogs.OfferUpdate(update.Version, updater.VersionDisplay, update.NotesMarkdown, InstallAsync))
+                .ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             InformIf(interactive, CheckFailedMessage, ex.Message);
+            return UpdateOutcome.Failed;
+        }
+        if (!install && refusal is not null)
+        {
+            // Later after a refused package: the refusal is still said (its text may ask for a reinstall), and the
+            // version is not recorded as declined, which would keep the background check from offering it again.
+            host.Marshal(() => dialogs.Inform(UpdateRefusedMessage, refusal.Message));
             return UpdateOutcome.Failed;
         }
         if (!install)
@@ -251,28 +317,22 @@ public sealed class UpdateCoordinator : IDisposable
             }
             return UpdateOutcome.Deferred;
         }
-        try
+        switch (installFailure)
         {
-            await updater.DownloadAsync(update).ConfigureAwait(false);
+            case null:
+                return UpdateOutcome.Installing;
+            case OperationCanceledException:
+                ExceptionDispatchInfo.Capture(installFailure).Throw();
+                return UpdateOutcome.Failed;   // not reached
+            case UpdateVerificationException refused:
+                host.Marshal(() => dialogs.Inform(UpdateRefusedMessage, refused.Message));
+                return UpdateOutcome.Failed;
+            default:
+                // The user asked for this and is waiting: the download or the relaunch failed, and the
+                // exception text says what actually broke.
+                host.Marshal(() => dialogs.Inform(InstallFailedMessage, installFailure.Message));
+                return UpdateOutcome.Failed;
         }
-        catch (UpdateVerificationException refused)
-        {
-            host.Marshal(() => dialogs.Inform(UpdateRefusedMessage, refused.Message));
-            return UpdateOutcome.Failed;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            // The user asked for this and is waiting; CheckFailedMessage is the one failure
-            // string the spec gives us, and the exception text says what actually broke.
-            host.Marshal(() => dialogs.Inform(CheckFailedMessage, ex.Message));
-            return UpdateOutcome.Failed;
-        }
-        // ApplyAndRestart does not return: Velopack's ApplyUpdatesAndRestart exits the
-        // process from inside the call, so App.OnExit never runs. Everything this app owns
-        // is already durable at this point (settings persist per setter; watchers need no
-        // teardown), which is why there is nothing to flush here.
-        host.Marshal(() => updater.ApplyAndRestart(update));
-        return UpdateOutcome.Installing;
     }
 
     /// <summary>A background check stays silent; only an interactive one (Check for Updates) shows the result.</summary>

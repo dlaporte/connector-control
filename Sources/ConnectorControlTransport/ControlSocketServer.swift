@@ -39,7 +39,7 @@ public final class ControlSocketServer: @unchecked Sendable {
         self.timeout = timeout
     }
 
-    /// Listens at `path` and hands every connection from `allowedUID` — this user, but for a test —
+    /// Listens at `path` and hands every connection from `allowedUID` - this user, but for a test -
     /// to `server`. Anyone else's is closed before a byte is read. `timeout` is a test's way to a
     /// short write timeout.
     public static func start(path: String, server: ControlServer, host: AppHost, allowedUID: uid_t = getuid(),

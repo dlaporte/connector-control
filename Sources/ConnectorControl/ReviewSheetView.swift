@@ -75,8 +75,8 @@ struct ReviewSheetView: View {
         }
     }
 
-    /// One side of a change, as the editor would show it. A side that does not exist — nothing
-    /// before an addition, nothing after a removal — still holds its column, so the side that
+    /// One side of a change, as the editor would show it. A side that does not exist - nothing
+    /// before an addition, nothing after a removal - still holds its column, so the side that
     /// does stays where the eye left it on the row above.
     private func side(_ text: String?) -> some View {
         // Both directions: a connector's config runs past seven caption lines as readily as it

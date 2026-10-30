@@ -28,8 +28,8 @@ public readonly record struct TextRun(string Text, bool IsSetApart = false)
     // Platform idiom: a record struct compares its text ordinally by itself, as the Mac mirror's == compares it
     // scalar by scalar; Swift's own == would hold canonically equivalent text equal.
 
-    /// <summary><paramref name="sentence"/> with every occurrence of each of <paramref name="settingApart"/> set apart — at each
-    /// place, the first of them found there — and the rest as words. An empty piece sets nothing apart.</summary>
+    /// <summary><paramref name="sentence"/> with every occurrence of each of <paramref name="settingApart"/> set apart - at each
+    /// place, the first of them found there - and the rest as words. An empty piece sets nothing apart.</summary>
     public static IReadOnlyList<TextRun> Runs(string sentence, IReadOnlyList<string> settingApart)
     {
         var wanted = settingApart.Where(piece => piece.Length > 0).Select(piece => ControlText.Scalars(piece).ToList()).ToList();
@@ -122,8 +122,8 @@ public readonly record struct TextRun(string Text, bool IsSetApart = false)
     /// <summary>An escaped name cut as <see cref="Cut"/> cuts one.</summary>
     internal static string CutName(string name, int limit) => Join(Cut(ControlText.Scalars(name).ToList(), limit));
 
-    /// <summary>An escaped name in pieces: each escape whole — a backslash and the character after it, or
-    /// <c>\u{…}</c> to its closing brace — and every other scalar alone.</summary>
+    /// <summary>An escaped name in pieces: each escape whole - a backslash and the character after it, or
+    /// <c>\u{…}</c> to its closing brace - and every other scalar alone.</summary>
     internal static List<List<int>> Escapes(List<int> name)
     {
         var pieces = new List<List<int>>();

@@ -139,12 +139,6 @@ public class ClaudeProcessTests
         Assert.Equal(2, detections);   // so a Claude installed after we started is picked up
     }
 
-    [Fact]
-    public void QuitMessageMatchesTheMacApp()
-    {
-        Assert.Equal("Claude didn\u2019t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again.", ClaudeProcess.DidNotQuitMessage);
-    }
-
     // Package folders look like <Name>_<Version>_<Arch>_<ResourceId>__<PublisherId>;
     // the family name is <Name>_<PublisherId>. Msix cases below all use the family
     // "Claude_pzs8sxrjxfjjc" against install directory

@@ -21,7 +21,7 @@ public sealed partial class ControlTools
 {
     public const string RestartToUseText = "Restart Claude to use it.";
     public const string RestartToApplyText = "Restart Claude to apply the change.";
-    public const string KeepCountError = "backups-to-keep takes a number from 5 to 100.";
+    public static readonly string KeepCountError = $"backups-to-keep takes a number from {ControlSettingKey.KeepCountRange}.";
 
     public static string SavedNotAppliedText(string message) => $"Saved, but Claude’s config wasn’t updated: {message}";
 
@@ -44,6 +44,20 @@ public sealed partial class ControlTools
     public static string DuplicatedText(string source, string copy) => $"Copied “{source}” as “{copy}”.";
 
     public static string DuplicateSubscribedError(string collection) => $"“{collection}” is subscribed; copy it in Connector Control with Make Local Copy.";
+
+    /// <summary>
+    /// add_connector on a subscribed collection: the collection named, and the two ways round it,
+    /// in the house style of the refusal above.
+    /// </summary>
+    public static string SubscribedAddError(string collection) =>
+        $"“{collection}” is subscribed, so it’s read-only; add the connector to a local collection, or copy this one in Connector Control with Make Local Copy.";
+
+    /// <summary>
+    /// update_connector and delete_connectors on a subscribed collection: the way round is a local
+    /// copy, since the connector has to be in a collection you own to be changed.
+    /// </summary>
+    public static string SubscribedChangeError(string collection) =>
+        $"“{collection}” is subscribed, so it’s read-only; copy it in Connector Control with Make Local Copy to change its connectors.";
 
     public static string SettingChangedText(string key, string value) => $"{key} is now {value}.";
 

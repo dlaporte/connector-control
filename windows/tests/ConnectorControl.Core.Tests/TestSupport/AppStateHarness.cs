@@ -114,7 +114,7 @@ public sealed class AppStateHarness : IDisposable
     }
 
     /// <summary>Writes both collection files where the app reads them, then reloads so the state
-    /// picks them up — the shape a subscribe or a publish would leave behind.</summary>
+    /// picks them up - the shape a subscribe or a publish would leave behind.</summary>
     public void Seed(AppState state, CollectionsFile file, CollectionsLocalCache? cache = null)
     {
         file.Save(Path.Combine(StoreDir, CollectionsFile.FileName));

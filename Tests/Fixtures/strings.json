@@ -6,7 +6,7 @@
   },
   "AppState.chooseClaude": "Choose the real Claude Desktop under Settings ▸ Claude.",
   "AppState.claudeConfigChangedBody": "Claude's config changed outside Connector Control.",
-  "AppState.claudeConfigRegeneratedBody": "Claude's config was changed outside Connector Control — regenerated from your connector list. Restart Claude to pick it up.",
+  "AppState.claudeConfigRegeneratedBody": "Claude's config was changed outside Connector Control - regenerated from your connector list. Restart Claude to pick it up.",
   "AppState.collectionDirCmdUnsafeCaution": {
     "win": "The folder ${COLLECTION_DIR} stands for must not contain & | < > ^ \" or spaces: on Windows the cmd /c launcher hands it to cmd.exe, which treats those as commands."
   },
@@ -28,8 +28,8 @@
     "format": "{0} changed at its source: {1}. Review it in Connector Control."
   },
   "AppState.collectionsNotSavedNote": "Collections could not be saved: the collections file is unreadable. Your change is not on disk and will be lost when the file is read again.",
-  "AppState.connectorListChangedBody.noRestart": "The connector list changed outside Connector Control — Claude's config was regenerated. Claude will use it the next time it starts.",
-  "AppState.connectorListChangedBody.restart": "The connector list changed outside Connector Control — Claude's config was regenerated. Restart Claude to pick it up.",
+  "AppState.connectorListChangedBody.noRestart": "The connector list changed outside Connector Control - Claude's config was regenerated. Claude will use it the next time it starts.",
+  "AppState.connectorListChangedBody.restart": "The connector list changed outside Connector Control - Claude's config was regenerated. Restart Claude to pick it up.",
   "AppState.defaultClaudeAppPath": {
     "mac": "/Applications/Claude.app"
   },
@@ -77,7 +77,7 @@
   },
   "AppState.quitButton": "Quit",
   "AppState.quitMessage": "Quit Connector Control?",
-  "AppState.regenerationFailedBody": "The connector configuration changed, but Claude's config could not be updated — open Connector Control to retry.",
+  "AppState.regenerationFailedBody": "The connector configuration changed, but Claude's config could not be updated - open Connector Control to retry.",
   "AppState.relaunchFailedMessage": {
     "win": "Claude didn’t come back after the restart. Start Claude yourself, then try again."
   },
@@ -94,7 +94,7 @@
   "AppState.sourceUnreadableError": {
     "format": "{0} couldn’t be read: {1}"
   },
-  "AppState.storeChangedBody": "The connector list changed outside Connector Control — review it before your next change is applied.",
+  "AppState.storeChangedBody": "The connector list changed outside Connector Control - review it before your next change is applied.",
   "AppState.targetMustBeLocalError": "Copies go into a local collection.",
   "AppState.unpublishedDirectoryCaution": {
     "mac": "${COLLECTION_DIR} has no folder until this collection is published from this Mac.",
@@ -165,6 +165,12 @@
   "CollectionsModel.connectorTally.one": {
     "format": "{0} connector"
   },
+  "CollectionsModel.copiedNote.many": {
+    "format": "Copied {0} connectors to “{1}”"
+  },
+  "CollectionsModel.copiedNote.one": {
+    "format": "Copied 1 connector to “{0}”"
+  },
   "CollectionsModel.copyToButton": "Copy to",
   "CollectionsModel.deleteAction": "Delete",
   "CollectionsModel.deleteCheckedButton": "Delete",
@@ -194,27 +200,26 @@
   "CollectionsModel.documentFilter": {
     "win": "Collection (*.json)|*.json"
   },
-  "CollectionsModel.duplicateAction": "Duplicate",
+  "CollectionsModel.duplicateAction": "Duplicate…",
   "CollectionsModel.editLabel": {
     "format": "Edit “{0}”"
   },
-  "CollectionsModel.exportAllAction": "Export All",
-  "CollectionsModel.exportCheckedButton": "Export",
-  "CollectionsModel.importButton": "Import",
+  "CollectionsModel.exportAllAction": "Export All…",
+  "CollectionsModel.exportCheckedButton": "Export…",
+  "CollectionsModel.importButton": "Import…",
   "CollectionsModel.importSubtitle": "Adds copies you own",
   "CollectionsModel.keepFileButton": "Keep",
   "CollectionsModel.lockedGlyphTooltip": "Read-only: synced from the collection’s author",
   "CollectionsModel.makeActiveAction": "Make Active",
-  "CollectionsModel.makeLocalCopyButton": "Make Local Copy",
+  "CollectionsModel.makeLocalCopyButton": "Make Local Copy…",
   "CollectionsModel.moreActionsLabel": "More",
-  "CollectionsModel.newButton": "New Collection",
-  "CollectionsModel.publishButton": "Start Publishing",
-  "CollectionsModel.publishSettingsButton": "Publishing Settings",
+  "CollectionsModel.newButton": "New Collection…",
+  "CollectionsModel.publishButton": "Start Publishing…",
+  "CollectionsModel.publishSettingsButton": "Publishing Settings…",
   "CollectionsModel.publishedPill": "Published",
   "CollectionsModel.readOnlyNote": "read-only",
   "CollectionsModel.refreshButton": "Refresh",
-  "CollectionsModel.remoteType": "remote",
-  "CollectionsModel.renameAction": "Rename",
+  "CollectionsModel.renameAction": "Rename…",
   "CollectionsModel.selectedCount": {
     "format": "{0} selected"
   },
@@ -226,7 +231,7 @@
   "CollectionsModel.stopSyncingMessage": {
     "format": "Stop Syncing “{0}”?"
   },
-  "CollectionsModel.subscribeButton": "Subscribe",
+  "CollectionsModel.subscribeButton": "Subscribe…",
   "CollectionsModel.subscribeSubtitle": "Stays in sync, read-only",
   "CollectionsModel.subscribedPill": "Subscribed",
   "CollectionsModel.updateAvailableStatus": "update available",
@@ -259,6 +264,11 @@
   "CommandLineToolText.scriptsCaption": {
     "format": "Scripts can always use {0}"
   },
+  "CommandLineToolText.unprotectedFolderError": {
+    "mac": {
+      "format": "The command-line tool can’t be installed from {0}: every account on this Mac would run it, and that folder can be changed without an administrator. Move Connector Control to Applications, then try again."
+    }
+  },
   "ConfigService.corruptStoreNote": {
     "format": "The MCP list file was unreadable; it was preserved as {0} and rebuilt from Claude’s config."
   },
@@ -274,6 +284,7 @@
   "ConfigService.malformedClaudeConfigNote": "Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.",
   "ConfirmationDialog.allowButton": "Allow",
   "ConfirmationDialog.dontAllowButton": "Don’t Allow",
+  "ConnectorTarget.remoteType": "remote",
   "ControlCaller.callingItselfText": {
     "format": "An app calling itself “{0}”"
   },
@@ -287,8 +298,12 @@
   "ControlCommandLine.missingValueError": {
     "format": "“{0}” needs a value."
   },
+  "ControlCommandLine.helpTakesNoArgumentsError": "help takes no arguments. Run connector-control help to see every command.",
   "ControlCommandLine.unknownCommandError": {
     "format": "There’s no command named “{0}”. Run connector-control help to see them all."
+  },
+  "ControlCommandLine.unknownSubcommandError": {
+    "format": "“{0}” isn’t a {1} command."
   },
   "ControlCommandLine.unknownOptionError": {
     "format": "“{0}” isn’t an option of this command."
@@ -296,6 +311,7 @@
   "ControlCommandLine.usageError": {
     "format": "Usage: connector-control {0}"
   },
+  "ControlCommandLine.usageContinuation": "\n       connector-control ",
   "ControlCommandLine.versionLine": {
     "format": "connector-control {0}"
   },
@@ -324,7 +340,7 @@
   "ControlMasking.setText": "••• (set)",
   "ControlMasking.typeLabel": "type",
   "ControlMasking.urlLabel": "url",
-  "ControlRelay.restartedError": "Connector Control restarted — try again.",
+  "ControlRelay.restartedError": "Connector Control restarted - try again.",
   "ControlSettingKey.automaticUpdates": "automatic-updates",
   "ControlSettingKey.backupsToKeep": "backups-to-keep",
   "ControlSettingKey.claudeIntegration": "claude-integration",
@@ -405,8 +421,11 @@
   "ControlTools.collectionHeader": "COLLECTION",
   "ControlTools.collectionsGroup": "Collections",
   "ControlTools.configShapeError": "A connector’s config needs a “command” or a “url”.",
-  "ControlTools.connectorCountText": {
+  "ControlTools.connectorCountText.many": {
     "format": "{0} connectors, {1} on"
+  },
+  "ControlTools.connectorCountText.one": {
+    "format": "{0} connector, {1} on"
   },
   "ControlTools.connectorsGroup": "Connectors (in the active collection; connectors --collection <name> lists another)",
   "ControlTools.connectorsHeader": "CONNECTORS",
@@ -666,6 +685,12 @@
   "ControlTools.subscribedNotification": {
     "format": "{0} subscribed to “{1}” as “{2}”."
   },
+  "ControlTools.subscribedAddError": {
+    "format": "“{0}” is subscribed, so it’s read-only; add the connector to a local collection, or copy this one in Connector Control with Make Local Copy."
+  },
+  "ControlTools.subscribedChangeError": {
+    "format": "“{0}” is subscribed, so it’s read-only; copy it in Connector Control with Make Local Copy to change its connectors."
+  },
   "ControlTools.subscribedText": {
     "format": "Subscribed: “{0}” follows {1}, read-only."
   },
@@ -747,7 +772,7 @@
   "EditorModel.addArgumentTitle": "＋ Add argument",
   "EditorModel.addVariableTitle": "＋ Add variable",
   "EditorModel.additionalTitle": {
-    "format": "{0} field(s) not editable here: {1} — switch to JSON to edit"
+    "format": "{0} field(s) not editable here: {1} - switch to JSON to edit"
   },
   "EditorModel.argumentLabel": {
     "format": "Argument {0}"
@@ -781,7 +806,16 @@
   "EditorModel.commandLabel": "Command",
   "EditorModel.commandPrompt": "npx",
   "EditorModel.deleteArgumentLabel": "Delete argument",
+  "EditorModel.deleteArgumentRowLabel": {
+    "format": "Delete argument {0}"
+  },
   "EditorModel.deleteVariableLabel": "Delete variable",
+  "EditorModel.deleteVariableRowLabel": {
+    "format": "Delete variable {0}"
+  },
+  "EditorModel.hideVariableValueLabel": {
+    "format": "Hide value of variable {0}"
+  },
   "EditorModel.deletedOutsideDetail": "Saving will add it back.",
   "EditorModel.deletedOutsideMessage": {
     "format": "“{0}” was deleted outside this editor."
@@ -803,7 +837,7 @@
   },
   "EditorModel.invalidURLError": "Server URL must be a valid http(s) URL.",
   "EditorModel.jsonTab": "JSON",
-  "EditorModel.jsonTip": "Tip: paste a README snippet or an mcpServers stanza — a wrapper or a bare \"name\": {…} entry is unwrapped automatically, and the name filled in.",
+  "EditorModel.jsonTip": "Tip: paste a README snippet or an mcpServers stanza - a wrapper or a bare \"name\": {…} entry is unwrapped automatically, and the name filled in.",
   "EditorModel.localTypeTitle": "Local",
   "EditorModel.lockedFieldsNote": {
     "format": "Synced from {0} · read-only"
@@ -816,7 +850,7 @@
   "EditorModel.noTargetMessage": {
     "mac": "Choose a connector in the Collections window."
   },
-  "EditorModel.notValidJSON": "Not valid JSON — check for a stray brace, missing comma, or unquoted value.",
+  "EditorModel.notValidJSON": "Not valid JSON - check for a stray brace, missing comma, or unquoted value.",
   "EditorModel.oauthSecretCaption": {
     "mac": "Passed to mcp-remote on its command line, which other programs running on this Mac can read.",
     "win": "Passed to mcp-remote on its command line, which other programs running on this PC can read."
@@ -828,9 +862,9 @@
     "format": "Also apply this change to {0}, which have an identical {1}"
   },
   "EditorModel.publishedNote": {
-    "format": "Published to {0} — saving updates the file your team reads. Secrets stay here."
+    "format": "Published to {0} - saving updates the file your team reads. Secrets stay here."
   },
-  "EditorModel.remoteFooter": "Runs via npx mcp-remote — managed for you.",
+  "EditorModel.remoteFooter": "Runs via npx mcp-remote - managed for you.",
   "EditorModel.remoteTypeTitle": "Remote",
   "EditorModel.saveAnywayButton": "Save Anyway",
   "EditorModel.saveButton": "Save",
@@ -839,12 +873,21 @@
   "EditorModel.serverURLLabel": "Server URL",
   "EditorModel.serverURLPrompt": "https://example.com/mcp",
   "EditorModel.showValueLabel": "Show value",
+  "EditorModel.showVariableValueLabel": {
+    "format": "Show value of variable {0}"
+  },
   "EditorModel.stayInJSONButton": "Stay in JSON",
   "EditorModel.switchAnywayButton": "Switch Anyway",
   "EditorModel.tokenLabel": "Token",
   "EditorModel.typeLabel": "Type",
   "EditorModel.urlHint": "Enter a valid http(s) URL, e.g. https://example.com/mcp",
   "EditorModel.valueLabel": "Value",
+  "EditorModel.variableNameLabel": {
+    "format": "Variable {0} name"
+  },
+  "EditorModel.variableValueLabel": {
+    "format": "Variable {0} value"
+  },
   "EditorModel.viewPickerLabel": {
     "mac": "View"
   },
@@ -922,26 +965,29 @@
   },
   "Notifications.restartToastButton": "Restart Claude",
   "Notifications.title": "Connector Control",
-  "PopoverModel.chooseFolderButton": "Choose Folder",
+  "PopoverModel.chooseFolderButton": "Choose Folder…",
   "PopoverModel.emptyText": {
     "format": "No connectors in “{0}”."
   },
   "PopoverModel.locateButton": {
-    "format": "Locate {0}"
+    "format": "Locate {0}…"
   },
   "PopoverModel.manageTitle": "Manage Collections",
+  "PopoverModel.menuBarRetryLabel": {
+    "mac": "Connector Control: Apply Failed - Retry"
+  },
   "PopoverModel.pendingMenuMark": " · update available",
   "PopoverModel.quitTooltip": "Quit Connector Control",
   "PopoverModel.restartTitle": "Restart Required",
-  "PopoverModel.retryTitle": "Apply Failed — Retry",
-  "PopoverModel.reviewAndApplyButton": "Review & Apply",
+  "PopoverModel.retryTitle": "Apply Failed - Retry",
+  "PopoverModel.reviewAndApplyButton": "Review & Apply…",
   "PopoverModel.settingsTooltip": "Settings",
   "PopoverModel.sourceTooltipFormat": {
     "format": "Synced from {0}"
   },
   "PopoverModel.title": "Connector Control",
   "PublishModel.cancelButton": "Cancel",
-  "PublishModel.chooseFolderButton": "Choose Folder",
+  "PublishModel.chooseFolderButton": "Choose Folder…",
   "PublishModel.envSectionTitle": "Environment values · stripped unless shared",
   "PublishModel.exportButton": "Export",
   "PublishModel.exportTitle": {
@@ -959,16 +1005,28 @@
     "format": "{0} · {1}"
   },
   "PublishModel.forgetMarkButton": "Forget Mark",
+  "PublishModel.forgetMarkRowLabel": {
+    "format": "Forget mark {1} in {0}"
+  },
   "PublishModel.hintPlaceholder": "hint for recipients",
+  "PublishModel.hintRowLabel": {
+    "format": "Hint for {1} in {0}"
+  },
   "PublishModel.keptPathNote": {
     "format": "“{0}” carries a path this machine keeps back, in {1}. Tick it where it sits, or release it."
   },
   "PublishModel.markPathLabel": "Mark as a path this machine supplies",
+  "PublishModel.markPathRowLabel": {
+    "format": "Mark {1} in {0} as a path this machine supplies"
+  },
   "PublishModel.noFolderError": "Choose a folder to publish to.",
   "PublishModel.otherFolderNote": {
     "format": "“{0}” carries, in {1}, the folder this machine keeps “{2}” in. Tick it where it sits, or release it."
   },
   "PublishModel.pathNamePlaceholder": "placeholder name",
+  "PublishModel.pathNameRowLabel": {
+    "format": "Placeholder name for {1} in {0}"
+  },
   "PublishModel.pathsSectionTitle": "Machine-specific paths · found in arguments",
   "PublishModel.previewTitle": "Document preview",
   "PublishModel.publishButton": "Publish",
@@ -984,7 +1042,13 @@
     "format": "“{0}” carries this machine’s publish folder as written, in {1}. Use ${COLLECTION_DIR} in its place."
   },
   "PublishModel.releaseValueButton": "Release",
+  "PublishModel.releaseValueRowLabel": {
+    "format": "Release {1} in {0}"
+  },
   "PublishModel.shareValueLabel": "share value",
+  "PublishModel.shareValueRowLabel": {
+    "format": "Share value of {1} in {0}"
+  },
   "PublishModel.title": {
     "format": "Publish “{0}”"
   },
@@ -992,6 +1056,9 @@
     "format": "A path marked “{1}” in “{0}” has moved. Tick it where it now sits, or forget the mark."
   },
   "PublishModel.useDirectoryTokenButton": "Use ${COLLECTION_DIR}",
+  "PublishModel.useDirectoryTokenRowLabel": {
+    "format": "Use ${COLLECTION_DIR} for {1} in {0}"
+  },
   "PublishModel.warningLine": {
     "format": "{0}: {1}"
   },
@@ -1028,6 +1095,9 @@
   "SettingsModel.backupsHeader": "Backups",
   "SettingsModel.backupsTitle": "Backups of each file",
   "SettingsModel.checkForUpdatesTitle": "Check for Updates",
+  "SettingsModel.checkingTitle": {
+    "win": "Checking…"
+  },
   "SettingsModel.chooseButtonTitle": "Choose…",
   "SettingsModel.chooseTitle": "Choose",
   "SettingsModel.claudeAppHeader": "Claude App",
@@ -1049,12 +1119,20 @@
   "SettingsModel.confirmQuitTitle": "Confirm before quitting",
   "SettingsModel.confirmRestartTitle": "Confirm before restarting Claude",
   "SettingsModel.confirmationsHeader": "Confirmations",
+  "SettingsModel.fewerBackupsLabel": {
+    "win": "Fewer backups"
+  },
   "SettingsModel.generalTab": "General",
   "SettingsModel.installKindLegacyText": {
     "win": "Legacy installer"
   },
   "SettingsModel.installKindMsixText": {
     "win": "MSIX package"
+  },
+  "SettingsModel.keepCountHelpText": {
+    "win": {
+      "format": "Keeps {0} backups of each file."
+    }
   },
   "SettingsModel.launchAtLoginTitle": {
     "mac": "Launch at login",
@@ -1079,6 +1157,9 @@
     "win": "Holds mcps.json and collections.json. A synced folder shares them across your PCs."
   },
   "SettingsModel.masterListHeader": "Master List Location",
+  "SettingsModel.moreBackupsLabel": {
+    "win": "More backups"
+  },
   "SettingsModel.notificationsHeader": "Notifications",
   "SettingsModel.notifyCaption": "When the master list, a subscribed document or Claude’s config changes outside the app, and when Claude’s config is rebuilt from your list.",
   "SettingsModel.notifyTitle": "Notify on external changes",
@@ -1100,6 +1181,9 @@
   "SettingsModel.useDefaultTitle": "Use Default",
   "SettingsModel.versionText": {
     "format": "Version {0}"
+  },
+  "SettingsModel.windowTitle": {
+    "win": "Settings"
   },
   "TextRun.cutMark": "…",
   "ToolFamily.nodeJS.installCommand": {
@@ -1143,7 +1227,7 @@
   },
   "UpdateCoordinator.availableDetail": {
     "win": {
-      "format": "Connector Control {0} is now available — you have {1}. Would you like to install it now?"
+      "format": "Connector Control {0} is now available - you have {1}. Would you like to install it now?"
     }
   },
   "UpdateCoordinator.availableHeadline": {
@@ -1152,8 +1236,17 @@
   "UpdateCoordinator.checkFailedMessage": {
     "win": "Couldn’t check for updates."
   },
+  "UpdateCoordinator.dialogTitle": {
+    "win": "Software Update"
+  },
+  "UpdateCoordinator.downloadingTitle": {
+    "win": "Downloading…"
+  },
   "UpdateCoordinator.installButton": {
     "win": "Install and Relaunch"
+  },
+  "UpdateCoordinator.installFailedMessage": {
+    "win": "Couldn’t install the update."
   },
   "UpdateCoordinator.laterButton": {
     "win": "Later"
@@ -1171,6 +1264,95 @@
   },
   "UpdateCoordinator.updateRefusedMessage": {
     "win": "The update was not installed."
+  },
+  "UpdateRefusals.cannotValidateSelf": {
+    "win": "This app's own signature could not be validated, so an update cannot be checked against it; the update was not installed."
+  },
+  "UpdateRefusals.insideTheUpdate": {
+    "win": {
+      "format": "{0} inside the update"
+    }
+  },
+  "UpdateRefusals.installedUpdater": {
+    "win": "The installed Update.exe"
+  },
+  "UpdateRefusals.invalidCharacterEntry": {
+    "win": {
+      "format": "The update package contains an entry named \"{0}\", with a character no Windows file name can hold; the update was not installed."
+    }
+  },
+  "UpdateRefusals.locationUnknown": {
+    "win": "This app's own location is unknown, so an update cannot be checked; the update was not installed."
+  },
+  "UpdateRefusals.mainExecutableTwice": {
+    "win": "The update package contains ConnectorControl.exe more than once; the update was not installed."
+  },
+  "UpdateRefusals.noMainExecutable": {
+    "win": "The update package does not contain ConnectorControl.exe; the update was not installed."
+  },
+  "UpdateRefusals.noVersion": {
+    "win": "ConnectorControl.exe inside the update carries no version; the update was not installed."
+  },
+  "UpdateRefusals.notValidlySigned": {
+    "win": {
+      "format": "{0} is not validly signed; the update was not installed."
+    }
+  },
+  "UpdateRefusals.olderVersion": {
+    "win": {
+      "format": "ConnectorControl.exe inside the update is version {0}, older than the installed {1}; the update was not installed."
+    }
+  },
+  "UpdateRefusals.previewForRelease": {
+    "win": {
+      "format": "ConnectorControl.exe inside the update is the preview {0}, and the installed {1} takes releases only; the update was not installed."
+    }
+  },
+  "UpdateRefusals.renamedEntry": {
+    "win": {
+      "format": "The update package contains an entry named \"{0}\", which Windows would rename on extraction; the update was not installed."
+    }
+  },
+  "UpdateRefusals.signedByAnother": {
+    "win": {
+      "format": "{0} is signed by \"{1}\", not by this app's publisher; the update was not installed."
+    }
+  },
+  "UpdateRefusals.signedByUntrusted": {
+    "win": {
+      "format": "{0} is signed by \"{1}\", not by this app's publisher or one it is built from; the update was not installed."
+    }
+  },
+  "UpdateRefusals.sizeMismatch": {
+    "win": {
+      "format": "The update package entry \"{0}\" declares {1} bytes but holds {2}; the update was not installed."
+    }
+  },
+  "UpdateRefusals.stubNotAProgram": {
+    "win": {
+      "format": "The update package contains \"{0}\", a launcher that is not a program; the update was not installed."
+    }
+  },
+  "UpdateRefusals.unknownInstalledVersion": {
+    "win": {
+      "format": "ConnectorControl.exe inside the update is version {0}, but the installed version could not be read; the update was not installed."
+    }
+  },
+  "UpdateRefusals.unreadable": {
+    "win": {
+      "format": "The update package could not be read ({0}); the update was not installed."
+    }
+  },
+  "UpdateRefusals.updaterKeptSentence": {
+    "win": "The updater it brought couldn’t be removed yet; Connector Control puts its own back the next time it starts or checks for updates."
+  },
+  "UpdateRefusals.updaterLeftSentence": {
+    "win": "The updater it brought couldn’t be removed; reinstall Connector Control to replace it."
+  },
+  "UpdateRefusals.versionMismatch": {
+    "win": {
+      "format": "ConnectorControl.exe inside the update is version {0}, but the update feed says {1}; the update was not installed."
+    }
   },
   "UserPath.notTextError": {
     "win": "Your user PATH in the registry isn’t text, so it was left as it is."

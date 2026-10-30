@@ -8,7 +8,7 @@ namespace ConnectorControl.Core;
 /// deleting the app.
 ///
 /// What the uninstaller takes away: Connector Control's own entry from every Claude config the app may have
-/// written — only when it is exactly as the app writes it, so a connector of that name a person made stays —
+/// written - only when it is exactly as the app writes it, so a connector of that name a person made stays -
 /// the copy's folder from the user PATH, and the copy itself.
 /// </summary>
 public static class ClaudeIntegrationCleanup
@@ -74,7 +74,7 @@ public static class ClaudeIntegrationCleanup
     /// the PATH entry: Velopack ends the hook after 60 seconds, and the PATH change waits on every window's answer to
     /// its broadcast. The configs are swept once more as the last step: an app a relay started before the hook took
     /// the single-instance lock may have put the entry back meanwhile. Each step stands alone: one that fails is said
-    /// to <paramref name="failed"/> — the app's log — and never keeps another from running, since nobody will see the
+    /// to <paramref name="failed"/> - the app's log - and never keeps another from running, since nobody will see the
     /// failure and this runs once.</summary>
     public static void Uninstall(PathContext paths, PathOverrides overrides, string dataDir, IUserEnvironment environment, int keepCount, Action<string>? failed = null) =>
         Uninstall(paths, overrides, dataDir, environment, keepCount, failed, ControlToolCopy.Remove, ClaudeConfigIO.Write);
@@ -89,7 +89,7 @@ public static class ClaudeIntegrationCleanup
         var bin = ControlToolCopy.BinDir(dataDir);
         var record = Path.Combine(bin, ControlEndpoint.AppPathFileName);
         // First, before any config is changed: Velopack stops the app before it runs this hook, and a relay that
-        // gets a call in between would start it again from this record — putting back the entry this hook takes
+        // gets a call in between would start it again from this record - putting back the entry this hook takes
         // away, and holding current\ open. Without the record the copy finds no app to start.
         Step(failed, $"The app's record could not be deleted from {bin}", () =>
         {

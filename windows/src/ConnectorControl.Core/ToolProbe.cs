@@ -4,8 +4,8 @@ using System.Runtime.Versioning;
 namespace ConnectorControl.Core;
 
 /// <summary>
-/// Resolves the four tools the way Claude Desktop would — on the PATH this process was launched
-/// with, honouring PATHEXT on Windows — and reads each one's <c>--version</c> best-effort.
+/// Resolves the four tools the way Claude Desktop would - on the PATH this process was launched
+/// with, honouring PATHEXT on Windows - and reads each one's <c>--version</c> best-effort.
 /// Never throws: every failure degrades to "not found" or "found, version unknown".
 /// The Core tests run this on the Mac too, so the Unix branches are real, not dead code.
 /// </summary>
@@ -43,9 +43,9 @@ public sealed class ToolProbe : IToolProbe
 
     /// <summary>
     /// First match of <paramref name="name"/> along <paramref name="searchPath"/> (split on the
-    /// OS path separator). With <paramref name="pathExt"/> — the Windows rule — each directory
+    /// OS path separator). With <paramref name="pathExt"/> - the Windows rule - each directory
     /// is tried with each extension in order (<c>npx.cmd</c> counts, a bare <c>npx</c> does not);
-    /// without it — the Unix rule — a regular file with an execute bit is required.
+    /// without it - the Unix rule - a regular file with an execute bit is required.
     /// </summary>
     public static string? Resolve(string name, string searchPath, string? pathExt)
     {
@@ -141,7 +141,7 @@ public sealed class ToolProbe : IToolProbe
             const UnixFileMode anyExecute = UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
             return (File.GetUnixFileMode(path) & anyExecute) != 0;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             return false;
         }

@@ -10,7 +10,7 @@ import ConnectorControlTestSupport
 @MainActor
 final class PublishModelTests: XCTestCase {
     /// One local connector with a stripped and a shared environment value and one absolute path
-    /// argument — a row of each kind the sheet offers.
+    /// argument - a row of each kind the sheet offers.
     private let connector = JSONValue.object([
         "command": .string("node"),
         "args": .array([.string("/Users/d/x.js"), .string("--quiet")]),
@@ -85,6 +85,39 @@ final class PublishModelTests: XCTestCase {
         ])), renamedFrom: nil))
         let model = PublishModel(state: state, collection: state.activeCollection)
         XCTAssertEqual(model.pathRows.filter { $0.connector == "win" }.map(\.value), ["C:/tools/x.js", "C:\\tools\\y.js"])
+    }
+
+    /// A network path (`\\server\share\…`) is offered too: it names the same place wherever it is
+    /// opened, as a drive root does. A single leading backslash is not one.
+    func testAUNCPathIsOfferedAsAPathRow() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        XCTAssertNil(state.upsert(name: "unc", entry: MCPEntry(config: .object([
+            "command": .string("node"),
+            "args": .array([.string("\\\\server\\share\\x.js"), .string("\\y.js")]),
+        ])), renamedFrom: nil))
+        let model = PublishModel(state: state, collection: state.activeCollection)
+        XCTAssertEqual(model.pathRows.filter { $0.connector == "unc" }.map(\.value), ["\\\\server\\share\\x.js"])
+    }
+
+    /// Whether an argument is offered as a path is read from how it is written, never from what this
+    /// process's working directory holds: that is "/" for an app the Finder starts, and the same
+    /// collection must offer the same rows wherever it is opened. Besides the window's explicit
+    /// paths, "." and ".." and their Windows-written forms count; a bare word, or a relative name
+    /// with a separator inside it (a package, an image), does not, even when the working directory
+    /// holds something by that name.
+    func testAPathRowIsOfferedByHowTheArgumentIsWrittenNotByTheWorkingDirectory() throws {
+        let (h, state) = try started()
+        defer { h.dispose() }
+        let cwd = FileManager.default.currentDirectoryPath
+        let held = try XCTUnwrap(try FileManager.default.contentsOfDirectory(atPath: cwd).sorted()
+            .first { !$0.hasPrefix(".") && !$0.hasPrefix("~") }, "the working directory holds something")
+        let args = ["usr", held, "dist/index.js", "@scope/pkg", cwd, ".", "..", ".\\x.js", "..\\y.js", "--out=a/b", "https://h/p"]
+        XCTAssertNil(state.upsert(name: "rel", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array(args.map(JSONValue.string)),
+        ])), renamedFrom: nil))
+        let model = PublishModel(state: state, collection: state.activeCollection)
+        XCTAssertEqual(model.pathRows.filter { $0.connector == "rel" }.map(\.value), [cwd, ".", "..", ".\\x.js", "..\\y.js"])
     }
 
     /// Rows and warnings list in UTF-16 code-unit order, as Windows sorts them: a character beyond
@@ -617,7 +650,7 @@ final class PublishModelTests: XCTestCase {
         try FileManager.default.removeItem(at: folder)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         // Nothing about the document or the ticks has changed since the failure, so only an
-        // unconditional write puts it back — which is what pressing Publish again has to do,
+        // unconditional write puts it back - which is what pressing Publish again has to do,
         // rather than waiting for whatever the user changes next.
         let retry = PublishModel(state: state, collection: state.activeCollection)
         XCTAssertEqual(retry.folder, folder.path)
@@ -739,5 +772,17 @@ final class PublishModelTests: XCTestCase {
         XCTAssertEqual(document.connectors.keys.sorted(), ["other"])
         XCTAssertEqual(state.store.collections[collection]?.mcps.keys.sorted(), held,
                        "exporting a subset takes nothing out of the collection")
+    }
+
+    /// Each row's controls are named by the connector and variable or path they act on, so a screen
+    /// reader can tell repeated rows apart.
+    func testRowControlsAreNamedByTheirConnectorAndSubject() {
+        XCTAssertEqual(PublishModel.shareValueRowLabel("github", "TOKEN"), "Share value of TOKEN in github")
+        XCTAssertEqual(PublishModel.hintRowLabel("github", "TOKEN"), "Hint for TOKEN in github")
+        XCTAssertEqual(PublishModel.pathNameRowLabel("fs", "/args/0"), "Placeholder name for /args/0 in fs")
+        XCTAssertEqual(PublishModel.markPathRowLabel("fs", "/Users/me/x"), "Mark /Users/me/x in fs as a path this machine supplies")
+        XCTAssertEqual(PublishModel.forgetMarkRowLabel("fs", "srv"), "Forget mark srv in fs")
+        XCTAssertEqual(PublishModel.releaseValueRowLabel("fs", "/Users/me/x"), "Release /Users/me/x in fs")
+        XCTAssertEqual(PublishModel.useDirectoryTokenRowLabel("fs", "/Users/me/x"), "Use ${COLLECTION_DIR} for /Users/me/x in fs")
     }
 }

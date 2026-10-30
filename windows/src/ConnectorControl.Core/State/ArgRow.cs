@@ -52,6 +52,9 @@ public sealed class ArgRow : ObservableObject
     /// <summary><see cref="EditorModel.ArgumentLabel"/> for where the row sits now: its box's spoken name.</summary>
     public string Label => editor?.Args.IndexOf(this) is { } index and >= 0 ? EditorModel.ArgumentLabel(index) : string.Empty;
 
+    /// <summary><see cref="EditorModel.DeleteArgumentRowLabel"/> for where the row sits now: its delete button's spoken name.</summary>
+    public string DeleteLabel => editor?.Args.IndexOf(this) is { } index and >= 0 ? EditorModel.DeleteArgumentRowLabel(index) : string.Empty;
+
     /// <summary>The editor whose rules this row answers with, set as the row joins its list.</summary>
     internal void Attach(EditorModel owner)
     {
@@ -64,6 +67,7 @@ public sealed class ArgRow : ObservableObject
     {
         Raise(nameof(Number));
         Raise(nameof(Label));
+        Raise(nameof(DeleteLabel));
     }
 
     internal void RaiseRules()

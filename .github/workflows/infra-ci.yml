@@ -9,6 +9,8 @@ on:
     paths:
       - '.github/**'
       - 'scripts/**'
+      - 'Package.resolved'
+      - 'CHANGELOG.md'
       - 'windows/scripts/**'
       - 'windows/tools/**'
 
@@ -37,7 +39,7 @@ jobs:
           # Downloaded to a file, not piped into bash: `bash <(curl ...)` swallows a curl
           # failure since the process substitution itself still succeeds, so a broken download
           # would silently run nothing instead of failing the job. The version argument is
-          # explicit because the SHA-pinned script installs the latest release when given none —
+          # explicit because the SHA-pinned script installs the latest release when given none -
           # without it, the "v1.7.12" comment would just be a wish, not a pin.
           curl -sfL -o download-actionlint.bash https://raw.githubusercontent.com/rhysd/actionlint/914e7df21a07ef503a81201c76d2b11c789d3fca/scripts/download-actionlint.bash # v1.7.12
           bash download-actionlint.bash 1.7.12
@@ -57,6 +59,24 @@ jobs:
       # than all of them fails the job: proved with a fake gh and curl, on the image the feed jobs use.
       - name: update-preview-feed.sh orders builds against the published releases
         run: ./scripts/tests/update-preview-feed-order.sh
+
+      # A notarization upload that stalls is stopped and retried, and only an accepted submission
+      # is stapled: proved with a fake xcrun and notarytool, so no Mac minutes and nothing sent to Apple.
+      - name: notarize.sh bounds and retries the upload
+        run: ./scripts/tests/notarize-retry.sh
+
+      # The release gate: a changelog section of only empty sub-headings, or no section, fails;
+      # empty sub-headings are dropped from what ships.
+      - name: changelog-section.sh gates a release's notes
+        run: ./scripts/tests/changelog-section.sh
+
+      # Sparkle's tools pin (scripts/mac/sparkle-tools.env) must equal the Sparkle in
+      # Package.resolved, so a Dependabot Sparkle bump fails on its pull request, not 20 minutes
+      # into the next signed build. The runner image ships jq.
+      - name: Sparkle tools pin matches Package.resolved
+        run: |
+          ./scripts/mac/check-sparkle-pin.sh
+          ./scripts/tests/sparkle-pin.sh
 
       - name: PSScriptAnalyzer
         shell: pwsh

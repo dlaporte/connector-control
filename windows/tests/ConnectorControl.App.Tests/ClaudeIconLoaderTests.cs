@@ -23,6 +23,17 @@ public class ClaudeIconLoaderTests
         Assert.Null(ClaudeIconLoader.Load(info));
     }
 
+    /// <summary>The icon is read at 32 pixels, twice the 16 DIPs it is shown at, so it stays sharp at 150-200% scaling.</summary>
+    [Fact]
+    public void TheIconIsReadAtTwiceTheSizeItIsShown()
+    {
+        // Any program with an icon will do; Explorer is on every Windows machine.
+        var exe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+        var info = new ClaudeInstallInfo(ClaudeInstallKind.Legacy, null, exe, "claude");
+        var size = WpfApp.Invoke(() => ClaudeIconLoader.Load(info) is BitmapSource icon ? (icon.PixelWidth, icon.PixelHeight) : (0, 0));
+        Assert.Equal((32, 32), size);
+    }
+
     [Fact]
     public void DesaturateKeepsAlphaAndGreysColor()
     {

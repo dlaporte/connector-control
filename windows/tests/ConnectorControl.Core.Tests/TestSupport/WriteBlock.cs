@@ -8,8 +8,8 @@ namespace ConnectorControl.Core.Tests.TestSupport;
 /// Makes writes to one file fail while reads keep working, so
 /// <c>ClaudeConfigIO.Write</c> throws inside <c>ConfigService.Apply</c>.
 /// <para>
-/// Two mechanisms, in order. First the parent directory is closed to new files —
-/// a Deny ACE for the current user's SID on Windows, mode 0500 on Unix — which
+/// Two mechanisms, in order. First the parent directory is closed to new files -
+/// a Deny ACE for the current user's SID on Windows, mode 0500 on Unix - which
 /// stops <c>AtomicFile</c> from creating its temp file. If a probe shows that did
 /// not bind (an elevated Windows account can be granted access that outranks a
 /// Deny ACE), the file itself is held open with <c>FileShare.Read</c>: Windows

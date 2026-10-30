@@ -7,7 +7,7 @@ namespace ConnectorControl.Core;
 /// </summary>
 public sealed class MasterStore : IEquatable<MasterStore>
 {
-    // Schema v2 only — no v1 fallback. A v1 (or otherwise malformed) file on
+    // Schema v2 only - no v1 fallback. A v1 (or otherwise malformed) file on
     // disk fails to decode and is handled by MasterStoreIO.Load's existing
     // corrupt-file path: moved aside and rebuilt fresh from Claude's config.
     public const long CurrentVersion = 2;
@@ -31,7 +31,7 @@ public sealed class MasterStore : IEquatable<MasterStore>
         Version = version;
         Collections = new Dictionary<string, Collection>(collections, StringComparer.Ordinal);
         // The Mcps getter must never create a collection as a side effect, so this constructor is
-        // the one place that guarantees Collections[ActiveCollection] exists — including a decoded
+        // the one place that guarantees Collections[ActiveCollection] exists - including a decoded
         // file that names a collection it doesn't have (MasterStoreIO.Load relies on this).
         if (Collections.ContainsKey(activeCollection))
         {
@@ -48,24 +48,18 @@ public sealed class MasterStore : IEquatable<MasterStore>
         }
     }
 
-    /// <summary>Swift <c>MasterStore(version:mcps:)</c>: a single "Default" collection; always v2.</summary>
-    public MasterStore(IEnumerable<KeyValuePair<string, McpEntry>> mcps)
-        : this(CurrentVersion, DefaultCollectionName, [new KeyValuePair<string, Collection>(DefaultCollectionName, new Collection(mcps))])
-    {
-    }
-
-    /// <summary>Swift <c>.empty</c>. A fresh instance every call — this type is mutable.</summary>
+    /// <summary>Swift <c>.empty</c>. A fresh instance every call - this type is mutable.</summary>
     public static MasterStore Empty() =>
         new(CurrentVersion, DefaultCollectionName, [new KeyValuePair<string, Collection>(DefaultCollectionName, new Collection())]);
 
     /// <summary>
-    /// The active collection's connectors — the view the entire app operates on. Side-effect free:
+    /// The active collection's connectors - the view the entire app operates on. Side-effect free:
     /// an active collection that somehow doesn't exist yet returns an empty, unstored dictionary
-    /// rather than creating one — the constructor is what normally guarantees
+    /// rather than creating one - the constructor is what normally guarantees
     /// Collections[ActiveCollection] exists.
     /// </summary>
     public Dictionary<string, McpEntry> Mcps =>
-        Collections.TryGetValue(ActiveCollection, out var collection) ? collection.Mcps : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
+        Collections.TryGetValue(ActiveCollection, out var collection) ? collection.Mcps : new Collection().Mcps;
 
     /// <summary>Claude's <c>mcpServers</c> section rendered from this store: the enabled subset's configs.</summary>
     public IReadOnlyDictionary<string, JsonValue> EnabledServers =>
@@ -93,13 +87,22 @@ public sealed class MasterStore : IEquatable<MasterStore>
         {
             return "Name must not be empty.";
         }
-        if (Collections.ContainsKey(trimmed))
+        if (HoldsCollectionNamed(trimmed))
         {
             return $"A collection named “{trimmed}” already exists.";
         }
         Collections[trimmed] = new Collection();
         return null;
     }
+
+    /// <summary>
+    /// Whether a collection already goes by <paramref name="name"/>, in this spelling or another Unicode
+    /// counts as the same text (<see cref="Collection.NameComparer"/>), as the Mac's dictionary keys
+    /// find it. Platform idiom: the collections stay keyed ordinally, as every sidecar keyed by a
+    /// collection's name is, so only a new name is held to this; a shared store never gains a second
+    /// spelling that a Mac, keeping one, would lose.
+    /// </summary>
+    private bool HoldsCollectionNamed(string name) => Collections.Keys.Any(k => Collection.NameComparer.Equals(k, name));
 
     /// <summary>null on success, else a user-facing error message. Renaming the active collection keeps it active under its new name.</summary>
     public string? RenameCollection(string name, string newName)
@@ -113,7 +116,7 @@ public sealed class MasterStore : IEquatable<MasterStore>
         {
             return "Name must not be empty.";
         }
-        if (trimmed != name && Collections.ContainsKey(trimmed))
+        if (!Collection.NameComparer.Equals(trimmed, name) && HoldsCollectionNamed(trimmed))
         {
             return $"A collection named “{trimmed}” already exists.";
         }

@@ -15,6 +15,8 @@ struct ConnectorControlApp: App {
             // persistent problem state: a failed apply awaiting retry.
             Image(systemName: state.applyRetryNeeded
                 ? "exclamationmark.triangle.fill" : "powerplug.fill")
+                .accessibilityLabel(state.applyRetryNeeded
+                    ? PopoverModel.menuBarRetryLabel : PopoverModel.title)
         }
         .menuBarExtraStyle(.window)
 

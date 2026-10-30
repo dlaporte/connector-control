@@ -1,15 +1,15 @@
-# Build, sign, and publish one Connector Control release — the Mac DMG with its
-# Sparkle appcast AND the Windows installers — from a single version tag.
+# Build, sign, and publish one Connector Control release - the Mac DMG with its
+# Sparkle appcast AND the Windows installers - from a single version tag.
 #
 # Jobs:
 #   prepare          (ubuntu)   version from the tag; CHANGELOG section -> notes.md (gate 1);
 #                               the tagged commit is on master (gate 2)
-#   mac-test         (macos-15) swift test; a failed test, or a skipped one other than the
-#                               deliberate goldens-regeneration skip, stops the run here
+#   mac-test         (macos-15) swift test; any failed or skipped test stops the run here
+#                               (scripts/test-mac.sh)
 #   mac              (macos-15) .github/workflows/mac-build.yml: build, sign, notarize, DMG,
 #                               appcast -> artifact "mac-dmg-appcast". preview.yml calls the
 #                               same file.
-#   windows          (windows)  .github/workflows/windows-build.yml with require-signing: true —
+#   windows          (windows)  .github/workflows/windows-build.yml with require-signing: true -
 #                               that file's own gate job proves all six Windows signing secrets
 #                               exist (a release is never unsigned) before test, then matrix
 #                               win-x64/win-arm64 publish + signed vpk pack -> "velopack-<rid>",
@@ -26,7 +26,7 @@
 #                               fail without failing the release (see the job).
 #
 # Trigger: exact vX.Y.Z tags only (see below). workflow_dispatch runs everything EXCEPT
-# publish and preview-feed — a rehearsal that cannot create a release (its version input names the
+# publish and preview-feed - a rehearsal that cannot create a release (its version input names the
 # CHANGELOG section and stamps the packages; the artifacts are the only output).
 #
 # Required secrets. The Mac set belongs in the "signing" GitHub Environment (Settings ▸
@@ -44,7 +44,7 @@
 #   APPLE_TEAM_ID              10-character team identifier
 #   KEYCHAIN_PASSWORD          any string; protects the throwaway CI keychain
 #   SPARKLE_ED_PRIVATE_KEY     EdDSA private key that signs the appcast (backup: login Keychain)
-#   Windows (Azure Artifact Signing) — ALL SIX are required, and documented
+#   Windows (Azure Artifact Signing) - ALL SIX are required, and documented
 #   once, with windows-build.yml's gate job:
 #   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SIGNING_ENDPOINT,
 #   AZURE_SIGNING_ACCOUNT, AZURE_SIGNING_PROFILE
@@ -54,7 +54,7 @@ name: Release
 on:
   push:
     tags:
-      # Exact stable versions only — no trailing wildcard. A suffixed tag
+      # Exact stable versions only - no trailing wildcard. A suffixed tag
       # (v1.3.0-beta1) must never build here: the release would be created
       # without --prerelease, become "latest", and its appcast would be
       # served from SUFeedURL to every auto-updating install.
@@ -119,12 +119,13 @@ jobs:
       # First, before minutes of build/notarization: the changelog is the
       # single source for the GitHub release notes, the Sparkle update
       # dialog AND the Windows update dialog, and failing here enforces that
-      # every release ships with one.
+      # every release ships with one. --release also drops sub-headings with no
+      # bullets and fails when nothing but sub-headings is left.
       - name: Extract changelog section
         env:
           TAG: ${{ steps.derive.outputs.tag }}
         run: |
-          ./scripts/release/changelog-section.sh "$TAG" > notes.md
+          ./scripts/release/changelog-section.sh --release "$TAG" > notes.md
           cat notes.md
 
       # Releases build from master only. A v* tag pushed from another branch would
@@ -133,7 +134,7 @@ jobs:
         run: |
           git fetch --no-tags origin master:refs/remotes/origin/master
           git merge-base --is-ancestor HEAD origin/master \
-            || { echo "::error::$(git rev-parse --short HEAD) is not on master — tag releases from master only."; exit 1; }
+            || { echo "::error::$(git rev-parse --short HEAD) is not on master - tag releases from master only."; exit 1; }
           echo "$(git rev-parse --short HEAD) is on master"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -247,7 +248,7 @@ jobs:
             cat notes/notes.md
           } > body.md
           # Drafts and prereleases must not be the compare base. A transient API hiccup must not
-          # silently drop the compare link (the old `|| true` did exactly that) — retry a few
+          # silently drop the compare link (the old `|| true` did exactly that) - retry a few
           # times instead. LISTED tracks whether a call ever succeeded, distinct from PREV being
           # empty because there genuinely is no previous release, so 5 straight failures fail the
           # job instead of quietly publishing without a compare link.
@@ -265,7 +266,7 @@ jobs:
 
       # ensure-release.sh deletes any stale draft under $TAG first (it would otherwise make
       # GitHub refuse to publish anything else under it), then creates the release WITH the DMG
-      # and appcast already attached — so it is never "latest" without its feed — or, on a
+      # and appcast already attached - so it is never "latest" without its feed - or, on a
       # re-run, reuses it and uploads only whichever of the two Mac assets is not already there
       # (never replacing a published one; see the script for why).
       - name: Create the release, with the Mac assets already attached
@@ -275,18 +276,14 @@ jobs:
             "mac/ConnectorControl_$VERSION.dmg" mac/appcast.xml
 
       # gh, not vpk, uploads everything, a re-run skips a RID whose assets are all published
-      # (and refuses to complete a half-published one) — all of it, with the reasons, in the
+      # (and refuses to complete a half-published one) - all of it, with the reasons, in the
       # script preview.yml calls too.
       - name: Upload the Windows assets
         run: ./scripts/release/upload-release-assets.sh "$TAG" "$VERSION" artifacts
 
       - name: Verify the release
         run: |
-          ./scripts/release/verify-release.sh "$TAG" --full \
-            "ConnectorControl_$VERSION.dmg" appcast.xml \
-            ConnectorControl-win-x64-Setup.exe ConnectorControl-win-arm64-Setup.exe \
-            "ConnectorControl-$VERSION-win-x64-full.nupkg" "ConnectorControl-$VERSION-win-arm64-full.nupkg" \
-            releases.win-x64.json releases.win-arm64.json
+          ./scripts/release/verify-release.sh "$TAG" --full --version "$VERSION"
 
           # This release must now be releases/latest: the Mac appcast URL
           # (releases/latest/download/appcast.xml) resolves through it. GitHub can take a few
@@ -303,21 +300,13 @@ jobs:
           done
           [ "$LATEST" = "$TAG" ] || { echo "::error::releases/latest is $LATEST, not $TAG"; exit 1; }
           [ "$REDIRECT" = "$REPO_URL/releases/download/$TAG/appcast.xml" ] || { echo "::error::appcast redirect is '$REDIRECT'"; exit 1; }
-          # The served appcast must announce THIS version, carry the monotonic build number
-          # build-app.sh derives (major*10000 + minor*100 + patch), and point at this
-          # release's DMG.
-          IFS=. read -r MAJ MIN PAT <<< "$VERSION"
-          BUILD=$(( MAJ * 10000 + MIN * 100 + PAT ))
+          # The served appcast must announce THIS version, point at this release's DMG and be
+          # signed, by the rules update-preview-feed.sh applies to the preview feed. The build
+          # number is read from it, not derived again: build-app.sh alone owns that formula.
           curl -sfL --retry 5 --retry-delay 5 --retry-all-errors "$REPO_URL/releases/latest/download/appcast.xml" > served-appcast.xml
-          grep -q "<sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>" served-appcast.xml || { echo "::error::served appcast does not announce $VERSION"; exit 1; }
-          grep -q "<sparkle:version>$BUILD</sparkle:version>" served-appcast.xml || { echo "::error::served appcast build number is not $BUILD"; exit 1; }
-          grep -q "url=\"$REPO_URL/releases/download/$TAG/ConnectorControl_$VERSION.dmg\"" served-appcast.xml || { echo "::error::served appcast enclosure is not this release's DMG"; exit 1; }
-          # An unsigned item is refused by Sparkle at update time and looks perfectly fine on
-          # the release page — the failure mode is "1.3.0 is live, nobody's Mac updates".
-          grep -q 'sparkle:edSignature="[^"][^"]*"' served-appcast.xml || { echo "::error::served appcast item carries no EdDSA signature"; exit 1; }
-          # The feed's own signature: SURequireSignedFeed makes Sparkle reject an appcast without
-          # its sparkle-signatures block, however well its item is signed.
-          grep -q 'sparkle-signatures:' served-appcast.xml || { echo "::error::served appcast carries no sparkle-signatures block"; exit 1; }
+          BUILD=$(./scripts/release/check-appcast.sh served-appcast.xml "$VERSION" "$REPO_URL/releases/download/$TAG/ConnectorControl_$VERSION.dmg")
+          # A stable build has no preview component: digits only.
+          [[ "$BUILD" =~ ^[0-9]+$ ]] || { echo "::error::stable appcast build '$BUILD' is not a plain number"; exit 1; }
           {
             echo "## Sparkle appcast for $TAG"
             echo
@@ -333,7 +322,7 @@ jobs:
     # backwards). A separate job rather than a step in publish, so the preview feed can never
     # fail, delay or interleave with the release: it starts only once publish has created and
     # verified the release, releases/latest and the stable appcast, and nothing runs after it.
-    # continue-on-error keeps the run green when it fails — the release is out and correct —
+    # continue-on-error keeps the run green when it fails - the release is out and correct -
     # while the job still shows red, with its error annotation, in the run's graph; Re-run this
     # job retries only the feed. Stable installs never read the feed, so a failure here only
     # leaves preview installs on their preview until the job is re-run or the next preview

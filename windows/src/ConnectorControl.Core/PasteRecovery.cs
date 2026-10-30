@@ -56,7 +56,7 @@ public static class PasteRecovery
                 candidates.Add("{" + balanced + "}");
             }
         }
-        // Curled quotes (Slack/Notion/Notes) break JSON — retry with them normalized.
+        // Curled quotes (Slack/Notion/Notes) break JSON - retry with them normalized.
         var normalized = candidates.Select(NormalizeQuotes).Where(n => !candidates.Contains(n, StringComparer.Ordinal)).ToList();
         candidates.AddRange(normalized);
         return candidates;
@@ -115,7 +115,7 @@ public static class PasteRecovery
         if (value.Kind == JsonKind.Object && value.ObjectProperties.Count == 1)
         {
             var (key, inner) = value.ObjectProperties.First();
-            // {"mcpServers": {"NAME": {…}}} — single entry.
+            // {"mcpServers": {"NAME": {…}}} - single entry.
             if (key == "mcpServers" && inner.Kind == JsonKind.Object && inner.ObjectProperties.Count == 1)
             {
                 var (name, config) = inner.ObjectProperties.First();

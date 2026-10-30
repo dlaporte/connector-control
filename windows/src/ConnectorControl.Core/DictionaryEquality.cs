@@ -21,7 +21,7 @@ internal static class DictionaryEquality
     }
 
     /// <summary>
-    /// The same, for values whose own equality is not <c>Equals</c> — a nested dictionary or a
+    /// The same, for values whose own equality is not <c>Equals</c> - a nested dictionary or a
     /// set, where <c>Equals</c> would compare references.
     /// </summary>
     public static bool Equal<TValue>(

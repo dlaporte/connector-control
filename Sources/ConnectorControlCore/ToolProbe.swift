@@ -1,8 +1,8 @@
 import Foundation
 
-/// Resolves the four tools the way Claude Desktop would — on the PATH this
+/// Resolves the four tools the way Claude Desktop would - on the PATH this
 /// process was launched with, plus the PATH floor Claude Desktop adds for
-/// itself — and, because neither list holds a version manager's directory,
+/// itself - and, because neither list holds a version manager's directory,
 /// falls back to the login shell's PATH to tell "not installed" from
 /// "installed where Claude Desktop cannot see it". Never throws;
 /// the version call is best-effort with a timeout.

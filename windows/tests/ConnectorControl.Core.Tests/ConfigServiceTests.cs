@@ -25,7 +25,7 @@ public class ConfigServiceTests : IDisposable
 
     /// <summary>
     /// Claude's file holds the collection it was last applied from, so what that collection renders
-    /// is left where it is; with nothing recorded — a first launch — everything is ingested.
+    /// is left where it is; with nothing recorded - a first launch - everything is ingested.
     /// </summary>
     [Fact]
     public void TheIngestLeavesTheRecordedCollectionsOwnServersWhereTheyAre()
@@ -53,8 +53,8 @@ public class ConfigServiceTests : IDisposable
         Assert.True(loaded.Store.Collections[loaded.Store.ActiveCollection].Mcps.ContainsKey("installer"));
         Assert.False(loaded.Store.Collections["Team"].Mcps.ContainsKey("installer"));
 
-        // A record naming a collection this store does not have — deleted here, or on another
-        // machine — has no render to compare against, so the names that apply wrote stand in for it.
+        // A record naming a collection this store does not have - deleted here, or on another
+        // machine - has no render to compare against, so the names that apply wrote stand in for it.
         File.Delete(paths.MasterStorePath);
         // What the collection that is gone rendered is left where it is, and the rest comes in.
         Assert.Equal(Set(["service-now", "installer"]),
@@ -69,6 +69,24 @@ public class ConfigServiceTests : IDisposable
     }
 
     /// <summary>
+    /// A name in Claude's file spelled another way (é decomposed where the collection composes it) is the
+    /// one the last-applied collection rendered, as on the Mac: it is not poured into the active one,
+    /// whether that collection is still here or only the names apply wrote stand in for it.
+    /// </summary>
+    [Fact]
+    public void ANameTheLastAppliedCollectionRenderedInAnotherSpellingIsNotIngested()
+    {
+        var store = MasterStore.Single([]);
+        store.Collections["Team"] = new Collection([new KeyValuePair<string, McpEntry>("caf\u00E9", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("t")))))]);
+        var servers = new Dictionary<string, JsonValue>(StringComparer.Ordinal)
+        {
+            ["cafe\u0301"] = JsonValue.Object(("command", JsonValue.String("t"))),
+        };
+        Assert.Empty(ConfigService.Ingestible(servers, "Team", null, false, store));
+        Assert.Empty(ConfigService.Ingestible(servers, "Gone", Set(["caf\u00E9"]), false, store));
+    }
+
+    /// <summary>
     /// A subscribed collection holds what its author published and nothing more, so what the file
     /// adds while one is active goes to a local collection: the one last applied when that is local,
     /// else the first local one by name, else a new one.
@@ -76,7 +94,7 @@ public class ConfigServiceTests : IDisposable
     [Fact]
     public void TheIngestTargetIsNeverASubscribedCollection()
     {
-        var store = new MasterStore([]);
+        var store = MasterStore.Single([]);
         store.Collections["Team"] = new Collection();
         store.Collections["Beta"] = new Collection();
         store.ActiveCollection = "Team";
@@ -102,7 +120,7 @@ public class ConfigServiceTests : IDisposable
     [Fact]
     public void ALoadWithASubscribedCollectionActiveKeepsTheAdditionsElsewhere()
     {
-        var store = new MasterStore([new KeyValuePair<string, McpEntry>("scoutbook", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("old")))))]);
+        var store = MasterStore.Single([new KeyValuePair<string, McpEntry>("scoutbook", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("old")))))]);
         store.Collections["Team"] = new Collection([new KeyValuePair<string, McpEntry>("aws-mcp", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("t")))))]);
         store.ActiveCollection = "Team";
         service.SaveStore(store);
@@ -186,9 +204,23 @@ public class ConfigServiceTests : IDisposable
         ]);
         service.SaveCollections(file);
         service.SaveCollections(new CollectionsFile([]));
-        Assert.Equal(new CollectionsFile([]), service.LoadCollections());
+        Assert.Equal(new CollectionsFile([]), service.LoadCollections().File);
         // the first save had nothing to back up; the second backed up the first
         Assert.Single(service.Backups.Backups("collections"));
+    }
+
+    /// <summary>The load says what bytes it read, so the app need not read the sidecar again to know.</summary>
+    [Fact]
+    public void LoadCollectionsHashesTheBytesItRead()
+    {
+        Assert.Null(service.LoadCollections().Hash);   // no file, no bytes
+        service.SaveCollections(new CollectionsFile([]));
+        var path = service.Paths.CollectionsFilePath;
+        Assert.Equal(ContentHash.Sha256(File.ReadAllBytes(path)), service.LoadCollections().Hash);
+        File.WriteAllText(path, "{half");
+        var unreadable = service.LoadCollections();
+        Assert.Null(unreadable.File);
+        Assert.Equal(ContentHash.Sha256(System.Text.Encoding.UTF8.GetBytes("{half")), unreadable.Hash);
     }
 
     [Fact]
@@ -277,8 +309,8 @@ public class ConfigServiceTests : IDisposable
     }
 
     /// <summary>
-    /// A backup whose active collection names one it does not hold — a hand edit, a foreign
-    /// machine's — makes the first existing collection in ordinal order active, and the reconcile
+    /// A backup whose active collection names one it does not hold - a hand edit, a foreign
+    /// machine's - makes the first existing collection in ordinal order active, and the reconcile
     /// takes Claude's connectors there rather than into a new collection under the missing name.
     /// </summary>
     [Fact]
@@ -345,7 +377,7 @@ public class ConfigServiceTests : IDisposable
         Assert.Equal(3, ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath).Count);
     }
 
-    /// <summary>The restore applies the bytes it is handed — the ones its caller checked — not the file as it
+    /// <summary>The restore applies the bytes it is handed - the ones its caller checked - not the file as it
     /// is by then.</summary>
     [Fact]
     public void RestoreUsesTheBytesItIsGivenNotTheFileNow()
@@ -552,7 +584,7 @@ public class ConfigServiceTests : IDisposable
 
     /// <summary>
     /// ParseRoot treats zero bytes as an empty root (the same rule ClaudeConfigIO's own read path
-    /// already applies), so a zero-byte backup — the same crash/truncation artifact — restores to
+    /// already applies), so a zero-byte backup - the same crash/truncation artifact - restores to
     /// an empty config instead of being refused as malformed.
     /// </summary>
     [Fact]
@@ -593,5 +625,5 @@ internal static class ConfigServiceLoads
         bool storeAuthoritative = false,
         string? lastAppliedCollection = null,
         IReadOnlySet<string>? lastAppliedNames = null) =>
-        service.LoadAndReconcile(service.LoadCollections(), baseline, storeAuthoritative, lastAppliedCollection, lastAppliedNames);
+        service.LoadAndReconcile(service.LoadCollections().File, baseline, storeAuthoritative, lastAppliedCollection, lastAppliedNames);
 }

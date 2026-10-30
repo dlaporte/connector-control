@@ -1,4 +1,5 @@
 using System.Reflection;
+using ConnectorControl.Core;
 using ConnectorControl.Core.State;
 using ConnectorControl.Core.Transport;
 
@@ -39,8 +40,8 @@ internal static class Program
 
     private static int Execute(string[] args, ConsoleText console)
     {
-        // The arguments first: help, --version and a usage error need nothing of this PC's — no environment, no
-        // SID — so nothing about it can keep them from answering. Only a command that goes to the app looks for
+        // The arguments first: help, --version and a usage error need nothing of this PC's - no environment, no
+        // SID - so nothing about it can keep them from answering. Only a command that goes to the app looks for
         // its pipe.
         var invocation = ControlCommandLine.Parse(args, Environment.CurrentDirectory, File.ReadAllBytes);
         var version = ToolVersion();
@@ -102,7 +103,7 @@ internal static class Program
         {
             return File.ReadAllText(path);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             return null;
         }

@@ -218,7 +218,7 @@ public class FileWatcherTests : IDisposable
     /// <summary>
     /// Drives HandleError's "directory is gone" branch entirely through the internal
     /// seam (no Start(), no live FileSystemWatcher at all). That branch is pure
-    /// internal logic — Stop() plus exactly one marshalled callback — and doesn't
+    /// internal logic - Stop() plus exactly one marshalled callback - and doesn't
     /// need a real OS watcher to prove it. This used to be folded into the
     /// real-file-system test below, alongside a genuinely-armed watcher and a real
     /// Directory.Delete; that combination was flaky on Windows CI (never on the
@@ -324,7 +324,7 @@ public class FileWatcherTests : IDisposable
     /// <summary>
     /// The rebuild that keeps a replaced folder from being watched by a dead handle. Whatever
     /// raised the error, the FileSystemWatcher behind it is spent, so a fresh one takes its
-    /// place — proved here by the arm count, which is a fact about this object and so does not
+    /// place - proved here by the arm count, which is a fact about this object and so does not
     /// depend on what a platform's FileSystemWatcher does with a handle on a folder that has
     /// been deleted. Nothing happens to the directory in this test, so the OS cannot raise an
     /// error of its own to race the count. C#-only: the Mac's watcher has no error event.
@@ -355,7 +355,7 @@ public class FileWatcherTests : IDisposable
     /// A FileSystemWatcher watches the folder it was armed on, not the path: a folder replaced
     /// wholesale leaves it holding one that is no longer there, where it is silent for good. The
     /// watcher's only handle on folder identity is the creation time it armed on, so changing
-    /// that is exactly the input a replacement produces — and it is the one way to produce it
+    /// that is exactly the input a replacement produces - and it is the one way to produce it
     /// without deleting or moving anything, which would let the OS raise an error of its own and
     /// race these assertions. IsArmed must then say no, and the re-arm every reload performs
     /// must swap the watcher onto the folder that is there. C#-only: the Mac tells folders apart
@@ -386,8 +386,8 @@ public class FileWatcherTests : IDisposable
 
     /// <summary>
     /// The real shape of the above: a sync client renames the shared folder away and puts
-    /// another copy at the path. A rename raises no error on Windows — the handle follows the
-    /// folder it was opened on — so nothing but the next Start() can notice, which is why
+    /// another copy at the path. A rename raises no error on Windows - the handle follows the
+    /// folder it was opened on - so nothing but the next Start() can notice, which is why
     /// IsArmed has to tell the truth. The creation time of the replacement is set explicitly
     /// because NTFS hands a name recreated in the same parent within about fifteen seconds its
     /// predecessor's creation time, and without that line this test would quietly stop
@@ -435,7 +435,7 @@ public class FileWatcherTests : IDisposable
     /// already differs will never fire for a change that happened before the new watcher
     /// existed, so without the re-check that change waits for an unrelated write. The path
     /// probe stands in for the replacement's contents, which is what makes this deterministic
-    /// on any platform — no real write happens, so no FileSystemWatcher event of any kind can
+    /// on any platform - no real write happens, so no FileSystemWatcher event of any kind can
     /// report the change for the wrong reason.
     /// </summary>
     [Fact]
@@ -560,8 +560,8 @@ public class FileWatcherTests : IDisposable
 
     /// <summary>
     /// A rebuild the cooldown holds back is owed, not dropped. If the error it answered came from
-    /// a dead handle — a folder deleted and recreated under the same name, which keeps its
-    /// creation time on NTFS, so the identity check cannot see it — dropping it would leave the
+    /// a dead handle - a folder deleted and recreated under the same name, which keeps its
+    /// creation time on NTFS, so the identity check cannot see it - dropping it would leave the
     /// watcher reporting itself armed while deaf for good. Two replacements of the same folder
     /// inside a second is enough, which a git rebase in a synced collection can do. C#-only: the
     /// Mac's watcher has no error event.
@@ -583,8 +583,8 @@ public class FileWatcherTests : IDisposable
     }
 
     /// <summary>
-    /// Only a rebuild that happened spends the cooldown. An attempt that found nothing armed —
-    /// a late error after Stop() — rebuilt nothing, and the next real error must still get its
+    /// Only a rebuild that happened spends the cooldown. An attempt that found nothing armed -
+    /// a late error after Stop() - rebuilt nothing, and the next real error must still get its
     /// rebuild rather than find the slot taken. C#-only: the Mac's watcher has no error event.
     /// </summary>
     [Fact]
@@ -673,5 +673,138 @@ public class FileWatcherTests : IDisposable
         watcher.HandleError();
         Assert.False(watcher.IsArmed);
         Assert.Equal(0, counter.Count);
+    }
+
+    /// <summary>A probe that blocks in <see cref="FileExists"/> once told to, until released: a
+    /// stalled UNC or cloud path, from the watcher's side.</summary>
+    private sealed class StallingProbe : IPathProbe
+    {
+        private readonly RealPathProbe real = new();
+        private readonly ManualResetEventSlim release = new(false);
+        private volatile bool stall;
+        public ManualResetEventSlim Stalled { get; } = new(false);
+
+        public void Stall() => stall = true;
+
+        public void Release() => release.Set();
+
+        public bool FileExists(string path)
+        {
+            if (stall)
+            {
+                Stalled.Set();
+                release.Wait();
+            }
+            return real.FileExists(path);
+        }
+
+        public bool DirectoryExists(string path) => real.DirectoryExists(path);
+
+        public IEnumerable<string> EnumerateDirectories(string path) => real.EnumerateDirectories(path);
+
+        public DateTime? LastWriteTimeUtc(string path) => real.LastWriteTimeUtc(path);
+
+        public DateTime CreationTimeUtc(string path) => real.CreationTimeUtc(path);
+    }
+
+    /// <summary>
+    /// The debounce check reads the file's times outside the gate, as IsArmed does, so a stalled path
+    /// holds up that check alone: an event's Schedule() and the reload's IsArmed, which take the gate,
+    /// still answer. C#-only: the Mac's watcher has no gate shared with its event handler.
+    /// </summary>
+    [Fact]
+    public void AStalledDebounceCheckDoesNotHoldTheGate()
+    {
+        File.WriteAllText(path, "one");
+        var counter = new Counter();
+        var timers = new ManualTimers();
+        var probe = new StallingProbe();
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, probe: probe, time: timers);
+        watcher.Start();
+        watcher.HandleError(rebuild: false);   // a lost buffer: schedules a re-check
+        Assert.True(timers.Pending);
+
+        probe.Stall();
+        var check = new Thread(() => timers.FireAll()) { IsBackground = true };
+        check.Start();
+        Assert.True(probe.Stalled.Wait(Wait.Eventually, TestContext.Current.CancellationToken), "the check is waiting on the disk");
+        var asked = new Thread(() => _ = watcher.ArmCount) { IsBackground = true };
+        asked.Start();
+        var answered = asked.Join(TimeSpan.FromSeconds(5));
+        probe.Release();
+        Assert.True(answered, "the gate is free while the check waits on the disk");
+        Assert.True(check.Join(Wait.Eventually));
+        Assert.Equal(0, counter.Count);
+    }
+
+    /// <summary>A probe whose file times are set by the test, and which can hold one read back after
+    /// taking its reading, as a slow path would: that check commits a time older than one a later
+    /// check has already committed.</summary>
+    private sealed class LaggingProbe : IPathProbe
+    {
+        private readonly RealPathProbe real = new();
+        private readonly ManualResetEventSlim release = new(false);
+        private readonly ThreadLocal<DateTime> taken = new();
+        private int lagNext;
+        public ManualResetEventSlim Lagging { get; } = new(false);
+        public DateTime LastWrite { get; set; } = DateTime.UnixEpoch;
+
+        public void LagNext() => Volatile.Write(ref lagNext, 1);
+
+        public void Release() => release.Set();
+
+        public bool FileExists(string path)
+        {
+            taken.Value = LastWrite;
+            if (Interlocked.Exchange(ref lagNext, 0) == 1)
+            {
+                Lagging.Set();
+                release.Wait();
+            }
+            return true;
+        }
+
+        public bool DirectoryExists(string path) => real.DirectoryExists(path);
+
+        public IEnumerable<string> EnumerateDirectories(string path) => real.EnumerateDirectories(path);
+
+        public DateTime? LastWriteTimeUtc(string path) => taken.Value;
+
+        public DateTime CreationTimeUtc(string path) => real.CreationTimeUtc(path);
+    }
+
+    /// <summary>
+    /// Two debounce checks overlap when the timer fires again behind a stalled one. The older one's
+    /// reading, taken before a write the newer one saw, is discarded: committed, it would put the
+    /// last-seen time back and report the same change twice. C#-only, as the gate is.
+    /// </summary>
+    [Fact]
+    public void AnOlderOverlappingCheckDoesNotOverwriteANewerOne()
+    {
+        File.WriteAllText(path, "one");
+        var counter = new Counter();
+        var timers = new ManualTimers();
+        var probe = new LaggingProbe { LastWrite = DateTime.UnixEpoch.AddHours(1) };
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, probe: probe, time: timers);
+        watcher.Start();
+
+        watcher.HandleError(rebuild: false);   // a lost buffer: schedules a re-check
+        probe.LagNext();
+        var older = new Thread(() => timers.FireAll()) { IsBackground = true };
+        older.Start();
+        Assert.True(probe.Lagging.Wait(Wait.Eventually, TestContext.Current.CancellationToken), "the older check has its reading");
+
+        probe.LastWrite = DateTime.UnixEpoch.AddHours(2);
+        watcher.HandleError(rebuild: false);
+        Assert.Equal(1, timers.FireAll());
+        Assert.Equal(1, counter.Count);   // the newer check saw the write
+
+        probe.Release();
+        Assert.True(older.Join(Wait.Eventually));
+        Assert.Equal(1, counter.Count);   // the older reading was discarded, not reported as a change
+
+        watcher.HandleError(rebuild: false);
+        timers.FireAll();
+        Assert.Equal(1, counter.Count);   // and the last-seen time is still the newer one
     }
 }

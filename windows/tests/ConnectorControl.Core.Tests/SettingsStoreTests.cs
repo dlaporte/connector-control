@@ -35,7 +35,7 @@ public class SettingsStoreTests : IDisposable
     }
 
     /// <summary>Every ISettings property round-trips through a second instance over the same
-    /// file — the Windows counterpart of UserDefaultsSettingsTests.testEveryKeyRoundTripsAndDefaultsApplyWhenAbsent,
+    /// file - the Windows counterpart of UserDefaultsSettingsTests.testEveryKeyRoundTripsAndDefaultsApplyWhenAbsent,
     /// widened to the two properties Windows has that the Mac does not (ClaudeConfigPath,
     /// AutoUpdate, TrayTipShown; ClaudeLaunchTarget replaces the Mac's claudeAppPath).</summary>
     [Fact]
@@ -117,7 +117,7 @@ public class SettingsStoreTests : IDisposable
         var s = new SettingsStore(Path);
         s.MasterStoreDir = "x";
         s.MasterStoreDir = null;
-        Assert.DoesNotContain("masterStoreDir", File.ReadAllText(Path));
+        Assert.DoesNotContain(SettingsKey.MasterStoreDir, File.ReadAllText(Path));
         Assert.Null(new SettingsStore(Path).MasterStoreDir);
     }
 

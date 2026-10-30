@@ -35,7 +35,7 @@ public struct ConfigService: Sendable {
     /// (nothing is written) and the store just loaded is returned as-is, so the
     /// UI keeps showing the user's MCP list instead of going blank.
     /// With `storeAuthoritative`, the file's own current servers act as the
-    /// baseline, so every reconciliation rule resolves store-wins — used when
+    /// baseline, so every reconciliation rule resolves store-wins - used when
     /// adopting a pre-existing (e.g. synced) store that must not be overwritten
     /// by this machine's state.
     ///
@@ -106,7 +106,7 @@ public struct ConfigService: Sendable {
             // additions correctly during an adoption: an entry matching it is
             // this machine's own applied state (never imported into the
             // adopted store), one differing from it is a genuine external
-            // addition racing the adoption — ingest it rather than letting
+            // addition racing the adoption - ingest it rather than letting
             // the regeneration erase it. Without a baseline (adoption of a
             // repointed store before any apply), the file itself is the
             // baseline: nothing is imported, the adopted store wins totally.
@@ -131,7 +131,7 @@ public struct ConfigService: Sendable {
     }
 
     /// The collection a load takes Claude's new connectors into: the active one, unless it is
-    /// subscribed. A subscribed collection holds what its author published and nothing more — a
+    /// subscribed. A subscribed collection holds what its author published and nothing more - a
     /// connector taken into it could be neither edited nor deleted, and the next Apply would delete
     /// it from Claude. It goes into a local collection instead: the one Claude's file was last
     /// applied from when that is local, else the first local one by name, else a new, empty
@@ -149,13 +149,7 @@ public struct ConfigService: Sendable {
             .min(by: { $0.ordinallyPrecedes($1) }) {
             return first
         }
-        var name = MasterStore.defaultCollectionName
-        var suffix = 2
-        while store.collections[name] != nil {
-            name = "\(MasterStore.defaultCollectionName) \(suffix)"
-            suffix += 1
-        }
-        return name
+        return FreeName.first(MasterStore.defaultCollectionName) { store.collections[$0] != nil }
     }
 
     /// The newest `mcps` backup that decodes, with the file it came from, or nil when none does.
@@ -176,19 +170,19 @@ public struct ConfigService: Sendable {
 
     /// What a load may take out of Claude's file and into the active collection.
     ///
-    /// All of it while the record of the last apply is the active collection, is missing — a first
-    /// launch — or the store was corrupt and is being rebuilt from the file. Otherwise the file
+    /// All of it while the record of the last apply is the active collection, is missing - a first
+    /// launch - or the store was corrupt and is being rebuilt from the file. Otherwise the file
     /// holds another collection's connectors, and the names that collection renders are left
     /// alone: pouring them into the active collection is what the record is for. Everything else
-    /// is genuinely new — an installer's connector, a hand edit — and belongs to the collection the
+    /// is genuinely new - an installer's connector, a hand edit - and belongs to the collection the
     /// app is about to apply, whichever that is.
     ///
-    /// A record naming a collection the store no longer has — deleted here, or on another machine,
-    /// which is how a collection disappears from a store that syncs — has no render to compare
+    /// A record naming a collection the store no longer has - deleted here, or on another machine,
+    /// which is how a collection disappears from a store that syncs - has no render to compare
     /// against. The names the last apply wrote are that render, so those are left alone and
     /// everything else comes in: a connector an installer or a hand edit added survives, and a
-    /// deleted collection's own connectors are not poured into the active one. Without those names
-    /// — a cache written before they were kept — nothing here tells the two apart, and nothing is
+    /// deleted collection's own connectors are not poured into the active one. Without those names -
+    /// a cache written before they were kept - nothing here tells the two apart, and nothing is
     /// taken in rather than all of it.
     static func ingestible(_ servers: [String: JSONValue], lastApplied: String?,
                            lastAppliedNames: Set<String>?, corrupt: Bool,
@@ -198,7 +192,7 @@ public struct ConfigService: Sendable {
             // Nothing here says what that collection rendered, so nothing in the file can be told
             // from it: taking it all in would pour a deleted collection's connectors, marked paths
             // and all, into the active one. Taking none is the safe half of that trade, and costs
-            // only a hand-added connector, in the one state that reaches it — a cache from a build
+            // only a hand-added connector, in the one state that reaches it - a cache from a build
             // that recorded the collection without the names.
             guard let lastAppliedNames else { return [:] }
             return servers.filter { !lastAppliedNames.contains($0.key) }
@@ -228,12 +222,13 @@ public struct ConfigService: Sendable {
 
     /// The sidecar beside the master list; a missing file loads as empty, and one that exists
     /// but cannot be read loads as nil (see `CollectionsFile.loadIfReadable`), so the caller can
-    /// tell a file with no entries from one it must not save over.
-    public func loadCollections() -> CollectionsFile? {
-        CollectionsFile.loadIfReadable(from: paths.collectionsFileURL)
+    /// tell a file with no entries from one it must not save over. The hash is of the bytes it read
+    /// (nil when there was no file), so the caller knows what is on disk without reading it again.
+    public func loadCollections() -> (file: CollectionsFile?, hash: String?) {
+        CollectionsFile.loadReadingHash(from: paths.collectionsFileURL)
     }
 
-    /// Backup the existing sidecar (skipped when it doesn't exist yet — nothing to protect on
+    /// Backup the existing sidecar (skipped when it doesn't exist yet - nothing to protect on
     /// the very first save), then atomically save the new one.
     public func saveCollections(_ file: CollectionsFile) throws {
         try backups.backUp(fileAt: paths.collectionsFileURL, series: "collections")
@@ -241,7 +236,7 @@ public struct ConfigService: Sendable {
     }
 
     /// Backup the current file, write the chosen backup over it as parsed, then adopt the
-    /// snapshot into the store — a restore is the user deliberately making the
+    /// snapshot into the store - a restore is the user deliberately making the
     /// snapshot the truth, and anything less would leave a divergence for the
     /// next reload to regenerate away, silently undoing the restore.
     /// The backup's content is validated BEFORE the live file is touched. A backup that names a key
@@ -251,7 +246,7 @@ public struct ConfigService: Sendable {
     /// Returns the restored file's servers so the caller can sync its
     /// reconciliation baseline to them.
     /// `publishFolder` is the folder `${COLLECTION_DIR}` stands for in the active collection on this
-    /// machine — the folder it publishes into, or a synced collection's document folder — and
+    /// machine - the folder it publishes into, or a synced collection's document folder - and
     /// `earlierFolders` the ones it published into before; a
     /// connector whose store copy renders exactly as the snapshot keeps the store copy
     /// (`Reconciler.adoptSnapshot`).
@@ -295,7 +290,7 @@ public struct ConfigService: Sendable {
         let outcome = Reconciler.adoptSnapshot(store: store, servers: servers, publishFolder: publishFolder,
                                                earlierFolders: earlierFolders)
         // A backup restored into a collection other than the active one makes that collection
-        // active, so Claude's file and the store agree on where its connectors live — even when
+        // active, so Claude's file and the store agree on where its connectors live - even when
         // the adoption itself changed nothing.
         if outcome.storeChanged || activating { try saveStore(outcome.store) }
         return servers

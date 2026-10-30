@@ -5,7 +5,7 @@ public sealed class RemoteConfig : IEquatable<RemoteConfig>
 {
     public string Url { get; }
     public RemoteAuth Auth { get; }
-    /// <summary>mcp-remote flags this app has no widget for — preserved verbatim, in order.</summary>
+    /// <summary>mcp-remote flags this app has no widget for - preserved verbatim, in order.</summary>
     public IReadOnlyList<string> ExtraArgs { get; }
     /// <summary>Env vars other than the one auth uses to indirect a header value.</summary>
     public IReadOnlyDictionary<string, string> PassthroughEnv { get; }
@@ -13,7 +13,7 @@ public sealed class RemoteConfig : IEquatable<RemoteConfig>
     public RemoteLaunchStyle LaunchStyle { get; }
 
     /// <summary>
-    /// The bridge package specifier as written — <c>mcp-remote</c>, or <c>mcp-remote@0.1.16</c> when the
+    /// The bridge package specifier as written - <c>mcp-remote</c>, or <c>mcp-remote@0.1.16</c> when the
     /// user pinned a version. A pin is a supply-chain control: it survives every edit.
     /// </summary>
     public string Package { get; }

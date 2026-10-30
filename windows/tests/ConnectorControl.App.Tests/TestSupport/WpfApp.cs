@@ -6,7 +6,7 @@ namespace ConnectorControl.App.Tests.TestSupport;
 
 /// <summary>
 /// One STA thread for the whole test run, hosting the single Application a
-/// process may own, with the Fluent theme and Styles/Shared.xaml merged — so
+/// process may own, with the Fluent theme and Styles/Shared.xaml merged - so
 /// windows constructed here resolve StaticResource/DynamicResource lookups
 /// exactly as in the app. Every access is marshalled through its dispatcher.
 /// </summary>

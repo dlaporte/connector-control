@@ -22,7 +22,7 @@ public class StringCatalogTests
 
     /// <summary>
     /// This fixture entry's Windows-side resolution, or null when the key is
-    /// Mac-only (no "win" side, and not a bare shared value) — such a key
+    /// Mac-only (no "win" side, and not a bare shared value) - such a key
     /// must never appear in `actual` below.
     /// </summary>
     private static (ValueKind Kind, string Text)? WinValue(JsonNode? entry)
@@ -57,7 +57,7 @@ public class StringCatalogTests
         return null;
     }
 
-    /// <summary>Substitutes {0}, {1}, … with <paramref name="args"/>, in order — the same convention the Swift test's fixture resolution uses.</summary>
+    /// <summary>Substitutes {0}, {1}, … with <paramref name="args"/>, in order - the same convention the Swift test's fixture resolution uses.</summary>
     private static string Expand(string format, params string[] args)
     {
         for (var i = 0; i < args.Length; i++)
@@ -71,7 +71,7 @@ public class StringCatalogTests
     /// Fixed arguments, by key, for every fixture entry whose Windows value is
     /// a {n} template: "X"/"Y" for string parameters, "3"/"7" for int
     /// parameters, and the joined-keys rendering for a factory that takes a
-    /// list of keys — matching the convention the Swift test also follows.
+    /// list of keys - matching the convention the Swift test also follows.
     /// </summary>
     private static readonly Dictionary<string, string[]> ArgsByKey = new(StringComparer.Ordinal)
     {
@@ -99,6 +99,8 @@ public class StringCatalogTests
         ["ClaudeSignature.notFoundMessage"] = ["X"],
         ["CollectionsModel.connectorTally.many"] = ["3"],
         ["CollectionsModel.connectorTally.one"] = ["1"],
+        ["CollectionsModel.copiedNote.many"] = ["3", "X"],
+        ["CollectionsModel.copiedNote.one"] = ["X"],
         ["CollectionsModel.deleteCheckedMessage.many"] = ["3"],
         ["CollectionsModel.deleteCheckedMessage.one"] = ["X"],
         ["CollectionsModel.deleteConnectorsSentence.many"] = ["3"],
@@ -122,6 +124,7 @@ public class StringCatalogTests
         ["ControlCommandLine.missingValueError"] = ["X"],
         ["ControlCommandLine.unknownCommandError"] = ["X"],
         ["ControlCommandLine.unknownOptionError"] = ["X"],
+        ["ControlCommandLine.unknownSubcommandError"] = ["X", "Y"],
         ["ControlCommandLine.usageError"] = ["X"],
         ["ControlCommandLine.versionLine"] = ["X"],
         ["ControlMasking.assignment"] = ["X", "Y"],
@@ -144,7 +147,8 @@ public class StringCatalogTests
         ["ControlTools.changedNotification"] = ["X", "Y", "Z"],
         ["ControlTools.changedText"] = ["X", "Y"],
         ["ControlTools.changesClause"] = ["X"],
-        ["ControlTools.connectorCountText"] = ["3", "7"],
+        ["ControlTools.connectorCountText.many"] = ["3", "7"],
+        ["ControlTools.connectorCountText.one"] = ["1", "1"],
         ["ControlTools.createdText"] = ["X"],
         ["ControlTools.deleteActiveMessage"] = ["X"],
         ["ControlTools.deleteCollectionTitle"] = ["X", "Y"],
@@ -204,6 +208,8 @@ public class StringCatalogTests
         ["ControlTools.subscribeMessage.one"] = ["X", "1"],
         ["ControlTools.subscribeTitle"] = ["X", "Y"],
         ["ControlTools.subscribedNotification"] = ["X", "Y", "Z"],
+        ["ControlTools.subscribedAddError"] = ["X"],
+        ["ControlTools.subscribedChangeError"] = ["X"],
         ["ControlTools.subscribedText"] = ["X", "Y"],
         ["ControlTools.switchValueError"] = ["X"],
         ["ControlTools.switchedNotification"] = ["X", "Y"],
@@ -221,6 +227,19 @@ public class StringCatalogTests
         ["EditorModel.additionalTitle"] = ["3", "a, b"],
         // Called with the row's index, 2: the text counts from one.
         ["EditorModel.argumentLabel"] = ["3"],
+        ["EditorModel.deleteArgumentRowLabel"] = ["3"],
+        ["EditorModel.deleteVariableRowLabel"] = ["3"],
+        ["EditorModel.hideVariableValueLabel"] = ["3"],
+        ["EditorModel.showVariableValueLabel"] = ["3"],
+        ["EditorModel.variableNameLabel"] = ["3"],
+        ["EditorModel.variableValueLabel"] = ["3"],
+        ["PublishModel.hintRowLabel"] = ["X", "Y"],
+        ["PublishModel.markPathRowLabel"] = ["X", "Y"],
+        ["PublishModel.pathNameRowLabel"] = ["X", "Y"],
+        ["PublishModel.forgetMarkRowLabel"] = ["X", "Y"],
+        ["PublishModel.releaseValueRowLabel"] = ["X", "Y"],
+        ["PublishModel.useDirectoryTokenRowLabel"] = ["X", "Y"],
+        ["PublishModel.shareValueRowLabel"] = ["X", "Y"],
         ["EditorModel.argumentNumber"] = ["3"],
         ["EditorModel.changedOutsideMessage"] = ["X"],
         ["EditorModel.cmdUnsafeError"] = ["X"],
@@ -262,11 +281,25 @@ public class StringCatalogTests
         ["RemotePattern.cmdUnsafeReason"] = ["Server URL"],
         ["RestoreModel.confirmMessage"] = ["X"],
         ["ReviewModel.title"] = ["X"],
+        ["SettingsModel.keepCountHelpText"] = ["3"],
         ["SettingsModel.loginItemFailureNote"] = ["X"],
         ["SettingsModel.versionText"] = ["X"],
         ["ToolFooterLine.installText"] = ["X", "Y", "Z"],
         ["UpdateCoordinator.availableDetail"] = ["X", "Y"],
         ["UpdateCoordinator.upToDateDetail"] = ["X"],
+        ["UpdateRefusals.insideTheUpdate"] = ["X"],
+        ["UpdateRefusals.invalidCharacterEntry"] = ["X"],
+        ["UpdateRefusals.notValidlySigned"] = ["X"],
+        ["UpdateRefusals.olderVersion"] = ["X", "Y"],
+        ["UpdateRefusals.previewForRelease"] = ["X", "Y"],
+        ["UpdateRefusals.renamedEntry"] = ["X"],
+        ["UpdateRefusals.signedByAnother"] = ["X", "Y"],
+        ["UpdateRefusals.signedByUntrusted"] = ["X", "Y"],
+        ["UpdateRefusals.sizeMismatch"] = ["X", "3", "7"],
+        ["UpdateRefusals.stubNotAProgram"] = ["X"],
+        ["UpdateRefusals.unknownInstalledVersion"] = ["X"],
+        ["UpdateRefusals.unreadable"] = ["X"],
+        ["UpdateRefusals.versionMismatch"] = ["X", "Y"],
     };
 
     [Fact]
@@ -363,8 +396,7 @@ public class StringCatalogTests
 
         actual["ClaudeProcess.notAClaudePackageError"] = "X is not a Claude Desktop package. " + ClaudePublisher.ChooseClaude;
         actual["ClaudeProcess.notInstalledMessage"] = "Claude Desktop was not found on this PC.";
-        actual["ClaudeRestarter.didNotQuitMessage"] =
-            "Claude didn’t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again.";
+        actual["ClaudeRestarter.didNotQuitMessage"] = ClaudePublisher.DidNotQuitMessage;
         actual["ClaudeSignature.notFoundMessage"] = "Claude Desktop was not found at X.";
         // "Y" alone is not a parseable distinguished name, so SubjectProblem takes the
         // no-organization branch and echoes it back verbatim as the signer subject.
@@ -388,6 +420,8 @@ public class StringCatalogTests
         actual["CollectionsModel.addConnectorTooltip"] = CollectionsModel.AddConnectorTooltip;
         actual["CollectionsModel.connectorTally.many"] = CollectionsModel.ConnectorTally(3);
         actual["CollectionsModel.connectorTally.one"] = CollectionsModel.ConnectorTally(1);
+        actual["CollectionsModel.copiedNote.many"] = CollectionsModel.CopiedNote(3, "X");
+        actual["CollectionsModel.copiedNote.one"] = CollectionsModel.CopiedNote(1, "X");
         actual["CollectionsModel.copyToButton"] = CollectionsModel.CopyToButton;
         actual["CollectionsModel.deleteAction"] = CollectionsModel.DeleteAction;
         actual["CollectionsModel.deleteConnectorsSentence.many"] = CollectionsModel.DeleteConnectorsSentence(3);
@@ -415,7 +449,7 @@ public class StringCatalogTests
         actual["CollectionsModel.publishedPill"] = CollectionsModel.PublishedPill;
         actual["CollectionsModel.readOnlyNote"] = CollectionsModel.ReadOnlyNote;
         actual["CollectionsModel.refreshButton"] = CollectionsModel.RefreshButton;
-        actual["CollectionsModel.remoteType"] = CollectionsModel.RemoteType;
+        actual["ConnectorTarget.remoteType"] = ConnectorTarget.RemoteType;
         actual["CollectionsModel.deleteCheckedButton"] = CollectionsModel.DeleteCheckedButton;
         actual["CollectionsModel.deleteCheckedInformative"] = CollectionsModel.DeleteCheckedInformative;
         actual["CollectionsModel.deleteCheckedMessage.many"] = CollectionsModel.DeleteCheckedMessage(["X", "Y", "Z"]);
@@ -461,6 +495,9 @@ public class StringCatalogTests
         actual["ControlCommandLine.missingValueError"] = ControlCommandLine.MissingValueError("X");
         actual["ControlCommandLine.unknownCommandError"] = ControlCommandLine.UnknownCommandError("X");
         actual["ControlCommandLine.unknownOptionError"] = ControlCommandLine.UnknownOptionError("X");
+        actual["ControlCommandLine.helpTakesNoArgumentsError"] = ControlCommandLine.HelpTakesNoArgumentsError;
+        actual["ControlCommandLine.unknownSubcommandError"] = ControlCommandLine.UnknownSubcommandError("X", "Y");
+        actual["ControlCommandLine.usageContinuation"] = ControlCommandLine.UsageContinuation;
         actual["ControlCommandLine.usageError"] = ControlCommandLine.UsageError("X");
         actual["ControlCommandLine.versionLine"] = ControlCommandLine.VersionLine("X");
         actual["ControlMasking.addedPrefix"] = ControlMasking.AddedPrefix;
@@ -535,7 +572,8 @@ public class StringCatalogTests
         actual["ControlTools.collectionHeader"] = ControlTools.CollectionHeader;
         actual["ControlTools.collectionsGroup"] = ControlTools.CollectionsGroup;
         actual["ControlTools.configShapeError"] = ControlTools.ConfigShapeError;
-        actual["ControlTools.connectorCountText"] = ControlTools.ConnectorCountText(3, 7);
+        actual["ControlTools.connectorCountText.many"] = ControlTools.ConnectorCountText(3, 7);
+        actual["ControlTools.connectorCountText.one"] = ControlTools.ConnectorCountText(1, 1);
         actual["ControlTools.connectorsGroup"] = ControlTools.ConnectorsGroup;
         actual["ControlTools.connectorsHeader"] = ControlTools.ConnectorsHeader;
         actual["ControlTools.createdText"] = ControlTools.CreatedText("X");
@@ -636,6 +674,8 @@ public class StringCatalogTests
         actual["ControlTools.subscribeTitle"] = ControlTools.SubscribeTitle("X", "Y");
         actual["ControlTools.subscribedKind"] = ControlTools.SubscribedKind;
         actual["ControlTools.subscribedNotification"] = ControlTools.SubscribedNotification("X", "Y", "Z");
+        actual["ControlTools.subscribedAddError"] = ControlTools.SubscribedAddError("X");
+        actual["ControlTools.subscribedChangeError"] = ControlTools.SubscribedChangeError("X");
         actual["ControlTools.subscribedText"] = ControlTools.SubscribedText("X", "Y");
         actual["ControlTools.switchValueError"] = ControlTools.SwitchValueError("X");
         actual["ControlTools.switchedNotification"] = ControlTools.SwitchedNotification("X", "Y");
@@ -684,11 +724,8 @@ public class StringCatalogTests
 
         // MARK: Dialogs / AlertDialogs
 
-        // IDialogs.Confirm's cancelTitle default parameter value — not a retrievable symbol.
-        actual["Dialogs.cancelTitle"] = "Cancel";
-        // WpfDialogs.cs / NamePromptDialog.xaml live in ConnectorControl.App, which this
-        // Core test project cannot reference; hardcoded here to match their "OK" literal.
-        actual["AlertDialogs.okTitle"] = "OK";
+        actual["Dialogs.cancelTitle"] = Dialogs.CancelTitle;
+        actual["AlertDialogs.okTitle"] = Dialogs.OkTitle;
 
         // MARK: EditTarget / EditorModel
 
@@ -698,6 +735,12 @@ public class StringCatalogTests
         actual["EditorModel.addVariableTitle"] = EditorModel.AddVariableTitle;
         actual["EditorModel.additionalTitle"] = EditorModel.AdditionalTitleFor(3, ["a", "b"]);
         actual["EditorModel.argumentLabel"] = EditorModel.ArgumentLabel(2);
+        actual["EditorModel.deleteArgumentRowLabel"] = EditorModel.DeleteArgumentRowLabel(2);
+        actual["EditorModel.deleteVariableRowLabel"] = EditorModel.DeleteVariableRowLabel(2);
+        actual["EditorModel.hideVariableValueLabel"] = EditorModel.HideVariableValueLabel(2);
+        actual["EditorModel.showVariableValueLabel"] = EditorModel.ShowVariableValueLabel(2);
+        actual["EditorModel.variableNameLabel"] = EditorModel.VariableNameLabel(2);
+        actual["EditorModel.variableValueLabel"] = EditorModel.VariableValueLabel(2);
         actual["EditorModel.argumentNumber"] = EditorModel.ArgumentNumber(2);
         actual["EditorModel.argumentPrompt"] = EditorModel.ArgumentPrompt;
         actual["EditorModel.argumentsHeader"] = EditorModel.ArgumentsHeader;
@@ -803,7 +846,7 @@ public class StringCatalogTests
         actual["ImportModel.unknownAuthor"] = ImportModel.UnknownAuthor;
 
         // MARK: MasterStore
-        // Every message below is returned by a real mutation, not a bare constant —
+        // Every message below is returned by a real mutation, not a bare constant -
         // each store is set up so that mutation fails for exactly the reason this key names.
 
         var nameEmptyStore = MasterStore.Empty();
@@ -844,6 +887,13 @@ public class StringCatalogTests
         actual["PublishModel.footerLine"] = PublishModel.FooterLine("X", "Y");
         actual["PublishModel.forgetMarkButton"] = PublishModel.ForgetMarkButton;
         actual["PublishModel.hintPlaceholder"] = PublishModel.HintPlaceholder;
+        actual["PublishModel.hintRowLabel"] = PublishModel.HintRowLabel("X", "Y");
+        actual["PublishModel.markPathRowLabel"] = PublishModel.MarkPathRowLabel("X", "Y");
+        actual["PublishModel.pathNameRowLabel"] = PublishModel.PathNameRowLabel("X", "Y");
+        actual["PublishModel.forgetMarkRowLabel"] = PublishModel.ForgetMarkRowLabel("X", "Y");
+        actual["PublishModel.releaseValueRowLabel"] = PublishModel.ReleaseValueRowLabel("X", "Y");
+        actual["PublishModel.useDirectoryTokenRowLabel"] = PublishModel.UseDirectoryTokenRowLabel("X", "Y");
+        actual["PublishModel.shareValueRowLabel"] = PublishModel.ShareValueRowLabel("X", "Y");
         actual["PublishModel.markPathLabel"] = PublishModel.MarkPathLabel;
         actual["PublishModel.noFolderError"] = PublishModel.NoFolderError;
         actual["PublishModel.pathNamePlaceholder"] = PublishModel.PathNamePlaceholder;
@@ -902,6 +952,7 @@ public class StringCatalogTests
         actual["SettingsModel.backupsHeader"] = SettingsModel.BackupsHeader;
         actual["SettingsModel.backupsTitle"] = SettingsModel.BackupsTitle;
         actual["SettingsModel.checkForUpdatesTitle"] = SettingsModel.CheckForUpdatesTitle;
+        actual["SettingsModel.checkingTitle"] = SettingsModel.CheckingTitle;
         actual["SettingsModel.chooseButtonTitle"] = SettingsModel.ChooseButtonTitle;
         actual["SettingsModel.chooseTitle"] = SettingsModel.ChooseTitle;
         actual["SettingsModel.claudeAppHeader"] = SettingsModel.ClaudeAppHeader;
@@ -918,15 +969,18 @@ public class StringCatalogTests
         actual["SettingsModel.confirmRestartTitle"] = SettingsModel.ConfirmRestartTitle;
         actual["SettingsModel.confirmationsHeader"] = SettingsModel.ConfirmationsHeader;
         actual["SettingsModel.configPathLabel"] = SettingsModel.ConfigPathLabel;
+        actual["SettingsModel.fewerBackupsLabel"] = SettingsModel.FewerBackupsLabel;
         actual["SettingsModel.generalTab"] = SettingsModel.GeneralTab;
-        // Inline literals inside InstallKindText's switch expression — not named constants.
+        // Inline literals inside InstallKindText's switch expression - not named constants.
         actual["SettingsModel.installKindLegacyText"] = "Legacy installer";
         actual["SettingsModel.installKindMsixText"] = "MSIX package";
+        actual["SettingsModel.keepCountHelpText"] = SettingsModel.KeepCountHelpText(3);
         actual["SettingsModel.launchAtLoginTitle"] = SettingsModel.LaunchAtStartupTitle;
         actual["SettingsModel.launchTargetLabel"] = SettingsModel.LaunchTargetLabel;
         actual["SettingsModel.loginItemFailureNote"] = SettingsModel.StartupEntryFailureNote("X");
         actual["SettingsModel.masterListFooter"] = SettingsModel.MasterListFooter;
         actual["SettingsModel.masterListHeader"] = SettingsModel.MasterListHeader;
+        actual["SettingsModel.moreBackupsLabel"] = SettingsModel.MoreBackupsLabel;
         actual["SettingsModel.notificationsHeader"] = SettingsModel.NotificationsHeader;
         actual["SettingsModel.notifyCaption"] = SettingsModel.NotifyCaption;
         actual["SettingsModel.notifyTitle"] = SettingsModel.NotifyTitle;
@@ -938,6 +992,7 @@ public class StringCatalogTests
         actual["SettingsModel.updatesHeader"] = SettingsModel.UpdatesHeader;
         actual["SettingsModel.useDefaultTitle"] = SettingsModel.UseDefaultTitle;
         actual["SettingsModel.versionText"] = SettingsModel.VersionTextFor("X");
+        actual["SettingsModel.windowTitle"] = SettingsModel.WindowTitle;
 
         // MARK: ToolFamily / ToolInfo / ToolFooterLine / ToolNote
 
@@ -964,12 +1019,39 @@ public class StringCatalogTests
         actual["UpdateCoordinator.availableDetail"] = UpdateCoordinator.AvailableDetail("X", "Y");
         actual["UpdateCoordinator.availableHeadline"] = UpdateCoordinator.AvailableHeadline;
         actual["UpdateCoordinator.checkFailedMessage"] = UpdateCoordinator.CheckFailedMessage;
+        actual["UpdateCoordinator.dialogTitle"] = UpdateCoordinator.DialogTitle;
+        actual["UpdateCoordinator.downloadingTitle"] = UpdateCoordinator.DownloadingTitle;
         actual["UpdateCoordinator.installButton"] = UpdateCoordinator.InstallButton;
+        actual["UpdateCoordinator.installFailedMessage"] = UpdateCoordinator.InstallFailedMessage;
         actual["UpdateCoordinator.laterButton"] = UpdateCoordinator.LaterButton;
         actual["UpdateCoordinator.readyToastBody"] = UpdateCoordinator.ReadyToastBody;
         actual["UpdateCoordinator.updateRefusedMessage"] = UpdateCoordinator.UpdateRefusedMessage;
         actual["UpdateCoordinator.upToDateDetail"] = UpdateCoordinator.UpToDateDetail("X");
         actual["UpdateCoordinator.upToDateMessage"] = UpdateCoordinator.UpToDateMessage;
+
+        // MARK: UpdateRefusals
+
+        actual["UpdateRefusals.cannotValidateSelf"] = UpdateRefusals.CannotValidateSelf;
+        actual["UpdateRefusals.insideTheUpdate"] = UpdateRefusals.InsideTheUpdate("X");
+        actual["UpdateRefusals.installedUpdater"] = UpdateRefusals.InstalledUpdater;
+        actual["UpdateRefusals.invalidCharacterEntry"] = UpdateRefusals.InvalidCharacterEntry("X");
+        actual["UpdateRefusals.locationUnknown"] = UpdateRefusals.LocationUnknown;
+        actual["UpdateRefusals.mainExecutableTwice"] = UpdateRefusals.MainExecutableTwice;
+        actual["UpdateRefusals.noMainExecutable"] = UpdateRefusals.NoMainExecutable;
+        actual["UpdateRefusals.noVersion"] = UpdateRefusals.NoVersion;
+        actual["UpdateRefusals.notValidlySigned"] = UpdateRefusals.NotValidlySigned("X");
+        actual["UpdateRefusals.olderVersion"] = UpdateRefusals.OlderVersion("X", "Y");
+        actual["UpdateRefusals.previewForRelease"] = UpdateRefusals.PreviewForRelease("X", "Y");
+        actual["UpdateRefusals.renamedEntry"] = UpdateRefusals.RenamedEntry("X");
+        actual["UpdateRefusals.signedByAnother"] = UpdateRefusals.SignedByAnother("X", "Y");
+        actual["UpdateRefusals.signedByUntrusted"] = UpdateRefusals.SignedByUntrusted("X", "Y");
+        actual["UpdateRefusals.sizeMismatch"] = UpdateRefusals.SizeMismatch("X", 3, 7);
+        actual["UpdateRefusals.stubNotAProgram"] = UpdateRefusals.StubNotAProgram("X");
+        actual["UpdateRefusals.unknownInstalledVersion"] = UpdateRefusals.UnknownInstalledVersion("X");
+        actual["UpdateRefusals.unreadable"] = UpdateRefusals.Unreadable("X");
+        actual["UpdateRefusals.updaterKeptSentence"] = UpdateRefusals.UpdaterKeptSentence;
+        actual["UpdateRefusals.updaterLeftSentence"] = UpdateRefusals.UpdaterLeftSentence;
+        actual["UpdateRefusals.versionMismatch"] = UpdateRefusals.VersionMismatch("X", "Y");
 
         // MARK: UserPath
 
@@ -994,15 +1076,15 @@ public class StringCatalogTests
             Assert.Equal(expected, actual[key]);
         }
 
-        // An unpaired key — present in `actual` but missing (or Mac-only) in the
-        // fixture, or vice versa — fails here on whichever side lacks it.
+        // An unpaired key - present in `actual` but missing (or Mac-only) in the
+        // fixture, or vice versa - fails here on whichever side lacks it.
         var actualKeys = actual.Keys.Order(StringComparer.Ordinal).ToList();
         winKeys.Sort(StringComparer.Ordinal);
         Assert.Equal(winKeys, actualKeys);
     }
 
     /// <summary>
-    /// The comparison above only ever looks at keys WinValue resolves — a fixture entry resolving
+    /// The comparison above only ever looks at keys WinValue resolves - a fixture entry resolving
     /// on neither platform (both "mac" and "win" omitted, or an unrecognized value shape) is
     /// silently skipped here AND by the Swift mirror's equivalent loop, so such a mistake would be
     /// asserted nowhere. This pins the fixture-wide invariant directly: every root key must

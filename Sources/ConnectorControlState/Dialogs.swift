@@ -20,6 +20,7 @@ public protocol Dialogs: AnyObject {
 
 public extension Dialogs {
     static var cancelTitle: String { "Cancel" }
+    static var okTitle: String { "OK" }
 
     /// The usual default: Return presses the primary button. One label short of the requirement,
     /// so a conformer that forgot it cannot compile against this instead.
@@ -29,7 +30,7 @@ public extension Dialogs {
     }
 
     /// The usual shape: a Cancel button. Deliberately NOT the requirement's
-    /// label set — an overload with the same labels would double as the
+    /// label set - an overload with the same labels would double as the
     /// requirement's default implementation, and a conformer that forgot the
     /// method would compile clean and recurse forever at runtime.
     func confirm(message: String, informative: String?, primary: String, destructive: Bool = false) -> Bool {

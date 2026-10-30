@@ -11,17 +11,20 @@ public final class PopoverModel: ObservableObject {
     public static let title = "Connector Control"
     public static let settingsTooltip = "Settings"
     public static let quitTooltip = "Quit Connector Control"
-    public static let retryTitle = "Apply Failed — Retry"
+    public static let retryTitle = "Apply Failed - Retry"
+    /// The menu bar item's spoken name while an apply awaits retry: the symbol alone reads as an
+    /// unnamed warning triangle. Mac only; the tray icon's tooltip is the product name.
+    public static let menuBarRetryLabel = "\(title): \(retryTitle)"
     public static let restartTitle = "Restart Required"
-    public static let reviewAndApplyButton = "Review & Apply"
-    public static let chooseFolderButton = "Choose Folder"
+    public static let reviewAndApplyButton = "Review & Apply…"
+    public static let chooseFolderButton = "Choose Folder…"
     public static let manageTitle = "Manage Collections"
     /// SF Symbols: the retry footer, the restart footer, and the row caution glyph.
     public static let retryGlyph = "exclamationmark.arrow.circlepath"
     public static let restartGlyph = "arrow.clockwise"
     public static let toolWarningGlyph = "exclamationmark.triangle.fill"
     /// The same glyph under the name the other surfaces call it by: the row caution it was
-    /// written for is one of several the app now draws with it — an unfilled placeholder, a
+    /// written for is one of several the app now draws with it - an unfilled placeholder, a
     /// connector authored elsewhere, a document still to be located. One value, so the two
     /// cannot drift; two names, so neither call site has to lie about what it is marking.
     public static let cautionGlyph = toolWarningGlyph
@@ -33,7 +36,7 @@ public final class PopoverModel: ObservableObject {
     /// twice, as `ConnectorRow.lockTooltip` borrows that window's lock sentence.
     public static let pendingSpokenLabel = CollectionsModel.updateAvailableStatus
     /// What a menu row says in place of the amber dot. A macOS `Menu` row draws one title and
-    /// one image, and the image is the chain, so a pending update has to be words — the same
+    /// one image, and the image is the chain, so a pending update has to be words - the same
     /// words the dot speaks, so a row reads the same whether it is seen or heard.
     public static let pendingMenuMark = " · " + pendingSpokenLabel
 
@@ -43,13 +46,13 @@ public final class PopoverModel: ObservableObject {
         item.hasPendingUpdate ? item.name + pendingMenuMark : item.name
     }
 
-    /// One row's chain tooltip, naming where that collection's document is — every synced row,
+    /// One row's chain tooltip, naming where that collection's document is - every synced row,
     /// not only the active one the chip names. nil for a row with no chain to explain.
     public static func menuTooltip(for item: CollectionMenuItem) -> String? {
         item.source.map(sourceTooltipFormat)
     }
 
-    public static func locateButton(_ fileName: String) -> String { "Locate \(fileName)" }
+    public static func locateButton(_ fileName: String) -> String { "Locate \(fileName)…" }
 
     /// The list's empty state, followed by the Manage Collections button that answers it: an
     /// empty active collection is an ordinary one now, and connectors are added in the window.
@@ -84,7 +87,7 @@ public final class PopoverModel: ObservableObject {
     /// The chain's tooltip: where the active collection's document sits on this machine, or the
     /// name the sidecar recorded while the file has still to be found. nil for a local
     /// collection, which has no source, and for a synced one the sidecar never named. A view
-    /// whose tooltip modifier takes a plain String coalesces it (`?? ""`) — the chain is drawn
+    /// whose tooltip modifier takes a plain String coalesces it (`?? ""`) - the chain is drawn
     /// only for a synced collection, which is the case that has something to say.
     public var sourceTooltip: String? {
         state.sourceLocation(of: state.activeCollection).map(PopoverModel.sourceTooltipFormat)
@@ -107,7 +110,7 @@ public final class PopoverModel: ObservableObject {
     /// to "this optional is not nil", where SwiftUI binds the optional itself.
     public var collectionBanner: CollectionBanner? { state.collectionBanner }
 
-    /// The popover's slot speaks for whichever collection has news, active or not — unlike the
+    /// The popover's slot speaks for whichever collection has news, active or not - unlike the
     /// Collections window's strip, which answers only for the collection it is showing.
     public var collectionBannerText: String? {
         state.collectionBanner.map { CollectionBannerPresentation.text($0, state) }
@@ -122,7 +125,7 @@ public final class PopoverModel: ObservableObject {
     // Platform idiom: the error here is the app's last error alone; the Windows mirror's error strip also
     // carries two lasting cautions the Mac has no counterpart for, and its offer ignores them too.
     /// The one-time offer of the Claude integration, in the banner slot: shown until it is answered,
-    /// and only while neither an error nor a collection banner holds the slot — it waits behind both.
+    /// and only while neither an error nor a collection banner holds the slot - it waits behind both.
     public var showsClaudeIntegrationOffer: Bool {
         state.showsClaudeIntegrationOffer && errorMessage == nil && state.collectionBanner == nil
     }
@@ -249,7 +252,7 @@ public final class PopoverModel: ObservableObject {
     }
 
     /// The failed-publish banner's folder, for the collection that banner names. Publishing
-    /// again into a new folder is what re-points it, so the recorded intent travels unchanged —
+    /// again into a new folder is what re-points it, so the recorded intent travels unchanged -
     /// the sheet is where what the document says gets edited. nil as `locateSource` returns nil.
     /// Under a publish blocked for review the folder is refused inside `changePublishFolder`, which
     /// answers with the reason, so a folder panel reached by any route explains itself rather than
@@ -263,7 +266,7 @@ public final class PopoverModel: ObservableObject {
         }
     }
 
-    /// The banner's Review & Apply, for the collection the banner names — which is not always
+    /// The banner's Review & Apply, for the collection the banner names - which is not always
     /// the active one, so the name travels with the request.
     public func requestReview() {
         guard case .updateAvailable(let collection, _) = state.collectionBanner else { return }

@@ -6,7 +6,7 @@ namespace ConnectorControl.App.Services;
 
 /// <summary>
 /// The user PATH in HKEY_CURRENT_USER\Environment. A change is broadcast as WM_SETTINGCHANGE "Environment",
-/// so Explorer — and every terminal started from it afterwards — sees it without signing out.
+/// so Explorer - and every terminal started from it afterwards - sees it without signing out.
 /// </summary>
 internal sealed class RegistryUserEnvironment : IUserEnvironment
 {
@@ -32,7 +32,7 @@ internal sealed class RegistryUserEnvironment : IUserEnvironment
     {
         using (var key = Registry.CurrentUser.CreateSubKey(EnvironmentKey, writable: true))
         {
-            // The kind it already is — a PATH holding %VARIABLES% is REG_EXPAND_SZ — or the kind Windows gives a new one.
+            // The kind it already is - a PATH holding %VARIABLES% is REG_EXPAND_SZ - or the kind Windows gives a new one.
             var kind = key.GetValueNames().Contains(PathValue, StringComparer.OrdinalIgnoreCase)
                 ? key.GetValueKind(PathValue) : RegistryValueKind.ExpandString;
             if (kind is not (RegistryValueKind.String or RegistryValueKind.ExpandString))

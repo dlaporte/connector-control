@@ -5,30 +5,19 @@
         xmlns:views="clr-namespace:ConnectorControl.App.Views"
         Width="620">
   <Window.Resources>
-    <views:ImportChoiceTitleConverter x:Key="ChoiceTitle" />
-    <views:ImportRowLabelConverter x:Key="RowLabel" />
-
     <!-- How a collision resolves. Its own template, applied only to a row that has one: a
          collapsed element inside a DataTemplate is still created and still binds, and a row with
          nothing in its way holds a choice this picker does not offer. -->
     <DataTemplate x:Key="ChoiceTemplate">
       <StackPanel Orientation="Horizontal">
-        <ComboBox x:Name="ChoiceBox" ItemsSource="{x:Static state:ImportModel.CollisionChoices}"
-                  SelectedItem="{Binding Choice, Mode=TwoWay}" MinWidth="110" VerticalAlignment="Center"
-                  AutomationProperties.Name="{Binding Name, Converter={StaticResource RowLabel}, ConverterParameter=choice}">
-          <ComboBox.ItemTemplate>
-            <DataTemplate>
-              <TextBlock Text="{Binding Converter={StaticResource ChoiceTitle}}" />
-            </DataTemplate>
-          </ComboBox.ItemTemplate>
-        </ComboBox>
+        <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource CollisionChoicePicker}" />
         <TextBlock x:Name="ReplaceNote" Text="{x:Static state:ImportModel.ReplaceKeepsValues}"
                    VerticalAlignment="Center" Margin="8,0,0,0">
           <TextBlock.Style>
             <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
               <Setter Property="Visibility" Value="Collapsed" />
               <Style.Triggers>
-                <DataTrigger Binding="{Binding SelectedItem, ElementName=ChoiceBox}" Value="{x:Static state:ImportChoice.Replace}">
+                <DataTrigger Binding="{Binding Choice}" Value="{x:Static state:ImportChoice.Replace}">
                   <Setter Property="Visibility" Value="Visible" />
                 </DataTrigger>
               </Style.Triggers>
@@ -142,8 +131,8 @@
                       </TextBlock>
 
                       <!-- What would happen to this connector: how the collision it would cause
-                           resolves, or — for every other row, and for a collision that is not
-                           coming across — the row's own badge. Which of the two is the row's
+                           resolves, or - for every other row, and for a collision that is not
+                           coming across - the row's own badge. Which of the two is the row's
                            ShowsPicker, which it raises as its Include changes. -->
                       <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,0,0,0">
                         <!-- The badge is a row's whole point and the skipped reason is the longest

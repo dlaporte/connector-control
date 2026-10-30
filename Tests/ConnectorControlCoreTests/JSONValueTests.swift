@@ -42,7 +42,7 @@ final class JSONValueTests: XCTestCase {
         XCTAssertEqual(value, .object(["x": .int(2), "y": .double(2.5)]))
 
         // Every spelling of a whole-valued number, parsed through JSONValue.parse
-        // (JSONDecoder), lands on the same .int — not just the plain "2.0" case.
+        // (JSONDecoder), lands on the same .int - not just the plain "2.0" case.
         for (literal, expectedInt) in [("2.0", 2), ("1e2", 100), ("100.000", 100), ("-0", 0)] {
             let parsed = try JSONValue.parse(Data(#"{"x": \#(literal)}"#.utf8))
             XCTAssertEqual(parsed, .object(["x": .int(expectedInt)]), "literal \(literal)")
@@ -99,10 +99,20 @@ final class JSONValueTests: XCTestCase {
 
     /// Unlike `JSONSerialization` (last wins) and Windows' `System.Text.Json`
     /// (also last wins by default), Foundation's `JSONDecoder` keeps the
-    /// FIRST value for a duplicate key — verified empirically, not assumed.
+    /// FIRST value for a duplicate key - verified empirically, not assumed.
     func testFirstDuplicateKeyWins() throws {
         let value = try JSONValue.parse(Data(#"{"a": 1, "a": 2}"#.utf8))
         XCTAssertEqual(value, .object(["a": .int(1)]))
+    }
+
+    /// A key in two spellings Unicode counts as the same text (é composed, then decomposed) is one
+    /// key, and the first in the document wins, spelling and value, as with an exact repeat.
+    func testFirstSpellingOfADuplicateKeyWins() throws {
+        let value = try JSONValue.parse(Data("{\"caf\u{00E9}\": 1, \"cafe\u{0301}\": 2}".utf8))
+        guard case .object(let object) = value else { return XCTFail("not an object") }
+        XCTAssertEqual(object.count, 1)
+        XCTAssertEqual(object.keys.first?.unicodeScalars.count, 4)
+        XCTAssertEqual(object["caf\u{00E9}"], .int(1))
     }
 
     func testInvalidDocumentsThrow() {
@@ -117,7 +127,7 @@ final class JSONValueTests: XCTestCase {
     }
 
     /// A file saved by an editor that writes a BOM (common on Windows) must
-    /// still parse — Foundation's JSONDecoder skips it.
+    /// still parse - Foundation's JSONDecoder skips it.
     func testUtf8BomIsAccepted() throws {
         var data = Data([0xEF, 0xBB, 0xBF])
         data.append(Data(#"{"a": 1}"#.utf8))
@@ -151,5 +161,20 @@ final class JSONValueTests: XCTestCase {
         XCTAssertThrowsError(try JSONValue.parse(nested(65)))
         XCTAssertThrowsError(try JSONValue.parse(nested(70)))
         XCTAssertNoThrow(try JSONValue.parse(Data(("[\"" + String(repeating: "[", count: 70) + "\"]").utf8)))
+    }
+
+    /// Text is compared scalar by scalar, as Windows compares it ordinally: é as one character and
+    /// as e and a combining accent are different values, in a string and in a key alike, and a set
+    /// holds both.
+    func testTextComposedAnotherWayIsAnotherValue() {
+        let composed = "caf\u{E9}", decomposed = "cafe\u{301}"
+        XCTAssertNotEqual(JSONValue.string(composed), .string(decomposed))
+        XCTAssertNotEqual(JSONValue.array([.string(composed)]), .array([.string(decomposed)]))
+        XCTAssertNotEqual(JSONValue.object([composed: .int(1)]), .object([decomposed: .int(1)]))
+        XCTAssertFalse(JSONValue.identical(["a": .string(composed)], ["a": .string(decomposed)]))
+        XCTAssertEqual(Set([JSONValue.string(composed), .string(decomposed)]).count, 2)
+        XCTAssertEqual(JSONValue.object([composed: .array([.string(decomposed)])]),
+                       .object([composed: .array([.string(decomposed)])]))
+        XCTAssertNotEqual(JSONValue.int(1), .double(1))
     }
 }

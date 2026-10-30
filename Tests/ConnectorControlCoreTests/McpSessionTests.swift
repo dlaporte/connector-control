@@ -226,12 +226,12 @@ final class McpSessionTests: XCTestCase {
         }
         initialize()
         session.receive(#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"echo"}}"#)
-        try XCTUnwrap(host.calls.last).completion(.object(["value": nested(McpSession.maxNestingDepth - 2)]))
+        try XCTUnwrap(host.calls.last).completion(.object(["value": nested(JSONValue.maxNestingDepth - 2)]))
         let answer = try XCTUnwrap(sent.last)
         XCTAssertTrue(answer.hasPrefix(#"{"id":9,"jsonrpc":"2.0","result":{"value":[[[["#), answer)
-        XCTAssertTrue(McpSession.nests(atMost: McpSession.maxNestingDepth, answer), "a line exactly at the limit goes out")
+        XCTAssertTrue(JSONValue.nests(atMost: JSONValue.maxNestingDepth, answer), "a line exactly at the limit goes out")
         session.receive(#"{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"echo"}}"#)
-        try XCTUnwrap(host.calls.last).completion(.object(["value": nested(McpSession.maxNestingDepth - 1)]))
+        try XCTUnwrap(host.calls.last).completion(.object(["value": nested(JSONValue.maxNestingDepth - 1)]))
         XCTAssertEqual(sent.last, #"{"error":{"code":-32603,"message":"Internal error"},"id":10,"jsonrpc":"2.0"}"#)
     }
 
@@ -282,6 +282,20 @@ final class McpSessionTests: XCTestCase {
         XCTAssertEqual(host.calls.count, 1)
         host.calls[0].completion(.object([:]))
         XCTAssertEqual(sent.last, #"{"id":3,"jsonrpc":"2.0","result":{}}"#)
+    }
+
+    /// Ids are compared scalar by scalar, as Windows compares them: an id composed another way is
+    /// another request, run and answered, and cancelling one leaves the other answered.
+    func testAnIdComposedAnotherWayIsAnotherRequest() {
+        initialize()
+        session.receive(#"{"jsonrpc":"2.0","id":"caf\u00e9","method":"tools/call","params":{"name":"echo"}}"#)
+        session.receive(#"{"jsonrpc":"2.0","id":"cafe\u0301","method":"tools/call","params":{"name":"echo"}}"#)
+        XCTAssertEqual(host.calls.count, 2)
+        session.receive(#"{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":"cafe\u0301"}}"#)
+        host.calls[0].completion(.object([:]))
+        host.calls[1].completion(.object([:]))
+        XCTAssertEqual(sent.count, 2)
+        XCTAssertEqual(sent.last, "{\"id\":\"caf\u{E9}\",\"jsonrpc\":\"2.0\",\"result\":{}}")
     }
 
     func testASecondInitializeIsRefusedAndKeepsTheFirstName() {

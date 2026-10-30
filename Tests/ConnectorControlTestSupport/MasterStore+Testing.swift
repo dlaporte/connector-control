@@ -1,5 +1,6 @@
 import ConnectorControlCore
 
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/TestSupport/MasterStoreTesting.cs
 public extension MasterStore {
     /// Convenience used across tests: a single-collection store.
     static func single(_ mcps: [String: MCPEntry]) -> MasterStore {

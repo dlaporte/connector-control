@@ -25,14 +25,14 @@ public struct BackupManager: Sendable {
         let dest = originalPath(series: series)
         guard !fm.fileExists(atPath: dest.path) else { return }
         // Written like every other private file (created 0600, atomically), not
-        // copied: copyItem would inherit the source's mode — Claude's config is
-        // usually 0644 — and, for a symlinked config, copy the link itself
+        // copied: copyItem would inherit the source's mode - Claude's config is
+        // usually 0644 - and, for a symlinked config, copy the link itself
         // rather than the bytes it points at.
         try AtomicFile.write(try Data(contentsOf: url), to: dest, staging: stagingDir)
     }
 
-    /// The `.original.json` snapshot's URL for a series — what `ensureOriginalSnapshot`
-    /// writes once and never prunes — when it exists on disk; nil otherwise.
+    /// The `.original.json` snapshot's URL for a series - what `ensureOriginalSnapshot`
+    /// writes once and never prunes - when it exists on disk; nil otherwise.
     public func originalSnapshotURL(series: String) -> URL? {
         let dest = originalPath(series: series)
         return FileManager.default.fileExists(atPath: dest.path) ? dest : nil
@@ -81,7 +81,9 @@ public struct BackupManager: Sendable {
         // copy of the file (or of a symlink to it). AtomicFile creates the
         // backups directory 0700 when it does not exist yet.
         try AtomicFile.write(current, to: dest, staging: stagingDir)
-        prune(series: series, listing: existing + [dest])
+        // A replaced last candidate is already listed, and counting it twice would prune one too many.
+        let listed = existing.contains { $0.lastPathComponent == dest.lastPathComponent }
+        prune(series: series, listing: listed ? existing : existing + [dest])
         return dest
     }
 
@@ -89,10 +91,12 @@ public struct BackupManager: Sendable {
     public func backups(series: String) throws -> [URL] {
         let fm = FileManager.default
         guard fm.fileExists(atPath: backupsDir.path) else { return [] }
-        return try fm.contentsOfDirectory(at: backupsDir, includingPropertiesForKeys: nil)
+        // Regular files only, as Windows lists files: a folder named like a backup is never pruned.
+        return try fm.contentsOfDirectory(at: backupsDir, includingPropertiesForKeys: [.isRegularFileKey])
             .filter {
                 $0.lastPathComponent.hasPrefix("\(series).")
                     && !$0.lastPathComponent.contains(".original.")
+                    && (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
             }
             .sorted(by: BackupManager.newestFirst)
     }
@@ -126,7 +130,7 @@ public struct BackupManager: Sendable {
     }
 
     /// `listing` is the caller's own pre-write directory read plus the file it just
-    /// wrote — sorted the same way `backups(series:)` would — so pruning does not
+    /// wrote - sorted the same way `backups(series:)` would - so pruning does not
     /// re-list a directory `backUp` already just listed.
     private func prune(series: String, listing: [URL]) {
         let all = listing.sorted(by: BackupManager.newestFirst)

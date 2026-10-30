@@ -96,7 +96,7 @@ public class ImportModelTests
         Assert.Null(state.Upsert("github", new McpEntry(true, AppStateHarness.Remote("https://x/")), null));
         var model = new ImportModel(state, path);
         Assert.Equal([new ImportModel.Target("Default"), ImportModel.Target.NewCollection], model.Targets);
-        Assert.Equal(["Default", CollectionsModel.NewButton], model.Targets.Select(ImportModel.TargetTitle));
+        Assert.Equal(["Default", AppState.NewCollectionTitle], model.Targets.Select(ImportModel.TargetTitle));
         Assert.Equal(new ImportModel.Target("Default"), model.ImportTarget);
 
         h.Dialogs.NextPromptAnswer = null;
@@ -210,6 +210,23 @@ public class ImportModelTests
     }
 
     /// <summary>
+    /// A document named in another spelling of a collection here (é decomposed where the collection
+    /// composes it) is offered a suffixed name, as on the Mac, not one Subscribe would then refuse.
+    /// </summary>
+    [Fact]
+    public void TheDefaultSyncNameSkipsAnotherSpellingOfATakenName()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.AddEmptyCollection("Caf\u00E9"));
+        var team = CollectionDocumentSamples.DataTeam;
+        var document = new CollectionDocument("Cafe\u0301", team.Author, team.Origin, team.Exported, team.Connectors);
+        var model = new ImportModel(state, h.WriteDocument(document, "cafe.json")) { ImportMode = ImportModel.Mode.KeepInSync };
+        Assert.Equal("Cafe\u0301 2", model.SyncName);
+        Assert.Null(model.Perform());
+    }
+
+    /// <summary>
     /// The failure line is the model's: an Import that did not land leaves its reason there, and
     /// only a change of mode takes it away, since the other mode is another question.
     /// </summary>
@@ -276,7 +293,7 @@ public class ImportModelTests
         Assert.Equal(1, model.ImportCount);
         model.ImportMode = ImportModel.Mode.AddToCollection;
 
-        // Ticking it makes no difference — an excluded row cannot be included.
+        // Ticking it makes no difference - an excluded row cannot be included.
         bad.Include = true;
         Assert.Equal(1, model.ImportCount);
         Assert.Null(model.Perform());
@@ -457,7 +474,7 @@ public class ImportModelTests
 
     /// <summary>
     /// C#-only: SwiftUI binds the optional <c>loadError</c> itself, so the Mac has no bool to
-    /// assert — the same one-sided pattern <c>HasCollectionBanner</c> already follows.
+    /// assert - the same one-sided pattern <c>HasCollectionBanner</c> already follows.
     /// </summary>
     [Fact]
     public void ADocumentThatCannotBeReadSaysSoAsABool()

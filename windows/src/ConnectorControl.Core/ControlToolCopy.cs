@@ -26,11 +26,11 @@ public static class ControlToolCopy
 
     /// <summary>Brings the copy up to date with <paramref name="packaged"/> and records <paramref name="appExecutable"/>,
     /// when a packaged tool sits beside the app. True when it copied; false also when there was nothing to do.
-    /// A failure leaves the copy that is there serving, is said to <paramref name="failed"/> — the app's log —
+    /// A failure leaves the copy that is there serving, is said to <paramref name="failed"/> - the app's log -
     /// and is tried again at the next launch.
     /// <para>
     /// Two refreshes can run at once: the app's single-instance mutex is per logon session, so one person
-    /// signed in twice — at the console and over Remote Desktop — runs two apps against the one bin\. Their
+    /// signed in twice - at the console and over Remote Desktop - runs two apps against the one bin\. Their
     /// steps can interleave: one's sweep of leftovers can delete the other's staging copy, or the old copy the
     /// other has just renamed aside. The worst that leaves is a failed refresh, a stale copy or none until the
     /// next launch, whose refresh recovers it.
@@ -79,13 +79,13 @@ public static class ControlToolCopy
             {
                 move(staging, target);
             }
-            catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && aside is not null)
+            catch (Exception ex) when (FileSystemErrors.IsTransient(ex) && aside is not null)
             {
                 try
                 {
                     move(aside, target);
                 }
-                catch (Exception rollback) when (rollback is IOException or UnauthorizedAccessException)
+                catch (Exception rollback) when (FileSystemErrors.IsTransient(rollback))
                 {
                     // Both are said, the cause first. The old copy stays aside, and the next launch's sweep and
                     // refresh place a new one.
@@ -95,14 +95,14 @@ public static class ControlToolCopy
             }
             return true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             failed?.Invoke($"The command-line tool could not be copied to {target}: {ex.Message}");
             return false;
         }
     }
 
-    /// <summary>The app's executable, for the copy to start it: written only when it differs, and then whole —
+    /// <summary>The app's executable, for the copy to start it: written only when it differs, and then whole -
     /// a new record is written beside the old one and moved into place, so the tool never reads half of one.</summary>
     private static void Record(string bin, string appExecutable, Action<string>? failed)
     {
@@ -117,7 +117,7 @@ public static class ControlToolCopy
             File.WriteAllText(staging, appExecutable);
             File.Move(staging, record, overwrite: true);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             failed?.Invoke($"The app's path could not be recorded in {record}: {ex.Message}");
         }
@@ -134,13 +134,13 @@ public static class ControlToolCopy
         }
         foreach (var file in Directory.EnumerateFiles(bin))
         {
-            TryDelete(file);
+            FileSystemErrors.TryDelete(file);
         }
         try
         {
             Directory.Delete(bin);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             // a copy still running keeps the folder
         }
@@ -155,7 +155,7 @@ public static class ControlToolCopy
             var name = Path.GetFileName(file);
             if (name.StartsWith(AsidePrefix, StringComparison.OrdinalIgnoreCase) || name.EndsWith(StagingSuffix, StringComparison.OrdinalIgnoreCase))
             {
-                TryDelete(file);
+                FileSystemErrors.TryDelete(file);
             }
         }
     }
@@ -184,17 +184,5 @@ public static class ControlToolCopy
         using var one = new FileStream(packaged, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         using var other = new FileStream(copy, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         return SHA256.HashData(one).AsSpan().SequenceEqual(SHA256.HashData(other));
-    }
-
-    private static void TryDelete(string file)
-    {
-        try
-        {
-            File.Delete(file);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // still running: a later launch, or nothing, deletes it
-        }
     }
 }

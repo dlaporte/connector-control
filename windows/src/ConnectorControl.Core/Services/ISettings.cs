@@ -31,9 +31,9 @@ public interface ISettings
     bool TrayTipShown { get; set; }
     /// <summary>
     /// The version most recently declined via a non-interactive update offer; null while none is
-    /// declined. It stays recorded until the user declines another version — declining a version
+    /// declined. It stays recorded until the user declines another version - declining a version
     /// only suppresses a future offer of that exact version; a different version is always
-    /// offered. Persisted so the decline survives a relaunch — the same way the Mac's Sparkle
+    /// offered. Persisted so the decline survives a relaunch - the same way the Mac's Sparkle
     /// persists "Skip This Version".
     /// </summary>
     string? DeclinedUpdateVersion { get; set; }

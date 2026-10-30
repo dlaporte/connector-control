@@ -61,7 +61,7 @@ final class GoldenFileTests: XCTestCase {
                 XCTAssertEqual(
                     String(decoding: committed, as: UTF8.self),
                     String(decoding: bytes, as: UTF8.self),
-                    "\(dir)/\(name) is stale — regenerate with CONNECTOR_CONTROL_UPDATE_GOLDENS=1")
+                    "\(dir)/\(name) is stale - regenerate with CONNECTOR_CONTROL_UPDATE_GOLDENS=1")
             }
         }
     }

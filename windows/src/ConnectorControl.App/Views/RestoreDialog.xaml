@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:state="clr-namespace:ConnectorControl.Core.State;assembly=ConnectorControl.Core"
         xmlns:views="clr-namespace:ConnectorControl.App.Views"
-        Title="Restore"
+        Title="{x:Static state:RestoreModel.RestoreTitle}"
         Width="460">
   <StackPanel Margin="16">
     <TextBlock Text="{x:Static state:RestoreModel.Headline}" FontSize="14" FontWeight="SemiBold" />

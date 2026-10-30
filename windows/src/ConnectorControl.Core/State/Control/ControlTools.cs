@@ -3,8 +3,8 @@ namespace ConnectorControl.Core.State;
 /// <summary>
 /// The control layer's tools: one list Claude sees through MCP and the command-line tool runs as
 /// commands, each a thin handler on AppState's own operations with the rules the windows apply. It
-/// knows nothing about transport — <c>McpSession</c> and the command-line client reach it through
-/// <c>ControlToolHost</c> — and the gate is decided here, once, for every caller.
+/// knows nothing about transport - <c>McpSession</c> and the command-line client reach it through
+/// <c>ControlToolHost</c> - and the gate is decided here, once, for every caller.
 ///
 /// Reads answer at once. Writes run one at a time, in the order they arrive. One that asks the user
 /// holds the line until the user answers, however long that takes, while its caller hears progress
@@ -36,7 +36,7 @@ public sealed partial class ControlTools
     public const string ListKind = "a list of names";
     public const string ObjectKind = "a JSON object";
     public const string HelpUsage = "Usage: connector-control <command> [options]";
-    public const string RelayUsage = "mcp";
+    public const string RelayUsage = ClaudeIntegration.RelayArgument;
     public const string RelaySummary = "The relay Claude Desktop runs; not for direct use";
     public const string HelpOptions = "Options: --json  --version  --help";
     /// <summary>The width of the usage field in <c>help</c>: two spaces of indent, then the usage padded to this, then the
@@ -300,7 +300,7 @@ public sealed partial class ControlTools
     /// <summary>The user's answer. What they allowed is what they were shown: the change is prepared again
     /// against the state as it is now and must ask the very same question, and stand for the very same
     /// thing where the question cannot show it (its fingerprint), or nothing happens. An answer to a call
-    /// that has already ended — one whose dialog threw — changes nothing.</summary>
+    /// that has already ended - one whose dialog threw - changes nothing.</summary>
     private void Answered(ToolCall call, ConfirmationRequest request, string? fingerprint, bool allowed)
     {
         if (call.Answered || call.Finished)
@@ -358,7 +358,7 @@ public sealed partial class ControlTools
             return;
         }
         // Caught here, where the Mac has nothing to catch: a C# notifier can throw, and Swift's does
-        // not. The change has applied whatever the notifier does, so its answer stays a success —
+        // not. The change has applied whatever the notifier does, so its answer stays a success -
         // a refusal would have Claude ask again for a change that already landed.
         try
         {
@@ -409,8 +409,8 @@ public sealed partial class ControlTools
 
     // MARK: waiting
 
-    /// <summary>Progress every <see cref="ProgressInterval"/> while a call waits — for its turn, or for the
-    /// user's answer — and, at <see cref="ConfirmationWait"/>, the early answer that says so. The call
+    /// <summary>Progress every <see cref="ProgressInterval"/> while a call waits - for its turn, or for the
+    /// user's answer - and, at <see cref="ConfirmationWait"/>, the early answer that says so. The call
     /// carries on: its turn still comes, and the user's answer still counts. The command line is never answered
     /// early, and a call whose connection has closed hears nothing more and gets no early answer.</summary>
     private void StartWaiting(ToolCall call)
@@ -427,7 +427,7 @@ public sealed partial class ControlTools
     {
         host.Delay(TimeSpan.FromSeconds(ProgressInterval), () =>
         {
-            // A call whose connection has closed hears nothing more — no progress, no early answer — so
+            // A call whose connection has closed hears nothing more - no progress, no early answer - so
             // one still waiting its turn stays untold, and is dropped when its turn comes.
             if (call.Delivered || call.IsAbandoned())
             {
@@ -461,7 +461,7 @@ public sealed partial class ControlTools
         public Action<double> Progress { get; } = progress;
         public Action<ControlResult> Completion { get; } = completion;
         public Func<bool> IsAbandoned { get; } = isAbandoned;
-        /// <summary>The caller has its answer — perhaps the early one that says the user's is awaited.</summary>
+        /// <summary>The caller has its answer - perhaps the early one that says the user's is awaited.</summary>
         public bool Delivered { get; set; }
         /// <summary>Its confirmation has been put to the user.</summary>
         public bool Asking { get; set; }
@@ -538,12 +538,12 @@ public sealed partial class ControlTools
 }
 
 /// <summary>
-/// A write, prepared against the state as it is now: refused with the reason, or ready — with the
+/// A write, prepared against the state as it is now: refused with the reason, or ready - with the
 /// question to ask when the tool asks, and the change itself. C# has no enum payloads, so the two
 /// steps are records.
 /// <para>
 /// <c>Fingerprint</c>, never shown, stands for what the change would land where the question cannot
-/// show it — a document's or a backup's bytes, whose secrets the dialog masks — so an Allow lands only
+/// show it - a document's or a backup's bytes, whose secrets the dialog masks - so an Allow lands only
 /// while that is unchanged too. It is declared last, where C# puts an optional parameter; the Mac
 /// mirror declares it before the change.
 /// </para>

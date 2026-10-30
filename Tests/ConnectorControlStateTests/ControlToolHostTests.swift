@@ -101,12 +101,12 @@ final class ControlToolHostTests: XCTestCase {
         // so Swift has no identity to compare.
     }
 
-    /// A tool or relay newer than the app it reached — an update replaced the app on disk while the
-    /// old one still runs — is told to restart the app, not that the tool does not exist.
+    /// A tool or relay newer than the app it reached - an update replaced the app on disk while the
+    /// old one still runs - is told to restart the app, not that the tool does not exist.
     func testANewerClientAskingForAToolThisAppLacksIsToldToRestartTheApp() {
         let rig = ControlRig(); defer { rig.dispose() }
         let host = ControlToolHost(tools: rig.tools, isCLI: true)
-        let unknown = McpSession.unknownToolMessage("future_tool")
+        let unknown = ControlTools.unknownToolError("future_tool")
         XCTAssertEqual(host.unknownToolMessage("future_tool"), unknown, "no version was said")
         for older in ["1.2.2", "1.2.1", "1.2.2-preview.1", "development build"] {
             host.clientVersion = older
@@ -116,6 +116,15 @@ final class ControlToolHostTests: XCTestCase {
         XCTAssertEqual(host.unknownToolMessage("future_tool"), ControlTools.needsNewerAppError("99.0.0"))
         host.clientVersion = "1.3.0-preview.2"
         XCTAssertEqual(host.unknownToolMessage("future_tool"), ControlTools.needsNewerAppError("1.3.0-preview.2"))
+    }
+
+    /// A tool nothing lists gets the app's own sentence, with the name escaped as every other name
+    /// the layer echoes is.
+    func testAnUnknownToolIsRefusedInTheAppsWordsWithItsNameEscaped() {
+        let rig = ControlRig(); defer { rig.dispose() }
+        let host = ControlToolHost(tools: rig.tools, isCLI: true)
+        XCTAssertEqual(host.unknownToolMessage("no_such_tool"), ControlTools.unknownToolError("no_such_tool"))
+        XCTAssertEqual(host.unknownToolMessage("bad\n\\name"), ControlTools.unknownToolError(#"bad\n\\name"#))
     }
 
     /// The version the session introduces itself with, and the one a hello is compared with, is the

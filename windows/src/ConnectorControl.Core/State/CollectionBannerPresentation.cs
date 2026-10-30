@@ -7,7 +7,7 @@ namespace ConnectorControl.Core.State;
 /// a banner is about.
 ///
 /// The sentences are <see cref="AppState"/>'s constants and the button titles
-/// <see cref="FlyoutModel"/>'s — where the string catalog already keys them, so nothing here
+/// <see cref="FlyoutModel"/>'s - where the string catalog already keys them, so nothing here
 /// owns wording of its own.
 ///
 /// Mirror: Sources/ConnectorControlState/CollectionBannerPresentation.swift

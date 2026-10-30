@@ -1,6 +1,7 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:views="clr-namespace:ConnectorControl.App.Views"
+                    xmlns:state="clr-namespace:ConnectorControl.Core.State;assembly=ConnectorControl.Core"
                     xmlns:system="clr-namespace:System;assembly=System.Runtime">
 
   <!-- Segoe Fluent Icons ships with Windows 11; Segoe MDL2 Assets is the Windows 10 fallback with the same code points. -->
@@ -185,8 +186,8 @@
   <!--
     Replaces Placeholder.cs's attached property + PlaceholderAdorner's AdornerLayer overlay
     with a Tag-bound watermark baked into the template. The chrome (background, border, corner
-    radius, hover/focus/disabled states) mirrors the Fluent theme's own TextBoxBase template —
-    same DynamicResource keys, from the .NET 10 WPF source — so a watermarked box looks like every
+    radius, hover/focus/disabled states) mirrors the Fluent theme's own TextBoxBase template -
+    same DynamicResource keys, from the .NET 10 WPF source - so a watermarked box looks like every
     other text field; only the watermark TextBlock is new.
   -->
   <Style x:Key="Watermarked" TargetType="TextBox">
@@ -197,7 +198,7 @@
     <Setter Property="BorderThickness" Value="{DynamicResource TextControlBorderThemeThickness}" />
     <Setter Property="Padding" Value="{DynamicResource TextControlThemePadding}" />
     <Setter Property="Border.CornerRadius" Value="{DynamicResource ControlCornerRadius}" />
-    <!-- Lost by replacing the template without BasedOn — restored to what a plain (unwatermarked) TextBox gets from the Fluent theme's own TextBox style. -->
+    <!-- Lost by replacing the template without BasedOn - restored to what a plain (unwatermarked) TextBox gets from the Fluent theme's own TextBox style. -->
     <Setter Property="MinHeight" Value="{DynamicResource TextControlThemeMinHeight}" />
     <Setter Property="MinWidth" Value="{DynamicResource TextControlThemeMinWidth}" />
     <Setter Property="VerticalContentAlignment" Value="Top" />
@@ -239,4 +240,20 @@
       </Setter.Value>
     </Setter>
   </Style>
+
+  <!-- The Import and Copy dialogs' collision picker, over the same choices, so its items, binding and
+       spoken name cannot drift between them. Each dialog's own row template wraps it. -->
+  <views:ImportChoiceTitleConverter x:Key="ChoiceTitle" />
+  <views:ImportRowLabelConverter x:Key="RowLabel" />
+  <DataTemplate x:Key="CollisionChoicePicker">
+    <ComboBox x:Name="ChoiceBox" ItemsSource="{x:Static state:ImportModel.CollisionChoices}"
+              SelectedItem="{Binding Choice, Mode=TwoWay}" MinWidth="110" VerticalAlignment="Center"
+              AutomationProperties.Name="{Binding Name, Converter={StaticResource RowLabel}, ConverterParameter=choice}">
+      <ComboBox.ItemTemplate>
+        <DataTemplate>
+          <TextBlock Text="{Binding Converter={StaticResource ChoiceTitle}}" />
+        </DataTemplate>
+      </ComboBox.ItemTemplate>
+    </ComboBox>
+  </DataTemplate>
 </ResourceDictionary>

@@ -16,8 +16,8 @@ public enum ControlSocketError: Error, Equatable {
     case notASocket(String)
     /// The server at the path belongs to another user.
     case notOwner(String)
-    /// The socket's folder is a link, or is not this user's — a socket there would be reachable through
-    /// what someone else controls — or a regular file sits where the folder should be.
+    /// The socket's folder is a link, or is not this user's - a socket there would be reachable through
+    /// what someone else controls - or a regular file sits where the folder should be.
     case folderNotOwned(String)
     case system(String, Int32)
 }
@@ -81,13 +81,13 @@ public final class ControlSocketListener: @unchecked Sendable {
         case live
         /// Nothing does: the file a crashed app left.
         case stale
-        /// A failure that says neither — permission refused, say — which leaves the file alone.
+        /// A failure that says neither - permission refused, say - which leaves the file alone.
         case unknown(Int32)
     }
 
     /// Listens at `path`. The path is checked before anything is made. The folder is made if it is
     /// missing; it must be a real folder of this user's, not a link, and is then tightened to 0700. A
-    /// socket nothing answers on — what a crashed app leaves — is removed; one something answers on is
+    /// socket nothing answers on - what a crashed app leaves - is removed; one something answers on is
     /// left to it, and so is one that fails for any other reason.
     public static func listen(at path: String) throws -> ControlSocketListener {
         var address = try ControlSocket.address(path)
@@ -179,7 +179,7 @@ public final class ControlSocketListener: @unchecked Sendable {
                     // the next, or back to waiting.
                     if errno == EAGAIN || errno == EWOULDBLOCK { return }
                     if errno == EINTR || errno == ECONNABORTED { continue }
-                    // Any other failure — out of descriptors, buffers or memory — can leave the
+                    // Any other failure - out of descriptors, buffers or memory - can leave the
                     // connection waiting, so the listener stays readable and this handler would spin:
                     // accepting pauses instead, and the waiting client is taken once it resumes.
                     source.suspend()
@@ -201,7 +201,7 @@ public final class ControlSocketListener: @unchecked Sendable {
     /// Whether the listener is accepting: started, and not closed.
     var isServing: Bool { lock.withLock { source != nil && !closed } }
 
-    /// Stops listening and removes the socket file — if it is still the one this listener made — so
+    /// Stops listening and removes the socket file - if it is still the one this listener made - so
     /// the next start finds nothing stale.
     public func close() {
         let source: DispatchSourceRead? = lock.withLock {

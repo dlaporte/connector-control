@@ -99,7 +99,7 @@ final class ControlTextTests: XCTestCase {
                        #"tag\u{E0041}\u{E007F} \u{1BCA0}\u{1D173}\u{E0000}\u{E0100}\u{E0FFF}"#,
                        "beyond the Basic Plane an escape has five hex digits")
         XCTAssertEqual(ControlText.escaped("❤\u{FE0F}"), #"❤\u{FE0F}"#, "a variation selector is invisible, so it shows too")
-        XCTAssertEqual(ControlText.escaped("é—👍 ok"), "é—👍 ok", "what shows as itself is left alone")
+        XCTAssertEqual(ControlText.escaped("é-👍 ok"), "é-👍 ok", "what shows as itself is left alone")
         XCTAssertEqual(ControlText.word("a\u{3164}b"), #"'a\u{3164}b'"#, "a word holding a blank letter is quoted")
     }
 
@@ -176,7 +176,7 @@ final class ControlTextTests: XCTestCase {
     }
 
     /// Text with one or two marks on a character reads as it always has: accented letters composed either
-    /// way, pointed Hebrew, and the scripts that put two marks on one letter as a matter of course — Thai
+    /// way, pointed Hebrew, and the scripts that put two marks on one letter as a matter of course - Thai
     /// vowel and tone, Vietnamese decomposed, Hebrew dagesh and vowel, Arabic shadda and vowel.
     func testOneOrTwoMarksOnACharacterReadAsTheyAre() {
         let thai = "\u{0E17}\u{0E35}\u{0E48}"

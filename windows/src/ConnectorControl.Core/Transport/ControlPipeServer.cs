@@ -43,7 +43,7 @@ public sealed class ControlPipeServer : IDisposable
 
     public string Name { get; }
 
-    /// <summary>Creates the pipe's first instance — which throws if anything already holds the name — and
+    /// <summary>Creates the pipe's first instance - which throws if anything already holds the name - and
     /// serves it. <paramref name="stopped"/> runs on the UI thread if serving ever stops on its own: the pipe
     /// would take no more instances, or the accept loop failed for any other reason. The Mac's socket has no
     /// such case, so its server takes no such action. A name something else holds surfaces as
@@ -148,7 +148,7 @@ public sealed class ControlPipeServer : IDisposable
                     next = ControlPipe.CreateServer(Name, first: false);
                     waiting = next;   // held at once, so a Dispose from here on frees it too
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
                 {
                     next = null;
                 }

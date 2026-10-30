@@ -37,7 +37,7 @@ public class ClaudeIntegrationTests
     public void ALegacyConnectorHoldingTheNameCanBeEditedInPlaceOrRenamedAway()
     {
         using var h = new AppStateHarness();
-        MasterStoreIO.Save(new MasterStore([new(Reserved, new McpEntry(true, Config))]), h.MasterStorePath);
+        MasterStoreIO.Save(MasterStore.Single([new(Reserved, new McpEntry(true, Config))]), h.MasterStorePath);
         using var state = h.Create();
         var edited = JsonValue.Object(("command", JsonValue.String("node")), ("args", JsonValue.Array([JsonValue.String("y.js")])));
         Assert.Null(state.Upsert(Reserved, new McpEntry(true, edited), Reserved));
@@ -199,7 +199,7 @@ public class ClaudeIntegrationTests
     public void AClashKeepsTheEntryOutAndTheSwitchRefusesUntilItIsRenamed()
     {
         using var h = new AppStateHarness { ControlToolPath = ToolPath };
-        MasterStoreIO.Save(new MasterStore([new(Reserved, new McpEntry(true, Config))]), h.MasterStorePath);
+        MasterStoreIO.Save(MasterStore.Single([new(Reserved, new McpEntry(true, Config))]), h.MasterStorePath);
         using var state = h.Create();
         Assert.True(state.ClaudeIntegrationClash);
         Assert.False(state.ShowsClaudeIntegrationOffer);
@@ -262,7 +262,7 @@ public class ClaudeIntegrationTests
 
     // MARK: Where the app runs from, and whether it can be reached
 
-    /// <summary>A Mac app run from where it will not stay — translocated, or from its disk image — refuses to
+    /// <summary>A Mac app run from where it will not stay - translocated, or from its disk image - refuses to
     /// turn the integration on, and leaves an entry Claude already has exactly as it is rather than write a
     /// path that will be gone. Turning it off still works.</summary>
     [Fact]
@@ -287,7 +287,7 @@ public class ClaudeIntegrationTests
     }
 
     /// <summary>With the switch on but no entry in Claude's config, an app run from where it will not stay
-    /// adds none — not at launch, and not when an apply writes Claude's config for another reason.</summary>
+    /// adds none - not at launch, and not when an apply writes Claude's config for another reason.</summary>
     [Fact]
     public void AnAppRunFromWhereItWillNotStayAddsNoEntryWhereClaudeHasNone()
     {

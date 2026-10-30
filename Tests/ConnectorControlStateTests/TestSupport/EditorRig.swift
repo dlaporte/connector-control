@@ -4,7 +4,7 @@ import ConnectorControlCore
 @testable import ConnectorControlState
 
 /// The harness + AppState + EditorModel construction every EditorModel test
-/// needs. `configure` runs on the harness BEFORE its AppState is created —
+/// needs. `configure` runs on the harness BEFORE its AppState is created -
 /// for the handful of tests that must seed a tool status the probe reads at
 /// launch.
 @MainActor

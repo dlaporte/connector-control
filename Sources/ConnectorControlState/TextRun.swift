@@ -33,16 +33,11 @@ public struct TextRun: Equatable, Sendable {
     // ordinally by itself; Swift's == would hold canonically equivalent text equal, and a name composed
     // another way is another name.
     public static func == (one: TextRun, other: TextRun) -> Bool {
-        one.isSetApart == other.isSetApart && same(one.text, other.text)
+        one.isSetApart == other.isSetApart && one.text.hasSameScalars(as: other.text)
     }
 
-    /// The same text, scalar for scalar.
-    static func same(_ one: String, _ other: String) -> Bool {
-        one.unicodeScalars.elementsEqual(other.unicodeScalars)
-    }
-
-    /// `sentence` with every occurrence of each of `pieces` set apart — at each place, the first of
-    /// `pieces` found there — and the rest as words. An empty piece sets nothing apart.
+    /// `sentence` with every occurrence of each of `pieces` set apart - at each place, the first of
+    /// `pieces` found there - and the rest as words. An empty piece sets nothing apart.
     public static func runs(_ sentence: String, settingApart pieces: [String]) -> [TextRun] {
         let wanted = pieces.filter { !$0.isEmpty }.map { Array($0.unicodeScalars) }
         let scalars = Array(sentence.unicodeScalars)
@@ -115,8 +110,8 @@ public struct TextRun: Equatable, Sendable {
         text(cut(Array(name.unicodeScalars), limit))
     }
 
-    /// An escaped name in pieces: each escape whole — a backslash and the character after it, or
-    /// `\u{…}` to its closing brace — and every other scalar alone.
+    /// An escaped name in pieces: each escape whole - a backslash and the character after it, or
+    /// `\u{…}` to its closing brace - and every other scalar alone.
     static func escapes(_ name: [Unicode.Scalar]) -> [[Unicode.Scalar]] {
         var pieces: [[Unicode.Scalar]] = []
         var index = 0

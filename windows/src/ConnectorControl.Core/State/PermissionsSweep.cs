@@ -10,8 +10,8 @@ namespace ConnectorControl.Core.State;
 /// </summary>
 /// <remarks>
 /// The sweep touches only what this app writes. A protected owner-only DACL
-/// is not additive — it strips inheritance, SYSTEM, Administrators and any
-/// sharing the owner set up — and the store directory can be a folder the
+/// is not additive - it strips inheritance, SYSTEM, Administrators and any
+/// sharing the owner set up - and the store directory can be a folder the
 /// user chose (OneDrive, Documents, a repo checkout). So in the store
 /// directory only the files <see cref="IsStoreFile"/> names are
 /// repaired, never anything else in the folder and never anything below it,
@@ -23,7 +23,7 @@ namespace ConnectorControl.Core.State;
 ///
 /// Windows has always swept with a DACL, so there is only the one pass
 /// (unlike the Mac's mode-then-ACL history): CurrentVersion is 1, and there
-/// is no migration off the old boolean AclSweepDone flag — the sweep is
+/// is no migration off the old boolean AclSweepDone flag - the sweep is
 /// idempotent and cheap, so an upgraded install simply re-runs it once more
 /// under the new key.
 /// </remarks>
@@ -159,7 +159,7 @@ public static class PermissionsSweep
         {
             return Directory.EnumerateFileSystemEntries(root, "*", option).ToList();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             return [];   // best effort
         }

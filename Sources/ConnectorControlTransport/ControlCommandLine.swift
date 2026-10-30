@@ -19,7 +19,7 @@ public enum ControlInvocation: Equatable, Sendable {
 ///
 /// `connector-control`'s arguments, read into what to run: one command per tool, as `help` lists them,
 /// or `help`, `--version` and the relay. `--json` anywhere asks for the structure Claude receives
-/// instead of text — except in `add` and `edit`, where `--json` followed by a JSON object (its first
+/// instead of text - except in `add` and `edit`, where `--json` followed by a JSON object (its first
 /// character not a space is "{") is the connector's config. Words after `--` are names. Paths are made
 /// full here, against the directory the command runs in, because the app runs elsewhere.
 @MainActor
@@ -42,6 +42,13 @@ public enum ControlCommandLine {
 
     public static func usageError(_ usage: String) -> String { "Usage: connector-control \(usage)" }
 
+    /// Between the usages of a command group, so each starts under the first.
+    public static let usageContinuation = "\n       connector-control "
+
+    public static func unknownSubcommandError(_ subcommand: String, _ group: String) -> String { "“\(subcommand)” isn’t a \(group) command." }
+
+    public static let helpTakesNoArgumentsError = "help takes no arguments. Run connector-control help to see every command."
+
     public static func unknownOptionError(_ option: String) -> String { "“\(option)” isn’t an option of this command." }
 
     public static func missingValueError(_ option: String) -> String { "“\(option)” needs a value." }
@@ -62,7 +69,7 @@ public enum ControlCommandLine {
         let rest = words.dropFirst()
         // --version wherever --json sits: asking for the structure changes nothing about the version.
         if arguments.filter({ $0 != jsonFlag }) == [versionFlag] { return .version }
-        if helpWords.contains(command) { return rest.first.map { ControlInvocation.usage(unknownOptionError($0)) } ?? .help }
+        if helpWords.contains(command) { return rest.isEmpty ? .help : .usage(helpTakesNoArgumentsError) }
         if command == ClaudeIntegration.relayArgument {
             return rest.first.map { ControlInvocation.usage(unknownOptionError($0)) } ?? .relay
         }
@@ -141,7 +148,10 @@ public enum ControlCommandLine {
                     ["collection": .string($0.positionals[0]), "newName": .string($0.positionals[1])]
                 }
             case "delete": return try call("delete_collection", more, count: 1...1) { ["collection": .string($0.positionals[0])] }
-            default: return .usage(unknownCommandError(([command] + rest.prefix(1)).joined(separator: " ")))
+            default:
+                let usages = ControlTools.catalog.map(\.cliUsage).filter { $0.hasPrefix(command + " ") }
+                let usage = usageError(usages.joined(separator: usageContinuation))
+                return .usage(rest.first.map { unknownSubcommandError($0, command) + "\n" + usage } ?? usage)
             }
         case "import":
             return try call("import_document", rest, options: [into, new, onClash], count: 1...1) {
@@ -288,7 +298,7 @@ public struct ControlOutput: Equatable, Sendable {
     }
 
     /// The app's answer to the command's call. A refusal, or an error the session answered instead,
-    /// exits 1 with its sentence on stderr — or as `{"error": …}` on stdout under `json`.
+    /// exits 1 with its sentence on stderr - or as `{"error": …}` on stdout under `json`.
     public static func answer(_ response: JSONValue, json: Bool) -> ControlOutput {
         guard case .object(let fields) = response else { return refused(McpSession.internalErrorMessage, json: json) }
         if case .object(let result)? = fields["result"] {

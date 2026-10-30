@@ -124,6 +124,62 @@ public class AppStateTests
         Assert.False(h.StoreOnDisk().Mcps.ContainsKey("scoutbook"));
     }
 
+    /// <summary>A change only in how a character is composed is a change, and Apply writes it, as it does on
+    /// the Mac: é as one character and as e and a combining accent are different bytes in Claude's config.</summary>
+    [Fact]
+    public void AChangeOnlyInHowACharacterIsComposedIsApplied()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var composed = AppStateHarness.Remote("https://caf\u00E9.example/mcp");
+        var decomposed = AppStateHarness.Remote("https://cafe\u0301.example/mcp");
+        Assert.Null(state.Upsert("scoutbook", new McpEntry(composed), "scoutbook"));
+        state.ApplyInteractively();
+        Assert.Equal(composed, h.ClaudeServers()["scoutbook"]);
+        Assert.Null(state.Upsert("scoutbook", new McpEntry(decomposed), "scoutbook"));
+        Assert.True(state.IsDirty);
+        state.ApplyInteractively();
+        Assert.Equal(decomposed, h.ClaudeServers()["scoutbook"]);
+        Assert.False(state.IsDirty);
+    }
+
+    /// <summary>Two spellings of a name, é composed and decomposed, are one connector's name, as Claude's
+    /// config counts them (it refuses a file naming a connector in both): a second connector may not
+    /// take the other spelling, and saving under it keeps the name as first written.</summary>
+    [Fact]
+    public void ANameComposedAnotherWayIsTheSameName()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        const string composed = "caf\u00E9", decomposed = "cafe\u0301";
+        var entry = new McpEntry(AppStateHarness.Remote("https://new.example/mcp"));
+        Assert.Null(state.Upsert(composed, entry, null));
+        Assert.Equal(AppState.DuplicateNameError(decomposed), state.Upsert(decomposed, entry, null));
+        Assert.Equal(AppState.DuplicateNameError(decomposed), state.Upsert(decomposed, entry, "scoutbook"));
+        Assert.Null(state.Upsert(decomposed, entry, composed));
+        state.ApplyInteractively();
+        Assert.Equal([4], state.SortedNames.Where(n => n.StartsWith("caf", StringComparison.Ordinal)).Select(n => n.Length));
+        Assert.Equal([4], h.ClaudeServers().Keys.Where(n => n.StartsWith("caf", StringComparison.Ordinal)).Select(n => n.Length));
+    }
+
+    /// <summary>Claude's file naming a connector in another spelling of its name holds that connector, not a
+    /// new one, and is rewritten in the store's spelling, as on the Mac.</summary>
+    [Fact]
+    public void AFileThatRespellsANameIsRegenerated()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var config = AppStateHarness.Remote("https://new.example/mcp");
+        Assert.Null(state.Upsert("caf\u00E9", new McpEntry(config), null));
+        state.ApplyInteractively();
+        h.WriteClaudeServers([.. state.SortedNames.Where(n => !n.StartsWith("caf", StringComparison.Ordinal))
+            .Select(n => (n, state.Store.Mcps[n].Config)), ("cafe\u0301", config)]);
+        state.Reload();
+        Assert.Equal([7, 4, 9, 11], state.SortedNames.Select(n => n.Length));
+        Assert.Equal([4], h.ClaudeServers().Keys.Where(n => n.StartsWith("caf", StringComparison.Ordinal)).Select(n => n.Length));
+        Assert.False(state.IsDirty);
+    }
+
     [Fact]
     public void DeletePersistsButDoesNotApply()
     {
@@ -346,7 +402,7 @@ public class AppStateTests
     }
 
     /// <summary>A stored empty string (e.g. a setting cleared by hand) counts as absent, same as
-    /// null — the default location, not a literal empty path.</summary>
+    /// null - the default location, not a literal empty path.</summary>
     [Fact]
     public void AnEmptyStoredStoreDirIsTheDefault()
     {

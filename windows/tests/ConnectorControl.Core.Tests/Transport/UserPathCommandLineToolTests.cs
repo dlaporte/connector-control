@@ -113,7 +113,7 @@ public class UserPathCommandLineToolTests
         Assert.False(Tool(environment).IsInstalled);
     }
 
-    /// <summary>A user PATH that is not text — the registry's reader refuses it — is not installed, and neither installing
+    /// <summary>A user PATH that is not text - the registry's reader refuses it - is not installed, and neither installing
     /// nor removing writes over it: each says why.</summary>
     [Fact]
     public void APathThatIsNotTextIsLeftAlone()

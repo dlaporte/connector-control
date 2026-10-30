@@ -3,7 +3,7 @@ import Foundation
 import ConnectorControlCore
 
 /// The Import sheet: one collection document, and the two exclusive things that can be done with
-/// it — copies into a collection the user owns, or a collection of its own that stays in sync
+/// it - copies into a collection the user owns, or a collection of its own that stays in sync
 /// with the file. Every row says what would happen to that connector before anything happens,
 /// because an import lands commands Claude will run.
 ///
@@ -41,7 +41,7 @@ public final class ImportModel: ObservableObject {
     public static func includeLabel(_ connector: String) -> String { "Include \(connector)" }
 
     /// A screen reader's name for a collision's choice picker. Without one it reads out the
-    /// badge beside it, which says the row is skipped — the opposite of what the picker is for.
+    /// badge beside it, which says the row is skipped - the opposite of what the picker is for.
     public static func collisionPickerLabel(_ connector: String) -> String { "What to do with \(connector)" }
 
     public static func importButton(_ count: Int) -> String { "Import \(count)" }
@@ -75,12 +75,13 @@ public final class ImportModel: ObservableObject {
     /// new one named when it is chosen and made only when Import is pressed.
     public enum Target: Hashable, Sendable { case collection(String), newCollection }
 
-    /// One target's picker label: the collection's name, or New Collection, the words Copy to's
-    /// menu ends with for the same thing.
+    /// One target's picker label: the collection's name, or New Collection, the title of the
+    /// prompt that names it. Without Copy to's ellipsis: choosing it here asks for nothing until
+    /// Import is pressed.
     public static func targetTitle(_ target: Target) -> String {
         switch target {
         case .collection(let name): return name
-        case .newCollection: return CollectionsModel.newButton
+        case .newCollection: return AppState.newCollectionTitle
         }
     }
 
@@ -100,7 +101,7 @@ public final class ImportModel: ObservableObject {
         public var choice: ImportChoice
         public let excludedReason: String?
         public let needs: [String]
-        /// The caution glyph's tooltip, or nil for no glyph — the same sentence a connector of
+        /// The caution glyph's tooltip, or nil for no glyph - the same sentence a connector of
         /// the collection this row lands in already carries for the same condition, rather than
         /// a second wording of it. Filled by the model, as `CollectionsModel.Row.caution` is,
         /// because the sentence belongs to AppState and a row is not on its actor.
@@ -202,11 +203,11 @@ public final class ImportModel: ObservableObject {
         author = document.author
         rendered = document.render()
         // The document's name, suffixed until it is one no collection here already answers to.
-        syncName = ImportModel.freeName(document.name, taken: Set(state.collectionNames))
+        syncName = FreeName.first(document.name, isTaken: Set(state.collectionNames).contains)
         rebuildRows()
     }
 
-    /// "“Data team” by Acme Data Platform · 4 connectors" — what the file says about itself. The
+    /// "“Data team” by Acme Data Platform · 4 connectors" - what the file says about itself. The
     /// Windows mirror calls it `SourceSentence`, where the static factory already owns the name.
     public var sourceLine: String {
         ImportModel.sourceLine(documentName, author ?? ImportModel.unknownAuthor, rows.count)
@@ -306,7 +307,7 @@ public final class ImportModel: ObservableObject {
         }
     }
 
-    /// One row per connector the document carries, including the ones this platform excludes —
+    /// One row per connector the document carries, including the ones this platform excludes -
     /// a connector that cannot come across is worth seeing and saying why. Ticked by default
     /// unless something already answers to that name in the target, which is the one case where
     /// importing takes a decision from the user.
@@ -330,13 +331,5 @@ public final class ImportModel: ObservableObject {
                            ? nil : AppState.needsValueCaution(needs.joined(separator: ", ")),
                        badge: ImportModel.badge(excludedReason: reason, present: present))
         }
-    }
-
-    /// `name`, or "name 2", "name 3", … — the first one nothing in `taken` answers to.
-    private static func freeName(_ name: String, taken: Set<String>) -> String {
-        guard taken.contains(name) else { return name }
-        var suffix = 2
-        while taken.contains("\(name) \(suffix)") { suffix += 1 }
-        return "\(name) \(suffix)"
     }
 }

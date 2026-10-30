@@ -30,7 +30,7 @@ public sealed class ConfigService
     /// UI keeps showing the user's MCP list instead of going blank.
     /// With <paramref name="storeAuthoritative"/>, the file's own current
     /// servers act as the baseline, so every reconciliation rule resolves
-    /// store-wins — used when adopting a pre-existing (e.g. synced) store that
+    /// store-wins - used when adopting a pre-existing (e.g. synced) store that
     /// must not be overwritten by this machine's state.
     ///
     /// <paramref name="lastAppliedCollection"/> is the collection Claude's file was last written from
@@ -111,7 +111,7 @@ public sealed class ConfigService
             // additions correctly during an adoption: an entry matching it is
             // this machine's own applied state (never imported into the
             // adopted store), one differing from it is a genuine external
-            // addition racing the adoption — ingest it rather than letting the
+            // addition racing the adoption - ingest it rather than letting the
             // regeneration erase it. Without a baseline (adoption of a
             // repointed store before any apply), the file itself is the
             // baseline: nothing is imported, the adopted store wins totally.
@@ -136,7 +136,7 @@ public sealed class ConfigService
 
     /// <summary>
     /// The collection a load takes Claude's new connectors into: the active one, unless it is
-    /// subscribed. A subscribed collection holds what its author published and nothing more — a
+    /// subscribed. A subscribed collection holds what its author published and nothing more - a
     /// connector taken into it could be neither edited nor deleted, and the next Apply would delete
     /// it from Claude. It goes into a local collection instead: the one Claude's file was last
     /// applied from when that is local, else the first local one by name, else a new, empty
@@ -163,33 +163,26 @@ public sealed class ConfigService
         {
             return first;
         }
-        var name = MasterStore.DefaultCollectionName;
-        var suffix = 2;
-        while (store.Collections.ContainsKey(name))
-        {
-            name = $"{MasterStore.DefaultCollectionName} {suffix}";
-            suffix++;
-        }
-        return name;
+        return FreeName.First(MasterStore.DefaultCollectionName, store.Collections.ContainsKey);
     }
 
     /// <summary>
     /// What a load may take out of Claude's file and into the active collection.
     /// <para>
-    /// All of it while the record of the last apply is the active collection, is missing — a first
-    /// launch — or the store was corrupt and is being rebuilt from the file. Otherwise the file holds
+    /// All of it while the record of the last apply is the active collection, is missing - a first
+    /// launch - or the store was corrupt and is being rebuilt from the file. Otherwise the file holds
     /// another collection's connectors, and the names that collection renders are left alone:
     /// pouring them into the active collection is what the record is for. Everything else is
-    /// genuinely new — an installer's connector, a hand edit — and belongs to the collection the app
+    /// genuinely new - an installer's connector, a hand edit - and belongs to the collection the app
     /// is about to apply, whichever that is.
     /// </para>
     /// <para>
-    /// A record naming a collection the store no longer has — deleted here, or on another machine,
-    /// which is how a collection disappears from a store that syncs — has no render to compare
+    /// A record naming a collection the store no longer has - deleted here, or on another machine,
+    /// which is how a collection disappears from a store that syncs - has no render to compare
     /// against. The names the last apply wrote are that render, so those are left alone and
     /// everything else comes in: a connector an installer or a hand edit added survives, and a
-    /// deleted collection's own connectors are not poured into the active one. Without those names —
-    /// a cache written before they were kept — nothing here tells the two apart, and nothing is taken
+    /// deleted collection's own connectors are not poured into the active one. Without those names -
+    /// a cache written before they were kept - nothing here tells the two apart, and nothing is taken
     /// in rather than all of it.
     /// </para>
     /// </summary>
@@ -206,13 +199,13 @@ public sealed class ConfigService
             // Nothing here says what that collection rendered, so nothing in the file can be told
             // from it: taking it all in would pour a deleted collection's connectors, marked paths
             // and all, into the active one. Taking none is the safe half of that trade, and costs
-            // only a hand-added connector, in the one state that reaches it — a cache from a build
+            // only a hand-added connector, in the one state that reaches it - a cache from a build
             // that recorded the collection without the names.
             return lastAppliedNames is null
                 ? new Dictionary<string, JsonValue>(StringComparer.Ordinal)
-                : servers.Where(p => !lastAppliedNames.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+                : servers.Where(p => !lastAppliedNames.Contains(p.Key, Collection.NameComparer)).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
         }
-        var rendered = collection.Mcps.Where(p => p.Value.Enabled).Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
+        var rendered = collection.Mcps.Where(p => p.Value.Enabled).Select(p => p.Key).ToHashSet(Collection.NameComparer);
         return servers.Where(p => !rendered.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
     }
 
@@ -263,14 +256,14 @@ public sealed class ConfigService
         {
             BackupCollections.Record(collection, backup, Paths.BackupsDir);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e) when (FileSystemErrors.IsTransient(e))
         {
             // Best effort, as the summary says: the backup itself is already written.
         }
     }
 
-    /// <summary>The sidecar beside the master list; a missing file loads as empty, and one that exists but cannot be read loads as null (see <see cref="CollectionsFile.LoadIfReadable"/>), so the caller can tell a file with no entries from one it must not save over.</summary>
-    public CollectionsFile? LoadCollections() => CollectionsFile.LoadIfReadable(Paths.CollectionsFilePath);
+    /// <summary>The sidecar beside the master list; a missing file loads as empty, and one that exists but cannot be read loads as null (see <see cref="CollectionsFile.LoadIfReadable"/>), so the caller can tell a file with no entries from one it must not save over. The hash is of the bytes it read (null when there was no file), so the caller knows what is on disk without reading it again.</summary>
+    public (CollectionsFile? File, string? Hash) LoadCollections() => CollectionsFile.LoadReadingHash(Paths.CollectionsFilePath);
 
     /// <summary>Backup the existing sidecar (skipped when it doesn't exist yet), then atomically save the new one.</summary>
     public AtomicWriteResult SaveCollections(CollectionsFile file)
@@ -288,7 +281,7 @@ public sealed class ConfigService
     /// of two repeated keys either parser would keep.
     /// </summary>
     /// <param name="publishFolder">
-    /// The folder <c>${COLLECTION_DIR}</c> stands for in the active collection on this machine — the
+    /// The folder <c>${COLLECTION_DIR}</c> stands for in the active collection on this machine - the
     /// folder it publishes into, or a synced collection's document folder; a connector whose store
     /// copy renders exactly as the snapshot keeps the store copy (<see cref="Reconciler.AdoptSnapshot"/>).
     /// </param>
@@ -330,14 +323,14 @@ public sealed class ConfigService
         }
         RecordBackup(Backups.BackUp(Paths.ClaudeConfigPath, "claude_desktop_config"), backedUpFrom);
         AtomicFile.Write(ClaudeConfigIO.Serialized(root), Paths.ClaudeConfigPath);
-        // The bytes just written are what was already parsed above — reading the servers back off
+        // The bytes just written are what was already parsed above - reading the servers back off
         // the disk file would just reparse the same bytes a second time.
         IReadOnlyDictionary<string, JsonValue> servers = rawServers is null
             ? new Dictionary<string, JsonValue>(StringComparer.Ordinal)
             : rawServers.ObjectProperties;
         var outcome = Reconciler.AdoptSnapshot(store, servers, publishFolder, earlierFolders);
         // A backup restored into a collection other than the active one makes that collection
-        // active, so Claude's file and the store agree on where its connectors live — even when the
+        // active, so Claude's file and the store agree on where its connectors live - even when the
         // adoption itself changed nothing.
         if (outcome.StoreChanged || activating)
         {

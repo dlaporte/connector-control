@@ -201,7 +201,7 @@ public class AppStateCommandTests
         Assert.Equal(errorBefore, state.LastError);
         Assert.Equal(needsRestartBefore, state.NeedsClaudeRestart);
 
-        // The completion block itself — not only the two delayed follow-ups — must be a no-op
+        // The completion block itself - not only the two delayed follow-ups - must be a no-op
         // once disposed: a restart that finishes after Dispose (the app quitting mid-restart)
         // must not resurrect state or schedule fresh delays.
         state.LastError = "should not survive";

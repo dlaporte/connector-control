@@ -126,7 +126,7 @@ public class ControlTextTests
             ControlText.Escaped("tag\U000E0041\U000E007F \U0001BCA0\U0001D173\U000E0000\U000E0100\U000E0FFF"));
         // A variation selector is invisible, so it shows too.
         Assert.Equal("""❤\u{FE0F}""", ControlText.Escaped("❤\uFE0F"));
-        Assert.Equal("é—👍 ok", ControlText.Escaped("é—👍 ok"));
+        Assert.Equal("é-👍 ok", ControlText.Escaped("é-👍 ok"));
         Assert.Equal("""'a\u{3164}b'""", ControlText.Word("a\u3164b"));
         // Platform idiom: only a .NET string can hold a lone surrogate; it shows as its code.
         Assert.Equal("""a\u{D800}b""", ControlText.Escaped("a\uD800b"));
@@ -217,7 +217,7 @@ public class ControlTextTests
     }
 
     /// <summary>Text with one or two marks on a character reads as it always has: accented letters composed either
-    /// way, pointed Hebrew, and the scripts that put two marks on one letter as a matter of course — Thai
+    /// way, pointed Hebrew, and the scripts that put two marks on one letter as a matter of course - Thai
     /// vowel and tone, Vietnamese decomposed, Hebrew dagesh and vowel, Arabic shadda and vowel.</summary>
     [Fact]
     public void OneOrTwoMarksOnACharacterReadAsTheyAre()

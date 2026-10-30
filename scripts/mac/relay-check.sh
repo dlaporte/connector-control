@@ -8,6 +8,8 @@
 #
 #   relay-check.sh <app bundle> <connector-control-test-host>
 set -euo pipefail
+# shellcheck source=scripts/lib/common.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh" # stop_process
 
 APP=${1:?usage: relay-check.sh <app bundle> <connector-control-test-host>}
 HOST_BIN=${2:?usage: relay-check.sh <app bundle> <connector-control-test-host>}
@@ -15,15 +17,6 @@ SANDBOX=$(mktemp -d /tmp/cc-relay-XXXXXX)
 COPY="$SANDBOX/Connector Control.app"
 HOST_PID=""
 RELAY_PID=""
-# SIGTERM first, as a quit; SIGKILL if the process is still there after about 3 s.
-stop_process() { # <pid>
-    kill -TERM "$1" 2>/dev/null || return 0
-    for _ in $(seq 1 30); do
-        kill -0 "$1" 2>/dev/null || return 0
-        sleep 0.1
-    done
-    kill -KILL "$1" 2>/dev/null || true
-}
 cleanup() {
     local code=$?
     if [ "$code" != 0 ]; then

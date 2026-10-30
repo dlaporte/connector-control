@@ -10,7 +10,7 @@ namespace ConnectorControl.Core.Tests.State;
 /// harness builds.
 ///
 /// Where a test needs a synced or published collection without subscribing or publishing, it is
-/// set up the way those flows leave it — the two files on disk — and read back through a real
+/// set up the way those flows leave it - the two files on disk - and read back through a real
 /// reload.
 /// </summary>
 public class AppStateCollectionsTests
@@ -210,6 +210,25 @@ public class AppStateCollectionsTests
         Assert.Equal(AppState.NameEmptyError, state.AddEmptyCollection("   "));
         Assert.Equal(["Default", "Empty"], state.CollectionNames);
         Assert.Equal("Default", state.ActiveCollection);
+    }
+
+    /// <summary>A collection name in another spelling of one already taken (é composed or decomposed) is that
+    /// name, as on the Mac: adding, copying, renaming into and subscribing under it are refused.</summary>
+    [Fact]
+    public void ACollectionNameComposedAnotherWayIsTaken()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        const string composed = "Caf\u00E9", decomposed = "Cafe\u0301";
+        var taken = $"A collection named “{decomposed}” already exists.";
+        Assert.Null(state.AddEmptyCollection(composed));
+        Assert.Equal(taken, state.AddEmptyCollection(decomposed));
+        Assert.Equal(taken, state.CreateActiveCopy(decomposed));
+        Assert.Null(state.CreateActiveCopy("Work"));
+        Assert.Equal(taken, state.RenameCollection("Work", decomposed));
+        var path = h.WriteDocument(CollectionDocumentSamples.DataTeam, "data-team.json");
+        Assert.Equal(taken, state.Subscribe(path, decomposed));
+        Assert.Equal([4, 7, 4], state.CollectionNames.Select(n => n.Length));
     }
 
     [Fact]
@@ -645,7 +664,7 @@ public class AppStateCollectionsTests
     // MARK: synced collections
 
     /// <summary>Gives a just-armed source watcher a moment before a test relies on it seeing the
-    /// very next write — the same arming race AppStateWatcherTests waits out. A FileSystemWatcher
+    /// very next write - the same arming race AppStateWatcherTests waits out. A FileSystemWatcher
     /// arms on a background thread on the Mac and leaves no signal to wait on, so only the one test
     /// that proves the watcher delivers a change uses it; every other test reads the source
     /// through RecomputePending, the watcher's own non-manual read.</summary>
@@ -663,7 +682,7 @@ public class AppStateCollectionsTests
                 [name] = new(new CollectionDocument.Launcher.Local(command, args, platform)),
             });
 
-    /// <summary>The sample with github gone and dbt's arguments changed — an author's next commit.</summary>
+    /// <summary>The sample with github gone and dbt's arguments changed - an author's next commit.</summary>
     private static CollectionDocument ChangedSample()
     {
         var sample = CollectionDocumentSamples.DataTeam;
@@ -1001,6 +1020,82 @@ public class AppStateCollectionsTests
         Assert.Equal(renders, state.SourceRenders);
     }
 
+    /// <summary>A save re-derives what is pending in every subscribed collection from the render this
+    /// run holds, and reads no document the change did not touch: a toggle in one collection leaves
+    /// another's pending update exactly as it was, and an edit there still re-derives it.</summary>
+    [Fact]
+    public void ASaveReDerivesPendingWithoutReadingAnUntouchedDocument()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam, "a.json", "A");
+        var b = h.Subscribe(state, CollectionDocumentSamples.DataTeam, "b.json", "B");
+        var original = state.Store.Collections["B"].Mcps["dbt"];
+        var edited = original with { Config = original.Config.Replacing(JsonPointer.Parse("/args/1")!, JsonValue.String("@dbt/mcp@local"))! };
+        Assert.Null(state.Upsert("dbt", edited, "dbt", "B"));
+        Assert.Equal("changes dbt", state.PendingUpdates["B"].Summary());
+        Assert.False(state.PendingUpdates.ContainsKey("A"));
+
+        state.SetEnabled("github", true, "A");
+        Assert.Equal("changes dbt", state.PendingUpdates["B"].Summary());   // B's update stands
+        Assert.False(state.PendingUpdates.ContainsKey("A"));
+
+        // The edit undone, B matches its document again, and the update goes with it; made again,
+        // it is back.
+        Assert.Null(state.Upsert("dbt", original, "dbt", "B"));
+        Assert.False(state.PendingUpdates.ContainsKey("B"));
+        Assert.Null(state.Upsert("dbt", edited, "dbt", "B"));
+        Assert.Equal("changes dbt", state.PendingUpdates["B"].Summary());
+
+        // B's document goes: a read of it now would count a failure and schedule a retry.
+        File.Delete(b);
+        state.SetEnabled("github", false, "A");
+        Assert.Equal("changes dbt", state.PendingUpdates["B"].Summary());
+        Assert.False(state.SourceErrors.ContainsKey("B"));
+        Assert.Empty(h.Delays.Pending);   // B's document was not read
+
+        // Refresh still reads it, and says what it found.
+        state.RefreshSource("B");
+        Assert.True(state.SourceErrors.ContainsKey("B"));
+    }
+
+    /// <summary>A Locate to a byte-identical copy keeps the render it holds and moves it to the new path,
+    /// so a later save elsewhere does not read the document again.</summary>
+    [Fact]
+    public void ALocateToAByteIdenticalCopyMovesTheKeptRender()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam, "a.json", "A");
+        var b = h.Subscribe(state, CollectionDocumentSamples.DataTeam, "b.json", "B");
+        var copy = h.Dir.File("copy.json");
+        File.Copy(b, copy);
+        var renders = state.SourceRenders;
+        Assert.Null(state.LocateSource("B", copy));
+        Assert.Equal(renders, state.SourceRenders);   // the same bytes are not decoded again
+
+        // The copy goes: a read of it now would count a failure and schedule a retry.
+        File.Delete(copy);
+        state.SetEnabled("github", true, "A");
+        Assert.False(state.SourceErrors.ContainsKey("B"));
+        Assert.Empty(h.Delays.Pending);   // B's document was not read
+    }
+
+    /// <summary>A document from a newer app is said at once and never retried: no wait makes it readable.</summary>
+    [Fact]
+    public void ASourceFromANewerAppIsReportedAtOnceAndNotRetried()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Subscribe(state, CollectionDocumentSamples.DataTeam, "t.json", "T");
+        var newer = CollectionDocumentSamples.DataTeam.Encode()
+            .Replacing(JsonPointer.Parse("/connectorControlCollection")!, JsonValue.Int(2))!;
+        File.WriteAllBytes(path, newer.Serialize());
+        state.RecomputePending();   // the source watcher's own read, without waiting on the watcher
+        Assert.Equal(AppState.NewerDocumentError, state.SourceErrors["T"]);
+        Assert.Empty(h.Delays.Pending);   // no retry is scheduled
+    }
+
     /// <summary>
     /// A retry waiting under the old name dies harmlessly when it fires, and the next failure under
     /// the new one starts a chain of its own: renaming a collection during a backoff must not turn
@@ -1195,7 +1290,7 @@ public class AppStateCollectionsTests
         return path;
     }
 
-    /// <summary>A local connector with two environment values and an absolute path argument — what
+    /// <summary>A local connector with two environment values and an absolute path argument - what
     /// the Publish sheet's rows are built from, and what the intent strips or shares.</summary>
     private static JsonValue LedgerConfig() => JsonValue.Object(new Dictionary<string, JsonValue>(StringComparer.Ordinal)
     {
@@ -1252,7 +1347,7 @@ public class AppStateCollectionsTests
         var folder = PublishFolder(h);
 
         // A synced collection has an author elsewhere, and nothing in the window offers Publish
-        // for one — its ⋯ menu has Refresh and Make Local Copy instead. The refusal is the same
+        // for one - its ⋯ menu has Refresh and Make Local Copy instead. The refusal is the same
         // silence LocateSource gives a collection that is not synced.
         Assert.Null(state.StartPublishing("Data team", folder, PublishIntent.None));
         Assert.False(state.IsPublished("Data team"));
@@ -1283,6 +1378,21 @@ public class AppStateCollectionsTests
         Assert.False(state.IsPublished(state.ActiveCollection));   // a refused publish records nothing
     }
 
+    /// <summary>A folder under the document's name takes the name as a file would: it vouches for no
+    /// origin, and the document could not be written there.</summary>
+    [Fact]
+    public void AFolderUnderTheDocumentsNameTakesTheSlug()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        var fileName = Slug.Make(state.ActiveCollection) + ".json";
+        Directory.CreateDirectory(Path.Combine(folder, fileName));
+        Assert.Equal(AppState.PublishSlugTakenError(fileName),
+            state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        Assert.False(state.IsPublished(state.ActiveCollection));   // a refused publish records nothing
+    }
+
     [Fact]
     public void PublishingAgainIntoTheFolderItAlreadyOwnsIsAllowed()
     {
@@ -1293,6 +1403,31 @@ public class AppStateCollectionsTests
         // The document sitting there carries this collection's own origin, which is the whole
         // point of the guard: only somebody else's file is in the way.
         Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+    }
+
+    /// <summary>The publish folder is shared, so what sits under the document's name is read within
+    /// the same bound as every other collection document: a file past it, even one carrying this
+    /// collection's own origin, vouches for nothing, as an unreadable one does not.</summary>
+    [Fact]
+    public void ADocumentPastTheReadBoundInThePublishFolderIsTreatedAsUnreadable()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        var fileName = Slug.Make(state.ActiveCollection) + ".json";
+        var target = Path.Combine(folder, fileName);
+        var written = File.ReadAllBytes(target);
+        var document = CollectionDocument.Decode(written);
+        // The document within the bound is read.
+        Assert.NotEmpty(AppState.AlreadyPublished(document, target));
+
+        File.WriteAllBytes(target, [.. written, .. Enumerable.Repeat((byte)' ', AppState.MaxDocumentBytes)]);
+        // Still a valid document, only too large.
+        CollectionDocument.Decode(File.ReadAllBytes(target));
+        Assert.Empty(AppState.AlreadyPublished(document, target));
+        Assert.Equal(AppState.PublishSlugTakenError(fileName),
+            state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
     }
 
     [Fact]
@@ -1342,7 +1477,7 @@ public class AppStateCollectionsTests
     /// <summary>
     /// A failed write's banner goes when the other machine stops publishing the collection: it names a
     /// folder and a write this machine no longer makes. Choose Folder has no binding left to move, so it
-    /// starts nothing — publishing here again is the dialog's, which shows what it reviews — and a
+    /// starts nothing - publishing here again is the dialog's, which shows what it reviews - and a
     /// connector added there meanwhile, credential and all, is never sent.
     /// </summary>
     [Fact]
@@ -1454,6 +1589,31 @@ public class AppStateCollectionsTests
         Assert.True(File.Exists(file), "only the folder it was publishing to is touched");
     }
 
+    /// <summary>Stop Publishing's delete takes the document, a plain file, and never a folder that has
+    /// come to sit under its name: that folder, and everything in it, survives, as on the Mac.</summary>
+    [Fact]
+    public void StopPublishingDeletesTheDocumentButNeverAFolderUnderItsName()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var fileName = Slug.Make(state.ActiveCollection) + ".json";
+        var folder = PublishFolder(h);
+        Assert.Null(state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        state.StopPublishing(state.ActiveCollection, deleteFile: true);
+        Assert.False(File.Exists(Path.Combine(folder, fileName)));   // the document goes
+
+        var second = PublishFolder(h, "pub2");
+        Assert.Null(state.StartPublishing(state.ActiveCollection, second, PublishIntent.None));
+        var target = Path.Combine(second, fileName);
+        File.Delete(target);
+        Directory.CreateDirectory(target);
+        var inside = Path.Combine(target, "inside.txt");
+        File.WriteAllText(inside, "keep");
+        state.StopPublishing(state.ActiveCollection, deleteFile: true);
+        Assert.Equal("keep", File.ReadAllText(inside));   // a folder under the name is left alone
+        Assert.Null(state.LastError);
+    }
+
     [Fact]
     public void AChangeThatArrivesFromAnotherMachineIsPublishedOnTheNextLoad()
     {
@@ -1522,8 +1682,8 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
-    /// A change to the connector that did not come through its editor — the JSON view of another
-    /// window, the author's other machine, an older app — so nothing re-keyed the marks.
+    /// A change to the connector that did not come through its editor - the JSON view of another
+    /// window, the author's other machine, an older app - so nothing re-keyed the marks.
     /// </summary>
     private static void RewriteLedger(AppState state, params string[] args) =>
         Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(args)), "ledger"));
@@ -1606,6 +1766,33 @@ public class AppStateCollectionsTests
         state.Delete(["books"]);
         // A connector added later under the same name was never ticked.
         Assert.False(state.CollectionsFile.Collections[state.ActiveCollection].Publish!.Intent.PathMarks.ContainsKey("books"));
+        Assert.Null(state.PublishError);
+    }
+
+    /// <summary>A connector saved or deleted under another spelling of its name (é composed or decomposed)
+    /// keeps its publish record under the name as stored: the editor's new marks land on it, and a
+    /// delete takes them with it, as on the Mac.</summary>
+    [Fact]
+    public void ANameTypedAnotherWayKeepsTheMarksUnderTheStoredName()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        PublishMarkedLedger(h, state, MarkedPath);
+        const string composed = "caf\u00E9", decomposed = "cafe\u0301";
+        var entry = state.Store.Collections[state.ActiveCollection].Mcps["ledger"];
+        Assert.Null(state.Upsert(composed, entry, "ledger"));
+        var pointer = state.CollectionsFile.Collections[state.ActiveCollection].Publish!.Intent.PathMarks[composed].Keys.First();
+        var edited = new Dictionary<JsonPointer, PublishIntent.PathMark> { [pointer] = new("server_path", "edited", MarkedPath) };
+        Assert.Null(state.Upsert(decomposed, entry, decomposed, pathMarks: edited));
+        var intent = state.CollectionsFile.Collections[state.ActiveCollection].Publish!.Intent;
+        Assert.Equal([4], intent.PathMarks.Keys.Where(n => n.StartsWith("caf", StringComparison.Ordinal)).Select(n => n.Length));
+        Assert.Equal("edited", Assert.Single(intent.PathMarks[composed]).Value.Hint);
+        Assert.Null(state.PublishError);
+
+        state.Delete([decomposed]);
+        Assert.False(state.Store.Collections[state.ActiveCollection].Mcps.ContainsKey(composed));
+        Assert.DoesNotContain(state.CollectionsFile.Collections[state.ActiveCollection].Publish!.Intent.PathMarks.Keys,
+            n => n.StartsWith("caf", StringComparison.Ordinal));
         Assert.Null(state.PublishError);
     }
 
@@ -1822,8 +2009,8 @@ public class AppStateCollectionsTests
 
     /// <summary>
     /// A Release is the author's word for the collection they gave it in. One given in a collection since
-    /// deleted does not pass to a later collection bearing its name — made here, renamed onto it, or one
-    /// that has published and stopped since — though the name's marks do. The new collection's dialog
+    /// deleted does not pass to a later collection bearing its name - made here, renamed onto it, or one
+    /// that has published and stopped since - though the name's marks do. The new collection's dialog
     /// ticks the path and lists it, and Release there lets it travel.
     /// </summary>
     [Theory]
@@ -2040,8 +2227,8 @@ public class AppStateCollectionsTests
 
     /// <summary>
     /// What a refusal and the Publish dialog call a field. Wherever the editor opens the connector in
-    /// the local form they use its own words — the command, an argument counted from one, the value
-    /// of a variable — and a hint belongs to the dialog whatever the form. Where the editor has no
+    /// the local form they use its own words - the command, an argument counted from one, the value
+    /// of a variable - and a hint belongs to the dialog whatever the form. Where the editor has no
     /// row of its own, the document's name is given as the document's, rather than one the author
     /// would go looking for and not find.
     /// </summary>
@@ -2528,8 +2715,8 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
-    /// An own folder where the rewrite cannot reach — a remote connector's client id, which the
-    /// command line carries inside a JSON blob — is a folder entry all the same: it says the dialog
+    /// An own folder where the rewrite cannot reach - a remote connector's client id, which the
+    /// command line carries inside a JSON blob - is a folder entry all the same: it says the dialog
     /// cannot write there, both answers say so, and the connector's editor is the way out.
     /// </summary>
     [Fact]
@@ -2759,7 +2946,7 @@ public class AppStateCollectionsTests
 
     /// <summary>
     /// A record belongs to the collection that published it, and that collection leaving the store is
-    /// what ends the claim — wherever it leaves from. A collection of the same name arriving from the
+    /// what ends the claim - wherever it leaves from. A collection of the same name arriving from the
     /// author's other machine is as much a different collection as one made here.
     /// </summary>
     [Fact]
@@ -2967,7 +3154,7 @@ public class AppStateCollectionsTests
     /// <summary>
     /// The merged record is the renamed collection's own: it published under the origin the record
     /// carries, so publishing again takes its folders back as its own, while the departed
-    /// collection's folder stays what it was to it — a path kept back, releasable, never the
+    /// collection's folder stays what it was to it - a path kept back, releasable, never the
     /// token's.
     /// </summary>
     [Fact]
@@ -3039,8 +3226,8 @@ public class AppStateCollectionsTests
     /// Team, published from the author's other machine, marks <c>MarkedPath</c> in the sidecar. This
     /// machine publishes its active collection, whose <c>ledger</c> the author reviews in the Publish
     /// dialog while it holds a path of its own, and then edits to hold the marked path. Only the
-    /// sidecar's mark keeps that path back — the review holds nothing, <c>ledger</c> having been
-    /// reviewed — so the refusal is the kept-path one. Returns the active collection's document.
+    /// sidecar's mark keeps that path back - the review holds nothing, <c>ledger</c> having been
+    /// reviewed - so the refusal is the kept-path one. Returns the active collection's document.
     /// </summary>
     private static string CopyAnotherMachinesMarkedPath(AppStateHarness h, AppState state)
     {
@@ -4075,8 +4262,8 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
-    /// However a connector arrives — copied from another collection, imported from a document, or
-    /// added on the author's other machine — one nobody reviewed here waits; and one deleted and added
+    /// However a connector arrives - copied from another collection, imported from a document, or
+    /// added on the author's other machine - one nobody reviewed here waits; and one deleted and added
     /// again under its old name is new again.
     /// </summary>
     [Fact]
@@ -4115,8 +4302,8 @@ public class AppStateCollectionsTests
 
     /// <summary>
     /// A reviewed connector deleted, and a different one added under its name, is new however long the
-    /// publish is held in between — by a connector nobody reviewed, by a folder that will not take the
-    /// write, or across two syncs from the other machine — even with a credential in the argument the
+    /// publish is held in between - by a connector nobody reviewed, by a folder that will not take the
+    /// write, or across two syncs from the other machine - even with a credential in the argument the
     /// reviewed one held its own. The review goes on the pass that finds the connector gone, written or
     /// not.
     /// </summary>
@@ -4197,8 +4384,8 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
-    /// A reviewed connector edited so it holds something that looks like a credential — in an
-    /// argument, or in a value it shares — waits for review. Reviewed in the dialog, it travels, and
+    /// A reviewed connector edited so it holds something that looks like a credential - in an
+    /// argument, or in a value it shares - waits for review. Reviewed in the dialog, it travels, and
     /// an edit that holds only what was reviewed publishes on its own again.
     /// </summary>
     [Fact]
@@ -4708,7 +4895,7 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
-    /// With no local collection left — a 1.3 app sharing the store can delete the last one — the
+    /// With no local collection left - a 1.3 app sharing the store can delete the last one - the
     /// addition goes into a new, empty "Default", which does not become active.
     /// </summary>
     [Fact]

@@ -23,7 +23,7 @@
     <!-- A connector row's spoken name, which says what a click on it does and to which connector. -->
     <views:EditLabelConverter x:Key="EditLabel" />
     <!-- The collection's own name in the sidebar: bold while it is the active one, dimmed while
-         its document has never been found on this machine — still usable, just not in step. -->
+         its document has never been found on this machine - still usable, just not in step. -->
     <Style x:Key="SidebarName" TargetType="TextBlock">
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
       <Setter Property="VerticalAlignment" Value="Center" />
@@ -105,9 +105,11 @@
     <!-- A connector row: a button the width of the list, with no chrome until the pointer is over
          it, when it takes the Fluent list item's hover fill; the Mac row takes its own light
          fill. The arrow stays the arrow, as a list row's does. Its focus visual is the theme's,
-         which WPF draws only once the keyboard is in use; the Mac draws its focus ring whenever
+         set here because a style with no BasedOn does not take the Fluent Button style's setter;
+         WPF draws it only once the keyboard is in use, and the Mac draws its focus ring whenever
          the row has focus, which is each platform's own rule. -->
     <Style x:Key="ConnectorRow" TargetType="Button">
+      <Setter Property="FocusVisualStyle" Value="{DynamicResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Padding" Value="0" />
@@ -176,7 +178,7 @@
                PreviewMouseDoubleClick="OnActivate" PreviewKeyDown="OnSidebarKey">
         <!-- The context menu is on the container rather than inside the template: one raised
              from the keyboard is looked for on the focused ListBoxItem, not on what it holds.
-             Nothing in here may carry x:Name or an event handler — the markup compiler numbers
+             Nothing in here may carry x:Name or an event handler - the markup compiler numbers
              such an element, WPF builds this subtree at another time, and the window's own
              connection ids then land on the wrong elements. Hence a command, whose parameter and
              target both come from the row the menu was raised over: this one ContextMenu is
@@ -263,7 +265,7 @@
         </DockPanel>
 
         <!-- Under the name, how many connectors the collection holds; under the More, the plus that
-             adds one — dimmed on a synced collection, whose tooltip then says where additions go
+             adds one - dimmed on a synced collection, whose tooltip then says where additions go
              instead. The plus is shorter than the More, so the two lines sit close. A source failure
              in the count can name a raw path. WPF has no middle ellipsis, so a pane too narrow for
              one loses its tail; the Mac window elides the middle and keeps the file name. -->
@@ -294,8 +296,8 @@
       </Border>
 
       <!-- The rows are the tall half of the window: they take what is left and scroll in it. One
-           size scope over every row, so the name column is as wide as the longest name cell —
-           capped, so a very long name trims and the target keeps room to say anything — and
+           size scope over every row, so the name column is as wide as the longest name cell -
+           capped, so a very long name trims and the target keeps room to say anything - and
            every target starts at the same x. The list is one stop for Tab, which returns to the
            row it left, and the arrows move between its rows, as on the Mac: Up and Down by hand,
            in OnRowKey, and Left and Right not at all, where WPF would otherwise move the focus
