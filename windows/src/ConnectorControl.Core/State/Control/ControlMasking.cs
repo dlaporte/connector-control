@@ -396,17 +396,21 @@ public static class ControlMasking
         "password", "passwd", "passphrase", "pass", "pwd", "pw",
     };
 
-    /// <summary>Whether a header-shaped word's value reads as written: a path that does not read as a secret
-    /// (<c>secrets:/run/secrets</c>, but not <c>X-Api-Key:/Abc9…</c>), or a scope word under a name with no
-    /// password word (<c>token:read</c>, but not <c>password:admin</c>).</summary>
+    /// <summary>Whether a header-shaped word's value reads as written, under a name with no password word: a
+    /// path that does not read as a secret (<c>secrets:/run/secrets</c>, but not <c>X-Api-Key:/Abc9…</c> or
+    /// <c>password:/x</c>), or a scope word (<c>token:read</c>, but not <c>password:admin</c>).</summary>
     internal static bool IsPlainValue(string value, string name)
     {
         var trimmed = value.TrimSpaces();
+        if (NameWords(name).Any(PasswordWords.Contains))
+        {
+            return false;
+        }
         if (trimmed.StartsWith('/'))
         {
             return !LooksSecret(trimmed);
         }
-        return ScopeWords.Contains(trimmed.ToLowerInvariant()) && !NameWords(name).Any(PasswordWords.Contains);
+        return ScopeWords.Contains(trimmed.ToLowerInvariant());
     }
 
     /// <summary>Values a single-dash option such as <c>-update:</c> or <c>-useLegacy:</c> takes, which no password is.</summary>

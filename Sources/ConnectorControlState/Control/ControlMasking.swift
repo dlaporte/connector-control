@@ -342,14 +342,14 @@ public enum ControlMasking {
     /// The words of a name that make its value a password, whatever word it is (`password:admin`).
     static let passwordWords: Set<String> = ["password", "passwd", "passphrase", "pass", "pwd", "pw"]
 
-    /// Whether a header-shaped word's value reads as written: a path that does not read as a secret
-    /// (`secrets:/run/secrets`, but not `X-Api-Key:/Abc9…`), or a scope word under a name with no
-    /// password word (`token:read`, but not `password:admin`).
+    /// Whether a header-shaped word's value reads as written, under a name with no password word: a
+    /// path that does not read as a secret (`secrets:/run/secrets`, but not `X-Api-Key:/Abc9…` or
+    /// `password:/x`), or a scope word (`token:read`, but not `password:admin`).
     static func isPlainValue(_ value: String, under name: String) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespaces)
+        if nameWords(name).contains(where: { passwordWords.contains($0) }) { return false }
         if trimmed.unicodeScalars.first == "/" { return !looksSecret(trimmed) }
         return scopeWords.contains { CredentialHeuristics.loweredUnits(trimmed).elementsEqual($0.utf16) }
-            && !nameWords(name).contains { passwordWords.contains($0) }
     }
 
     /// Values a single-dash option such as `-update:` or `-useLegacy:` takes, which no password is.

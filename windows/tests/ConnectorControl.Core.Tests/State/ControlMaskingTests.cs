@@ -984,7 +984,7 @@ public class ControlMaskingTests
             Assert.Equal(args, ControlMasking.Arguments(args));
         }
         // A digit ends a word of the name, so `auth0` reads as `auth` and its value is hidden.
-        foreach (var (text, shown) in new[] { ("password:admin", "password: •••"), ("passphrase:admin", "passphrase: •••"), ("pwd:all", "pwd: •••"), ("X-Api-Key:/Abc9xYz1QwErTy7UiOp3AsDf", "X-Api-Key: •••"), ("token1:hunter2", "token1: •••"), ("apiKey2:hunter2", "apiKey2: •••"), ("auth0:domain", "auth0: •••"), ("apiKey:hunter2", "apiKey: •••"), ("Authorization: hunter2", "Authorization: •••"),
+        foreach (var (text, shown) in new[] { ("password:admin", "password: •••"), ("passphrase:admin", "passphrase: •••"), ("pwd:all", "pwd: •••"), ("password:/hunter2", "password: •••"), ("X-Api-Key:/Abc9xYz1QwErTy7UiOp3AsDf", "X-Api-Key: •••"), ("token1:hunter2", "token1: •••"), ("apiKey2:hunter2", "apiKey2: •••"), ("auth0:domain", "auth0: •••"), ("apiKey:hunter2", "apiKey: •••"), ("Authorization: hunter2", "Authorization: •••"),
                      ("password:hunter2", "password: •••"), ("X-Auth-Token: hunter2", "X-Auth-Token: •••") })
         {
             Assert.Equal(["--opt", shown], ControlMasking.Arguments(["--opt", text]));
