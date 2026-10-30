@@ -10,6 +10,10 @@ namespace ConnectorControl.Core.State;
 /// </summary>
 public sealed class SettingsModel : ObservableObject, IDisposable
 {
+    // Platform idiom: a Mac Settings window takes its title from the selected tab, so the Mac has
+    // no string for it.
+    /// <summary>The Settings window's own title, kept apart from the tray's Settings item.</summary>
+    public const string WindowTitle = "Settings";
     public const string GeneralTab = "General";
     public const string StorageTab = "Storage";
     public const string ClaudeTab = "Claude";

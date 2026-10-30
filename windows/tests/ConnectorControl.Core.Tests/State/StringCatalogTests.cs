@@ -980,6 +980,7 @@ public class StringCatalogTests
         actual["SettingsModel.updatesHeader"] = SettingsModel.UpdatesHeader;
         actual["SettingsModel.useDefaultTitle"] = SettingsModel.UseDefaultTitle;
         actual["SettingsModel.versionText"] = SettingsModel.VersionTextFor("X");
+        actual["SettingsModel.windowTitle"] = SettingsModel.WindowTitle;
 
         // MARK: ToolFamily / ToolInfo / ToolFooterLine / ToolNote
 

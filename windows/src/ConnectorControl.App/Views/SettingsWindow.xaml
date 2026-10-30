@@ -4,7 +4,7 @@
         xmlns:core="clr-namespace:ConnectorControl.Core;assembly=ConnectorControl.Core"
         xmlns:state="clr-namespace:ConnectorControl.Core.State;assembly=ConnectorControl.Core"
         xmlns:views="clr-namespace:ConnectorControl.App.Views"
-        Title="{x:Static state:FlyoutModel.SettingsTooltip}"
+        Title="{x:Static state:SettingsModel.WindowTitle}"
         Width="480" Height="840" ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
         Background="{DynamicResource ApplicationBackgroundBrush}">
   <!-- Platform idiom: the Mac's window is 480 by 660 and this one 480 by 840, tall enough that no tab scrolls

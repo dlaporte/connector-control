@@ -1177,6 +1177,9 @@
   "SettingsModel.versionText": {
     "format": "Version {0}"
   },
+  "SettingsModel.windowTitle": {
+    "win": "Settings"
+  },
   "TextRun.cutMark": "…",
   "ToolFamily.nodeJS.installCommand": {
     "mac": "brew install node",
