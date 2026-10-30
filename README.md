@@ -16,12 +16,6 @@ config as generated output, and backs up each file it manages — Claude's
 config, the master list and collections.json — before writing to it, so a
 wiped or mangled config is always one click from restored.
 
-<p align="center">
-  <img src="docs/screenshots/mac-popover.png" width="344" alt="The Connector Control popover on macOS: a collection chip and the active collection's connectors with on/off toggles.">
-</p>
-
-<p align="center"><sub>Pending: equivalent Windows tray-flyout screenshots.</sub></p>
-
 ## Features
 
 - **One-click enable/disable** — toggle any connector from the menu bar or
@@ -60,15 +54,6 @@ wiped or mangled config is always one click from restored.
   master list and all backups are written owner-only (mode 600 on macOS, an
   owner-only ACL on Windows).
 
-The editor's two views of the same connector:
-
-<table>
-  <tr>
-    <td align="center"><img src="docs/screenshots/mac-editor-form.png" width="420" alt="Form view: Name, Server URL, and an Authentication type picker for a remote mcp-remote connector."><br><sub>Form view</sub></td>
-    <td align="center"><img src="docs/screenshots/mac-editor-json.png" width="420" alt="JSON view of the same connector, with the paste-a-README-snippet tip along the bottom."><br><sub>JSON view</sub></td>
-  </tr>
-</table>
-
 ### Collections
 
 Collections are full, independent connector snapshots — each has its own
@@ -81,10 +66,6 @@ raises **Restart Required** just like a toggle would. The switches below the
 chip turn the active collection's connectors on and off. That is all the
 popover or flyout does: adding, editing, copying and sharing connectors
 happen in the Collections window.
-
-<p align="center">
-  <img src="docs/screenshots/mac-chip-menu.png" width="344" alt="The collection chip's menu on macOS: the collections to switch between, a check on the active one and a chain on a subscribed one, then Manage Collections.">
-</p>
 
 A collection is one of three kinds.
 
@@ -215,10 +196,6 @@ A connector that another local collection holds an identical copy of, under
 the same name, opens in the editor with a checkbox, off by default: "Also
 apply this change to <collection>, which has an identical <connector>". Tick it and saving makes
 the same change in those collections too; each copy keeps its own switch.
-
-<p align="center">
-  <img src="docs/screenshots/mac-collections-window.png" width="620" alt="The Collections window on macOS: collections in the sidebar with a chain on the subscribed one; the selected collection's name with its pills and a More menu, and under it the connector count and the + that adds one; its connectors with ticks, names and what each one runs; and the selection bar along the bottom.">
-</p>
 
 The master list file (mcps.json) is v2 (collection-aware); an older v1 file,
 from a build before 1.1, is treated as any unreadable one is (see How it
@@ -979,14 +956,6 @@ than the one under `%APPDATA%`, and Settings ▸ Claude lets you point it at any
 file.
 
 ### Settings
-
-<table>
-  <tr>
-    <td align="center"><img src="docs/screenshots/mac-settings-general.png" width="290" alt="Settings, General tab: launch at login, confirm before restarting Claude, confirm before quitting, notify on external changes, and update options."><br><sub>General</sub></td>
-    <td align="center"><img src="docs/screenshots/mac-settings-storage.png" width="290" alt="Settings, Storage tab: the master list location (here a OneDrive folder) and the backup retention count with Reveal in Finder and Restore buttons."><br><sub>Storage</sub></td>
-    <td align="center"><img src="docs/screenshots/mac-settings-claude.png" width="290" alt="Settings, Claude tab: the Claude app path and a Tools table showing whether npx, node, uvx and uv are installed where Claude can find them."><br><sub>Claude</sub></td>
-  </tr>
-</table>
 
 Every row reads the same way on both platforms: what it is on the left, with
 a short note under it where it needs one, and its control on the right;
