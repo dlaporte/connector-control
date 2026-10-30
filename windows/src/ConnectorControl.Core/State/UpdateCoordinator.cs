@@ -252,6 +252,9 @@ public sealed class UpdateCoordinator : IDisposable
         // reported once the dialog has closed. Cancel, while it runs, returns the dialog to its offer
         // with nothing to report; the next Install and Relaunch starts afresh.
         Exception? installFailure = null;
+        // A refusal from any attempt, kept past the next one: a Cancel pressed while the package was being checked
+        // returns the dialog to its offer even though the check went on to refuse it, and Later must not drop that.
+        UpdateVerificationException? refusal = null;
         async Task InstallAsync(CancellationToken cancellationToken)
         {
             installFailure = null;
@@ -281,6 +284,7 @@ public sealed class UpdateCoordinator : IDisposable
             {
                 // The dialog awaits this from a click handler, where an exception would crash the app.
                 installFailure = ex;
+                refusal = ex as UpdateVerificationException ?? refusal;
             }
         }
         bool install;
@@ -292,6 +296,13 @@ public sealed class UpdateCoordinator : IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             InformIf(interactive, CheckFailedMessage, ex.Message);
+            return UpdateOutcome.Failed;
+        }
+        if (!install && refusal is not null)
+        {
+            // Later after a refused package: the refusal is still said (its text may ask for a reinstall), and the
+            // version is not recorded as declined, which would keep the background check from offering it again.
+            host.Marshal(() => dialogs.Inform(UpdateRefusedMessage, refusal.Message));
             return UpdateOutcome.Failed;
         }
         if (!install)

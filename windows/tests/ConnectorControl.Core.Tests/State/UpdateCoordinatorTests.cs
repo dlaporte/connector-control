@@ -175,6 +175,29 @@ public class UpdateCoordinatorTests
         Assert.Empty(dialogs.Informs);
     }
 
+    /// <summary>
+    /// Cancel pressed while the downloaded package was being checked, and the check refused it: the dialog went back to
+    /// its offer, but Later still reports the refusal (its text may ask for a reinstall), and a background offer does
+    /// not record the version as declined.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ARefusalReachedWithACancelIsStillReportedAndNotDeclined(bool interactive)
+    {
+        updater.Next = Update();
+        updater.HonoursCancellation = false;   // the download had finished; the check ran on and refused
+        updater.DownloadFailure = new UpdateVerificationException("not signed by this app's publisher");
+        dialogs.CancelledInstalls = 1;
+        dialogs.NextOffer = false;             // then Later
+        using var coordinator = Coordinator();
+        Assert.Equal(UpdateOutcome.Failed, await coordinator.CheckAsync(interactive));
+        Assert.Equal(new FakeDialogs.InformCall("The update was not installed.", "not signed by this app's publisher"), Assert.Single(dialogs.Informs));
+        Assert.Null(settings.DeclinedUpdateVersion);
+        Assert.Null(coordinator.DeclinedVersion);
+        Assert.Equal(0, updater.AppliedAndRestarted);
+    }
+
     /// <summary>Install and Relaunch pressed again after a Cancel starts afresh: the cancelled attempt leaves nothing behind.</summary>
     [Fact]
     public async Task InstallAfterACancelStillInstalls()
