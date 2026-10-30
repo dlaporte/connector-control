@@ -1096,9 +1096,9 @@ public sealed class AppState : ObservableObject, IDisposable
         var target = collection ?? ActiveCollection;
         // Read-only lookup: a collection that isn't there has nothing to toggle, and must not be
         // brought into being by the attempt - what Swift's optional chain gives for free.
-        if (Store.Collections.TryGetValue(target, out var held) && held.Mcps.TryGetValue(name, out var entry))
+        if (Store.Collections.TryGetValue(target, out var held) && held.StoredName(name) is { } stored)
         {
-            held.Mcps[name] = entry with { Enabled = on };
+            held.Mcps[stored] = held.Mcps[stored] with { Enabled = on };
         }
         PersistStore();
         if (target == ActiveCollection)
@@ -1181,6 +1181,11 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return NameEmptyError;
         }
+        // The connector renamed, by the name it is stored under, so its publish record moves with it.
+        if (renamedFrom is not null)
+        {
+            renamedFrom = Store.Collections.GetValueOrDefault(target)?.StoredName(renamedFrom) ?? renamedFrom;
+        }
         // Connector Control's own entry goes by this name in Claude's config. A connector already
         // holding it, from before the name was reserved, may still be saved in place, so the clash
         // can be resolved by renaming or deleting it; nothing new may take the name.
@@ -1199,6 +1204,9 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return DuplicateNameError(trimmed);
         }
+        // Saved under another spelling of its own name, the connector keeps the name as stored, and so
+        // does everything keyed by it: the marks below land under the one spelling.
+        trimmed = Store.Collections.GetValueOrDefault(target)?.StoredName(trimmed) ?? trimmed;
         if (renamedFrom is { } old && renaming)
         {
             existing?.Remove(old);
@@ -1237,9 +1245,10 @@ public sealed class AppState : ObservableObject, IDisposable
             return;
         }
         var removed = false;
-        foreach (var name in names)
+        // By the name as stored, so the publish record's entry goes too when the name is typed another way.
+        foreach (var typed in names)
         {
-            if (!held.Mcps.ContainsKey(name))
+            if (held.StoredName(typed) is not { } name)
             {
                 continue;
             }

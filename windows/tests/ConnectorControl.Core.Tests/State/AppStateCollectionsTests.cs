@@ -1750,6 +1750,33 @@ public class AppStateCollectionsTests
         Assert.Null(state.PublishError);
     }
 
+    /// <summary>A connector saved or deleted under another spelling of its name (é composed or decomposed)
+    /// keeps its publish record under the name as stored: the editor's new marks land on it, and a
+    /// delete takes them with it, as on the Mac.</summary>
+    [Fact]
+    public void ANameTypedAnotherWayKeepsTheMarksUnderTheStoredName()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        PublishMarkedLedger(h, state, MarkedPath);
+        const string composed = "caf\u00E9", decomposed = "cafe\u0301";
+        var entry = state.Store.Collections[state.ActiveCollection].Mcps["ledger"];
+        Assert.Null(state.Upsert(composed, entry, "ledger"));
+        var pointer = state.CollectionsFile.Collections[state.ActiveCollection].Publish!.Intent.PathMarks[composed].Keys.First();
+        var edited = new Dictionary<JsonPointer, PublishIntent.PathMark> { [pointer] = new("server_path", "edited", MarkedPath) };
+        Assert.Null(state.Upsert(decomposed, entry, decomposed, pathMarks: edited));
+        var intent = state.CollectionsFile.Collections[state.ActiveCollection].Publish!.Intent;
+        Assert.Equal([4], intent.PathMarks.Keys.Where(n => n.StartsWith("caf", StringComparison.Ordinal)).Select(n => n.Length));
+        Assert.Equal("edited", Assert.Single(intent.PathMarks[composed]).Value.Hint);
+        Assert.Null(state.PublishError);
+
+        state.Delete([decomposed]);
+        Assert.False(state.Store.Collections[state.ActiveCollection].Mcps.ContainsKey(composed));
+        Assert.DoesNotContain(state.CollectionsFile.Collections[state.ActiveCollection].Publish!.Intent.PathMarks.Keys,
+            n => n.StartsWith("caf", StringComparison.Ordinal));
+        Assert.Null(state.PublishError);
+    }
+
     [Fact]
     public void AMarkWhoseConnectorWasRenamedElsewhereFailsClosed()
     {

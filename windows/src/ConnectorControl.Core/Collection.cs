@@ -34,6 +34,14 @@ public sealed class Collection : IEquatable<Collection>
         }
     }
 
+    /// <summary>
+    /// The name <paramref name="name"/> is held under, in the spelling first stored, or null when no
+    /// connector has it. Whatever is keyed by a connector's name beside the store (its path marks, its
+    /// review) takes this spelling, so a name typed another way never leaves a second key behind.
+    /// </summary>
+    public string? StoredName(string name) =>
+        Mcps.ContainsKey(name) ? Mcps.Keys.First(k => NameComparer.Equals(k, name)) : null;
+
     public Collection Clone() => new(Mcps);
 
     public bool Equals(Collection? other) => other is not null && DictionaryEquality.Equal(Mcps, other.Mcps);

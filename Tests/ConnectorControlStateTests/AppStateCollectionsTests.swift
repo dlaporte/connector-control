@@ -1563,6 +1563,31 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNil(state.publishError)
     }
 
+    /// A connector saved or deleted under another spelling of its name (é composed or decomposed)
+    /// keeps its publish record under the name as stored: the editor's new marks land on it, and a
+    /// delete takes them with it, as on Windows.
+    func testANameTypedAnotherWayKeepsTheMarksUnderTheStoredName() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        _ = try publishMarkedLedger(h, state, args: [markedPath])
+        let composed = "caf\u{E9}", decomposed = "cafe\u{301}"
+        let entry = try XCTUnwrap(state.store.collections[state.activeCollection]?.mcps["ledger"])
+        XCTAssertNil(state.upsert(name: composed, entry: entry, renamedFrom: "ledger"))
+        let pointer = try XCTUnwrap(state.collectionsFile.collections[state.activeCollection]?.publish?.intent.pathMarks[composed]?.keys.first)
+        let edited: [JSONPointer: PublishIntent.PathMark] = [pointer: .init(name: "server_path", hint: "edited", value: markedPath)]
+        XCTAssertNil(state.upsert(name: decomposed, entry: entry, renamedFrom: decomposed, pathMarks: edited))
+        let intent = try XCTUnwrap(state.collectionsFile.collections[state.activeCollection]?.publish?.intent)
+        XCTAssertEqual(intent.pathMarks.keys.filter { $0.hasPrefix("caf") }.map { $0.unicodeScalars.count }, [4])
+        XCTAssertEqual(intent.pathMarks[composed]?.values.first?.hint, "edited")
+        XCTAssertNil(state.publishError)
+
+        state.delete(names: [decomposed])
+        XCTAssertNil(state.store.collections[state.activeCollection]?.mcps[composed])
+        XCTAssertTrue(try XCTUnwrap(state.collectionsFile.collections[state.activeCollection]?.publish?.intent)
+                        .pathMarks.keys.filter { $0.hasPrefix("caf") }.isEmpty)
+        XCTAssertNil(state.publishError)
+    }
+
     func testAMarkWhoseConnectorWasRenamedElsewhereFailsClosed() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

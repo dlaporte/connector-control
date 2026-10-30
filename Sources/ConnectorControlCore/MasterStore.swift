@@ -24,6 +24,13 @@ public struct MCPEntry: Equatable, Hashable, Codable, Sendable {
 public struct Collection: Equatable, Codable, Sendable {
     public var mcps: [String: MCPEntry]
     public init(mcps: [String: MCPEntry] = [:]) { self.mcps = mcps }
+
+    /// The name `name` is held under, in the spelling first stored, or nil when no connector has it.
+    /// Whatever is keyed by a connector's name beside the store (its path marks, its review) takes
+    /// this spelling, so a name typed another way never leaves a second key behind.
+    public func storedName(_ name: String) -> String? {
+        mcps.index(forKey: name).map { mcps.keys[$0] }
+    }
 }
 
 /// Schema v2 only - no v1 fallback. A v1 (or otherwise malformed) file on

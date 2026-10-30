@@ -821,7 +821,7 @@ public final class AppState: ObservableObject {
     /// reaches Claude, so a toggle anywhere else stops at the store.
     public func setEnabled(_ name: String, _ on: Bool, in collection: String? = nil) {
         let target = collection ?? activeCollection
-        store.collections[target]?.mcps[name]?.enabled = on
+        if let stored = store.collections[target]?.storedName(name) { store.collections[target]?.mcps[stored]?.enabled = on }
         persistStore()
         if target == activeCollection { performApply() }
     }
@@ -887,25 +887,30 @@ public final class AppState: ObservableObject {
 
     /// `upsert` in memory only, for the caller to persist: an error message, with nothing
     /// changed, or nil once the entry is in the store.
-    private func stageUpsert(name: String, entry: MCPEntry, renamedFrom oldName: String?, in target: String,
+    private func stageUpsert(name: String, entry: MCPEntry, renamedFrom typedOldName: String?, in target: String,
                              pathMarks: [JSONPointer: PublishIntent.PathMark]?) -> String? {
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        var trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return AppState.nameEmptyError }
+        // The connector renamed, by the name it is stored under, so its publish record moves with it.
+        let renamedFrom = typedOldName.map { store.collections[target]?.storedName($0) ?? $0 }
         // Connector Control's own entry goes by this name in Claude's config. A connector already
         // holding it, from before the name was reserved, may still be saved in place, so the clash
         // can be resolved by renaming or deleting it; nothing new may take the name.
-        if trimmed == ClaudeIntegration.entryName, trimmed != oldName { return ClaudeIntegration.reservedNameError }
-        if trimmed != oldName, store.collections[target]?.mcps[trimmed] != nil {
+        if trimmed == ClaudeIntegration.entryName, trimmed != renamedFrom { return ClaudeIntegration.reservedNameError }
+        if trimmed != renamedFrom, store.collections[target]?.mcps[trimmed] != nil {
             return AppState.duplicateNameError(trimmed)
         }
-        if let old = oldName, old != trimmed { store.collections[target]?.mcps.removeValue(forKey: old) }
+        // Saved under another spelling of its own name, the connector keeps the name as stored, and so
+        // does everything keyed by it: the marks below land under the one spelling.
+        trimmed = store.collections[target]?.storedName(trimmed) ?? trimmed
+        if let old = renamedFrom, old != trimmed { store.collections[target]?.mcps.removeValue(forKey: old) }
         // A rename changes nothing the author reviewed for publishing: the review follows it.
-        if let old = oldName, old != trimmed, let binding = collectionsCache.published[target] {
+        if let old = renamedFrom, old != trimmed, let binding = collectionsCache.published[target] {
             collectionsCache.published[target] = binding.movingReview(of: old, to: trimmed)
         }
         store.collections[target, default: Collection()].mcps[trimmed] = entry
         editPublishIntent(of: target) { intent in
-            if let old = oldName, old != trimmed { intent = intent.movingConnector(old, to: trimmed) }
+            if let old = renamedFrom, old != trimmed { intent = intent.movingConnector(old, to: trimmed) }
             if let pathMarks { intent = intent.replacingPathMarks(of: trimmed, with: pathMarks) }
         }
         return nil
@@ -921,7 +926,9 @@ public final class AppState: ObservableObject {
     public func delete(names: [String], in collection: String? = nil) {
         let target = collection ?? activeCollection
         var removed = false
-        for name in names where store.collections[target]?.mcps[name] != nil {
+        // By the name as stored, so the publish record's entry goes too when the name is typed another way.
+        for typed in names {
+            guard let name = store.collections[target]?.storedName(typed) else { continue }
             store.collections[target]?.mcps.removeValue(forKey: name)
             editPublishIntent(of: target) { $0 = $0.movingConnector(name, to: nil) }
             removed = true
