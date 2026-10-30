@@ -29,16 +29,20 @@ public static class ExplorerReveal
 {
     public static void Show(string path)
     {
-        var arguments = File.Exists(path) || Directory.Exists(path)
-            ? $"/select,\"{path}\""
-            : $"\"{Path.GetDirectoryName(path) ?? path}\"";
         try
         {
-            Process.Start(new ProcessStartInfo(SystemPrograms.Explorer, arguments) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(SystemPrograms.Explorer, Arguments(path)) { UseShellExecute = true });
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
         {
             // nothing more to do
         }
     }
+
+    /// <summary>What Explorer is asked to show for <paramref name="path"/>: the item selected in its
+    /// folder while it is there, its parent folder once it has gone.</summary>
+    internal static string Arguments(string path) =>
+        File.Exists(path) || Directory.Exists(path)
+            ? $"/select,\"{path}\""
+            : $"\"{Path.GetDirectoryName(path) ?? path}\"";
 }
