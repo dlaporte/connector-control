@@ -252,6 +252,8 @@ public class UpdateVerifierTests : IDisposable
     [InlineData("1.5.0-preview.9", "1.5.0", "1.5.0-preview.9", false)]            // a preview is older than its release
     [InlineData("1.5.0-preview.2", "1.5.0-preview.10", "1.5.0-preview.2", false)] // preview numbers compare by value
     [InlineData(null, "1.4.2", "1.5.0", false)]                                   // no product version at all
+    [InlineData("1.5.1-preview.1", "1.5.0", "1.5.1-preview.1", false)]           // a release install never takes a preview
+    [InlineData("1.5.1", "1.5.0", "1.5.1", true)]                                 // a release install takes the next release
     public void TheEmbeddedVersionIsBoundByItsFullSemVer(string? embedded, string running, string feed, bool accepted)
     {
         Assert.Equal(accepted, UpdateVerifier.VersionProblem(embedded, running, feed) is null);

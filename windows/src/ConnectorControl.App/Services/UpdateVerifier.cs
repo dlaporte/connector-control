@@ -248,7 +248,8 @@ public static class UpdateVerifier
     /// <summary>
     /// The version baked into the signed executable is the one the attacker cannot rewrite: it must
     /// equal what the feed advertises (no relabeling an old release or preview as a newer one) and must
-    /// not be older than what is running (no downgrade to a build without this check). All three are
+    /// not be older than what is running (no downgrade to a build without this check), nor a preview when what is
+    /// running is a release (the stable feed's filter is not trusted alone). All three are
     /// full Semantic Versions, the downgrade judged by SemVer precedence: every 1.5.0 preview and the 1.5.0 release
     /// share the file version 1.5.0.0, so only the prerelease label tells them apart. Windows only: the
     /// Mac's Sparkle feed is signed with the app's own key, and its build numbers already order previews.
@@ -267,8 +268,18 @@ public static class UpdateVerifier
         {
             return $"{MainExecutable} inside the update is version {embedded}, older than the installed {runningVersion}{NotInstalledSuffix}";
         }
+        // A release install never takes a preview, whatever the feed offers: the stable feed's filter is not the only
+        // thing keeping one out. A preview install still takes its release.
+        if (IsPrerelease(embedded) && ControlVersion.Semantic(runningVersion) is { } running && !IsPrerelease(running))
+        {
+            return $"{MainExecutable} inside the update is the preview {embedded}, and the installed {runningVersion} takes releases only{NotInstalledSuffix}";
+        }
         return null;
     }
+
+    /// <summary>Whether <paramref name="version"/> carries a prerelease label, as 1.5.0-preview.3 does.</summary>
+    private static bool IsPrerelease(string version) =>
+        ControlVersion.Semantic(version) is { } semantic && semantic.Contains('-');
 
     /// <summary>The same SemVer, build metadata aside, and readable: a version that cannot be read matches nothing.
     /// Exact text rather than precedence: SemVer forbids the leading zeros that would make two spellings equal.</summary>
