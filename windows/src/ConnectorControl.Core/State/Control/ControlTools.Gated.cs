@@ -596,7 +596,7 @@ public sealed partial class ControlTools
             }
             return info is FileInfo { Exists: true } found && found.Length > McpSession.MaxMessageBytes ? DocumentTooLargeError(file) : null;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             // A link that loops, or a path that cannot be looked at, is the read's to report.
             return null;

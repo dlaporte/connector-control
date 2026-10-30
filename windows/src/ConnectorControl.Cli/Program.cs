@@ -1,4 +1,5 @@
 using System.Reflection;
+using ConnectorControl.Core;
 using ConnectorControl.Core.State;
 using ConnectorControl.Core.Transport;
 
@@ -102,7 +103,7 @@ internal static class Program
         {
             return File.ReadAllText(path);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             return null;
         }

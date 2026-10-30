@@ -581,7 +581,7 @@ public sealed class AppState : ObservableObject, IDisposable
                 // its create call.
                 AtomicFile.Write(File.ReadAllBytes(previousStorePath), newStorePath);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
             {
                 // The new location refused the seed copy. Switching to it now would leave it with
                 // no mcps.json, and Reload would read that as an empty store and quietly wipe the
@@ -988,7 +988,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             CollectionsCache.Save(Service.Paths.CollectionsCachePath);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             // Kept in memory; the next cache save writes it.
         }
@@ -1036,7 +1036,7 @@ public sealed class AppState : ObservableObject, IDisposable
             }
             StoreNotPrivate = !isProtected;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             LastError = Friendly(ex);
         }
@@ -1584,7 +1584,7 @@ public sealed class AppState : ObservableObject, IDisposable
             {
                 BackupCollections.Rename(name, trimmed, Service.Paths.BackupsDir);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
             {
                 // As above: such a backup is refused on restore.
             }
@@ -2822,7 +2822,7 @@ public sealed class AppState : ObservableObject, IDisposable
                     File.Delete(target);
                 }
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
             {
                 LastError = Friendly(ex);
             }
@@ -3042,7 +3042,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             CollectionsCache.Save(Service.Paths.CollectionsCachePath);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             LastError = Friendly(ex);
         }
@@ -3295,7 +3295,7 @@ public sealed class AppState : ObservableObject, IDisposable
             {
                 CollectionsCache.Save(Service.Paths.CollectionsCachePath);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
             {
                 collectionsNote = Friendly(ex);
             }
@@ -3355,7 +3355,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             CollectionsCache.Save(Service.Paths.CollectionsCachePath);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             collectionsNote = Friendly(ex);
         }

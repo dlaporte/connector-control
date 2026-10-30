@@ -23,7 +23,7 @@ public sealed class ConsoleEncodingScope : IDisposable
             set(new UTF8Encoding(false));
             previous = before;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             // no console to change: the bytes are UTF-8 regardless
         }
@@ -40,7 +40,7 @@ public sealed class ConsoleEncodingScope : IDisposable
         {
             set(before);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             // the console has gone
         }

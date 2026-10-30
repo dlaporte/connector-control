@@ -141,7 +141,7 @@ public sealed class ToolProbe : IToolProbe
             const UnixFileMode anyExecute = UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
             return (File.GetUnixFileMode(path) & anyExecute) != 0;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             return false;
         }

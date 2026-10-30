@@ -256,7 +256,7 @@ public sealed class ConfigService
         {
             BackupCollections.Record(collection, backup, Paths.BackupsDir);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e) when (FileSystemErrors.IsTransient(e))
         {
             // Best effort, as the summary says: the backup itself is already written.
         }

@@ -100,7 +100,7 @@ public sealed class RestoreModel : ObservableObject
             data = BoundedRead.Data(backup, ConfigService.MaxBackupBytes);
         }
         // Platform idiom: the I/O and access errors a read throws; the Mac mirror's catch takes every error.
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             RestoreError = ex.Message;
             return false;

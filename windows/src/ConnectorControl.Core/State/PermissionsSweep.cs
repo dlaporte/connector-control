@@ -159,7 +159,7 @@ public static class PermissionsSweep
         {
             return Directory.EnumerateFileSystemEntries(root, "*", option).ToList();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             return [];   // best effort
         }

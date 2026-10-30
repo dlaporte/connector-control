@@ -79,13 +79,13 @@ public static class ControlToolCopy
             {
                 move(staging, target);
             }
-            catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && aside is not null)
+            catch (Exception ex) when (FileSystemErrors.IsTransient(ex) && aside is not null)
             {
                 try
                 {
                     move(aside, target);
                 }
-                catch (Exception rollback) when (rollback is IOException or UnauthorizedAccessException)
+                catch (Exception rollback) when (FileSystemErrors.IsTransient(rollback))
                 {
                     // Both are said, the cause first. The old copy stays aside, and the next launch's sweep and
                     // refresh place a new one.
@@ -95,7 +95,7 @@ public static class ControlToolCopy
             }
             return true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             failed?.Invoke($"The command-line tool could not be copied to {target}: {ex.Message}");
             return false;
@@ -117,7 +117,7 @@ public static class ControlToolCopy
             File.WriteAllText(staging, appExecutable);
             File.Move(staging, record, overwrite: true);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             failed?.Invoke($"The app's path could not be recorded in {record}: {ex.Message}");
         }
@@ -134,13 +134,13 @@ public static class ControlToolCopy
         }
         foreach (var file in Directory.EnumerateFiles(bin))
         {
-            TryDelete(file);
+            FileSystemErrors.TryDelete(file);
         }
         try
         {
             Directory.Delete(bin);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             // a copy still running keeps the folder
         }
@@ -155,7 +155,7 @@ public static class ControlToolCopy
             var name = Path.GetFileName(file);
             if (name.StartsWith(AsidePrefix, StringComparison.OrdinalIgnoreCase) || name.EndsWith(StagingSuffix, StringComparison.OrdinalIgnoreCase))
             {
-                TryDelete(file);
+                FileSystemErrors.TryDelete(file);
             }
         }
     }
@@ -184,17 +184,5 @@ public static class ControlToolCopy
         using var one = new FileStream(packaged, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         using var other = new FileStream(copy, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         return SHA256.HashData(one).AsSpan().SequenceEqual(SHA256.HashData(other));
-    }
-
-    private static void TryDelete(string file)
-    {
-        try
-        {
-            File.Delete(file);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // still running: a later launch, or nothing, deletes it
-        }
     }
 }

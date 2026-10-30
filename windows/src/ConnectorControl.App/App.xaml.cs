@@ -173,7 +173,7 @@ public partial class App : Application
                 File.AppendAllText(Path.Combine(ServiceFactory.DefaultDataDir, LogFileName), $"{DateTime.UtcNow:o} {message}{Environment.NewLine}");
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             // nothing more to do
         }

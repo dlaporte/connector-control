@@ -131,7 +131,7 @@ public sealed class SettingsStore : ISettings
             AtomicFile.Write(root.Serialize(), path);
             LastSaveError = null;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
             LastSaveError = ex.Message;
         }

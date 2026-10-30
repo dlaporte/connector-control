@@ -148,7 +148,7 @@ public sealed class ControlPipeServer : IDisposable
                     next = ControlPipe.CreateServer(Name, first: false);
                     waiting = next;   // held at once, so a Dispose from here on frees it too
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
                 {
                     next = null;
                 }

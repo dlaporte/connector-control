@@ -40,7 +40,7 @@ public static class AtomicFile
                     target = real;
                 }
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
             {
                 // the target vanished, or was replaced by something that is not a link, between
                 // the LinkTarget check above and the resolve: write to the literal path instead
@@ -65,7 +65,7 @@ public static class AtomicFile
         {
             if (File.Exists(tmp))
             {
-                try { File.Delete(tmp); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                FileSystemErrors.TryDelete(tmp);
             }
         }
     }
