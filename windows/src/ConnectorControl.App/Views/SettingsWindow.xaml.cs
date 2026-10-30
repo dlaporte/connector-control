@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -98,21 +97,7 @@ public partial class SettingsWindow : Window
     private void OnIncrementKeepCount(object sender, RoutedEventArgs e) => Model.IncrementKeepCount();
 
     /// <summary>The Mac's "Reveal in Finder": select the backups folder in its parent.</summary>
-    private void OnShowInExplorer(object sender, RoutedEventArgs e)
-    {
-        var dir = Model.BackupsDir;
-        var arguments = Directory.Exists(dir) ? $"/select,\"{dir}\"" : $"\"{Path.GetDirectoryName(dir) ?? dir}\"";
-        try
-        {
-            Process.Start(new ProcessStartInfo(SystemPrograms.Explorer, arguments) { UseShellExecute = true });
-        }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
-        {
-            // This window has no dialogs seam (unlike ConfirmDialog/NamePromptDialog/UpdateDialog,
-            // it never surfaces failures through IDialogs); explorer.exe failing to launch isn't
-            // worth inventing one for, so it's a silent no-op rather than a crash.
-        }
-    }
+    private void OnShowInExplorer(object sender, RoutedEventArgs e) => ExplorerReveal.Show(Model.BackupsDir);
 
     // RestoreDialog.Show presents through WpfDialogs.Present, which activates the dialog; that is fine
     // here because this window is the owner and the dialog is shown modally (ShowDialog).

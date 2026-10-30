@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -283,18 +282,9 @@ public partial class CollectionsWindow : Window
     /// <summary>The Mac's "Show in Finder": the document selected in its folder.</summary>
     private static void Reveal(string? path)
     {
-        if (path is null)
+        if (path is not null)
         {
-            return;
-        }
-        try
-        {
-            Process.Start(new ProcessStartInfo(SystemPrograms.Explorer, $"/select,\"{path}\"") { UseShellExecute = true });
-        }
-        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
-        {
-            // Settings' Show in Explorer does the same: explorer.exe failing to launch is not
-            // worth a sentence of its own, so it is a silent no-op rather than a crash.
+            ExplorerReveal.Show(path);
         }
     }
 
