@@ -148,15 +148,13 @@ jobs:
         with:
           node-version: '22'
 
-      # The tool as it ships - single-file, self-contained, compressed and trimmed - so the Inspector
-      # check below also proves the trimmed exe works, on every push and not only when packaging. The
-      # flags are windows/scripts/package.ps1's for the tool: change them in both places.
+      # The tool as it ships - single-file, self-contained, compressed and trimmed, as
+      # ConnectorControl.Cli.csproj sets for any publish with a runtime, package.ps1's included - so
+      # the Inspector check below also proves the trimmed exe works, on every push and not only when
+      # packaging.
       - name: Publish the command-line tool as it ships
         shell: pwsh
-        run: |
-          dotnet publish windows/src/ConnectorControl.Cli -c Release -r win-x64 --self-contained true `
-            -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:PublishTrimmed=true `
-            -o "$env:RUNNER_TEMP/connector-control"
+        run: dotnet publish windows/src/ConnectorControl.Cli -c Release -r win-x64 -o "$env:RUNNER_TEMP/connector-control"
 
       # The MCP Inspector drives the published connector-control.exe mcp against the headless test host
       # from the Release build above.
@@ -213,17 +211,13 @@ jobs:
       - name: Write Azure Artifact Signing metadata
         if: inputs.require-signing
         shell: pwsh
+        # Only the three values the metadata file holds. The gate job has already proved all six
+        # secrets are there, and the next step asserts SIGN_FILE before it packs.
         env:
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
           AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
           AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
         run: |
-          foreach ($name in 'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET', 'AZURE_SIGNING_ENDPOINT', 'AZURE_SIGNING_ACCOUNT', 'AZURE_SIGNING_PROFILE') {
-            if (-not [Environment]::GetEnvironmentVariable($name)) { throw "require-signing is set but the $name secret is missing" }
-          }
           $file = Join-Path $env:RUNNER_TEMP 'azure-signing.json'
           @{ Endpoint = $env:AZURE_SIGNING_ENDPOINT; CodeSigningAccountName = $env:AZURE_SIGNING_ACCOUNT; CertificateProfileName = $env:AZURE_SIGNING_PROFILE } |
             ConvertTo-Json | Set-Content -Path $file -Encoding utf8NoBOM

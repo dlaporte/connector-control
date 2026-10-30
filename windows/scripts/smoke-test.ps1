@@ -47,9 +47,8 @@
          hook takes the entry out of Claude's config, the copy's folder out of the user PATH and deletes the
          copy. Asserted: the app exited, the entry is gone and the rest of the config kept, bin\ is gone,
          the PATH is clean, nothing wrote to Claude's config afterwards, and crash.log (in the data folder,
-         which the uninstall keeps) is still absent, since the hook logs only a failure.
-      5. a safety stop of the process if it somehow still runs. (The logs are copied to -LogDir before the
-         uninstall, which deletes the install root.)
+         which the uninstall keeps) is still absent, since the hook logs only a failure. (The logs are
+         copied to -LogDir before the uninstall, which deletes the install root.)
     Prints "SMOKE PASS" and exits 0; any failed assertion throws.
 
 .PARAMETER SetupExe      The ConnectorControl-<rid>-Setup.exe to check or install.
@@ -77,9 +76,9 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-# `taskkill` without /F legitimately exits non-zero against a process with no window to close,
-# and PowerShell 7.4+ (the runner has 7.6) would turn that into a terminating error while
-# $ErrorActionPreference is 'Stop'. Native exit codes are handled explicitly below instead.
+# PowerShell 7.4+ (the runner has 7.6) turns a non-zero native exit code into a terminating error
+# while $ErrorActionPreference is 'Stop'. Native exit codes are asserted explicitly below instead,
+# so a failure names the command.
 $PSNativeCommandUseErrorActionPreference = $false
 
 function Assert-True {
@@ -288,27 +287,13 @@ Assert-True ((Get-FileHash $claudeConfig).Hash -eq $configAfterHook -and (Get-It
 Assert-True (-not ((Get-ServerNames) -contains 'connector-control')) "and the entry has not come back"
 Assert-True (-not (Test-Path $bin)) "nor the copy"
 
-Write-Host "== Stop"
-$stopTimeoutMs = 15000   # generous margin over how long a graceful WM_CLOSE-style shutdown should ever take
-# The uninstall has normally ended the app already; taskkill on a dead PID would leave $LASTEXITCODE at 128, which
-# the CI shell's trailing `exit $LASTEXITCODE` would turn into a failed step after SMOKE PASS.
-if (-not $app.HasExited) {
-    & taskkill.exe /PID $app.Id | Out-Null      # graceful first: posts WM_CLOSE to the process's windows
-    if (-not $app.WaitForExit($stopTimeoutMs)) {
-        # Expected for a tray app: with no top-level window, taskkill reports "can only be
-        # terminated forcefully" and exits non-zero. That is the normal path here, not a failure.
-        Write-Host "     graceful taskkill did not stop it (a tray app has no window to close); forcing"
-        & taskkill.exe /PID $app.Id /F | Out-Null
-    }
-}
-Assert-True ($app.WaitForExit($stopTimeoutMs)) "the process exited within $($stopTimeoutMs / 1000) s"
-# A clean run says nothing to crash.log: not the copy, not the hook (which logs only a failure), not the stop.
+# A clean run says nothing to crash.log: not the copy, not the hook (which logs only a failure).
 if (Test-Path $crashLog) {
     Write-Host "--- crash.log ---"
     Get-Content $crashLog | Write-Host
     Copy-Item $crashLog (Join-Path $LogDir 'crash.log')
 }
-Assert-True (-not (Test-Path $crashLog)) "still no crash.log after the uninstall and the stop"
+Assert-True (-not (Test-Path $crashLog)) "still no crash.log after the uninstall"
 
 Write-Host "SMOKE PASS"
 # Explicit: the CI shell ends with $LASTEXITCODE, which a native command above may have left non-zero.

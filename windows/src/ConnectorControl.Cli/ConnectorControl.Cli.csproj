@@ -2,16 +2,27 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <!-- Windows only: the pipe, the user's SID and the detached start are Windows'. EnableWindowsTargeting
-         (Directory.Build.props) lets it build on the Mac. package.ps1 publishes it single-file and
-         self-contained per runtime, so the copy in bin\ runs with nothing beside it. -->
+         (Directory.Build.props) lets it build on the Mac. Published per runtime as set below. -->
     <TargetFramework>net10.0-windows</TargetFramework>
     <RootNamespace>ConnectorControl.Cli</RootNamespace>
     <!-- The file Claude's entry and the PATH run. UpdateVerifier.MustBeOurs requires this app's own
          signature on it. -->
     <AssemblyName>connector-control</AssemblyName>
-    <!-- Published trimmed (package.ps1 and CI pass PublishTrimmed): the analyzer makes any code the
-         trimmer could break an IL2xxx warning, which TreatWarningsAsErrors turns into a failed build. -->
+    <!-- Published trimmed (below): the analyzer makes any code the trimmer could break an IL2xxx
+         warning, which TreatWarningsAsErrors turns into a failed build. -->
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+  </PropertyGroup>
+  <!-- How the tool ships, for `dotnet publish -r <rid>` (package.ps1, and windows-build.yml's
+       Inspector check, which therefore runs the build that ships). Single-file and self-contained:
+       the app keeps a copy in %LOCALAPPDATA%\Connector Control\bin, outside the update folder,
+       where it runs with nothing beside it. Trimmed and compressed, since the packaged tool and that
+       copy each carry the runtime: about 11 MB instead of 70. Only with a runtime identifier, so
+       `dotnet build` and the tests are unaffected. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishTrimmed>true</PublishTrimmed>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../ConnectorControl.Core/ConnectorControl.Core.csproj" />
