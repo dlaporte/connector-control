@@ -60,6 +60,11 @@ jobs:
       - name: update-preview-feed.sh orders builds against the published releases
         run: ./scripts/tests/update-preview-feed-order.sh
 
+      # A notarization upload that stalls is stopped and retried, and only an accepted submission
+      # is stapled: proved with a fake xcrun and notarytool, so no Mac minutes and nothing sent to Apple.
+      - name: notarize.sh bounds and retries the upload
+        run: ./scripts/tests/notarize-retry.sh
+
       # The release gate: a changelog section of only empty sub-headings, or no section, fails;
       # empty sub-headings are dropped from what ships.
       - name: changelog-section.sh gates a release's notes
