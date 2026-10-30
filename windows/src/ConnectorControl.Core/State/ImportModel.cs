@@ -220,7 +220,7 @@ public sealed class ImportModel : ObservableObject
         Author = document.Author;
         rendered = document.Render();
         // The document's name, suffixed until it is one no collection here already answers to.
-        syncName = FreeName(document.Name, state.CollectionNames);
+        syncName = FreeName.First(document.Name, new HashSet<string>(state.CollectionNames, StringComparer.Ordinal).Contains);
         RebuildRows();
     }
 
@@ -516,21 +516,5 @@ public sealed class ImportModel : ObservableObject
                            needs.Count == 0 ? null : AppState.NeedsValueCaution(string.Join(", ", needs)),
                            Badge(reason, present));
         }).ToList();
-    }
-
-    /// <summary><paramref name="name"/>, or "name 2", "name 3", … - the first one nothing in <paramref name="taken"/> answers to.</summary>
-    private static string FreeName(string name, IReadOnlyList<string> taken)
-    {
-        var used = new HashSet<string>(taken, StringComparer.Ordinal);
-        if (!used.Contains(name))
-        {
-            return name;
-        }
-        var suffix = 2;
-        while (used.Contains(name + " " + suffix.ToString(CultureInfo.InvariantCulture)))
-        {
-            suffix++;
-        }
-        return name + " " + suffix.ToString(CultureInfo.InvariantCulture);
     }
 }

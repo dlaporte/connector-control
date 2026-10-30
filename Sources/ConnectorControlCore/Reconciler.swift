@@ -51,13 +51,8 @@ public enum Reconciler {
     /// this very config. The active collection never holds the name, so there it is `name`
     /// itself; another collection may hold a connector of its own under it, which stays as it is.
     private static func keptName(_ name: String, _ config: JSONValue, in held: [String: MCPEntry]) -> String {
-        var candidate = name
-        var suffix = 2
-        while let entry = held[candidate], entry.config != config {
-            candidate = "\(name) \(suffix)"
-            suffix += 1
-        }
-        return candidate
+        // A name held with this very config counts as free: the connector is already there.
+        FreeName.first(name) { held[$0].map { $0.config != config } ?? false }
     }
 
     /// A file entry unknown to the store is imported only when it's genuinely

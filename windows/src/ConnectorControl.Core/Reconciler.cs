@@ -68,14 +68,8 @@ public static class Reconciler
     /// </summary>
     private static string KeptName(string name, JsonValue config, IReadOnlyDictionary<string, McpEntry> held)
     {
-        var candidate = name;
-        var suffix = 2;
-        while (held.TryGetValue(candidate, out var entry) && entry.Config != config)
-        {
-            candidate = $"{name} {suffix}";
-            suffix++;
-        }
-        return candidate;
+        // A name held with this very config counts as free: the connector is already there.
+        return FreeName.First(name, candidate => held.TryGetValue(candidate, out var entry) && entry.Config != config);
     }
 
     /// <summary>

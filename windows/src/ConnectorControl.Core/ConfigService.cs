@@ -163,14 +163,7 @@ public sealed class ConfigService
         {
             return first;
         }
-        var name = MasterStore.DefaultCollectionName;
-        var suffix = 2;
-        while (store.Collections.ContainsKey(name))
-        {
-            name = $"{MasterStore.DefaultCollectionName} {suffix}";
-            suffix++;
-        }
-        return name;
+        return FreeName.First(MasterStore.DefaultCollectionName, store.Collections.ContainsKey);
     }
 
     /// <summary>

@@ -2575,16 +2575,7 @@ public sealed class AppState : ObservableObject, IDisposable
     private string FreeConnectorName(string name, string collection)
     {
         var mcps = Store.Collections.TryGetValue(collection, out var held) ? held.Mcps : null;
-        if (mcps is null || !mcps.ContainsKey(name))
-        {
-            return name;
-        }
-        var suffix = 2;
-        while (mcps.ContainsKey(name + " " + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture)))
-        {
-            suffix++;
-        }
-        return name + " " + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return FreeName.First(name, candidate => mcps?.ContainsKey(candidate) == true);
     }
 
     // MARK: publishing and export

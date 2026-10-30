@@ -149,13 +149,7 @@ public struct ConfigService: Sendable {
             .min(by: { $0.ordinallyPrecedes($1) }) {
             return first
         }
-        var name = MasterStore.defaultCollectionName
-        var suffix = 2
-        while store.collections[name] != nil {
-            name = "\(MasterStore.defaultCollectionName) \(suffix)"
-            suffix += 1
-        }
-        return name
+        return FreeName.first(MasterStore.defaultCollectionName) { store.collections[$0] != nil }
     }
 
     /// The newest `mcps` backup that decodes, with the file it came from, or nil when none does.

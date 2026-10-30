@@ -1711,10 +1711,7 @@ public final class AppState: ObservableObject {
     /// `name`, or "name 2", "name 3", … - the first one no connector in `collection` is called.
     /// Keep both lands beside what is already there rather than over it.
     private func freeConnectorName(_ name: String, in collection: String) -> String {
-        guard store.collections[collection]?.mcps[name] != nil else { return name }
-        var suffix = 2
-        while store.collections[collection]?.mcps["\(name) \(suffix)"] != nil { suffix += 1 }
-        return "\(name) \(suffix)"
+        FreeName.first(name) { store.collections[collection]?.mcps[$0] != nil }
     }
 
     // MARK: - Publishing and export

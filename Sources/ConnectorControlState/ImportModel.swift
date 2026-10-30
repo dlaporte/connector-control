@@ -203,7 +203,7 @@ public final class ImportModel: ObservableObject {
         author = document.author
         rendered = document.render()
         // The document's name, suffixed until it is one no collection here already answers to.
-        syncName = ImportModel.freeName(document.name, taken: Set(state.collectionNames))
+        syncName = FreeName.first(document.name, isTaken: Set(state.collectionNames).contains)
         rebuildRows()
     }
 
@@ -331,13 +331,5 @@ public final class ImportModel: ObservableObject {
                            ? nil : AppState.needsValueCaution(needs.joined(separator: ", ")),
                        badge: ImportModel.badge(excludedReason: reason, present: present))
         }
-    }
-
-    /// `name`, or "name 2", "name 3", … - the first one nothing in `taken` answers to.
-    private static func freeName(_ name: String, taken: Set<String>) -> String {
-        guard taken.contains(name) else { return name }
-        var suffix = 2
-        while taken.contains("\(name) \(suffix)") { suffix += 1 }
-        return "\(name) \(suffix)"
     }
 }
