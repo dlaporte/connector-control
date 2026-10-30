@@ -37,5 +37,9 @@ public enum ClaudeSignature {
         "\(name) is not an app bundle this app can inspect."
     }
 
+    /// What Restart Claude says when Claude is still running after the wait for it to quit.
+    public static let didNotQuitMessage =
+        "Claude didn\u{2019}t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again."
+
     public static let requirementCompileFailure = "The Claude Desktop signing requirement could not be compiled."
 }

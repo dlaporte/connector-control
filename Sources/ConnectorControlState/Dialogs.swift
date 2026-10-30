@@ -20,6 +20,7 @@ public protocol Dialogs: AnyObject {
 
 public extension Dialogs {
     static var cancelTitle: String { "Cancel" }
+    static var okTitle: String { "OK" }
 
     /// The usual default: Return presses the primary button. One label short of the requirement,
     /// so a conformer that forgot it cannot compile against this instead.

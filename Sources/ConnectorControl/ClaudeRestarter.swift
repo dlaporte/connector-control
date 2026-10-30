@@ -74,8 +74,7 @@ enum ClaudeRestarter {
             Thread.sleep(forTimeInterval: pollInterval)
         }
         if stillRunning() {
-            completion("Claude didn’t quit (it may be showing a dialog). "
-                       + "Quit it manually, then click Restart Claude again.")
+            completion(ClaudeSignature.didNotQuitMessage)
             return
         }
         NSWorkspace.shared.openApplication(

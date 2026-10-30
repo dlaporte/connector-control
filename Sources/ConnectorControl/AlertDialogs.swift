@@ -6,8 +6,6 @@ import ConnectorControlState
 /// behind whatever is frontmost.
 @MainActor
 final class AlertDialogs: Dialogs {
-    static let okTitle = "OK"
-
     func confirm(message: String, informative: String?, primary: String, cancel: String, destructive: Bool,
                  cancelIsDefault: Bool) -> Bool {
         NSApp.activate(ignoringOtherApps: true)
@@ -33,7 +31,7 @@ final class AlertDialogs: Dialogs {
         field.stringValue = initial
         alert.accessoryView = field
         alert.window.initialFirstResponder = field
-        alert.addButton(withTitle: AlertDialogs.okTitle)
+        alert.addButton(withTitle: Self.okTitle)
         alert.addButton(withTitle: Self.cancelTitle)
         guard alert.runModal() == .alertFirstButtonReturn else { return nil }
         return field.stringValue
@@ -44,7 +42,7 @@ final class AlertDialogs: Dialogs {
         let alert = NSAlert()
         alert.messageText = message
         if let informative { alert.informativeText = informative }
-        alert.addButton(withTitle: AlertDialogs.okTitle)
+        alert.addButton(withTitle: Self.okTitle)
         alert.runModal()
     }
 

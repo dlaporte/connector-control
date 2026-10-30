@@ -359,12 +359,8 @@ final class StringCatalogTests: XCTestCase {
         actual["ClaudeIntegration.reservedNameError"] = ClaudeIntegration.reservedNameError
 
         // MARK: ClaudeRestarter / ClaudeSignature
-        // ClaudeRestarter.swift lives in the ConnectorControl app target (AppKit),
-        // which this test target cannot import; its one user-facing literal is
-        // pinned here by hand, matching Sources/ConnectorControl/ClaudeRestarter.swift.
 
-        actual["ClaudeRestarter.didNotQuitMessage"] =
-            "Claude didn\u{2019}t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again."
+        actual["ClaudeRestarter.didNotQuitMessage"] = ClaudeSignature.didNotQuitMessage
         actual["ClaudeSignature.notFoundMessage"] = ClaudeSignature.notFoundMessage(path: "X")
         actual["ClaudeSignature.refusalMessage"] = ClaudeSignature.refusalMessage(name: "X", detail: "Y")
         actual["ClaudeSignature.requirementCompileFailure"] = ClaudeSignature.requirementCompileFailure
@@ -686,10 +682,7 @@ final class StringCatalogTests: XCTestCase {
         // MARK: Dialogs / AlertDialogs
 
         actual["Dialogs.cancelTitle"] = FakeDialogs.cancelTitle
-        // AlertDialogs.swift lives in the ConnectorControl app target (AppKit),
-        // which this test target cannot import; its OK button title is pinned
-        // here by hand, matching Sources/ConnectorControl/AlertDialogs.swift.
-        actual["AlertDialogs.okTitle"] = "OK"
+        actual["AlertDialogs.okTitle"] = FakeDialogs.okTitle
 
         // MARK: EditTarget / EditorModel
 
