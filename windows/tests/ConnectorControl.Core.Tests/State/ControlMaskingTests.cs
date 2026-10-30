@@ -910,13 +910,38 @@ public class ControlMaskingTests
         }
     }
 
-    /// <summary>Text that starts as JSON does but does not parse (JSON5's unquoted keys and single quotes)
-    /// is masked whole, as JSON too deep to read is: what it holds cannot be read by key.</summary>
+    /// <summary>A flag with <c>=</c> whose glued value leaves the secret to the next word hides that word, past a
+    /// scheme word, as the flag on its own does.</summary>
     [Fact]
-    public void JsonLikeTextThatDoesNotParseIsMaskedWhole()
+    public void AFlagWithItsValueGluedOnHidesTheSecretAfterIt()
     {
-        Assert.Equal(["--config", ControlMasking.Mask], ControlMasking.Arguments(["--config", "{apiKey: 'hunter2'}"]));
-        Assert.Equal(ControlMasking.Mask, ControlMasking.Argument(" [hunter2"));
-        AssertHidden(["hunter2"], Local("npx", ["--config", "{apiKey: 'hunter2'}"]));
+        string[][] cases =
+        [
+            ["--header=Authorization:", "Bearer", "x9secret"],
+            ["--headers=Authorization:", "Bearer", "hunter2"],
+            ["--header=Authorization: Bearer", "hunter2"],
+            ["--token=Bearer", "hunter2"],
+            ["--token=", "hunter2"],
+            ["-c", "curl --header=Authorization: Bearer hunter2 https://x"],
+        ];
+        foreach (var args in cases)
+        {
+            var shown = string.Join(" ", ControlMasking.Arguments(args));
+            Assert.DoesNotContain("hunter2", shown);
+            Assert.DoesNotContain("x9secret", shown);
+            AssertHidden(["hunter2", "x9secret"], Local("sh", args));
+        }
+        Assert.Equal(["--token=•••", "${TOKEN}"], ControlMasking.Arguments(["--token=Bearer", "${TOKEN}"]));
+        Assert.Equal(["--header=X-Team:", "blue"], ControlMasking.Arguments(["--header=X-Team:", "blue"]));
+        Assert.Equal(["--token=•••", "server.js"], ControlMasking.Arguments(["--token=abc", "server.js"]));
+    }
+
+    /// <summary>Text that starts with a bracket but is not JSON — an IPv6 literal, a glob — reads as written.</summary>
+    [Fact]
+    public void BracketedValuesThatAreNotJsonReadAsWritten()
+    {
+        Assert.Equal(["--host", "[::1]"], ControlMasking.Arguments(["--host", "[::1]"]));
+        Assert.Equal(["--listen", "[::]:8080"], ControlMasking.Arguments(["--listen", "[::]:8080"]));
+        Assert.Equal("{src,lib}/**/*.ts", ControlMasking.Argument("{src,lib}/**/*.ts"));
     }
 }

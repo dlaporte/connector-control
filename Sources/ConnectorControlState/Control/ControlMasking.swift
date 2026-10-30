@@ -259,13 +259,12 @@ public enum ControlMasking {
 
     /// An argument that is a JSON object or array — Smithery's `--config '{"apiKey":"…"}'` — with
     /// each leaf masked by its key, as a config's are, on one line; as written when nothing in it
-    /// changed. JSON nested deeper than `JSONValue.parse` reads, and text that starts as JSON does
-    /// but does not parse (JSON5's `{apiKey: 'x'}`), is "•••", since what it holds cannot be read.
-    /// Nil for anything else. Before the shell line, which would split JSON at its spaces.
+    /// changed. JSON nested deeper than `JSONValue.parse` reads is "•••", since what it holds cannot
+    /// be read. Nil for anything else. Before the shell line, which would split JSON at its spaces.
     static func jsonArgument(_ arg: String) -> String? {
         guard let first = arg.unicodeScalars.first(where: { !$0.properties.isWhitespace }), first == "{" || first == "[" else { return nil }
         guard McpSession.nests(atMost: McpSession.maxNestingDepth, arg) else { return mask }
-        guard let value = try? JSONValue.parse(Data(arg.utf8)) else { return mask }
+        guard let value = try? JSONValue.parse(Data(arg.utf8)) else { return nil }
         switch value {
         case .object, .array:
             let shown = compactText(leaves(value, .masked, secret: false))
@@ -306,7 +305,7 @@ public enum ControlMasking {
             if index > 0 {
                 let previous = args[index - 1]
                 if headerFlags.contains(previous) { return header(arg) }
-                if hidesNext(previous, exposure), !isFlag(arg), !refersElsewhere(arg) {
+                if hidesAfter(previous, exposure), !isFlag(arg), !refersElsewhere(arg) {
                     return exposure == .dialog ? clientInfo(arg) : mask
                 }
             }
@@ -323,8 +322,25 @@ public enum ControlMasking {
     static func afterScheme(_ args: [String], _ index: Int, _ exposure: Exposure) -> Bool {
         guard exposure == .masked, index > 1 else { return false }
         let arg = args[index]
-        return hidesNext(args[index - 2], exposure) && CredentialHeuristics.isSchemeWord(args[index - 1])
+        return hidesAfter(args[index - 2], exposure) && CredentialHeuristics.isSchemeWord(args[index - 1])
             && !isFlag(arg) && !refersElsewhere(arg)
+    }
+
+    /// Whether the word after `word` is a secret: after a flag `hidesNext(_:_:)` accepts, and, when
+    /// masked, after a flag with `=` whose glued value leaves the secret to the next word — nothing
+    /// or only a scheme word after a flag named for a secret (`--token=` `x`, `--token=Bearer` `x`),
+    /// or after a header flag a header named for a secret or that signs in, with nothing or only a
+    /// scheme word after its ":" (`--header=Authorization:` `Bearer` `x`, `--header=Authorization:
+    /// Bearer` `x`), as `headerValues(_:)` reads a header after a bare `--header`.
+    static func hidesAfter(_ word: String, _ exposure: Exposure) -> Bool {
+        if hidesNext(word, exposure) { return true }
+        guard exposure == .masked, let piece = cut(word, at: "="), isFlag(piece.before) else { return false }
+        if hidesNext(piece.before, exposure) {
+            return piece.after.isEmpty || CredentialHeuristics.isSchemeWord(piece.after)
+        }
+        guard headerFlags.contains(piece.before), let named = headerName(piece.after) else { return false }
+        return CredentialHeuristics.namesASecret(named.name)
+            || signInHeaders.contains(where: { CredentialHeuristics.loweredUnits(named.name).elementsEqual($0.utf16) })
     }
 
     /// One argument as the dialog shows it: as written, but for the value of

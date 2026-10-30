@@ -764,11 +764,31 @@ final class ControlMaskingTests: XCTestCase {
         }
     }
 
-    /// Text that starts as JSON does but does not parse (JSON5's unquoted keys and single quotes)
-    /// is masked whole, as JSON too deep to read is: what it holds cannot be read by key.
-    func testJSONLikeTextThatDoesNotParseIsMaskedWhole() throws {
-        XCTAssertEqual(ControlMasking.arguments(["--config", "{apiKey: 'hunter2'}"]), ["--config", ControlMasking.mask])
-        XCTAssertEqual(ControlMasking.argument(" [hunter2"), ControlMasking.mask)
-        try assertHidden(["hunter2"], in: local("npx", ["--config", "{apiKey: 'hunter2'}"]))
+    /// A flag with `=` whose glued value leaves the secret to the next word hides that word, past a
+    /// scheme word, as the flag on its own does.
+    func testAFlagWithItsValueGluedOnHidesTheSecretAfterIt() throws {
+        let cases: [[String]] = [
+            ["--header=Authorization:", "Bearer", "x9secret"],
+            ["--headers=Authorization:", "Bearer", "hunter2"],
+            ["--header=Authorization: Bearer", "hunter2"],
+            ["--token=Bearer", "hunter2"],
+            ["--token=", "hunter2"],
+            ["-c", "curl --header=Authorization: Bearer hunter2 https://x"],
+        ]
+        for args in cases {
+            let shown = ControlMasking.arguments(args).joined(separator: " ")
+            XCTAssertFalse(shown.contains("hunter2") || shown.contains("x9secret"), "\(args) -> \(shown)")
+            try assertHidden(["hunter2", "x9secret"], in: local("sh", args))
+        }
+        XCTAssertEqual(ControlMasking.arguments(["--token=Bearer", "${TOKEN}"]), ["--token=•••", "${TOKEN}"])
+        XCTAssertEqual(ControlMasking.arguments(["--header=X-Team:", "blue"]), ["--header=X-Team:", "blue"])
+        XCTAssertEqual(ControlMasking.arguments(["--token=abc", "server.js"]), ["--token=•••", "server.js"])
+    }
+
+    /// Text that starts with a bracket but is not JSON — an IPv6 literal, a glob — reads as written.
+    func testBracketedValuesThatAreNotJSONReadAsWritten() {
+        XCTAssertEqual(ControlMasking.arguments(["--host", "[::1]"]), ["--host", "[::1]"])
+        XCTAssertEqual(ControlMasking.arguments(["--listen", "[::]:8080"]), ["--listen", "[::]:8080"])
+        XCTAssertEqual(ControlMasking.argument("{src,lib}/**/*.ts"), "{src,lib}/**/*.ts")
     }
 }

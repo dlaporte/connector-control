@@ -304,9 +304,8 @@ public static class ControlMasking
 
     /// <summary>An argument that is a JSON object or array — Smithery's <c>--config '{"apiKey":"…"}'</c> — with
     /// each leaf masked by its key, as a config's are, on one line; as written when nothing in it
-    /// changed. JSON nested deeper than <see cref="JsonValue.Parse(string)"/> reads, and text that starts as JSON does
-    /// but does not parse (JSON5's <c>{apiKey: 'x'}</c>), is "•••", since what it holds cannot be read.
-    /// Null for anything else. Before the shell line, which would split JSON at its spaces.</summary>
+    /// changed. JSON nested deeper than <see cref="JsonValue.Parse(string)"/> reads is "•••", since what it holds cannot
+    /// be read. Null for anything else. Before the shell line, which would split JSON at its spaces.</summary>
     internal static string? JsonArgument(string arg)
     {
         var first = arg.FirstOrDefault(c => !char.IsWhiteSpace(c));
@@ -325,7 +324,7 @@ public static class ControlMasking
         }
         catch (JsonException)
         {
-            return Mask;
+            return null;
         }
         if (value.Kind is not (JsonKind.Object or JsonKind.Array))
         {
@@ -381,7 +380,7 @@ public static class ControlMasking
                 {
                     return Header(arg);
                 }
-                if (HidesNext(previous, exposure) && !IsFlag(arg) && !RefersElsewhere(arg))
+                if (HidesAfter(previous, exposure) && !IsFlag(arg) && !RefersElsewhere(arg))
                 {
                     return exposure == Exposure.Dialog ? ClientInfo(arg) : Mask;
                 }
@@ -406,8 +405,35 @@ public static class ControlMasking
             return false;
         }
         var arg = args[index];
-        return HidesNext(args[index - 2], exposure) && CredentialHeuristics.IsSchemeWord(args[index - 1])
+        return HidesAfter(args[index - 2], exposure) && CredentialHeuristics.IsSchemeWord(args[index - 1])
             && !IsFlag(arg) && !RefersElsewhere(arg);
+    }
+
+    /// <summary>Whether the word after <paramref name="word"/> is a secret: after a flag <see cref="HidesNext"/> accepts, and, when
+    /// masked, after a flag with <c>=</c> whose glued value leaves the secret to the next word — nothing
+    /// or only a scheme word after a flag named for a secret (<c>--token=</c> <c>x</c>, <c>--token=Bearer</c> <c>x</c>),
+    /// or after a header flag a header named for a secret or that signs in, with nothing or only a
+    /// scheme word after its ":" (<c>--header=Authorization:</c> <c>Bearer</c> <c>x</c>, <c>--header=Authorization:
+    /// Bearer</c> <c>x</c>), as <see cref="HeaderValues"/> reads a header after a bare <c>--header</c>.</summary>
+    internal static bool HidesAfter(string word, Exposure exposure)
+    {
+        if (HidesNext(word, exposure))
+        {
+            return true;
+        }
+        if (exposure != Exposure.Masked || Cut(word, "=") is not { } piece || !IsFlag(piece.Before))
+        {
+            return false;
+        }
+        if (HidesNext(piece.Before, exposure))
+        {
+            return piece.After.Length == 0 || CredentialHeuristics.IsSchemeWord(piece.After);
+        }
+        if (!HeaderFlags.Contains(piece.Before) || HeaderName(piece.After) is not { } named)
+        {
+            return false;
+        }
+        return CredentialHeuristics.NamesASecret(named.Name) || SignInHeaders.Contains(named.Name.ToLowerInvariant());
     }
 
     /// <summary>One argument as the dialog shows it: as written, but for the value of
