@@ -117,7 +117,7 @@ public sealed partial class ControlTools
         }
         if (state.IsSynced(collection))
         {
-            return new ControlStep.Refused(SubscribedReadOnlyError(shownCollection));
+            return new ControlStep.Refused(SubscribedAddError(shownCollection));
         }
         var name = (arguments.String("name") ?? "").TrimSpaces();
         var shownName = ControlText.EscapedName(name);
@@ -177,7 +177,7 @@ public sealed partial class ControlTools
         }
         if (state.IsSynced(collection))
         {
-            return new ControlStep.Refused(SubscribedReadOnlyError(shownCollection));
+            return new ControlStep.Refused(SubscribedChangeError(shownCollection));
         }
         var name = arguments.String("name") ?? "";
         var shownName = ControlText.EscapedName(name);
@@ -262,7 +262,7 @@ public sealed partial class ControlTools
         }
         if (state.IsSynced(collection))
         {
-            return new ControlStep.Refused(SubscribedReadOnlyError(shownCollection));
+            return new ControlStep.Refused(SubscribedChangeError(shownCollection));
         }
         var names = new List<string>();
         foreach (var name in arguments.Strings("names") ?? [])

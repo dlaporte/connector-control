@@ -104,7 +104,7 @@ extension ControlTools {
         let collection = targetCollection(arguments)
         let shownCollection = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shownCollection)) }
-        guard !state.isSynced(collection) else { return .refused(ControlTools.subscribedReadOnlyError(shownCollection)) }
+        guard !state.isSynced(collection) else { return .refused(ControlTools.subscribedAddError(shownCollection)) }
         let name = (arguments.string("name") ?? "").trimmingCharacters(in: .whitespaces)
         let shownName = ControlText.escapedName(name)
         guard !name.isEmpty else { return .refused(AppState.nameEmptyError) }
@@ -141,7 +141,7 @@ extension ControlTools {
         let collection = targetCollection(arguments)
         let shownCollection = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shownCollection)) }
-        guard !state.isSynced(collection) else { return .refused(ControlTools.subscribedReadOnlyError(shownCollection)) }
+        guard !state.isSynced(collection) else { return .refused(ControlTools.subscribedChangeError(shownCollection)) }
         let name = arguments.string("name") ?? ""
         let shownName = ControlText.escapedName(name)
         guard let current = held.mcps[name] else { return .refused(ControlTools.noConnectorError(shownName, shownCollection)) }
@@ -191,7 +191,7 @@ extension ControlTools {
         let collection = targetCollection(arguments)
         let shownCollection = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shownCollection)) }
-        guard !state.isSynced(collection) else { return .refused(ControlTools.subscribedReadOnlyError(shownCollection)) }
+        guard !state.isSynced(collection) else { return .refused(ControlTools.subscribedChangeError(shownCollection)) }
         var names: [String] = []
         for name in arguments.strings("names") ?? [] where !names.contains(name) { names.append(name) }
         guard !names.isEmpty else { return .refused(ControlTools.missingArgumentError("names")) }

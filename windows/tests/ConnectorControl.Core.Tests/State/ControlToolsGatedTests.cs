@@ -92,7 +92,7 @@ public class ControlToolsGatedTests
             (Args(("name", Text("x")), ("config", JsonValue.Object(("command", Text("npx")),
                 ("args", JsonValue.Array([Text("-y"), Text("mcp-remote"), Text("nope")]))))),
              EditorModel.InvalidUrlError),
-            (Args(("name", Text("x")), ("config", Notion), ("collection", Text("Data team"))), ControlTools.SubscribedReadOnlyError("Data team")),
+            (Args(("name", Text("x")), ("config", Notion), ("collection", Text("Data team"))), ControlTools.SubscribedAddError("Data team")),
             (Args(("name", Text("x")), ("config", Notion), ("collection", Text("Nope"))), MasterStore.NoCollectionError("Nope")),
         ];
         foreach (var (arguments, refusal) in cases)
@@ -177,7 +177,7 @@ public class ControlToolsGatedTests
             (Args(("name", Text("scoutbook")), ("newName", Text("connector-control"))), ClaudeIntegration.ReservedNameError),
             (Args(("name", Text("scoutbook")), ("newName", Text(" "))), AppState.NameEmptyError),
             (Args(("name", Text("scoutbook")), ("config", JsonValue.Object())), ControlTools.ConfigShapeError),
-            (Args(("name", Text("github")), ("config", Notion), ("collection", Text("Data team"))), ControlTools.SubscribedReadOnlyError("Data team")),
+            (Args(("name", Text("github")), ("config", Notion), ("collection", Text("Data team"))), ControlTools.SubscribedChangeError("Data team")),
         ];
         foreach (var (arguments, refusal) in cases)
         {
@@ -211,7 +211,7 @@ public class ControlToolsGatedTests
             rig.Call("delete_connectors", Args(("names", Names("aws-mcp", "nope")))));
         Assert.Equal(ControlResult.Refusal(ControlTools.MissingArgumentError("names")),
             rig.Call("delete_connectors", Args(("names", Names()))));
-        Assert.Equal(ControlResult.Refusal(ControlTools.SubscribedReadOnlyError("Data team")),
+        Assert.Equal(ControlResult.Refusal(ControlTools.SubscribedChangeError("Data team")),
             rig.Call("delete_connectors", Args(("names", Names("github")), ("collection", Text("Data team")))));
         // Nothing is deleted when one name is wrong.
         Assert.True(rig.State.Store.Mcps.ContainsKey("aws-mcp"));

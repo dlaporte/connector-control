@@ -77,7 +77,7 @@ final class ControlToolsGatedTests: XCTestCase {
             (["name": .string("x"), "config": .object(["url": .string(" ")])], ControlTools.configShapeError),
             (["name": .string("x"), "config": .object(["command": .string("npx"), "args": .array([.string("-y"), .string("mcp-remote"), .string("nope")])])],
              EditorModel.invalidURLError),
-            (["name": .string("x"), "config": notion, "collection": .string("Data team")], ControlTools.subscribedReadOnlyError("Data team")),
+            (["name": .string("x"), "config": notion, "collection": .string("Data team")], ControlTools.subscribedAddError("Data team")),
             (["name": .string("x"), "config": notion, "collection": .string("Nope")], MasterStore.noCollectionError("Nope")),
         ]
         for (arguments, refusal) in cases {
@@ -140,7 +140,7 @@ final class ControlToolsGatedTests: XCTestCase {
             (["name": .string("scoutbook"), "newName": .string("connector-control")], ClaudeIntegration.reservedNameError),
             (["name": .string("scoutbook"), "newName": .string(" ")], AppState.nameEmptyError),
             (["name": .string("scoutbook"), "config": .object([:])], ControlTools.configShapeError),
-            (["name": .string("github"), "config": notion, "collection": .string("Data team")], ControlTools.subscribedReadOnlyError("Data team")),
+            (["name": .string("github"), "config": notion, "collection": .string("Data team")], ControlTools.subscribedChangeError("Data team")),
         ]
         for (arguments, refusal) in cases {
             XCTAssertEqual(rig.call("update_connector", arguments), .refusal(refusal), refusal)
@@ -168,7 +168,7 @@ final class ControlToolsGatedTests: XCTestCase {
                        .refusal(ControlTools.noConnectorError("nope", "Default")))
         XCTAssertEqual(rig.call("delete_connectors", ["names": .array([])]), .refusal(ControlTools.missingArgumentError("names")))
         XCTAssertEqual(rig.call("delete_connectors", ["names": .array([.string("github")]), "collection": .string("Data team")]),
-                       .refusal(ControlTools.subscribedReadOnlyError("Data team")))
+                       .refusal(ControlTools.subscribedChangeError("Data team")))
         XCTAssertNotNil(rig.state.store.mcps["aws-mcp"], "nothing is deleted when one name is wrong")
         XCTAssertTrue(rig.confirmer.requests.isEmpty)
     }

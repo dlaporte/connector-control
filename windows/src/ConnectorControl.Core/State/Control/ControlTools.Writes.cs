@@ -46,11 +46,18 @@ public sealed partial class ControlTools
     public static string DuplicateSubscribedError(string collection) => $"“{collection}” is subscribed; copy it in Connector Control with Make Local Copy.";
 
     /// <summary>
-    /// add_connector, update_connector and delete_connectors on a subscribed collection: the
-    /// collection named, and the two ways round it, in the house style of the refusal above.
+    /// add_connector on a subscribed collection: the collection named, and the two ways round it,
+    /// in the house style of the refusal above.
     /// </summary>
-    public static string SubscribedReadOnlyError(string collection) =>
-        $"“{collection}” is subscribed, so it’s read-only; add connectors to a local collection, or copy this one in Connector Control with Make Local Copy.";
+    public static string SubscribedAddError(string collection) =>
+        $"“{collection}” is subscribed, so it’s read-only; add the connector to a local collection, or copy this one in Connector Control with Make Local Copy.";
+
+    /// <summary>
+    /// update_connector and delete_connectors on a subscribed collection: the way round is a local
+    /// copy, since the connector has to be in a collection you own to be changed.
+    /// </summary>
+    public static string SubscribedChangeError(string collection) =>
+        $"“{collection}” is subscribed, so it’s read-only; copy it in Connector Control with Make Local Copy to change its connectors.";
 
     public static string SettingChangedText(string key, string value) => $"{key} is now {value}.";
 

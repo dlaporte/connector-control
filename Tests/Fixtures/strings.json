@@ -680,8 +680,11 @@
   "ControlTools.subscribedNotification": {
     "format": "{0} subscribed to “{1}” as “{2}”."
   },
-  "ControlTools.subscribedReadOnlyError": {
-    "format": "“{0}” is subscribed, so it’s read-only; add connectors to a local collection, or copy this one in Connector Control with Make Local Copy."
+  "ControlTools.subscribedAddError": {
+    "format": "“{0}” is subscribed, so it’s read-only; add the connector to a local collection, or copy this one in Connector Control with Make Local Copy."
+  },
+  "ControlTools.subscribedChangeError": {
+    "format": "“{0}” is subscribed, so it’s read-only; copy it in Connector Control with Make Local Copy to change its connectors."
   },
   "ControlTools.subscribedText": {
     "format": "Subscribed: “{0}” follows {1}, read-only."

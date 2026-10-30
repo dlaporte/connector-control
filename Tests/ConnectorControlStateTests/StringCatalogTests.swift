@@ -202,7 +202,8 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.subscribeMessage.one": ["X", "1"],
         "ControlTools.subscribeTitle": ["X", "Y"],
         "ControlTools.subscribedNotification": ["X", "Y", "Z"],
-        "ControlTools.subscribedReadOnlyError": ["X"],
+        "ControlTools.subscribedAddError": ["X"],
+        "ControlTools.subscribedChangeError": ["X"],
         "ControlTools.subscribedText": ["X", "Y"],
         "ControlTools.switchValueError": ["X"],
         "ControlTools.switchedNotification": ["X", "Y"],
@@ -650,7 +651,8 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.subscribeTitle"] = ControlTools.subscribeTitle("X", "Y")
         actual["ControlTools.subscribedKind"] = ControlTools.subscribedKind
         actual["ControlTools.subscribedNotification"] = ControlTools.subscribedNotification("X", "Y", "Z")
-        actual["ControlTools.subscribedReadOnlyError"] = ControlTools.subscribedReadOnlyError("X")
+        actual["ControlTools.subscribedAddError"] = ControlTools.subscribedAddError("X")
+        actual["ControlTools.subscribedChangeError"] = ControlTools.subscribedChangeError("X")
         actual["ControlTools.subscribedText"] = ControlTools.subscribedText("X", "Y")
         actual["ControlTools.switchValueError"] = ControlTools.switchValueError("X")
         actual["ControlTools.switchedNotification"] = ControlTools.switchedNotification("X", "Y")

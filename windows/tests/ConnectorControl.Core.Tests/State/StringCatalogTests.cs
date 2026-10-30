@@ -208,7 +208,8 @@ public class StringCatalogTests
         ["ControlTools.subscribeMessage.one"] = ["X", "1"],
         ["ControlTools.subscribeTitle"] = ["X", "Y"],
         ["ControlTools.subscribedNotification"] = ["X", "Y", "Z"],
-        ["ControlTools.subscribedReadOnlyError"] = ["X"],
+        ["ControlTools.subscribedAddError"] = ["X"],
+        ["ControlTools.subscribedChangeError"] = ["X"],
         ["ControlTools.subscribedText"] = ["X", "Y"],
         ["ControlTools.switchValueError"] = ["X"],
         ["ControlTools.switchedNotification"] = ["X", "Y"],
@@ -661,7 +662,8 @@ public class StringCatalogTests
         actual["ControlTools.subscribeTitle"] = ControlTools.SubscribeTitle("X", "Y");
         actual["ControlTools.subscribedKind"] = ControlTools.SubscribedKind;
         actual["ControlTools.subscribedNotification"] = ControlTools.SubscribedNotification("X", "Y", "Z");
-        actual["ControlTools.subscribedReadOnlyError"] = ControlTools.SubscribedReadOnlyError("X");
+        actual["ControlTools.subscribedAddError"] = ControlTools.SubscribedAddError("X");
+        actual["ControlTools.subscribedChangeError"] = ControlTools.SubscribedChangeError("X");
         actual["ControlTools.subscribedText"] = ControlTools.SubscribedText("X", "Y");
         actual["ControlTools.switchValueError"] = ControlTools.SwitchValueError("X");
         actual["ControlTools.switchedNotification"] = ControlTools.SwitchedNotification("X", "Y");
