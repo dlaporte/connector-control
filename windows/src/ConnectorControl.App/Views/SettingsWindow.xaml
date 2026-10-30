@@ -257,7 +257,8 @@
               <StackPanel>
                 <Border Style="{StaticResource Row}">
                   <StackPanel Orientation="Horizontal">
-                    <Image x:Name="ClaudeAppIcon" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center" Visibility="Collapsed" />
+                    <Image x:Name="ClaudeAppIcon" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center" Visibility="Collapsed"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
                     <TextBlock x:Name="InstallKind" Text="{Binding InstallKindText}" VerticalAlignment="Center" />
                   </StackPanel>
                 </Border>

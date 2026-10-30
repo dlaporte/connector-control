@@ -31,6 +31,10 @@ public class SettingsWindowTests
                 Assert.Equal(3, window.Tabs.Items.Count);
                 var headers = window.Tabs.Items.Cast<TabItem>().Select(t => ((TextBlock)((StackPanel)t.Header).Children[1]).Text).ToArray();
                 Assert.Equal(["General", "Storage", "Claude"], headers);
+                // Each tab draws its glyph before its name, as the Mac's draw gearshape, externaldrive and Claude's icon; the
+                // Claude tab's generic glyph stays until its own icon is read, and wherever it cannot be.
+                var glyphs = window.Tabs.Items.Cast<TabItem>().Select(t => ((TextBlock)((StackPanel)t.Header).Children[0]).Text).ToArray();
+                Assert.Equal(["\uE713", "\uEDA2", "\uECAA"], glyphs);
                 Assert.Equal("Version 1.2.2", window.Model.VersionText);
                 Assert.Equal(Visibility.Collapsed, window.UpdatesCaption.Visibility);   // a release says nothing about previews
                 Assert.Equal(h.StoreDir, window.Model.StoreDirPath);

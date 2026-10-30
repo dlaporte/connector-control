@@ -22,9 +22,9 @@ public partial class SettingsWindow : Window
         this.state = state;
         Model = new SettingsModel(state, services.Settings, services.Autostart, services.ClaudeInstall, services.Updater, updates, commandLineTool);
         DataContext = Model;
-        GeneralTabItem.Header = TabHeader("", null, SettingsModel.GeneralTab);
-        StorageTabItem.Header = TabHeader("", null, SettingsModel.StorageTab);
-        ClaudeTabItem.Header = TabHeader("", null, SettingsModel.ClaudeTab);
+        GeneralTabItem.Header = TabHeader(GeneralGlyph, null, SettingsModel.GeneralTab);
+        StorageTabItem.Header = TabHeader(StorageGlyph, null, SettingsModel.StorageTab);
+        ClaudeTabItem.Header = TabHeader(ClaudeFallbackGlyph, null, SettingsModel.ClaudeTab);
         Activated += (_, _) => Model.Refresh();
         Closed += (_, _) => Model.Dispose();
         Model.RefreshTools();   // probe all four when the window opens
@@ -37,7 +37,7 @@ public partial class SettingsWindow : Window
             try
             {
                 var icon = await Task.Run(() => ClaudeIconLoader.Load(services.ClaudeInstall.Detect()));
-                ClaudeTabItem.Header = TabHeader("", icon, SettingsModel.ClaudeTab);
+                ClaudeTabItem.Header = TabHeader(ClaudeFallbackGlyph, icon, SettingsModel.ClaudeTab);
                 // The Claude App group's first row shows the same icon, as the Mac's shows the app's.
                 if (icon is not null)
                 {
@@ -47,7 +47,7 @@ public partial class SettingsWindow : Window
             }
             catch (Exception)
             {
-                // async void: an unhandled exception here would crash the app. Leave the plain-text
+                // async void: an unhandled exception here would crash the app. Leave the generic
                 // glyph header already in place rather than rethrow for a popped-in icon that failed.
             }
         }));
@@ -55,13 +55,23 @@ public partial class SettingsWindow : Window
 
     public SettingsModel Model { get; }
 
+    // The Mac tabs' gearshape and externaldrive, and for Claude a generic app where its own icon cannot be read. Code
+    // points of IconFont (Segoe Fluent Icons, falling back to Segoe MDL2 Assets), which both fonts carry: Setting,
+    // HardDrive and AppIconDefault.
+    internal const string GeneralGlyph = "\uE713";
+    internal const string StorageGlyph = "\uEDA2";
+    internal const string ClaudeFallbackGlyph = "\uECAA";
+
     /// <summary>Glyph (or Claude's desaturated icon) + text, the Mac tab label.</summary>
     private StackPanel TabHeader(string glyph, ImageSource? image, string text)
     {
         var panel = new StackPanel { Orientation = Orientation.Horizontal };
         if (image is not null)
         {
-            panel.Children.Add(new Image { Source = image, Width = 16, Height = 16, Margin = new Thickness(0, 0, 6, 0) });
+            var icon = new Image { Source = image, Width = 16, Height = 16, Margin = new Thickness(0, 0, 6, 0) };
+            // The icon is read at 32 pixels so it stays sharp up to 200%; drawn smaller, it is scaled down smoothly.
+            RenderOptions.SetBitmapScalingMode(icon, BitmapScalingMode.HighQuality);
+            panel.Children.Add(icon);
         }
         else
         {

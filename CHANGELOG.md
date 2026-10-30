@@ -28,6 +28,7 @@ has one.
 - Pressing Escape to close the editor’s Authentication drop-down now closes just the drop-down; before, it closed the whole editor and lost your unsaved changes. Escape in the flyout’s collection menu likewise closes only the menu. With nothing open, Escape still cancels the editor and dismisses the flyout.
 - Check for Updates now reads “Checking…” and can’t be clicked while a check runs, instead of looking as if nothing happened. After Install and Relaunch, the update dialog stays open reading “Downloading…” until Connector Control relaunches, so the app no longer just vanishes; if the download fails, the dialog closes and says why.
 - Narrator now names the flyout’s Restart Claude button and the collection switcher (with its waiting update), the Settings backup − and + buttons (which also dim at 5 and 100) and the Name field in New Collection, Rename and Duplicate. Each Use Default and Choose… button in Settings now says which row it belongs to.
+- The Settings tabs now show their icons — a gear for General, a drive for Storage, and Claude’s own icon, or a generic app icon where Claude’s can’t be read — instead of an empty space before each name. Claude’s icon is now sharp at 150% and 200% scaling.
 
 ### Both platforms
 

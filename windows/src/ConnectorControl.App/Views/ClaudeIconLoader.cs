@@ -16,6 +16,9 @@ namespace ConnectorControl.App.Views;
 /// </summary>
 public static class ClaudeIconLoader
 {
+    /// <summary>The extracted bitmap's size: twice the 16 DIPs it is shown at, so it stays sharp up to 200%.</summary>
+    internal const int IconPixels = 32;
+
     public static ImageSource? Load(ClaudeInstallInfo info)
     {
         var exe = ExecutablePath(info);
@@ -30,7 +33,8 @@ public static class ClaudeIconLoader
             {
                 return null;
             }
-            var source = Imaging.CreateBitmapSourceFromHIcon(icon.Handle, Int32Rect.Empty, BitmapSizeOptions.FromWidthAndHeight(16, 16));
+            // Read at 32 pixels, though shown at 16 DIPs: at 150-200% scaling a 16-pixel bitmap would be scaled up and blur.
+            var source = Imaging.CreateBitmapSourceFromHIcon(icon.Handle, Int32Rect.Empty, BitmapSizeOptions.FromWidthAndHeight(IconPixels, IconPixels));
             return Desaturate(source);
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or COMException or Win32Exception)
