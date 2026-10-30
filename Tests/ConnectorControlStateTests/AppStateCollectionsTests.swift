@@ -920,6 +920,26 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNotNil(state.sourceErrors["B"])
     }
 
+    /// A Locate to a byte-identical copy keeps the render it holds and moves it to the new path, so
+    /// a later save elsewhere does not read the document again.
+    func testALocateToAByteIdenticalCopyMovesTheKeptRender() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam, at: "a.json", as: "A")
+        let b = try h.subscribe(state, to: CollectionDocumentSamples.dataTeam, at: "b.json", as: "B")
+        let copy = h.dir.file("copy.json")
+        try FileManager.default.copyItem(at: b, to: copy)
+        let renders = state.sourceRenders
+        XCTAssertNil(state.locateSource(for: "B", path: copy.path))
+        XCTAssertEqual(state.sourceRenders, renders, "the same bytes are not decoded again")
+
+        // The copy goes: a read of it now would count a failure and schedule a retry.
+        try FileManager.default.removeItem(at: copy)
+        state.setEnabled("github", true, in: "A")
+        XCTAssertNil(state.sourceErrors["B"])
+        XCTAssertTrue(h.delays.pending.isEmpty, "B's document was not read")
+    }
+
     /// A document from a newer app is said at once and never retried: no wait makes it readable.
     func testASourceFromANewerAppIsReportedAtOnceAndNotRetried() throws {
         let (h, state) = AppStateHarness.started()

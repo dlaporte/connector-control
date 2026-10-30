@@ -1040,6 +1040,28 @@ public class AppStateCollectionsTests
         Assert.True(state.SourceErrors.ContainsKey("B"));
     }
 
+    /// <summary>A Locate to a byte-identical copy keeps the render it holds and moves it to the new path,
+    /// so a later save elsewhere does not read the document again.</summary>
+    [Fact]
+    public void ALocateToAByteIdenticalCopyMovesTheKeptRender()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam, "a.json", "A");
+        var b = h.Subscribe(state, CollectionDocumentSamples.DataTeam, "b.json", "B");
+        var copy = h.Dir.File("copy.json");
+        File.Copy(b, copy);
+        var renders = state.SourceRenders;
+        Assert.Null(state.LocateSource("B", copy));
+        Assert.Equal(renders, state.SourceRenders);   // the same bytes are not decoded again
+
+        // The copy goes: a read of it now would count a failure and schedule a retry.
+        File.Delete(copy);
+        state.SetEnabled("github", true, "A");
+        Assert.False(state.SourceErrors.ContainsKey("B"));
+        Assert.Empty(h.Delays.Pending);   // B's document was not read
+    }
+
     /// <summary>A document from a newer app is said at once and never retried: no wait makes it readable.</summary>
     [Fact]
     public void ASourceFromANewerAppIsReportedAtOnceAndNotRetried()

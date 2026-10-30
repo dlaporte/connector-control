@@ -1430,8 +1430,10 @@ public final class AppState: ObservableObject {
         if let kept = pendingRendered[collection], kept.hash == hash {
             // The same bytes as last time: the render they produce cannot have changed, so only
             // the diff below is re-derived. The store moves under it constantly - a local edit,
-            // another machine's apply arriving - and the answer has to follow it.
+            // another machine's apply arriving - and the answer has to follow it. The path follows
+            // the binding, so a Locate to a byte-identical copy still vouches for the render.
             rendered = kept.rendered
+            pendingRendered[collection]?.path = path
         } else {
             let decoded = AppState.decodeDocument(data, fileName: url.lastPathComponent)
             guard let document = decoded.document else {
