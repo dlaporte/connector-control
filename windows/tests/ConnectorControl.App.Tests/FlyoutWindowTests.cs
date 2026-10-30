@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ConnectorControl.App.Services;
@@ -676,5 +677,52 @@ public class FlyoutWindowTests
                 window.Close();
             }
         });
+    }
+
+    /// <summary>
+    /// A key pressed on an element as the keyboard delivers it — tunnelling first, then bubbling
+    /// unless something took it on the way down. The window's source stands in for the element's:
+    /// an open menu's own popup window may not exist yet.
+    /// </summary>
+    private static void Press(Window window, UIElement target, Key key)
+    {
+        var source = PresentationSource.FromVisual(window)!;
+        var preview = new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, key) { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+        target.RaiseEvent(preview);
+        if (!preview.Handled)
+        {
+            target.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, key) { RoutedEvent = Keyboard.KeyDownEvent });
+        }
+    }
+
+    /// <summary>
+    /// Escape in the open collection menu closes the menu and leaves the flyout up, as on the Mac;
+    /// with nothing open, Escape dismisses the flyout. An open menu routes its keys through the
+    /// chip to this window, which used to take Escape on its way down, ahead of the menu.
+    /// </summary>
+    [Fact]
+    public void EscapeClosesTheCollectionMenuBeforeItHidesTheFlyout()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        WpfApp.Invoke(() => Showing(h, state, (window, _, _) =>
+        {
+            window.ShowActivated = false;   // visible, never active: see Showing
+            window.Show();
+            window.UpdateLayout();
+            var menu = window.OpenCollectionMenu();
+            try
+            {
+                Press(window, menu, Key.Escape);
+                Assert.True(window.IsVisible);
+            }
+            finally
+            {
+                menu.IsOpen = false;   // leave nothing behind in the shared WPF host
+            }
+
+            Press(window, window.CollectionChip, Key.Escape);
+            Assert.False(window.IsVisible);
+        }));
     }
 }

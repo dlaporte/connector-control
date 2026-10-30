@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Threading;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
@@ -84,6 +86,67 @@ public class EditorWindowTests
             parts.Add(node is UIElement ui ? $"{node.GetType().Name}({ui.Visibility},{ui.IsEnabled})" : node.GetType().Name);
         }
         return string.Join(" < ", parts);
+    }
+
+    /// <summary>
+    /// A key pressed on an element as the keyboard delivers it — tunnelling first, then bubbling
+    /// unless something took it on the way down. Returns whether anything took it: a key nothing
+    /// took goes on to the window's access keys, which is where Escape finds the Cancel button.
+    /// </summary>
+    private static bool Press(UIElement target, Key key)
+    {
+        var source = PresentationSource.FromVisual(target)!;
+        var preview = new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, key) { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+        target.RaiseEvent(preview);
+        if (preview.Handled)
+        {
+            return true;
+        }
+        var down = new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, key) { RoutedEvent = Keyboard.KeyDownEvent };
+        target.RaiseEvent(down);
+        return down.Handled;
+    }
+
+    /// <summary>
+    /// Escape closes an open drop-down and leaves the editor, and every unsaved field, alone; only
+    /// an Escape nothing else took cancels the editor. The window used to take Escape on its way
+    /// down, ahead of the drop-down, and closed the editor with the menu still open.
+    /// RaiseEvent stops short of WPF's access-key step, so the cancel half is the Cancel button
+    /// being the window's cancel button and what its click does.
+    /// </summary>
+    [Fact]
+    public void EscapeClosesAnOpenDropDownBeforeItCancelsTheEditor()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        WpfApp.Invoke(() => Editing(state, EditTarget.NewRemote(EditorWindow.NewRemoteStyle, "Default"), window =>
+        {
+            var cancels = 0;
+            window.Model.CloseRequested += () => cancels++;
+            window.Model.Name = "example";
+            try
+            {
+                window.AuthPicker.IsDropDownOpen = true;
+                Assert.True(window.AuthPicker.IsDropDownOpen);
+
+                Assert.True(Press(window.AuthPicker, Key.Escape));   // the drop-down took it
+                Assert.False(window.AuthPicker.IsDropDownOpen);
+                Assert.Equal(0, cancels);
+                Assert.Equal("example", window.Model.Name);
+            }
+            finally
+            {
+                window.AuthPicker.IsDropDownOpen = false;   // leave no popup behind in the shared WPF host
+            }
+
+            Assert.False(Press(window.AuthPicker, Key.Escape));      // nothing open: nothing takes it
+            Assert.True(window.CancelButton.IsCancel);
+            window.CancelButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, window.CancelButton));
+            Assert.Equal(1, cancels);
+            // Cancel queues the window's Close; run it inside this guarded body rather than
+            // leaving it to fire on the shared host during some later test.
+            window.Dispatcher.Invoke(() => { }, DispatcherPriority.Background);
+        }, rows: true));
     }
 
     [Fact]

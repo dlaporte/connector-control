@@ -167,7 +167,9 @@
         </CheckBox>
         <Grid>
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="{x:Static state:EditorModel.CancelButton}" MinWidth="80" Click="OnCancel" />
+            <!-- Escape is this button's, not the window's: an open drop-down takes the key first and
+                 closes, and only an Escape nothing else took reaches the window's cancel button. -->
+            <Button x:Name="CancelButton" Content="{x:Static state:EditorModel.CancelButton}" MinWidth="80" IsCancel="True" Click="OnCancel" />
             <Button Content="{x:Static state:EditorModel.SaveButton}" MinWidth="80" Margin="8,0,0,0" IsDefault="True" IsEnabled="{Binding CanSave}" Style="{DynamicResource AccentButtonStyle}" Click="OnSave" />
           </StackPanel>
         </Grid>
@@ -241,7 +243,7 @@
                     <TextBlock Text="{x:Static state:EditorModel.TypeLabel}" />
                     <TextBlock Style="{StaticResource LabelLock}" />
                   </StackPanel>
-                  <ComboBox Grid.Column="1" ItemsSource="{x:Static state:EditorModel.AuthKindTitles}" SelectedIndex="{Binding AuthKindIndex}" AutomationProperties.Name="{x:Static state:EditorModel.AuthenticationHeader}" HorizontalAlignment="Left" MinWidth="220" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
+                  <ComboBox x:Name="AuthPicker" Grid.Column="1" ItemsSource="{x:Static state:EditorModel.AuthKindTitles}" SelectedIndex="{Binding AuthKindIndex}" AutomationProperties.Name="{x:Static state:EditorModel.AuthenticationHeader}" HorizontalAlignment="Left" MinWidth="220" IsEnabled="{Binding IsReadOnly, Converter={StaticResource Not}}" />
                 </Grid>
                 <TextBlock Text="{x:Static state:EditorModel.AutomaticCaption}" Style="{StaticResource CaptionText}" Visibility="{Binding IsAutomatic, Converter={StaticResource Vis}}" />
                 <StackPanel Visibility="{Binding IsBearer, Converter={StaticResource Vis}}">

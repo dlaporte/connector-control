@@ -39,7 +39,9 @@ public partial class FlyoutWindow : Window
         this.windows = windows;
         DataContext = model;
         Deactivated += (_, _) => HandleDeactivated();
-        PreviewKeyDown += OnPreviewKeyDown;
+        // Bubbling, not tunnelling: the collection menu routes its keys through the chip to this
+        // window, and the menu takes Escape to close itself; only an Escape nothing took hides us.
+        KeyDown += OnKeyDown;
     }
 
     /// <summary>
@@ -162,7 +164,7 @@ public partial class FlyoutWindow : Window
         HideFlyout();
     }
 
-    private void OnPreviewKeyDown(object sender, KeyEventArgs e)
+    private void OnKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape)
         {
