@@ -1446,6 +1446,50 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: linked.appendingPathComponent("inside.txt"), encoding: .utf8), "keep")
     }
 
+    /// A link whose file is gone is still the document's name, and goes; a link to a folder stays, and
+    /// leaving it is no error.
+    func testStopPublishingRemovesADanglingLinkAndLeavesALinkToAFolderWithoutAnError() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let fileName = Slug.make(state.activeCollection) + ".json"
+        let fm = FileManager.default
+        let folder = try publishFolder(h)
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: folder.path, intent: .none))
+        let target = folder.appendingPathComponent(fileName)
+        try fm.removeItem(at: target)
+        try fm.createSymbolicLink(atPath: target.path, withDestinationPath: h.dir.file("gone.json").path)
+        state.stopPublishing(state.activeCollection, deleteFile: true)
+        XCTAssertNil(try? fm.destinationOfSymbolicLink(atPath: target.path), "the dangling link goes")
+        XCTAssertNil(state.lastError)
+
+        let second = try publishFolder(h, "pub2")
+        let linked = try publishFolder(h, "linked")
+        XCTAssertNil(state.startPublishing(state.activeCollection, to: second.path, intent: .none))
+        let other = second.appendingPathComponent(fileName)
+        try fm.removeItem(at: other)
+        try fm.createSymbolicLink(at: other, withDestinationURL: linked)
+        state.stopPublishing(state.activeCollection, deleteFile: true)
+        XCTAssertNotNil(try? fm.destinationOfSymbolicLink(atPath: other.path), "a link to a folder is left")
+        XCTAssertNil(state.lastError, "leaving it is no error")
+    }
+
+    /// The delete itself never removes a folder, even one put under the name after the check, and a
+    /// document already gone is no error, as Windows' `File.Delete` says none.
+    func testTheDocumentDeleteNeverRemovesAFolderAndAMissingFileIsNoError() throws {
+        let dir = TempDir(prefix: "unlink"); defer { dir.dispose() }
+        let fm = FileManager.default
+        XCTAssertNoThrow(try AppState.removeDocument(at: dir.file("missing.json").path))
+        let folder = dir.file("work.json")
+        try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data("keep".utf8).write(to: folder.appendingPathComponent("inside.txt"))
+        XCTAssertThrowsError(try AppState.removeDocument(at: folder.path))
+        XCTAssertEqual(try String(contentsOf: folder.appendingPathComponent("inside.txt"), encoding: .utf8), "keep")
+        let file = dir.file("doc.json")
+        try Data("{}".utf8).write(to: file)
+        try AppState.removeDocument(at: file.path)
+        XCTAssertFalse(fm.fileExists(atPath: file.path))
+    }
+
     func testAChangeThatArrivesFromAnotherMachineIsPublishedOnTheNextLoad() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

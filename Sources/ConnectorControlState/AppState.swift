@@ -1955,10 +1955,21 @@ public final class AppState: ObservableObject {
         let target = URL(fileURLWithPath: folder).appendingPathComponent(CollectionDocument.fileName(slug: record.slug))
         guard AppState.isDeletableDocument(at: target.path) else { return }
         do {
-            try FileManager.default.removeItem(at: target)
+            try AppState.removeDocument(at: target.path)
         } catch {
             lastError = AppState.friendly(error)
         }
+    }
+
+    /// `unlink(2)`, which never removes a folder - not even one a sync engine puts under the document's
+    /// name after `isDeletableDocument` looked, where `removeItem` would take it with everything in it -
+    /// and removes a link as a link. A document already gone is no error, as Windows' `File.Delete` says
+    /// none.
+    static func removeDocument(at path: String) throws {
+        guard Darwin.unlink(path) != 0 else { return }
+        let code = errno
+        guard code != ENOENT else { return }
+        throw POSIXError(POSIXErrorCode(rawValue: code) ?? .EIO)
     }
 
     /// Whether Stop Publishing may delete what sits at `path`, judged as Windows' `File.Exists` and
