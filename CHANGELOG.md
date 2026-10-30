@@ -13,6 +13,16 @@ Release pipeline`; leave a sub-heading's bullets empty rather than
 removing the sub-heading, and drop any sub-heading that never got a
 bullet once the section is about to ship.
 
+## v1.5.1
+
+### macOS
+
+### Windows
+
+### Both platforms
+
+### Release pipeline
+
 ## v1.5.0
 
 ### macOS
