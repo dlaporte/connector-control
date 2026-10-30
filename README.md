@@ -556,11 +556,15 @@ Claude can't publish a collection or stop publishing one, Stop Syncing, or
 Make Local Copy; those stay in the Collections window. It can't change
 `claude-integration` or `confirm-claude-changes`, the two settings that
 decide what it may do, or `notify-external-changes` and
-`automatic-updates`, which keep you told about changes and updates. And it never sees a secret: for an environment
-variable or a header it sees whether a value is set, never the value, and an
-argument that reads as a secret - a value after a flag named like a secret,
-a `NAME=value` word whose name is a secret's, a URL's password or a query value, even inside a
-multi-word or JSON argument - reads as `•••`. When Claude adds a connector
+`automatic-updates`, which keep you told about changes and updates. And it
+isn't shown a secret's value: for an environment variable or a header it sees
+whether a value is set, never the value, and an argument that reads as a
+secret - a value after a flag named like a secret, a `NAME=value` word whose
+name is a secret's, a URL's password or a query value, a `user:password`
+pair, a header written as `Name: value`, a shell default such as
+`${DB_PASSWORD:-…}`, even inside a multi-word or JSON argument - reads as
+`•••`. Masking an argument is best effort: [Scope and
+caveats](#scope-and-caveats) lists shapes it misses. When Claude adds a connector
 that needs a secret you haven't given it, it is told to write a
 `${CC_NEEDS:<name>}` placeholder, and you fill the value in in Connector
 Control. While the integration is off, Claude is refused everything.
@@ -1142,6 +1146,8 @@ preview workflows call one Mac signing build,
 [`mac-build.yml`](.github/workflows/mac-build.yml), which alone runs in the
 `signing` environment; and every workflow's own YAML and shell/PowerShell
 scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
+[`text-ci.yml`](.github/workflows/text-ci.yml) runs on every push and checks
+that no file in the repository contains an em-dash.
 
 ### Scripts
 
@@ -1160,7 +1166,12 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
 | `scripts/mac/notarize.sh` | Submits a binary or app bundle for Apple notarization, stopping and retrying an upload that stalls, and staples the ticket. | `mac-build.yml` |
 | `scripts/tests/notarize-retry.sh` | Checks that `notarize.sh` retries a stalled or failed upload (three tries in all) and staples only an accepted submission, with a fake `xcrun` and `notarytool`. | `infra-ci.yml` |
 | `scripts/mac/make-appcast.sh` | Builds and EdDSA-signs the Sparkle appcast for one release or preview. | `mac-build.yml` |
-| `scripts/release/changelog-section.sh` | Prints one version's CHANGELOG.md section. | `release.yml`, `scripts/release/preview-notes.sh` |
+| `scripts/mac/sparkle-tools.env` | Pins the version and SHA-256 of the Sparkle tools `make-appcast.sh` signs with. | sourced by `make-appcast.sh` and `check-sparkle-pin.sh` |
+| `scripts/mac/check-sparkle-pin.sh` | Fails unless the pin in `sparkle-tools.env` matches the Sparkle version in `Package.resolved`. | `infra-ci.yml`, `scripts/mac/make-appcast.sh` |
+| `scripts/tests/sparkle-pin.sh` | Checks that `check-sparkle-pin.sh` passes on the repository and fails, naming both versions, on a drifted `Package.resolved`. | `infra-ci.yml` |
+| `scripts/release/changelog-section.sh` | Prints one version's CHANGELOG.md section. With `--release` it drops sub-headings that have no bullets and fails on a section that holds only sub-headings; with `--preview` it drops them too and demotes the rest for `preview-notes.sh`. | `release.yml`, `scripts/release/preview-notes.sh` |
+| `scripts/tests/changelog-section.sh` | Checks `changelog-section.sh`'s `--release` and `--preview` handling against a scratch CHANGELOG. | `infra-ci.yml` |
+| `scripts/tests/no-em-dash.sh` | Fails if any tracked file contains an em-dash. | `text-ci.yml` |
 | `scripts/release/preview-notes.sh` | Prints the release notes for a joint preview build: the prerelease page, or with `--dialog` the shorter text both apps' update dialogs show. | `preview.yml` |
 | `scripts/release/update-preview-feed.sh` | Copies a published release's appcast onto the `preview-feed` prerelease that Mac previews update from, creating it the first time and never moving it to an older build, then checks what it serves. | `preview.yml`, `release.yml` |
 | `scripts/tests/update-preview-feed-order.sh` | Checks that `update-preview-feed.sh` moves the preview feed only forward, with a fake `gh` and `curl`. | `infra-ci.yml` |
@@ -1202,22 +1213,29 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
   parts differently on a Mac and on Windows.
 - On a Mac, look-alike quotation marks in the alert's title and in
   notifications show as typed; the name is set apart instead.
-- Claude sees any connector argument that reads as a secret as `•••`. A
-  whole command line written as one argument that holds a URL with a query
-  reads as `•••` in full, and so does a command line in one argument that
-  starts with a `NAME=value` named like a secret (`API_KEY=x npx server`
-  reads `API_KEY=•••`). A few shapes that don't work as written still show a
-  secret to Claude: JSON5 config written unquoted into a shell line, where
-  the shell splits it at the space (`--config {apiKey: x}`), a value after
-  `--` (`--password Basic -- x`), and a second word after a scheme word and
-  its value (`--auth Token abc def` shows `def`). After `-u`, `--user` or
-  `--proxy-user`, a `name:group` pair reads as `name:•••` unless it is a
-  user ID with a group ID or group name (`1000:1000`, `1000:node`), or the
-  group is named as the user (`node:node`). So a user ID with a password of
-  lower-case letters only still shows (`-u 1000:hunter`): that shape can't
-  be told from Docker's user ID and group name. A Go-style `-user=admin:pw`
-  also shows, since it reads as a flag named `-user`. A name such as
-  `auth0:` reads as a header named `auth`, so its value is hidden.
+- Claude sees any connector argument that reads as a secret as `•••`, but
+  this masking is best effort. A whole command line written as one argument
+  that holds a URL with a password or a query reads as `•••` in full, and so
+  does a command line in one argument that starts with a `NAME=value` named
+  like a secret (`API_KEY=x npx server` reads `API_KEY=•••`). Some shapes
+  still show a secret to Claude, for example: JSON5 config written unquoted
+  into a shell line, where the shell splits it at the space (`--config
+  {apiKey: x}`), a value after `--` (`--password Basic -- x`), a second word
+  after a scheme word and its value (`--auth Token abc def` shows `def`), a
+  name run together in lower case before a colon (`--opt accesstoken:x`), a
+  header split into two words after a flag Connector Control doesn't know
+  (`--hdr X-Api-Key: x`), and curl's `-U admin:x`. A value that looks random
+  is hidden whatever its shape, so what shows is a short or word-like
+  secret. After `-u`, `--user` or `--proxy-user`, a `name:value` pair,
+  a `host:port` among them, reads as `name:•••` unless it is a user ID
+  followed by digits only or by a group-shaped name of lower-case letters,
+  `-` and `_` only (`1000:1000`, `1000:node`), or the value is the name
+  again (`node:node`). So a user ID with a password of digits only, or of
+  lower-case letters, `-` and `_` only, still shows (`-u 1000:hunter`):
+  that shape can't be told from Docker's user ID and group. A Go-style
+  `-user=admin:pw` also shows, since it reads as a flag named `-user`. A
+  name such as `auth0:` reads as a header named `auth`, so its value is
+  hidden.
 - A restore asks with the names of the connectors it would put back. A
   backup someone else planted in your backups folder could carry commands
   the question doesn't show; doing that needs write access to your own
