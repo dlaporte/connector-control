@@ -2691,8 +2691,9 @@ public sealed class AppState : ObservableObject, IDisposable
         var target = Path.Combine(full, fileName);
         // Somebody else's document under the name this one would take: publishing over it would
         // replace what their subscribers follow. A file that cannot be read within the document
-        // bound or decoded counts too - it has no origin to vouch for it.
-        if (File.Exists(target) && ReadOrigin(target) != origin)
+        // bound or decoded counts too - it has no origin to vouch for it - and so does a folder
+        // under that name, as on the Mac, where one exists as a file does.
+        if ((File.Exists(target) || Directory.Exists(target)) && ReadOrigin(target) != origin)
         {
             return PublishSlugTakenError(fileName);
         }

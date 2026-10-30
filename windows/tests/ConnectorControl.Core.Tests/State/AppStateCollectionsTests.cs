@@ -1359,6 +1359,21 @@ public class AppStateCollectionsTests
         Assert.False(state.IsPublished(state.ActiveCollection));   // a refused publish records nothing
     }
 
+    /// <summary>A folder under the document's name takes the name as a file would: it vouches for no
+    /// origin, and the document could not be written there.</summary>
+    [Fact]
+    public void AFolderUnderTheDocumentsNameTakesTheSlug()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var folder = PublishFolder(h);
+        var fileName = Slug.Make(state.ActiveCollection) + ".json";
+        Directory.CreateDirectory(Path.Combine(folder, fileName));
+        Assert.Equal(AppState.PublishSlugTakenError(fileName),
+            state.StartPublishing(state.ActiveCollection, folder, PublishIntent.None));
+        Assert.False(state.IsPublished(state.ActiveCollection));   // a refused publish records nothing
+    }
+
     [Fact]
     public void PublishingAgainIntoTheFolderItAlreadyOwnsIsAllowed()
     {

@@ -1183,6 +1183,19 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertFalse(state.isPublished(state.activeCollection), "a refused publish records nothing")
     }
 
+    /// A folder under the document's name takes the name as a file would: it vouches for no origin,
+    /// and the document could not be written there.
+    func testAFolderUnderTheDocumentsNameTakesTheSlug() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let folder = try publishFolder(h)
+        let fileName = Slug.make(state.activeCollection) + ".json"
+        try FileManager.default.createDirectory(at: folder.appendingPathComponent(fileName), withIntermediateDirectories: false)
+        XCTAssertEqual(state.startPublishing(state.activeCollection, to: folder.path, intent: .none),
+                       AppState.publishSlugTakenError(fileName))
+        XCTAssertFalse(state.isPublished(state.activeCollection), "a refused publish records nothing")
+    }
+
     func testPublishingAgainIntoTheFolderItAlreadyOwnsIsAllowed() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

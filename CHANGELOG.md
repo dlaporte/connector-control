@@ -31,6 +31,7 @@ has one.
 - Narrator now names the flyout’s Restart Claude button and the collection switcher (with its waiting update), the Settings backup − and + buttons (which also dim at 5 and 100) and the Name field in New Collection, Rename and Duplicate. Each Use Default and Choose… button in Settings now says which row it belongs to.
 - The Settings tabs now show their icons - a gear for General, a drive for Storage, and Claude’s own icon, or a generic app icon where Claude’s can’t be read - instead of an empty space before each name. Claude’s icon is now sharp at 150% and 200% scaling.
 - The Publish and Export dialogs now fit on a short screen: when there isn’t room, the preview gets shorter so the Publish, Export and Cancel buttons stay visible.
+- Start Publishing into a folder that already holds a folder with the collection’s document name (such as `work.json`) now says that name is taken, as the Mac does, instead of failing with a file-system error.
 
 ### Both platforms
 
