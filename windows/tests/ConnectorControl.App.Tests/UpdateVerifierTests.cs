@@ -23,7 +23,9 @@ public class UpdateVerifierTests : IDisposable
     /// <summary>The SemVer product version baked into the framework DLL that stands in for ConnectorControl.exe.</summary>
     private static string FrameworkVersion => UpdateVerifier.EmbeddedVersion(RunningExe) ?? throw new InvalidOperationException("the framework carries no product version");
 
-    private const string Older = "1.0.0";
+    /// <summary>The running version the package checks compare with: older than the framework's, and a preview, since
+    /// a framework build may carry a prerelease label (10.0.0-rc.2 and the like) that a release install refuses.</summary>
+    private const string Older = "1.0.0-older.1";
 
     /// <summary>A signer subject no real file here carries.</summary>
     private const string TestPublisher = "CN=Test Publisher, O=Test Publisher, C=US";
