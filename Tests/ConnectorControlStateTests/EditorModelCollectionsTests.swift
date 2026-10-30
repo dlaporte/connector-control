@@ -283,6 +283,28 @@ final class EditorModelCollectionsTests: XCTestCase {
         XCTAssertTrue(updated.enabled)
     }
 
+    /// The save and every twin it reaches are one change to the master list: written once, with one
+    /// backup of what came before, not one per collection for states that were only ever halfway.
+    func testAPropagatedSaveWritesTheMasterListOnce() throws {
+        let rig = EditorRig()
+        defer { rig.dispose() }
+        let state = rig.state
+        rig.twin("Backup")
+        rig.twin("Spare")
+
+        let editor = rig.editor("scoutbook", in: "Default")
+        XCTAssertEqual(editor.propagateTargets, ["Backup", "Spare"])
+        editor.propagate = true
+        editor.remoteURL = "https://scoutbook.example.com/mcp/v2"
+        let before = try state.service.backups.backups(series: "mcps").count
+        XCTAssertTrue(editor.save())
+
+        XCTAssertEqual(try state.service.backups.backups(series: "mcps").count, before + 1)
+        let updated = try XCTUnwrap(state.store.collections["Default"]?.mcps["scoutbook"]?.config)
+        XCTAssertEqual(state.store.collections["Backup"]?.mcps["scoutbook"]?.config, updated)
+        XCTAssertEqual(state.store.collections["Spare"]?.mcps["scoutbook"]?.config, updated)
+    }
+
     func testAnUntickedPropagateLeavesTheTwinAlone() throws {
         let rig = EditorRig()
         defer { rig.dispose() }

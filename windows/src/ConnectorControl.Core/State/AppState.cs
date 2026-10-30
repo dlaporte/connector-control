@@ -1117,11 +1117,44 @@ public sealed class AppState : ObservableObject, IDisposable
     /// path marks with ones re-keyed to where the saved arguments put them. Both land in the same
     /// save as the connector, so the document written at the end of it never pairs the new
     /// arguments with the old marks.
+    ///
+    /// <paramref name="alsoIn"/> is the same save again in other collections — the editor's
+    /// propagate checkbox — under the same name and rename. It is tried only once the save itself
+    /// is accepted, a name already taken in one of them leaves that collection alone, and all of it
+    /// reaches disk as one write: one backup of the master list, one publish pass, rather than one
+    /// for each halfway state.
     /// </summary>
     public string? Upsert(string name, McpEntry entry, string? renamedFrom, string? collection = null,
-                          IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark>? pathMarks = null)
+                          IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark>? pathMarks = null,
+                          IReadOnlyList<PropagatedSave>? alsoIn = null)
     {
-        var target = collection ?? ActiveCollection;
+        if (StageUpsert(name, entry, renamedFrom, collection ?? ActiveCollection, pathMarks) is { } error)
+        {
+            return error;
+        }
+        foreach (var other in alsoIn ?? [])
+        {
+            StageUpsert(name, other.Entry, renamedFrom, other.Collection, other.PathMarks);
+        }
+        PersistStore();
+        RaiseAll();
+        return null;
+    }
+
+    /// <summary>
+    /// The same save again in another collection, for <see cref="Upsert"/>'s <c>alsoIn</c>: the
+    /// entry it lands there as, and that collection's path marks (null: leave them).
+    /// </summary>
+    public sealed record PropagatedSave(string Collection, McpEntry Entry,
+                                        IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark>? PathMarks);
+
+    /// <summary>
+    /// <see cref="Upsert"/> in memory only, for the caller to persist: an error message, with
+    /// nothing changed, or null once the entry is in the store.
+    /// </summary>
+    private string? StageUpsert(string name, McpEntry entry, string? renamedFrom, string target,
+                                IReadOnlyDictionary<JsonPointer, PublishIntent.PathMark>? pathMarks)
+    {
         var trimmed = name.TrimSpaces();
         if (trimmed.Length == 0)
         {
@@ -1160,8 +1193,6 @@ public sealed class AppState : ObservableObject, IDisposable
             }
             return pathMarks is null ? intent : intent.ReplacingPathMarks(trimmed, pathMarks);
         });
-        PersistStore();
-        RaiseAll();
         return null;
     }
 

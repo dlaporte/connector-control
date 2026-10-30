@@ -979,11 +979,11 @@ public final class EditorModel: ObservableObject {
                              lastEditView: readOnly ? target.entry.lastEditView : view)
         if let error = state.upsert(name: saved, entry: entry, renamedFrom: target.isNew ? nil : target.name,
                                     in: target.collection,
-                                    pathMarks: followedPathMarks(in: collection, saving: config)) {
+                                    pathMarks: followedPathMarks(in: collection, saving: config),
+                                    alsoIn: propagate ? propagatedSaves(of: config) : []) {
             validationError = error
             return false
         }
-        if propagate { propagateSavedConfig(config, as: saved) }
         // Apply, then let the view dismiss on `true`. The old view dismissed first
         // and applied after (and EditorModel.cs raises CloseRequested before it
         // applies); performApply shows no UI, so the order is not observable.
@@ -994,21 +994,23 @@ public final class EditorModel: ObservableObject {
     /// The ticked checkbox: the same change again in each collection that held an identical
     /// copy when this window opened. Each twin keeps its own on/off state, which is this
     /// machine's business and not part of "this change"; a name already taken in one of them
-    /// leaves that collection alone rather than failing a save that has already landed.
+    /// leaves that collection alone rather than failing the save.
     ///
     /// The checkbox promised these collections held an identical copy, and that was measured when
     /// the window opened. A twin that has moved since — a second editor window on it saved first,
     /// or an external edit reconciled in — is no longer the connector the user agreed to change,
     /// so it is skipped in silence. The same care the primary save takes over its own snapshot.
-    private func propagateSavedConfig(_ config: JSONValue, as saved: String) {
-        for other in propagateTargets {
+    ///
+    /// The twins go to the store with the save itself (`AppState.upsert(…, alsoIn:)`), so the
+    /// master list is written once for all of them.
+    private func propagatedSaves(of config: JSONValue) -> [AppState.PropagatedSave] {
+        propagateTargets.compactMap { other in
             guard let twin = state.store.collections[other]?.mcps[target.name],
-                  twin.config == target.entry.config else { continue }
+                  twin.config == target.entry.config else { return nil }
             // The twin held this window's opening config, so its marks follow the same rows.
-            _ = state.upsert(name: saved,
-                             entry: MCPEntry(enabled: twin.enabled, config: config, lastEditView: view),
-                             renamedFrom: target.name, in: other,
-                             pathMarks: followedPathMarks(in: other, saving: config))
+            return AppState.PropagatedSave(collection: other,
+                                           entry: MCPEntry(enabled: twin.enabled, config: config, lastEditView: view),
+                                           pathMarks: followedPathMarks(in: other, saving: config))
         }
     }
 

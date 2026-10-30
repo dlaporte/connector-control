@@ -819,10 +819,46 @@ public final class AppState: ObservableObject {
     /// ones re-keyed to where the saved arguments put them. Both land in the same save as the
     /// connector, so the document written at the end of it never pairs the new arguments with
     /// the old marks.
+    ///
+    /// `alsoIn` is the same save again in other collections — the editor's propagate checkbox —
+    /// under the same name and rename. It is tried only once the save itself is accepted, a name
+    /// already taken in one of them leaves that collection alone, and all of it reaches disk as
+    /// one write: one backup of the master list, one publish pass, rather than one for each
+    /// halfway state.
     public func upsert(name: String, entry: MCPEntry, renamedFrom oldName: String?,
                        in collection: String? = nil,
-                       pathMarks: [JSONPointer: PublishIntent.PathMark]? = nil) -> String? {
-        let target = collection ?? activeCollection
+                       pathMarks: [JSONPointer: PublishIntent.PathMark]? = nil,
+                       alsoIn others: [PropagatedSave] = []) -> String? {
+        if let error = stageUpsert(name: name, entry: entry, renamedFrom: oldName,
+                                   in: collection ?? activeCollection, pathMarks: pathMarks) {
+            return error
+        }
+        for other in others {
+            _ = stageUpsert(name: name, entry: other.entry, renamedFrom: oldName, in: other.collection,
+                            pathMarks: other.pathMarks)
+        }
+        persistStore()
+        return nil
+    }
+
+    /// The same save again in another collection, for `upsert(…, alsoIn:)`: the entry it lands
+    /// there as, and that collection's path marks (nil: leave them).
+    public struct PropagatedSave {
+        public let collection: String
+        public let entry: MCPEntry
+        public let pathMarks: [JSONPointer: PublishIntent.PathMark]?
+
+        public init(collection: String, entry: MCPEntry, pathMarks: [JSONPointer: PublishIntent.PathMark]?) {
+            self.collection = collection
+            self.entry = entry
+            self.pathMarks = pathMarks
+        }
+    }
+
+    /// `upsert` in memory only, for the caller to persist: an error message, with nothing
+    /// changed, or nil once the entry is in the store.
+    private func stageUpsert(name: String, entry: MCPEntry, renamedFrom oldName: String?, in target: String,
+                             pathMarks: [JSONPointer: PublishIntent.PathMark]?) -> String? {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return AppState.nameEmptyError }
         // Connector Control's own entry goes by this name in Claude's config. A connector already
@@ -842,7 +878,6 @@ public final class AppState: ObservableObject {
             if let old = oldName, old != trimmed { intent = intent.movingConnector(old, to: trimmed) }
             if let pathMarks { intent = intent.replacingPathMarks(of: trimmed, with: pathMarks) }
         }
-        persistStore()
         return nil
     }
 

@@ -1516,14 +1516,10 @@ public sealed class EditorModel : ObservableObject, IDisposable
         var saved = readOnly ? Target.Name : name;
         var entry = new McpEntry(current?.Enabled ?? Target.Entry.Enabled, config, readOnly ? Target.Entry.LastEditView : view);
         if (state.Upsert(saved, entry, Target.IsNew ? null : Target.Name, Target.Collection,
-                         FollowedPathMarks(CollectionName, config)) is { } error)
+                         FollowedPathMarks(CollectionName, config), propagate ? PropagatedSaves(config) : []) is { } error)
         {
             ValidationError = error;
             return false;
-        }
-        if (propagate)
-        {
-            PropagateSavedConfig(config, saved);
         }
         CloseRequested?.Invoke();
         state.ApplyInteractively();
@@ -1534,16 +1530,21 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// The ticked checkbox: the same change again in each collection that held an identical copy
     /// when this window opened. Each twin keeps its own on/off state, which is this machine's
     /// business and not part of "this change"; a name already taken in one of them leaves that
-    /// collection alone rather than failing a save that has already landed.
+    /// collection alone rather than failing the save.
     /// <para>
     /// The checkbox promised these collections held an identical copy, and that was measured when
     /// the window opened. A twin that has moved since — a second editor window on it saved first,
     /// or an external edit reconciled in — is no longer the connector the user agreed to change,
     /// so it is skipped in silence. The same care the primary save takes over its own snapshot.
     /// </para>
+    /// <para>
+    /// The twins go to the store with the save itself (<see cref="AppState.Upsert"/>'s
+    /// <c>alsoIn</c>), so the master list is written once for all of them.
+    /// </para>
     /// </summary>
-    private void PropagateSavedConfig(JsonValue config, string saved)
+    private List<AppState.PropagatedSave> PropagatedSaves(JsonValue config)
     {
+        var saves = new List<AppState.PropagatedSave>();
         foreach (var other in PropagateTargets)
         {
             if (state.Store.Collections.TryGetValue(other, out var held)
@@ -1551,10 +1552,11 @@ public sealed class EditorModel : ObservableObject, IDisposable
                 && twin.Config == Target.Entry.Config)
             {
                 // The twin held this window's opening config, so its marks follow the same rows.
-                state.Upsert(saved, new McpEntry(twin.Enabled, config, view), Target.Name, other,
-                             FollowedPathMarks(other, config));
+                saves.Add(new AppState.PropagatedSave(other, new McpEntry(twin.Enabled, config, view),
+                                                      FollowedPathMarks(other, config)));
             }
         }
+        return saves;
     }
 
     /// <summary>

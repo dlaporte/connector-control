@@ -329,6 +329,30 @@ public class EditorModelCollectionsTests
         Assert.True(updated.Enabled);
     }
 
+    /// <summary>The save and every twin it reaches are one change to the master list: written once,
+    /// with one backup of what came before, not one per collection for states that were only ever
+    /// halfway.</summary>
+    [Fact]
+    public void APropagatedSaveWritesTheMasterListOnce()
+    {
+        using var rig = new EditorRig();
+        var state = rig.State;
+        rig.Twin("Backup");
+        rig.Twin("Spare");
+
+        using var editor = rig.Editor("scoutbook", "Default");
+        Assert.Equal(["Backup", "Spare"], editor.PropagateTargets);
+        editor.Propagate = true;
+        editor.RemoteUrl = "https://scoutbook.example.com/mcp/v2";
+        var before = state.Service.Backups.Backups("mcps").Count;
+        Assert.True(editor.Save());
+
+        Assert.Equal(before + 1, state.Service.Backups.Backups("mcps").Count);
+        var updated = state.Store.Collections["Default"].Mcps["scoutbook"].Config;
+        Assert.Equal(updated, state.Store.Collections["Backup"].Mcps["scoutbook"].Config);
+        Assert.Equal(updated, state.Store.Collections["Spare"].Mcps["scoutbook"].Config);
+    }
+
     [Fact]
     public void AnUntickedPropagateLeavesTheTwinAlone()
     {
