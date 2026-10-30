@@ -287,6 +287,17 @@ public class StringCatalogTests
         ["ToolFooterLine.installText"] = ["X", "Y", "Z"],
         ["UpdateCoordinator.availableDetail"] = ["X", "Y"],
         ["UpdateCoordinator.upToDateDetail"] = ["X"],
+        ["UpdateRefusals.insideTheUpdate"] = ["X"],
+        ["UpdateRefusals.invalidCharacterEntry"] = ["X"],
+        ["UpdateRefusals.notValidlySigned"] = ["X"],
+        ["UpdateRefusals.olderVersion"] = ["X", "Y"],
+        ["UpdateRefusals.previewForRelease"] = ["X", "Y"],
+        ["UpdateRefusals.renamedEntry"] = ["X"],
+        ["UpdateRefusals.signedByAnother"] = ["X", "Y"],
+        ["UpdateRefusals.signedByUntrusted"] = ["X", "Y"],
+        ["UpdateRefusals.sizeMismatch"] = ["X", "3", "7"],
+        ["UpdateRefusals.unreadable"] = ["X"],
+        ["UpdateRefusals.versionMismatch"] = ["X", "Y"],
     };
 
     [Fact]
@@ -1006,6 +1017,7 @@ public class StringCatalogTests
         actual["UpdateCoordinator.availableDetail"] = UpdateCoordinator.AvailableDetail("X", "Y");
         actual["UpdateCoordinator.availableHeadline"] = UpdateCoordinator.AvailableHeadline;
         actual["UpdateCoordinator.checkFailedMessage"] = UpdateCoordinator.CheckFailedMessage;
+        actual["UpdateCoordinator.dialogTitle"] = UpdateCoordinator.DialogTitle;
         actual["UpdateCoordinator.downloadingTitle"] = UpdateCoordinator.DownloadingTitle;
         actual["UpdateCoordinator.installButton"] = UpdateCoordinator.InstallButton;
         actual["UpdateCoordinator.laterButton"] = UpdateCoordinator.LaterButton;
@@ -1013,6 +1025,26 @@ public class StringCatalogTests
         actual["UpdateCoordinator.updateRefusedMessage"] = UpdateCoordinator.UpdateRefusedMessage;
         actual["UpdateCoordinator.upToDateDetail"] = UpdateCoordinator.UpToDateDetail("X");
         actual["UpdateCoordinator.upToDateMessage"] = UpdateCoordinator.UpToDateMessage;
+
+        // MARK: UpdateRefusals
+
+        actual["UpdateRefusals.cannotValidateSelf"] = UpdateRefusals.CannotValidateSelf;
+        actual["UpdateRefusals.insideTheUpdate"] = UpdateRefusals.InsideTheUpdate("X");
+        actual["UpdateRefusals.installedUpdater"] = UpdateRefusals.InstalledUpdater;
+        actual["UpdateRefusals.invalidCharacterEntry"] = UpdateRefusals.InvalidCharacterEntry("X");
+        actual["UpdateRefusals.locationUnknown"] = UpdateRefusals.LocationUnknown;
+        actual["UpdateRefusals.mainExecutableTwice"] = UpdateRefusals.MainExecutableTwice;
+        actual["UpdateRefusals.noMainExecutable"] = UpdateRefusals.NoMainExecutable;
+        actual["UpdateRefusals.noVersion"] = UpdateRefusals.NoVersion;
+        actual["UpdateRefusals.notValidlySigned"] = UpdateRefusals.NotValidlySigned("X");
+        actual["UpdateRefusals.olderVersion"] = UpdateRefusals.OlderVersion("X", "Y");
+        actual["UpdateRefusals.previewForRelease"] = UpdateRefusals.PreviewForRelease("X", "Y");
+        actual["UpdateRefusals.renamedEntry"] = UpdateRefusals.RenamedEntry("X");
+        actual["UpdateRefusals.signedByAnother"] = UpdateRefusals.SignedByAnother("X", "Y");
+        actual["UpdateRefusals.signedByUntrusted"] = UpdateRefusals.SignedByUntrusted("X", "Y");
+        actual["UpdateRefusals.sizeMismatch"] = UpdateRefusals.SizeMismatch("X", 3, 7);
+        actual["UpdateRefusals.unreadable"] = UpdateRefusals.Unreadable("X");
+        actual["UpdateRefusals.versionMismatch"] = UpdateRefusals.VersionMismatch("X", "Y");
 
         // MARK: UserPath
 

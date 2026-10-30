@@ -145,7 +145,7 @@ public sealed class VelopackUpdater : IUpdater
         }
         var location = manager.Location;
         var runningExe = Environment.ProcessPath
-            ?? throw new UpdateVerificationException("This app's own location is unknown, so an update cannot be checked" + UpdateVerifier.NotInstalledSuffix);
+            ?? throw new UpdateVerificationException(UpdateRefusals.LocationUnknown);
         // The running app's identity is read once per download and decides both checks below.
         var identity = identify(runningExe);
         var knownGoodUpdater = PrepareInstalledUpdater(identity);

@@ -1231,6 +1231,9 @@
   "UpdateCoordinator.checkFailedMessage": {
     "win": "Couldn’t check for updates."
   },
+  "UpdateCoordinator.dialogTitle": {
+    "win": "Software Update"
+  },
   "UpdateCoordinator.downloadingTitle": {
     "win": "Downloading…"
   },
@@ -1253,6 +1256,79 @@
   },
   "UpdateCoordinator.updateRefusedMessage": {
     "win": "The update was not installed."
+  },
+  "UpdateRefusals.cannotValidateSelf": {
+    "win": "This app's own signature could not be validated, so an update cannot be checked against it; the update was not installed."
+  },
+  "UpdateRefusals.insideTheUpdate": {
+    "win": {
+      "format": "{0} inside the update"
+    }
+  },
+  "UpdateRefusals.installedUpdater": {
+    "win": "The installed Update.exe"
+  },
+  "UpdateRefusals.invalidCharacterEntry": {
+    "win": {
+      "format": "The update package contains an entry named \"{0}\", with a character no Windows file name can hold; the update was not installed."
+    }
+  },
+  "UpdateRefusals.locationUnknown": {
+    "win": "This app's own location is unknown, so an update cannot be checked; the update was not installed."
+  },
+  "UpdateRefusals.mainExecutableTwice": {
+    "win": "The update package contains ConnectorControl.exe more than once; the update was not installed."
+  },
+  "UpdateRefusals.noMainExecutable": {
+    "win": "The update package does not contain ConnectorControl.exe; the update was not installed."
+  },
+  "UpdateRefusals.noVersion": {
+    "win": "ConnectorControl.exe inside the update carries no version; the update was not installed."
+  },
+  "UpdateRefusals.notValidlySigned": {
+    "win": {
+      "format": "{0} is not validly signed; the update was not installed."
+    }
+  },
+  "UpdateRefusals.olderVersion": {
+    "win": {
+      "format": "ConnectorControl.exe inside the update is version {0}, older than the installed {1}; the update was not installed."
+    }
+  },
+  "UpdateRefusals.previewForRelease": {
+    "win": {
+      "format": "ConnectorControl.exe inside the update is the preview {0}, and the installed {1} takes releases only; the update was not installed."
+    }
+  },
+  "UpdateRefusals.renamedEntry": {
+    "win": {
+      "format": "The update package contains an entry named \"{0}\", which Windows would rename on extraction; the update was not installed."
+    }
+  },
+  "UpdateRefusals.signedByAnother": {
+    "win": {
+      "format": "{0} is signed by \"{1}\", not by this app's publisher; the update was not installed."
+    }
+  },
+  "UpdateRefusals.signedByUntrusted": {
+    "win": {
+      "format": "{0} is signed by \"{1}\", not by this app's publisher or one it is built from; the update was not installed."
+    }
+  },
+  "UpdateRefusals.sizeMismatch": {
+    "win": {
+      "format": "The update package entry \"{0}\" declares {1} bytes but holds {2}; the update was not installed."
+    }
+  },
+  "UpdateRefusals.unreadable": {
+    "win": {
+      "format": "The update package could not be read ({0}); the update was not installed."
+    }
+  },
+  "UpdateRefusals.versionMismatch": {
+    "win": {
+      "format": "ConnectorControl.exe inside the update is version {0}, but the update feed says {1}; the update was not installed."
+    }
   },
   "UserPath.notTextError": {
     "win": "Your user PATH in the registry isn’t text, so it was left as it is."

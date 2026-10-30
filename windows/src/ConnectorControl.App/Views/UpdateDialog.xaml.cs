@@ -24,6 +24,7 @@ public partial class UpdateDialog : DialogWindow
         // While the package downloads the dialog cannot be closed: closed, it would answer Later while the
         // download ran on and the app then relaunched anyway.
         Closing += (_, e) => e.Cancel = busy;
+        Title = UpdateCoordinator.DialogTitle;
         Headline.Text = UpdateCoordinator.AvailableHeadline;
         Detail.Text = UpdateCoordinator.AvailableDetail(newVersion, currentVersion);
         Notes.Document = RenderNotes(notesMarkdown ?? string.Empty);

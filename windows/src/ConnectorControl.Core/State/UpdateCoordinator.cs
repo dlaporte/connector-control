@@ -17,6 +17,8 @@ public sealed class UpdateCoordinator : IDisposable
     public static readonly TimeSpan InitialDelay = TimeSpan.FromSeconds(10);
     public static readonly TimeSpan Interval = TimeSpan.FromHours(24);
 
+    /// <summary>The update dialog's window title, as Sparkle titles the Mac's.</summary>
+    public const string DialogTitle = "Software Update";
     public const string ReadyToastBody = "An update to Connector Control is ready and will install when you quit.";
     public const string UpToDateMessage = "You're up to date.";
     public const string CheckFailedMessage = "Couldn’t check for updates.";

@@ -93,6 +93,7 @@ public class DialogTests
         WpfApp.Invoke(() =>
         {
             var dialog = new UpdateDialog("1.3.0", "1.2.2", "## Fixes\n- one\n- two", () => Task.CompletedTask);
+            Assert.Equal("Software Update", dialog.Title);
             Assert.Equal(UpdateCoordinator.AvailableHeadline, dialog.Headline.Text);
             Assert.Equal("Connector Control 1.3.0 is now available - you have 1.2.2. Would you like to install it now?", dialog.Detail.Text);
             Assert.NotNull(dialog.Notes.Document);
