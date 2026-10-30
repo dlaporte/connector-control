@@ -224,6 +224,9 @@ public class StringCatalogTests
         // Called with the row's index, 2: the text counts from one.
         ["EditorModel.argumentLabel"] = ["3"],
         ["EditorModel.deleteVariableRowLabel"] = ["3"],
+        ["EditorModel.hideVariableValueLabel"] = ["3"],
+        ["EditorModel.showVariableValueLabel"] = ["3"],
+        ["PublishModel.pathNameRowLabel"] = ["X", "Y"],
         ["EditorModel.variableNameLabel"] = ["3"],
         ["EditorModel.variableValueLabel"] = ["3"],
         ["PublishModel.hintRowLabel"] = ["X", "Y"],
@@ -712,6 +715,9 @@ public class StringCatalogTests
         actual["EditorModel.additionalTitle"] = EditorModel.AdditionalTitleFor(3, ["a", "b"]);
         actual["EditorModel.argumentLabel"] = EditorModel.ArgumentLabel(2);
         actual["EditorModel.deleteVariableRowLabel"] = EditorModel.DeleteVariableRowLabel(2);
+        actual["EditorModel.hideVariableValueLabel"] = EditorModel.HideVariableValueLabel(2);
+        actual["EditorModel.showVariableValueLabel"] = EditorModel.ShowVariableValueLabel(2);
+        actual["PublishModel.pathNameRowLabel"] = PublishModel.PathNameRowLabel("X", "Y");
         actual["EditorModel.variableNameLabel"] = EditorModel.VariableNameLabel(2);
         actual["EditorModel.variableValueLabel"] = EditorModel.VariableValueLabel(2);
         actual["EditorModel.argumentNumber"] = EditorModel.ArgumentNumber(2);

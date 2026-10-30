@@ -283,6 +283,33 @@ public class EditorWindowTests
     /// 2"), and its box is named by it; the numbers follow the rows as they come and go.
     /// </summary>
     [Fact]
+    public void EnvironmentRowControlsAreNamedByTheirNumberAndFollowADeletion()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var target = EditTarget.Existing("local", AppStateHarness.LocalConnector("node", "server.js"), "Default");
+        WpfApp.Invoke(() => Editing(state, target, window =>
+        {
+            window.Model.AddEnvRow();
+            window.Model.AddEnvRow();
+            Layout(window);
+            var second = window.Model.EnvRows[1];
+            string NameOf<T>(string element) where T : FrameworkElement =>
+                AutomationProperties.GetName(RowElements.Find<T>(window.EnvList, second, element));
+
+            Assert.Equal(EditorModel.VariableNameLabel(1), NameOf<TextBox>("EnvName"));
+            Assert.Equal(EditorModel.DeleteVariableRowLabel(1), NameOf<Button>("DeleteEnvButton"));
+
+            window.Model.DeleteEnvRow(window.Model.EnvRows[0]);
+            Layout(window);
+            Assert.Equal(EditorModel.VariableNameLabel(0), NameOf<TextBox>("EnvName"));
+            Assert.Equal(EditorModel.DeleteVariableRowLabel(0), NameOf<Button>("DeleteEnvButton"));
+            // The eye says what it would do next: the fresh row is revealed, so it would hide.
+            Assert.Equal(EditorModel.HideVariableValueLabel(0), NameOf<Button>("RevealButton"));
+        }, rows: true));
+    }
+
+    [Fact]
     public void ArgumentRowsAreNumberedAndTheirBoxesNamedByTheNumber()
     {
         using var h = new AppStateHarness();

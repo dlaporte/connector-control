@@ -118,6 +118,7 @@
                   <StackPanel x:Name="MarkedFields" Orientation="Horizontal" Margin="28,6,0,0"
                               Visibility="{Binding IsChecked, ElementName=MarkTick, Converter={StaticResource Vis}}">
                     <TextBox x:Name="PathNameBox" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="150" FontSize="12"
+                             AutomationProperties.Name="{Binding NameLabel}"
                              Style="{StaticResource Watermarked}" Tag="{x:Static state:PublishModel.PathNamePlaceholder}" />
                     <TextBox x:Name="PathHintBox" Text="{Binding Hint, UpdateSourceTrigger=PropertyChanged}" Width="210" FontSize="12" Margin="8,0,0,0"
                              AutomationProperties.Name="{Binding HintLabel}"

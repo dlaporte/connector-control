@@ -71,6 +71,8 @@ public final class EditorModel: ObservableObject {
     // the variable's own name is the author's to retype under the reader's cursor.
     public static func variableNameLabel(_ index: Int) -> String { "Variable \(index + 1) name" }
     public static func variableValueLabel(_ index: Int) -> String { "Variable \(index + 1) value" }
+    public static func showVariableValueLabel(_ index: Int) -> String { "Show value of variable \(index + 1)" }
+    public static func hideVariableValueLabel(_ index: Int) -> String { "Hide value of variable \(index + 1)" }
     public static func deleteVariableRowLabel(_ index: Int) -> String { "Delete variable \(index + 1)" }
     public static let valueLabel = "Value"
     public static let tokenLabel = "Token"

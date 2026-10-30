@@ -28,6 +28,7 @@ public final class PublishModel: ObservableObject {
     // variable it is by position alone, and the tick's own words are a bare "share value".
     public static func shareValueRowLabel(_ connector: String, _ name: String) -> String { "Share value of \(name) in \(connector)" }
     public static func hintRowLabel(_ connector: String, _ subject: String) -> String { "Hint for \(subject) in \(connector)" }
+    public static func pathNameRowLabel(_ connector: String, _ subject: String) -> String { "Placeholder name for \(subject) in \(connector)" }
     public static func markPathRowLabel(_ connector: String, _ value: String) -> String { "Mark \(value) in \(connector) as a path this machine supplies" }
     /// The button beside an unresolved mark's note: drop the mark and let the path travel as the
     /// preview shows it.

@@ -234,6 +234,7 @@ struct PublishSheetView: View {
                             .textFieldStyle(.roundedBorder)
                             .font(.caption)
                             .frame(width: 150)
+                            .accessibilityLabel(PublishModel.pathNameRowLabel(row.connector, row.pointer.description))
                         TextField(PublishModel.hintPlaceholder, text: $row.hint)
                             .textFieldStyle(.roundedBorder)
                             .font(.caption)

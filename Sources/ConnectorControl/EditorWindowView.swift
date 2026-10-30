@@ -294,7 +294,9 @@ struct EditorWindowView: View {
                             }
                             .buttonStyle(.plain)
                             .help(reveal)
-                            .accessibilityLabel(reveal)
+                            .accessibilityLabel(row.revealed
+                                ? EditorModel.hideVariableValueLabel(position)
+                                : EditorModel.showVariableValueLabel(position))
                             Button { model.deleteEnvRow(id: row.id) } label: {
                                 Image(systemName: "xmark.circle")
                             }

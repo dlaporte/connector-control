@@ -27,6 +27,7 @@ public sealed class PublishModel : ObservableObject
     // variable it is by position alone, and the tick's own words are a bare "share value".
     public static string ShareValueRowLabel(string connector, string name) => $"Share value of {name} in {connector}";
     public static string HintRowLabel(string connector, string subject) => $"Hint for {subject} in {connector}";
+    public static string PathNameRowLabel(string connector, string subject) => $"Placeholder name for {subject} in {connector}";
     public static string MarkPathRowLabel(string connector, string value) => $"Mark {value} in {connector} as a path this machine supplies";
     /// <summary>The button beside an unresolved mark's note: drop the mark and let the path travel as the preview shows it.</summary>
     public const string ForgetMarkButton = "Forget Mark";
@@ -161,6 +162,9 @@ public sealed class PublishModel : ObservableObject
 
         /// <summary><see cref="HintRowLabel"/> for this row, named by where its path sits: the hint box's spoken name.</summary>
         public string HintLabel => HintRowLabel(Connector, Pointer.ToString());
+
+        /// <summary><see cref="PathNameRowLabel"/> for this row, named by where its path sits: the name box's spoken name.</summary>
+        public string NameLabel => PathNameRowLabel(Connector, Pointer.ToString());
 
         public string Name { get => name; set => Set(ref name, value); }
 

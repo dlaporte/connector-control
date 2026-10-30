@@ -969,6 +969,7 @@ public class PublishModelTests
     {
         Assert.Equal("Share value of TOKEN in github", PublishModel.ShareValueRowLabel("github", "TOKEN"));
         Assert.Equal("Hint for TOKEN in github", PublishModel.HintRowLabel("github", "TOKEN"));
+        Assert.Equal("Placeholder name for /args/0 in fs", PublishModel.PathNameRowLabel("fs", "/args/0"));
         Assert.Equal("Mark /Users/me/x in fs as a path this machine supplies", PublishModel.MarkPathRowLabel("fs", "/Users/me/x"));
         var env = new PublishModel.EnvRow("github", "TOKEN", "v", false, "");
         Assert.Equal("Share value of TOKEN in github", env.ShareLabel);

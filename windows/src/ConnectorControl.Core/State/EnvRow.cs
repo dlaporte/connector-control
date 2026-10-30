@@ -45,7 +45,17 @@ public sealed class EnvRow : ObservableObject
         }
     }
 
-    public bool Revealed { get => revealed; set => Set(ref revealed, value); }
+    public bool Revealed
+    {
+        get => revealed;
+        set
+        {
+            if (Set(ref revealed, value))
+            {
+                Raise(nameof(RevealLabel));
+            }
+        }
+    }
 
     // MARK: the editor's rules
 
@@ -72,6 +82,11 @@ public sealed class EnvRow : ObservableObject
     /// <summary><see cref="EditorModel.VariableValueLabel"/> for where the row sits now: its value box's spoken name.</summary>
     public string ValueLabel => editor?.EnvRows.IndexOf(this) is { } index and >= 0 ? EditorModel.VariableValueLabel(index) : string.Empty;
 
+    /// <summary>The eye's spoken name: what it would do next to this row, show a masked value or hide it again.</summary>
+    public string RevealLabel => editor?.EnvRows.IndexOf(this) is { } index and >= 0
+        ? (revealed ? EditorModel.HideVariableValueLabel(index) : EditorModel.ShowVariableValueLabel(index))
+        : string.Empty;
+
     /// <summary><see cref="EditorModel.DeleteVariableRowLabel"/> for where the row sits now: its delete button's spoken name.</summary>
     public string DeleteLabel => editor?.EnvRows.IndexOf(this) is { } index and >= 0 ? EditorModel.DeleteVariableRowLabel(index) : string.Empty;
 
@@ -81,6 +96,7 @@ public sealed class EnvRow : ObservableObject
         Raise(nameof(NameLabel));
         Raise(nameof(ValueLabel));
         Raise(nameof(DeleteLabel));
+        Raise(nameof(RevealLabel));
     }
 
     /// <summary>The editor whose rules this row answers with, set as the row joins its list.</summary>

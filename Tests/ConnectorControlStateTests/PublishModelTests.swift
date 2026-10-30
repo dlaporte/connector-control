@@ -766,6 +766,7 @@ final class PublishModelTests: XCTestCase {
     func testRowControlsAreNamedByTheirConnectorAndSubject() {
         XCTAssertEqual(PublishModel.shareValueRowLabel("github", "TOKEN"), "Share value of TOKEN in github")
         XCTAssertEqual(PublishModel.hintRowLabel("github", "TOKEN"), "Hint for TOKEN in github")
+        XCTAssertEqual(PublishModel.pathNameRowLabel("fs", "/args/0"), "Placeholder name for /args/0 in fs")
         XCTAssertEqual(PublishModel.markPathRowLabel("fs", "/Users/me/x"), "Mark /Users/me/x in fs as a path this machine supplies")
     }
 }

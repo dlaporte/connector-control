@@ -473,15 +473,13 @@
                         </StackPanel>
                         <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="6,0,0,0" VerticalAlignment="Top">
                           <!-- The eye's words follow what it would do next: show a masked value, or hide it again. -->
-                          <Button x:Name="RevealButton" Content="&#xE7B3;" Click="OnToggleReveal">
+                          <Button x:Name="RevealButton" Content="&#xE7B3;" Click="OnToggleReveal" AutomationProperties.Name="{Binding RevealLabel}">
                             <Button.Style>
                               <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
                                 <Setter Property="ToolTip" Value="{x:Static state:EditorModel.ShowValueLabel}" />
-                                <Setter Property="AutomationProperties.Name" Value="{x:Static state:EditorModel.ShowValueLabel}" />
                                 <Style.Triggers>
                                   <DataTrigger Binding="{Binding Revealed}" Value="True">
                                     <Setter Property="ToolTip" Value="{x:Static state:EditorModel.HideValueLabel}" />
-                                    <Setter Property="AutomationProperties.Name" Value="{x:Static state:EditorModel.HideValueLabel}" />
                                   </DataTrigger>
                                 </Style.Triggers>
                               </Style>

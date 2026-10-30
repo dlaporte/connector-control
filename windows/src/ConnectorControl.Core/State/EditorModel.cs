@@ -85,6 +85,8 @@ public sealed class EditorModel : ObservableObject, IDisposable
     // the variable's own name is the author's to retype under the reader's cursor.
     public static string VariableNameLabel(int index) => $"Variable {index + 1} name";
     public static string VariableValueLabel(int index) => $"Variable {index + 1} value";
+    public static string ShowVariableValueLabel(int index) => $"Show value of variable {index + 1}";
+    public static string HideVariableValueLabel(int index) => $"Hide value of variable {index + 1}";
     public static string DeleteVariableRowLabel(int index) => $"Delete variable {index + 1}";
     public const string ValueLabel = "Value";
     public const string TokenLabel = "Token";

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using ConnectorControl.App.Tests.TestSupport;
@@ -147,6 +148,9 @@ public class PublishDialogTests
                 var hint = RowElements.Find<TextBox>(window.EnvList, row, "HintBox");
 
                 Assert.Equal(PublishModel.ShareValueLabel, tick.Content);
+                // Visible words stay short; the spoken name says which row the tick is on.
+                Assert.Equal(PublishModel.ShareValueRowLabel(row.Connector, "A"), AutomationProperties.GetName(tick));
+                Assert.Equal(PublishModel.HintRowLabel(row.Connector, "A"), AutomationProperties.GetName(hint));
                 Assert.False(tick.IsChecked);
                 Assert.Equal(PublishModel.HintPlaceholder, hint.Tag);
                 Assert.Equal(Visibility.Visible, hint.Visibility);
@@ -193,6 +197,8 @@ public class PublishDialogTests
                 Assert.False(tick.IsChecked);
                 Assert.Equal(Visibility.Collapsed, fields.Visibility);
                 Assert.Equal(PublishModel.PathNamePlaceholder, nameBox.Tag);
+                Assert.Equal(PublishModel.MarkPathRowLabel(row.Connector, row.Value), AutomationProperties.GetName(tick));
+                Assert.Equal(PublishModel.PathNameRowLabel(row.Connector, row.Pointer.ToString()), AutomationProperties.GetName(nameBox));
                 Assert.Equal(PublishModel.HintPlaceholder, hintBox.Tag);
                 // Unmarked, the path on this machine is what the document carries.
                 Assert.Contains("/Users/d/x.js", window.PreviewBox.Text, StringComparison.Ordinal);

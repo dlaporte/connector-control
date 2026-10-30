@@ -219,6 +219,9 @@ final class StringCatalogTests: XCTestCase {
         "EditorModel.argumentLabel": ["3"],
         "EditorModel.argumentNumber": ["3"],
         "EditorModel.deleteVariableRowLabel": ["3"],
+        "EditorModel.hideVariableValueLabel": ["3"],
+        "EditorModel.showVariableValueLabel": ["3"],
+        "PublishModel.pathNameRowLabel": ["X", "Y"],
         "EditorModel.changedOutsideMessage": ["X"],
         "EditorModel.deletedOutsideMessage": ["X"],
         "EditorModel.duplicateEnvError": ["X"],
@@ -686,6 +689,9 @@ final class StringCatalogTests: XCTestCase {
         actual["EditorModel.argumentLabel"] = EditorModel.argumentLabel(2)
         actual["EditorModel.argumentNumber"] = EditorModel.argumentNumber(2)
         actual["EditorModel.deleteVariableRowLabel"] = EditorModel.deleteVariableRowLabel(2)
+        actual["EditorModel.hideVariableValueLabel"] = EditorModel.hideVariableValueLabel(2)
+        actual["EditorModel.showVariableValueLabel"] = EditorModel.showVariableValueLabel(2)
+        actual["PublishModel.pathNameRowLabel"] = PublishModel.pathNameRowLabel("X", "Y")
         actual["EditorModel.variableNameLabel"] = EditorModel.variableNameLabel(2)
         actual["EditorModel.variableValueLabel"] = EditorModel.variableValueLabel(2)
         actual["EditorModel.argumentPrompt"] = EditorModel.argumentPrompt
