@@ -557,11 +557,7 @@ extension ControlTools {
         let shown = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shown)) }
         guard state.isSynced(collection) else { return .refused(ControlTools.notSubscribedError(shown)) }
-        if let problem = state.sourceErrors[collection] {
-            // The problem names the document's file.
-            let file = state.sourceBinding(of: collection)?.path.map { URL(fileURLWithPath: $0).lastPathComponent }
-            return .refused(file.map { ControlTools.shown(problem, leadingWith: $0) } ?? ControlText.escaped(problem))
-        }
+        if let problem = sourceProblem(collection) { return .refused(problem) }
         guard let diff = state.pendingUpdates[collection] else { return .refused(ControlTools.noUpdateError(shown)) }
         // Connector by connector, as the Review sheet shows an update: every entry is a command
         // Claude will run. A document that moves under the question then asks a different one, so

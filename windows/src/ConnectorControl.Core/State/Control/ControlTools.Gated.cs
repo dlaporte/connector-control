@@ -793,11 +793,9 @@ public sealed partial class ControlTools
         {
             return new ControlStep.Refused(NotSubscribedError(shown));
         }
-        if (state.SourceErrors.TryGetValue(collection, out var problem))
+        if (SourceProblem(collection) is { } problem)
         {
-            // The problem names the document's file.
-            var file = state.SourceBinding(collection)?.Path is { } source ? Path.GetFileName(source) : null;
-            return new ControlStep.Refused(file is null ? ControlText.Escaped(problem) : Shown(problem, file));
+            return new ControlStep.Refused(problem);
         }
         if (state.PendingUpdates.GetValueOrDefault(collection) is not { } diff)
         {

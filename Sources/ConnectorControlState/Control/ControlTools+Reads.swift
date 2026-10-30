@@ -245,6 +245,15 @@ extension ControlTools {
         return clauses.joined(separator: clauseSeparator)
     }
 
+    /// The refusal for a subscribed collection whose document can't be read, nil when it can:
+    /// get_pending_update and apply_update both answer with it. The problem names the document's
+    /// file, unquoted.
+    func sourceProblem(_ collection: String) -> String? {
+        guard let problem = state.sourceErrors[collection] else { return nil }
+        let file = state.sourceBinding(of: collection)?.path.map { URL(fileURLWithPath: $0).lastPathComponent }
+        return file.map { ControlTools.shown(problem, leadingWith: $0) } ?? ControlText.escaped(problem)
+    }
+
     /// What an update would change: the window's banner, with the collection quoted and every name
     /// through `ControlText.escapedName(_:)`, since others chose them. refresh_subscription answers
     /// with it, and is announced with it when it lands late; apply_update asks with it.
@@ -252,11 +261,7 @@ extension ControlTools {
         let shown = ControlText.escapedName(collection)
         guard state.store.collections[collection] != nil else { return .refusal(MasterStore.noCollectionError(shown)) }
         guard state.isSynced(collection) else { return .refusal(ControlTools.notSubscribedError(shown)) }
-        if let problem = state.sourceErrors[collection] {
-            // The problem names the document's file, unquoted.
-            let file = state.sourceBinding(of: collection)?.path.map { URL(fileURLWithPath: $0).lastPathComponent }
-            return .refusal(file.map { ControlTools.shown(problem, leadingWith: $0) } ?? ControlText.escaped(problem))
-        }
+        if let problem = sourceProblem(collection) { return .refusal(problem) }
         let diff = state.pendingUpdates[collection]
         let structured: JSONValue = .object([
             "collection": .string(collection),

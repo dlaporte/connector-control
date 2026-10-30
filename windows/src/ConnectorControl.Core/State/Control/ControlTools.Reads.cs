@@ -285,6 +285,19 @@ public sealed partial class ControlTools
         return string.Join(ClauseSeparator, clauses);
     }
 
+    /// <summary>The refusal for a subscribed collection whose document can't be read, null when it
+    /// can: get_pending_update and apply_update both answer with it. The problem names the
+    /// document's file, unquoted.</summary>
+    internal string? SourceProblem(string collection)
+    {
+        if (!state.SourceErrors.TryGetValue(collection, out var problem))
+        {
+            return null;
+        }
+        var file = state.SourceBinding(collection)?.Path is { } source ? Path.GetFileName(source) : null;
+        return file is null ? ControlText.Escaped(problem) : Shown(problem, file);
+    }
+
     /// <summary>What an update would change: the window's banner, with the collection quoted and every name
     /// through <see cref="ControlText.EscapedName"/>, since others chose them. refresh_subscription answers
     /// with it, and is announced with it when it lands late; apply_update asks with it.</summary>
@@ -299,11 +312,9 @@ public sealed partial class ControlTools
         {
             return ControlResult.Refusal(NotSubscribedError(shown));
         }
-        if (state.SourceErrors.TryGetValue(collection, out var problem))
+        if (SourceProblem(collection) is { } problem)
         {
-            // The problem names the document's file, unquoted.
-            var file = state.SourceBinding(collection)?.Path is { } source ? Path.GetFileName(source) : null;
-            return ControlResult.Refusal(file is null ? ControlText.Escaped(problem) : Shown(problem, file));
+            return ControlResult.Refusal(problem);
         }
         var diff = state.PendingUpdates.GetValueOrDefault(collection);
         var structured = JsonValue.Object(
