@@ -203,11 +203,13 @@ public final class AppState: ObservableObject {
     }
 
     /// One collection document as this platform renders it, with the bytes and the origin it was
-    /// read from - what Apply needs, and what the row cautions read the author's platform from.
+    /// read from - what Apply needs, and what the row cautions read the author's platform from -
+    /// and the path it was read at, so a save can tell the render still describes the binding.
     private struct RenderedSource {
         var rendered: RenderedCollection
         var hash: String
         var origin: String?
+        var path: String
     }
 
     /// Test probe: both watchers are live, which should hold true after every reload.
@@ -594,13 +596,13 @@ public final class AppState: ObservableObject {
             // holds while a sync tool is halfway through writing the file.
             let sidecar = service.loadCollections()
             let result = try service.loadAndReconcile(
-                collections: sidecar ?? (hasLoadedCollectionsOnce ? collectionsFile : nil),
+                collections: sidecar.file ?? (hasLoadedCollectionsOnce ? collectionsFile : nil),
                 baseline: hasLoadedOnce ? appliedServers : nil,
                 storeAuthoritative: trigger != .routine,
                 lastAppliedCollection: applied.collection,
                 lastAppliedNames: applied.names)
             store = result.store
-            loadCollections(sidecar)
+            loadCollections(sidecar.file, hash: sidecar.hash)
             var claudeConfigChangedExternally = false
             if let servers = result.claudeServers {
                 claudeConfigChangedExternally = wasLoaded && servers != previousApplied
@@ -730,7 +732,7 @@ public final class AppState: ObservableObject {
     /// active collection, so only a change to that one reaches its config. Shared by the verbs
     /// that can change what a collection runs, so none of them saves without the second half.
     private func persistAndApply(touching collection: String) {
-        persistStore()
+        persistStore(touching: collection)
         if collection == activeCollection { applyIfChanged() }
     }
 
@@ -761,10 +763,13 @@ public final class AppState: ObservableObject {
     /// local one until the next save, and loses nothing the app cannot rebuild. One `catch` for
     /// the three: the first failure stops the chain, since a sidecar written against a master
     /// list that never landed would describe collections that do not exist.
-    private func persistStore() {
+    ///
+    /// `touched` is the collection the change was made to, when it was one: its document is read
+    /// again, as a Locate that points the binding back at the same path needs.
+    private func persistStore(touching touched: String? = nil) {
         // The store just changed, so what a source document would change with it may have too -
         // and the excluded lists a re-render produces belong in the cache this save writes.
-        recomputePending()
+        rederivePending(rereading: touched)
         do {
             try service.saveStore(store)
             // A sidecar that the last load could not read is one something else is writing.
@@ -1290,7 +1295,7 @@ public final class AppState: ObservableObject {
         let hash = ContentHash.sha256(data)
         collectionsCache.synced[name] = CollectionsLocalCache.SyncedBinding(
             path: url.path, lastHash: hash, excluded: rendered.excluded)
-        pendingRendered[name] = RenderedSource(rendered: rendered, hash: hash, origin: document.origin)
+        pendingRendered[name] = RenderedSource(rendered: rendered, hash: hash, origin: document.origin, path: url.path)
         notifiedSourceHashes[name] = hash
         persistStore()
         return nil
@@ -1440,8 +1445,33 @@ public final class AppState: ObservableObject {
             }
             rendered = document.render()
             sourceRenders += 1
-            pendingRendered[collection] = RenderedSource(rendered: rendered, hash: hash, origin: document.origin)
+            pendingRendered[collection] = RenderedSource(rendered: rendered, hash: hash, origin: document.origin, path: path)
         }
+        derivePending(for: collection, rendered: rendered, hash: hash)
+    }
+
+    /// What a store change needs: every bound synced collection's pending update re-derived against
+    /// the store as it stands now. A document is read again only for `touched`, the collection the
+    /// change was made to, and where the render this run holds cannot vouch for it - none yet, one
+    /// read at another path, or a read still failing, whose retries run as they did. A store change
+    /// does not touch any other document: one that changed on disk reaches its watcher, and every
+    /// reload reads them all again.
+    private func rederivePending(rereading touched: String?) {
+        for name in collectionsFile.collections.keys.sorted(by: { $0.ordinallyPrecedes($1) })
+        where collectionsFile.collections[name]?.kind == .synced {
+            guard let path = collectionsCache.synced[name]?.path else { continue }
+            if name != touched, let kept = pendingRendered[name], kept.path == path,
+               sourceFailures[name] == nil, sourceErrors[name] == nil {
+                derivePending(for: name, rendered: kept.rendered, hash: kept.hash)
+            } else {
+                readSource(for: name, manual: false)
+            }
+        }
+    }
+
+    /// The rest of a successful read: the read state cleared, and what `rendered` - the document
+    /// whose bytes hash to `hash` - would change in the collection as the store holds it now.
+    private func derivePending(for collection: String, rendered: RenderedCollection, hash: String) {
         sourceFailures.removeValue(forKey: collection)
         sourceRetryScheduled.remove(collection)
         sourceErrors.removeValue(forKey: collection)
@@ -2382,8 +2412,9 @@ public final class AppState: ObservableObject {
     /// The sidecar and the cache follow the store on every load: the master list decides which
     /// collections exist, the sidecar annotates them, and the cache binds what this machine has
     /// found. Runs after the store is assigned, so both reconcile against the list just loaded.
-    /// `loaded` is the sidecar `reload` read for this load.
-    private func loadCollections(_ loaded: CollectionsFile?) {
+    /// `loaded` is the sidecar `reload` read for this load, and `hash` the hash of the bytes it was
+    /// read from (nil when there was no file).
+    private func loadCollections(_ loaded: CollectionsFile?, hash: String?) {
         // An unreadable sidecar loads as nil (see CollectionsFile.loadIfReadable). Reconciling the
         // cache against it would drop every binding on this machine over a file a sync tool is
         // halfway through writing, so it is left alone and whatever is already in memory stands.
@@ -2437,8 +2468,9 @@ public final class AppState: ObservableObject {
         }
         // What is on disk NOW, not what this app last wrote: another machine's sidecar is the
         // file the next save has to differ from, or a change that happens to restore our old
-        // bytes would be skipped and reverted by the reload after it.
-        lastSavedSidecarHash = (try? Data(contentsOf: service.paths.collectionsFileURL)).map(ContentHash.sha256)
+        // bytes would be skipped and reverted by the reload after it. The bytes this load read, not a
+        // second read: what was decoded and what the next save compares against are the same file.
+        lastSavedSidecarHash = hash
         bindSourcesBesideTheStore()
         armSourceWatchers()
         recomputePending()

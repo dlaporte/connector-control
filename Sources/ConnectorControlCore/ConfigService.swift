@@ -222,9 +222,10 @@ public struct ConfigService: Sendable {
 
     /// The sidecar beside the master list; a missing file loads as empty, and one that exists
     /// but cannot be read loads as nil (see `CollectionsFile.loadIfReadable`), so the caller can
-    /// tell a file with no entries from one it must not save over.
-    public func loadCollections() -> CollectionsFile? {
-        CollectionsFile.loadIfReadable(from: paths.collectionsFileURL)
+    /// tell a file with no entries from one it must not save over. The hash is of the bytes it read
+    /// (nil when there was no file), so the caller knows what is on disk without reading it again.
+    public func loadCollections() -> (file: CollectionsFile?, hash: String?) {
+        CollectionsFile.loadReadingHash(from: paths.collectionsFileURL)
     }
 
     /// Backup the existing sidecar (skipped when it doesn't exist yet - nothing to protect on

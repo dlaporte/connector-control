@@ -168,8 +168,20 @@ final class ConfigServiceTests: XCTestCase {
         let file = CollectionsFile(collections: ["X": .init(kind: .synced, fileName: "x.json", relativeToStore: nil, origin: nil, needs: [:], publish: nil, provenance: [:])])
         try service.saveCollections(file)
         try service.saveCollections(CollectionsFile(collections: [:]))
-        XCTAssertEqual(service.loadCollections(), CollectionsFile(collections: [:]))
+        XCTAssertEqual(service.loadCollections().file, CollectionsFile(collections: [:]))
         XCTAssertEqual(try service.backups.backups(series: "collections").count, 1, "the first save had nothing to back up; the second backed up the first")
+    }
+
+    /// The load says what bytes it read, so the app need not read the sidecar again to know.
+    func testLoadCollectionsHashesTheBytesItRead() throws {
+        XCTAssertNil(service.loadCollections().hash, "no file, no bytes")
+        try service.saveCollections(CollectionsFile(collections: [:]))
+        let url = service.paths.collectionsFileURL
+        XCTAssertEqual(service.loadCollections().hash, ContentHash.sha256(try Data(contentsOf: url)))
+        try Data("{half".utf8).write(to: url)
+        let unreadable = service.loadCollections()
+        XCTAssertNil(unreadable.file)
+        XCTAssertEqual(unreadable.hash, ContentHash.sha256(Data("{half".utf8)))
     }
 
     func testApplyServersWritesExactlyWhatItIsGiven() throws {
@@ -555,7 +567,7 @@ private extension ConfigService {
                           lastAppliedNames: Set<String>? = nil) throws
         -> (store: MasterStore, notes: [String],
             claudeServers: [String: JSONValue]?, ingestedElsewhere: IngestedElsewhere?) {
-        try loadAndReconcile(collections: loadCollections(), baseline: baseline,
+        try loadAndReconcile(collections: loadCollections().file, baseline: baseline,
                              storeAuthoritative: storeAuthoritative,
                              lastAppliedCollection: lastAppliedCollection, lastAppliedNames: lastAppliedNames)
     }

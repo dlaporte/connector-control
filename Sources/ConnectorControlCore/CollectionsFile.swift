@@ -124,11 +124,17 @@ public struct CollectionsFile: Equatable, Sendable {
     /// on disk is left exactly as it was. A missing sidecar loads as empty: nothing has been written
     /// yet, so nothing is being lost.
     public static func loadIfReadable(from url: URL) -> CollectionsFile? {
-        guard FileManager.default.fileExists(atPath: url.path) else { return CollectionsFile(collections: [:]) }
-        guard let data = try? Data(contentsOf: url),
-              let json = try? JSONValue.parse(data),
-              let file = try? decode(json) else { return nil }
-        return file
+        loadReadingHash(from: url).file
+    }
+
+    /// `loadIfReadable(from:)`, with the hash of the bytes it read - nil when there was no file to
+    /// read - so a caller that has to know what is on disk does not read the file a second time.
+    public static func loadReadingHash(from url: URL) -> (file: CollectionsFile?, hash: String?) {
+        guard FileManager.default.fileExists(atPath: url.path) else { return (CollectionsFile(collections: [:]), nil) }
+        guard let data = try? Data(contentsOf: url) else { return (nil, nil) }
+        let hash = ContentHash.sha256(data)
+        guard let json = try? JSONValue.parse(data), let file = try? decode(json) else { return (nil, hash) }
+        return (file, hash)
     }
 
     public func save(to url: URL, staging: URL?) throws {

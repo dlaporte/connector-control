@@ -152,9 +152,10 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>
     /// One collection document as this platform renders it, with the bytes and the origin it was
-    /// read from - what Apply needs, and what the row cautions read the author's platform from.
+    /// read from - what Apply needs, and what the row cautions read the author's platform from -
+    /// and the path it was read at, so a save can tell the render still describes the binding.
     /// </summary>
-    private sealed record RenderedSource(RenderedCollection Rendered, string Hash, string? Origin);
+    private sealed record RenderedSource(RenderedCollection Rendered, string Hash, string? Origin, string Path);
 
     /// <summary>Test probe: both watchers are live. Should be true after every reload.</summary>
     internal bool WatchersArmed => watcher is { IsArmed: true } && storeWatcher is { IsArmed: true };
@@ -750,13 +751,13 @@ public sealed class AppState : ObservableObject, IDisposable
             // sync tool is halfway through writing the file.
             var sidecar = Service.LoadCollections();
             var result = Service.LoadAndReconcile(
-                collections: sidecar ?? (hasLoadedCollectionsOnce ? CollectionsFile : null),
+                collections: sidecar.File ?? (hasLoadedCollectionsOnce ? CollectionsFile : null),
                 baseline: hasLoadedOnce ? AppliedServers : null,
                 storeAuthoritative: trigger != ReloadTrigger.Routine,
                 lastAppliedCollection: applied.Collection,
                 lastAppliedNames: applied.Names);
             Store = result.Store;
-            LoadCollections(sidecar);
+            LoadCollections(sidecar.File, sidecar.Hash);
             var claudeConfigChangedExternally = false;
             if (result.ClaudeServers is { } servers)
             {
@@ -953,7 +954,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// </summary>
     private void PersistAndApply(string touching)
     {
-        PersistStore();
+        PersistStore(touching);
         if (touching == ActiveCollection)
         {
             ApplyIfChanged();
@@ -1010,12 +1011,15 @@ public sealed class AppState : ObservableObject, IDisposable
     /// one until the next save, and loses nothing the app cannot rebuild. One catch for the
     /// three: the first failure stops the chain, since a sidecar written against a master list
     /// that never landed would describe collections that do not exist.
+    ///
+    /// <paramref name="touched"/> is the collection the change was made to, when it was one: its
+    /// document is read again, as a Locate that points the binding back at the same path needs.
     /// </summary>
-    private void PersistStore()
+    private void PersistStore(string? touched = null)
     {
         // The store just changed, so what a source document would change with it may have too -
         // and the excluded lists a re-render produces belong in the cache this save writes.
-        RecomputePending();
+        RederivePending(touched);
         try
         {
             var isProtected = Service.SaveStore(Store).Protected;
@@ -1056,19 +1060,6 @@ public sealed class AppState : ObservableObject, IDisposable
         // Publishing is derived from the store on every store change, never from a save event:
         // the store has just changed, so what the team reads may have to change with it.
         PublishIfChanged();
-    }
-
-    /// <summary>The sidecar's bytes as they are on disk, or null when it is not there to read.</summary>
-    private string? ReadSidecarHash()
-    {
-        try
-        {
-            return ContentHash.Sha256(File.ReadAllBytes(Service.Paths.CollectionsFilePath));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        {
-            return null;
-        }
     }
 
     /// <summary>
@@ -1953,7 +1944,7 @@ public sealed class AppState : ObservableObject, IDisposable
             CollectionKind.Synced, Path.GetFileName(full), RelativeToStore(full), document.Origin, result.Needs));
         var hash = ContentHash.Sha256(data);
         SetBinding(name, new CollectionsLocalCache.SyncedBinding(full, hash, rendered.Excluded));
-        pendingRendered[name] = new RenderedSource(rendered, hash, document.Origin);
+        pendingRendered[name] = new RenderedSource(rendered, hash, document.Origin, full);
         notifiedSourceHashes[name] = hash;
         PersistStore();
         RaiseAll();
@@ -2143,12 +2134,51 @@ public sealed class AppState : ObservableObject, IDisposable
             }
             rendered = document.Render();
             SourceRenders++;
-            pendingRendered[collection] = new RenderedSource(rendered, hash, document.Origin);
+            pendingRendered[collection] = new RenderedSource(rendered, hash, document.Origin, path);
         }
+        DerivePending(collection, rendered, hash);
+    }
+
+    /// <summary>
+    /// What a store change needs: every bound synced collection's pending update re-derived against
+    /// the store as it stands now. A document is read again only for <paramref name="touched"/>, the
+    /// collection the change was made to, and where the render this run holds cannot vouch for it -
+    /// none yet, one read at another path, or a read still failing, whose retries run as they did. A
+    /// store change does not touch any other document: one that changed on disk reaches its watcher,
+    /// and every reload reads them all again.
+    /// </summary>
+    private void RederivePending(string? touched)
+    {
+        foreach (var name in CollectionsFile.Collections.Keys.Order(StringComparer.Ordinal).ToList())
+        {
+            if (CollectionsFile.Collections[name].Kind != CollectionKind.Synced || SourceBinding(name)?.Path is not { } path)
+            {
+                continue;
+            }
+            if (name != touched && pendingRendered.GetValueOrDefault(name) is { } kept && kept.Path == path
+                && !sourceFailures.ContainsKey(name) && !sourceErrors.ContainsKey(name))
+            {
+                DerivePending(name, kept.Rendered, kept.Hash);
+            }
+            else
+            {
+                ReadSource(name, manual: false);
+            }
+        }
+    }
+
+    /// <summary>The rest of a successful read: the read state cleared, and what <paramref name="rendered"/> -
+    /// the document whose bytes hash to <paramref name="hash"/> - would change in the collection as the
+    /// store holds it now.</summary>
+    private void DerivePending(string collection, RenderedCollection rendered, string hash)
+    {
         sourceFailures.Remove(collection);
         sourceRetryScheduled.Remove(collection);
         SetSourceError(collection, null);
-        SetBinding(collection, binding with { Excluded = rendered.Excluded });
+        if (SourceBinding(collection) is { } binding)
+        {
+            SetBinding(collection, binding with { Excluded = rendered.Excluded });
+        }
         var current = Store.Collections.TryGetValue(collection, out var held)
             ? held.Mcps
             : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
@@ -3245,9 +3275,10 @@ public sealed class AppState : ObservableObject, IDisposable
     /// The sidecar and the cache follow the store on every load: the master list decides which
     /// collections exist, the sidecar annotates them, and the cache binds what this machine has
     /// found. Runs after the store is assigned, so both reconcile against the list just loaded.
-    /// <paramref name="loaded"/> is the sidecar <see cref="Reload"/> read for this load.
+    /// <paramref name="loaded"/> is the sidecar <see cref="Reload"/> read for this load, and
+    /// <paramref name="hash"/> the hash of the bytes it was read from (null when there was no file).
     /// </summary>
-    private void LoadCollections(CollectionsFile? loaded)
+    private void LoadCollections(CollectionsFile? loaded, string? hash)
     {
         // An unreadable sidecar loads as null (see CollectionsFile.LoadIfReadable). Reconciling the
         // cache against it would drop every binding on this machine over a file a sync tool is
@@ -3313,7 +3344,9 @@ public sealed class AppState : ObservableObject, IDisposable
         // What is on disk NOW, not what this app last wrote: another machine's sidecar is the
         // file the next save has to differ from, or a change that happens to restore our old
         // bytes would be skipped and reverted by the reload after it.
-        lastSavedSidecarHash = ReadSidecarHash();
+        // The bytes this load read, not a second read: what was decoded and what the next save
+        // compares against are the same file.
+        lastSavedSidecarHash = hash;
         BindSourcesBesideTheStore();
         ArmSourceWatchers();
         RecomputePending();

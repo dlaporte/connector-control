@@ -882,6 +882,44 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.sourceRenders, renders, "and re-deriving it still costs no decode")
     }
 
+    /// A save re-derives what is pending in every subscribed collection from the render this run
+    /// holds, and reads no document the change did not touch: a toggle in one collection leaves
+    /// another's pending update exactly as it was, and an edit there still re-derives it.
+    func testASaveReDerivesPendingWithoutReadingAnUntouchedDocument() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        try h.subscribe(state, to: CollectionDocumentSamples.dataTeam, at: "a.json", as: "A")
+        let b = try h.subscribe(state, to: CollectionDocumentSamples.dataTeam, at: "b.json", as: "B")
+        let original = try XCTUnwrap(state.store.collections["B"]?.mcps["dbt"])
+        var edited = original
+        edited.config = edited.config.replacing(at: JSONPointer(["args", "1"]), with: .string("@dbt/mcp@local"))!
+        XCTAssertNil(state.upsert(name: "dbt", entry: edited, renamedFrom: "dbt", in: "B"))
+        XCTAssertEqual(state.pendingUpdates["B"]?.summary(), "changes dbt")
+        XCTAssertNil(state.pendingUpdates["A"])
+
+        state.setEnabled("github", true, in: "A")
+        XCTAssertEqual(state.pendingUpdates["B"]?.summary(), "changes dbt", "B's update stands")
+        XCTAssertNil(state.pendingUpdates["A"])
+
+        // The edit undone, B matches its document again, and the update goes with it; made again,
+        // it is back.
+        XCTAssertNil(state.upsert(name: "dbt", entry: original, renamedFrom: "dbt", in: "B"))
+        XCTAssertNil(state.pendingUpdates["B"])
+        XCTAssertNil(state.upsert(name: "dbt", entry: edited, renamedFrom: "dbt", in: "B"))
+        XCTAssertEqual(state.pendingUpdates["B"]?.summary(), "changes dbt")
+
+        // B's document goes: a read of it now would count a failure and schedule a retry.
+        try FileManager.default.removeItem(at: b)
+        state.setEnabled("github", false, in: "A")
+        XCTAssertEqual(state.pendingUpdates["B"]?.summary(), "changes dbt")
+        XCTAssertNil(state.sourceErrors["B"])
+        XCTAssertTrue(h.delays.pending.isEmpty, "B's document was not read")
+
+        // Refresh still reads it, and says what it found.
+        state.refreshSource(for: "B")
+        XCTAssertNotNil(state.sourceErrors["B"])
+    }
+
     /// A retry waiting under the old name dies harmlessly when it fires, and the next failure under
     /// the new one starts a chain of its own: renaming a collection during a backoff must not turn
     /// automatic retries off.

@@ -1001,6 +1001,45 @@ public class AppStateCollectionsTests
         Assert.Equal(renders, state.SourceRenders);
     }
 
+    /// <summary>A save re-derives what is pending in every subscribed collection from the render this
+    /// run holds, and reads no document the change did not touch: a toggle in one collection leaves
+    /// another's pending update exactly as it was, and an edit there still re-derives it.</summary>
+    [Fact]
+    public void ASaveReDerivesPendingWithoutReadingAnUntouchedDocument()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        h.Subscribe(state, CollectionDocumentSamples.DataTeam, "a.json", "A");
+        var b = h.Subscribe(state, CollectionDocumentSamples.DataTeam, "b.json", "B");
+        var original = state.Store.Collections["B"].Mcps["dbt"];
+        var edited = original with { Config = original.Config.Replacing(JsonPointer.Parse("/args/1")!, JsonValue.String("@dbt/mcp@local"))! };
+        Assert.Null(state.Upsert("dbt", edited, "dbt", "B"));
+        Assert.Equal("changes dbt", state.PendingUpdates["B"].Summary());
+        Assert.False(state.PendingUpdates.ContainsKey("A"));
+
+        state.SetEnabled("github", true, "A");
+        Assert.Equal("changes dbt", state.PendingUpdates["B"].Summary());   // B's update stands
+        Assert.False(state.PendingUpdates.ContainsKey("A"));
+
+        // The edit undone, B matches its document again, and the update goes with it; made again,
+        // it is back.
+        Assert.Null(state.Upsert("dbt", original, "dbt", "B"));
+        Assert.False(state.PendingUpdates.ContainsKey("B"));
+        Assert.Null(state.Upsert("dbt", edited, "dbt", "B"));
+        Assert.Equal("changes dbt", state.PendingUpdates["B"].Summary());
+
+        // B's document goes: a read of it now would count a failure and schedule a retry.
+        File.Delete(b);
+        state.SetEnabled("github", false, "A");
+        Assert.Equal("changes dbt", state.PendingUpdates["B"].Summary());
+        Assert.False(state.SourceErrors.ContainsKey("B"));
+        Assert.Empty(h.Delays.Pending);   // B's document was not read
+
+        // Refresh still reads it, and says what it found.
+        state.RefreshSource("B");
+        Assert.True(state.SourceErrors.ContainsKey("B"));
+    }
+
     /// <summary>
     /// A retry waiting under the old name dies harmlessly when it fires, and the next failure under
     /// the new one starts a chain of its own: renaming a collection during a backoff must not turn

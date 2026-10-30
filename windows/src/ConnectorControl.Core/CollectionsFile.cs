@@ -246,19 +246,33 @@ public sealed record CollectionsFile
     /// on disk is left exactly as it was. A missing sidecar loads as empty: nothing has been written
     /// yet, so nothing is being lost.
     /// </summary>
-    public static CollectionsFile? LoadIfReadable(string path)
+    public static CollectionsFile? LoadIfReadable(string path) => LoadReadingHash(path).File;
+
+    /// <summary><see cref="LoadIfReadable"/>, with the hash of the bytes it read - null when there was no
+    /// file to read - so a caller that has to know what is on disk does not read the file a second time.</summary>
+    public static (CollectionsFile? File, string? Hash) LoadReadingHash(string path)
     {
         if (!File.Exists(path))
         {
-            return new CollectionsFile([]);
+            return (new CollectionsFile([]), null);
         }
+        byte[] data;
         try
         {
-            return Decode(JsonValue.Parse(File.ReadAllBytes(path)));
+            data = File.ReadAllBytes(path);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or CollectionsFileException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return null;
+            return (null, null);
+        }
+        var hash = ContentHash.Sha256(data);
+        try
+        {
+            return (Decode(JsonValue.Parse(data)), hash);
+        }
+        catch (Exception e) when (e is System.Text.Json.JsonException or CollectionsFileException)
+        {
+            return (null, hash);
         }
     }
 

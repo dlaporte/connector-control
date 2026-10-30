@@ -186,9 +186,23 @@ public class ConfigServiceTests : IDisposable
         ]);
         service.SaveCollections(file);
         service.SaveCollections(new CollectionsFile([]));
-        Assert.Equal(new CollectionsFile([]), service.LoadCollections());
+        Assert.Equal(new CollectionsFile([]), service.LoadCollections().File);
         // the first save had nothing to back up; the second backed up the first
         Assert.Single(service.Backups.Backups("collections"));
+    }
+
+    /// <summary>The load says what bytes it read, so the app need not read the sidecar again to know.</summary>
+    [Fact]
+    public void LoadCollectionsHashesTheBytesItRead()
+    {
+        Assert.Null(service.LoadCollections().Hash);   // no file, no bytes
+        service.SaveCollections(new CollectionsFile([]));
+        var path = service.Paths.CollectionsFilePath;
+        Assert.Equal(ContentHash.Sha256(File.ReadAllBytes(path)), service.LoadCollections().Hash);
+        File.WriteAllText(path, "{half");
+        var unreadable = service.LoadCollections();
+        Assert.Null(unreadable.File);
+        Assert.Equal(ContentHash.Sha256(System.Text.Encoding.UTF8.GetBytes("{half")), unreadable.Hash);
     }
 
     [Fact]
@@ -593,5 +607,5 @@ internal static class ConfigServiceLoads
         bool storeAuthoritative = false,
         string? lastAppliedCollection = null,
         IReadOnlySet<string>? lastAppliedNames = null) =>
-        service.LoadAndReconcile(service.LoadCollections(), baseline, storeAuthoritative, lastAppliedCollection, lastAppliedNames);
+        service.LoadAndReconcile(service.LoadCollections().File, baseline, storeAuthoritative, lastAppliedCollection, lastAppliedNames);
 }
