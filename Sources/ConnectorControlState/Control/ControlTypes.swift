@@ -263,8 +263,16 @@ public enum ControlSettingKey {
 
     /// Only the user changes these, in Settings or with the command-line tool: Claude may not
     /// widen what it is allowed to do, silence the notice of changes synced in from another
-    /// machine, or stop the app updating.
-    public static func isUserOnly(_ key: String) -> Bool {
-        key == claudeIntegration || key == confirmClaudeChanges || key == notifyExternalChanges || key == automaticUpdates
-    }
+    /// machine, or stop the app updating. In the order set_setting's description lists them.
+    public static let userOnly = [claudeIntegration, confirmClaudeChanges, notifyExternalChanges, automaticUpdates]
+
+    public static func isUserOnly(_ key: String) -> Bool { userOnly.contains(key) }
+
+    /// "a, b, c and d": the user-only keys as set_setting's description names them, built from
+    /// the list `isUserOnly` reads so the two cannot disagree.
+    static let userOnlyText = userOnly.dropLast().joined(separator: ", ") + ControlText.listAnd + (userOnly.last ?? "")
+
+    /// "5 to 100": the backups-to-keep range as set_setting's description and refusal write it,
+    /// built from the bounds the check enforces.
+    static let keepCountRange = "\(SettingsModel.minKeepCount) to \(SettingsModel.maxKeepCount)"
 }

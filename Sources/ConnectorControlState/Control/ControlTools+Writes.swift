@@ -17,7 +17,7 @@ import ConnectorControlCore
 extension ControlTools {
     public static let restartToUseText = "Restart Claude to use it."
     public static let restartToApplyText = "Restart Claude to apply the change."
-    public static let keepCountError = "backups-to-keep takes a number from 5 to 100."
+    public static let keepCountError = "backups-to-keep takes a number from \(ControlSettingKey.keepCountRange)."
 
     public static func savedNotAppliedText(_ message: String) -> String { "Saved, but Claude’s config wasn’t updated: \(message)" }
 

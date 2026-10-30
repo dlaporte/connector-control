@@ -51,8 +51,9 @@ public final class SettingsModel: ObservableObject {
     /// says why keeps full opacity.
     public static let dimmedOpacity = 0.45
     public static let loginItemApprovalNote = "Approve Connector Control under System Settings → General → Login Items."
-    public static let minKeepCount = 5
-    public static let maxKeepCount = 100
+    // Nonisolated: ControlSettingKey builds set_setting's wording from them.
+    public nonisolated static let minKeepCount = 5
+    public nonisolated static let maxKeepCount = 100
 
     public static func versionText(_ version: String) -> String { "Version \(version)" }
 

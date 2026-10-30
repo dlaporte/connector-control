@@ -21,7 +21,7 @@ public sealed partial class ControlTools
 {
     public const string RestartToUseText = "Restart Claude to use it.";
     public const string RestartToApplyText = "Restart Claude to apply the change.";
-    public const string KeepCountError = "backups-to-keep takes a number from 5 to 100.";
+    public static readonly string KeepCountError = $"backups-to-keep takes a number from {ControlSettingKey.KeepCountRange}.";
 
     public static string SavedNotAppliedText(string message) => $"Saved, but Claude’s config wasn’t updated: {message}";
 

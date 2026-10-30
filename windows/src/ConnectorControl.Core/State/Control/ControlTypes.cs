@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace ConnectorControl.Core.State;
 
 // The values the control layer passes around: who is calling, how a tool is guarded, what it
@@ -244,7 +246,20 @@ public static class ControlSettingKey
 
     /// <summary>Only the user changes these, in Settings or with the command-line tool: Claude may not
     /// widen what it is allowed to do, silence the notice of changes synced in from another
-    /// machine, or stop the app updating.</summary>
-    public static bool IsUserOnly(string key) =>
-        key == ClaudeIntegration || key == ConfirmClaudeChanges || key == NotifyExternalChanges || key == AutomaticUpdates;
+    /// machine, or stop the app updating. In the order set_setting's description lists them.</summary>
+    public static readonly IReadOnlyList<string> UserOnly = [ClaudeIntegration, ConfirmClaudeChanges, NotifyExternalChanges, AutomaticUpdates];
+
+    public static bool IsUserOnly(string key) => UserOnly.Contains(key);
+
+    /// <summary>"a, b, c and d": the user-only keys as set_setting's description names them, built from
+    /// the list <see cref="IsUserOnly"/> reads so the two cannot disagree. After <see cref="UserOnly"/>,
+    /// which it reads as it initializes.</summary>
+    internal static readonly string UserOnlyText =
+        string.Join(", ", UserOnly.Take(UserOnly.Count - 1)) + ControlText.ListAnd + UserOnly[^1];
+
+    /// <summary>"5 to 100": the backups-to-keep range as set_setting's description and refusal write it,
+    /// built from the bounds the check enforces.</summary>
+    internal static readonly string KeepCountRange =
+        SettingsModel.MinKeepCount.ToString(CultureInfo.InvariantCulture) + " to "
+        + SettingsModel.MaxKeepCount.ToString(CultureInfo.InvariantCulture);
 }
