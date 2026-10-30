@@ -271,44 +271,14 @@ public sealed record CollectionsFile
     // MARK: Decoding helpers
     // Every failure names the key it read, so a hand-edited sidecar says what is wrong with it.
 
-    internal static string RequiredString(JsonValue? value, string what)
-    {
-        if (value is null)
-        {
-            throw CollectionsFileException.Malformed($"{what} is missing");
-        }
-        if (value.Kind != JsonKind.String)
-        {
-            throw CollectionsFileException.Malformed($"{what} is not a string");
-        }
-        return value.StringValue;
-    }
+    internal static string RequiredString(JsonValue? value, string what) =>
+        JsonField.RequiredString(value, what, CollectionsFileException.Malformed);
 
-    internal static string? OptionalString(JsonValue? value, string what)
-    {
-        if (value is null || value.Kind == JsonKind.Null)
-        {
-            return null;
-        }
-        if (value.Kind != JsonKind.String)
-        {
-            throw CollectionsFileException.Malformed($"{what} is not a string");
-        }
-        return value.StringValue;
-    }
+    internal static string? OptionalString(JsonValue? value, string what) =>
+        JsonField.OptionalString(value, what, CollectionsFileException.Malformed);
 
-    internal static IReadOnlyDictionary<string, JsonValue> ObjectValue(JsonValue? value, string what)
-    {
-        if (value is null)
-        {
-            return new Dictionary<string, JsonValue>(StringComparer.Ordinal);
-        }
-        if (value.Kind != JsonKind.Object)
-        {
-            throw CollectionsFileException.Malformed($"{what} is not a JSON object");
-        }
-        return value.ObjectProperties;
-    }
+    internal static IReadOnlyDictionary<string, JsonValue> ObjectValue(JsonValue? value, string what) =>
+        JsonField.ObjectValue(value, what, CollectionsFileException.Malformed);
 
     internal static IReadOnlySet<string> StringSet(JsonValue? value, string what)
     {

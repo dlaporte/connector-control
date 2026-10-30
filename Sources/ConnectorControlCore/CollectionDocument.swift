@@ -934,15 +934,11 @@ public struct CollectionDocument: Equatable, Sendable {
     // Every failure names the key it read, so a hand-edited document says what is wrong with it.
 
     static func requiredString(_ value: JSONValue?, _ what: String) throws -> String {
-        guard let value else { throw CollectionDocumentError.malformed("\(what) is missing") }
-        guard case .string(let s) = value else { throw CollectionDocumentError.malformed("\(what) is not a string") }
-        return s
+        try JSONField.requiredString(value, what, CollectionDocumentError.malformed)
     }
 
     static func optionalString(_ value: JSONValue?, _ what: String) throws -> String? {
-        guard let value, value != .null else { return nil }
-        guard case .string(let s) = value else { throw CollectionDocumentError.malformed("\(what) is not a string") }
-        return s
+        try JSONField.optionalString(value, what, CollectionDocumentError.malformed)
     }
 
     static func stringArray(_ value: JSONValue?, _ what: String) throws -> [String] {
@@ -955,9 +951,7 @@ public struct CollectionDocument: Equatable, Sendable {
     }
 
     static func objectValue(_ value: JSONValue?, _ what: String) throws -> [String: JSONValue] {
-        guard let value else { return [:] }
-        guard case .object(let object) = value else { throw CollectionDocumentError.malformed("\(what) is not a JSON object") }
-        return object
+        try JSONField.objectValue(value, what, CollectionDocumentError.malformed)
     }
 }
 

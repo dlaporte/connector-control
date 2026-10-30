@@ -1643,31 +1643,11 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     // MARK: Decoding helpers
     // Every failure names the key it read, so a hand-edited document says what is wrong with it.
 
-    internal static string RequiredString(JsonValue? value, string what)
-    {
-        if (value is null)
-        {
-            throw CollectionDocumentException.Malformed($"{what} is missing");
-        }
-        if (value.Kind != JsonKind.String)
-        {
-            throw CollectionDocumentException.Malformed($"{what} is not a string");
-        }
-        return value.StringValue;
-    }
+    internal static string RequiredString(JsonValue? value, string what) =>
+        JsonField.RequiredString(value, what, CollectionDocumentException.Malformed);
 
-    internal static string? OptionalString(JsonValue? value, string what)
-    {
-        if (value is null || value.Kind == JsonKind.Null)
-        {
-            return null;
-        }
-        if (value.Kind != JsonKind.String)
-        {
-            throw CollectionDocumentException.Malformed($"{what} is not a string");
-        }
-        return value.StringValue;
-    }
+    internal static string? OptionalString(JsonValue? value, string what) =>
+        JsonField.OptionalString(value, what, CollectionDocumentException.Malformed);
 
     internal static IReadOnlyList<string> StringArray(JsonValue? value, string what)
     {
@@ -1692,16 +1672,6 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
         return items;
     }
 
-    internal static IReadOnlyDictionary<string, JsonValue> ObjectValue(JsonValue? value, string what)
-    {
-        if (value is null)
-        {
-            return new Dictionary<string, JsonValue>(StringComparer.Ordinal);
-        }
-        if (value.Kind != JsonKind.Object)
-        {
-            throw CollectionDocumentException.Malformed($"{what} is not a JSON object");
-        }
-        return value.ObjectProperties;
-    }
+    internal static IReadOnlyDictionary<string, JsonValue> ObjectValue(JsonValue? value, string what) =>
+        JsonField.ObjectValue(value, what, CollectionDocumentException.Malformed);
 }

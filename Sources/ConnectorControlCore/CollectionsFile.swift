@@ -145,21 +145,15 @@ public struct CollectionsFile: Equatable, Sendable {
     // Every failure names the key it read, so a hand-edited sidecar says what is wrong with it.
 
     static func requiredString(_ value: JSONValue?, _ what: String) throws -> String {
-        guard let value else { throw CollectionsFileError.malformed("\(what) is missing") }
-        guard case .string(let s) = value else { throw CollectionsFileError.malformed("\(what) is not a string") }
-        return s
+        try JSONField.requiredString(value, what, CollectionsFileError.malformed)
     }
 
     static func optionalString(_ value: JSONValue?, _ what: String) throws -> String? {
-        guard let value, value != .null else { return nil }
-        guard case .string(let s) = value else { throw CollectionsFileError.malformed("\(what) is not a string") }
-        return s
+        try JSONField.optionalString(value, what, CollectionsFileError.malformed)
     }
 
     static func objectValue(_ value: JSONValue?, _ what: String) throws -> [String: JSONValue] {
-        guard let value else { return [:] }
-        guard case .object(let object) = value else { throw CollectionsFileError.malformed("\(what) is not a JSON object") }
-        return object
+        try JSONField.objectValue(value, what, CollectionsFileError.malformed)
     }
 
     static func stringSet(_ value: JSONValue?, _ what: String) throws -> Set<String> {
