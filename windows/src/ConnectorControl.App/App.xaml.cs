@@ -88,7 +88,9 @@ public partial class App : Application
         // The startup half of the updater's recovery: an Update.exe an earlier check left in place is put back before
         // anything can run it. Here, the first moment the updater exists, rather than straight after the startup hook:
         // only the app's one instance may do it, or a second launch could undo a check the first is running.
-        (services.Updater as VelopackUpdater)?.RecoverInterruptedCheck();
+        // Off the UI thread: the installed-updater check reads signatures and may wait on revocation.
+        var updater = services.Updater as VelopackUpdater;
+        _ = Task.Run(() => updater?.RecoverInterruptedCheck());
         // No owner: WpfDialogs falls back to whichever of our windows is active, so a dialog
         // raised from Settings still centres on Settings.
         var dialogs = new WpfDialogs(() => null);

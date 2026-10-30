@@ -189,7 +189,9 @@ public sealed class VelopackUpdater : IUpdater
         {
             if (ex.UpdaterLeftInPlace)
             {
-                log("The refused update's updater is still in place: the copy saved before the download is kept, to be put back at the next launch or update check.");
+                log(savedUpdaterPath is not null && File.Exists(savedUpdaterPath)
+                    ? "The refused update's updater is still in place: the copy saved before the download is kept, to be put back at the next launch or update check."
+                    : "The refused update's updater is still in place, and no copy was saved before the download to put back.");
             }
             else
             {
