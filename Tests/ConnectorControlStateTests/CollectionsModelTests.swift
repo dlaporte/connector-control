@@ -1357,6 +1357,57 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(state.store.collections["Spare"], before, "and nothing about Spare changed")
     }
 
+    /// A copy that lands says so on the count line, naming how many landed and where, since the
+    /// window stays on the source and the ticks clear. The note lasts until the next tick, the next
+    /// action or another collection; a copy that does not land, or one whose clashes were all
+    /// skipped, says nothing.
+    func testACopyConfirmsOnTheCountLineUntilTheNextTickActionOrSelection() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createActiveCopy(named: "Spare"))
+        XCTAssertNil(state.upsert(name: "alpha", entry: AppStateHarness.localConnector("/bin/alpha"), renamedFrom: nil, in: "Default"))
+        XCTAssertNil(state.upsert(name: "beta", entry: AppStateHarness.localConnector("/bin/beta"), renamedFrom: nil, in: "Default"))
+        let model = h.collectionsModel(state, selecting: "Default", ticking: ["alpha"])
+        let tally = CollectionsModel.connectorTally(try XCTUnwrap(state.store.collections["Default"]).mcps.count)
+        XCTAssertNil(model.copyConfirmation)
+        XCTAssertEqual(model.connectorCount, tally)
+
+        XCTAssertTrue(model.copyChecked(into: "Spare"))
+        XCTAssertEqual(model.copyConfirmation, "Copied 1 connector to \u{201C}Spare\u{201D}")
+        XCTAssertEqual(model.connectorCount, tally + " · Copied 1 connector to \u{201C}Spare\u{201D}")
+
+        model.setChecked("alpha", true)
+        XCTAssertNil(model.copyConfirmation, "the next tick clears it")
+        XCTAssertEqual(model.connectorCount, tally)
+
+        model.setChecked("beta", true)
+        h.dialogs.nextPromptAnswer = "Fresh"
+        XCTAssertTrue(model.copyCheckedIntoNewCollection())
+        XCTAssertEqual(model.copyConfirmation, "Copied 2 connectors to \u{201C}Fresh\u{201D}", "Copy to ▸ New Collection confirms too")
+        model.selected = "Spare"
+        XCTAssertNil(model.copyConfirmation, "another collection clears it")
+
+        model.selected = "Default"
+        model.setChecked("alpha", true)
+        XCTAssertTrue(model.copyChecked(into: "Spare"))
+        XCTAssertNotNil(model.copyConfirmation)
+        h.dialogs.nextPromptAnswer = nil
+        model.rename()
+        XCTAssertNil(model.copyConfirmation, "the next action clears it, even one cancelled")
+
+        // Spare now holds alpha: skipping the clash copies nothing, so there is nothing to confirm.
+        model.setChecked("alpha", true)
+        XCTAssertTrue(model.copyChecked(into: "Spare", choices: ["alpha": .skip]))
+        XCTAssertNil(model.copyConfirmation, "a skipped clash is not counted")
+
+        // A copy that does not land confirms nothing.
+        model.setChecked("alpha", true)
+        h.dialogs.nextPromptAnswer = "Spare"
+        XCTAssertFalse(model.copyCheckedIntoNewCollection())
+        XCTAssertNotNil(model.lastError)
+        XCTAssertNil(model.copyConfirmation)
+    }
+
     /// Copy to ▸ New Collection: an empty collection holding only the copies, while the window
     /// stays where the rows came from and nothing Claude runs changes.
     func testCopyCheckedIntoNewCollectionMakesAnEmptyCollectionOfTheCopiesAlone() throws {

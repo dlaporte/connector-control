@@ -165,6 +165,12 @@
   "CollectionsModel.connectorTally.one": {
     "format": "{0} connector"
   },
+  "CollectionsModel.copiedNote.many": {
+    "format": "Copied {0} connectors to “{1}”"
+  },
+  "CollectionsModel.copiedNote.one": {
+    "format": "Copied 1 connector to “{0}”"
+  },
   "CollectionsModel.copyToButton": "Copy to",
   "CollectionsModel.deleteAction": "Delete",
   "CollectionsModel.deleteCheckedButton": "Delete",

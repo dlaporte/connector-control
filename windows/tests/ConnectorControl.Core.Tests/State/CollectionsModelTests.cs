@@ -1585,6 +1585,66 @@ public class CollectionsModelTests
     }
 
     /// <summary>
+    /// A copy that lands says so on the count line, naming how many landed and where, since the
+    /// window stays on the source and the ticks clear. The note lasts until the next tick, the next
+    /// action or another collection; a copy that does not land, or one whose clashes were all
+    /// skipped, says nothing. The count line repaints each time.
+    /// </summary>
+    [Fact]
+    public void ACopyConfirmsOnTheCountLineUntilTheNextTickActionOrSelection()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateActiveCopy("Spare"));
+        Assert.Null(state.Upsert("alpha", AppStateHarness.LocalConnector("/bin/alpha"), null, "Default"));
+        Assert.Null(state.Upsert("beta", AppStateHarness.LocalConnector("/bin/beta"), null, "Default"));
+        var model = h.CollectionsModel(state, "Default", "alpha");
+        var countRaises = 0;
+        model.PropertyChanged += (_, e) => countRaises += e.PropertyName == nameof(CollectionsModel.ConnectorCount) ? 1 : 0;
+        var tally = CollectionsModel.ConnectorTally(state.Store.Collections["Default"].Mcps.Count);
+        Assert.Null(model.CopyConfirmation);
+        Assert.Equal(tally, model.ConnectorCount);
+
+        Assert.True(model.CopyChecked("Spare"));
+        Assert.Equal("Copied 1 connector to “Spare”", model.CopyConfirmation);
+        Assert.Equal(tally + " · Copied 1 connector to “Spare”", model.ConnectorCount);
+        Assert.True(countRaises > 0);   // the count line repaints
+
+        countRaises = 0;
+        model.SetChecked("alpha", true);
+        Assert.Null(model.CopyConfirmation);   // the next tick clears it
+        Assert.Equal(tally, model.ConnectorCount);
+        Assert.True(countRaises > 0);
+
+        model.SetChecked("beta", true);
+        h.Dialogs.NextPromptAnswer = "Fresh";
+        Assert.True(model.CopyCheckedIntoNewCollection());
+        Assert.Equal("Copied 2 connectors to “Fresh”", model.CopyConfirmation);   // Copy to ▸ New Collection confirms too
+        model.Selected = "Spare";
+        Assert.Null(model.CopyConfirmation);   // another collection clears it
+
+        model.Selected = "Default";
+        model.SetChecked("alpha", true);
+        Assert.True(model.CopyChecked("Spare"));
+        Assert.NotNull(model.CopyConfirmation);
+        h.Dialogs.NextPromptAnswer = null;
+        model.Rename();
+        Assert.Null(model.CopyConfirmation);   // the next action clears it, even one cancelled
+
+        // Spare now holds alpha: skipping the clash copies nothing, so there is nothing to confirm.
+        model.SetChecked("alpha", true);
+        Assert.True(model.CopyChecked("Spare", new Dictionary<string, ImportChoice> { ["alpha"] = ImportChoice.Skip }));
+        Assert.Null(model.CopyConfirmation);   // a skipped clash is not counted
+
+        // A copy that does not land confirms nothing.
+        model.SetChecked("alpha", true);
+        h.Dialogs.NextPromptAnswer = "Spare";
+        Assert.False(model.CopyCheckedIntoNewCollection());
+        Assert.NotNull(model.LastError);
+        Assert.Null(model.CopyConfirmation);
+    }
+
+    /// <summary>
     /// Copy to ▸ New Collection: an empty collection holding only the copies, while the window
     /// stays where the rows came from and nothing Claude runs changes.
     /// </summary>

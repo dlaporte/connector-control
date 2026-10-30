@@ -99,6 +99,8 @@ public class StringCatalogTests
         ["ClaudeSignature.notFoundMessage"] = ["X"],
         ["CollectionsModel.connectorTally.many"] = ["3"],
         ["CollectionsModel.connectorTally.one"] = ["1"],
+        ["CollectionsModel.copiedNote.many"] = ["3", "X"],
+        ["CollectionsModel.copiedNote.one"] = ["X"],
         ["CollectionsModel.deleteCheckedMessage.many"] = ["3"],
         ["CollectionsModel.deleteCheckedMessage.one"] = ["X"],
         ["CollectionsModel.deleteConnectorsSentence.many"] = ["3"],
@@ -401,6 +403,8 @@ public class StringCatalogTests
         actual["CollectionsModel.addConnectorTooltip"] = CollectionsModel.AddConnectorTooltip;
         actual["CollectionsModel.connectorTally.many"] = CollectionsModel.ConnectorTally(3);
         actual["CollectionsModel.connectorTally.one"] = CollectionsModel.ConnectorTally(1);
+        actual["CollectionsModel.copiedNote.many"] = CollectionsModel.CopiedNote(3, "X");
+        actual["CollectionsModel.copiedNote.one"] = CollectionsModel.CopiedNote(1, "X");
         actual["CollectionsModel.copyToButton"] = CollectionsModel.CopyToButton;
         actual["CollectionsModel.deleteAction"] = CollectionsModel.DeleteAction;
         actual["CollectionsModel.deleteConnectorsSentence.many"] = CollectionsModel.DeleteConnectorsSentence(3);

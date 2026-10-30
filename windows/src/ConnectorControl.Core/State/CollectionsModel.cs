@@ -62,6 +62,13 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     public static string SelectedCount(int n) => $"{n} selected";
 
     /// <summary>
+    /// What the count line adds after a copy lands, the window staying on the collection the rows
+    /// came from: the only sign, once the ticks have cleared, that the copy happened and where to.
+    /// </summary>
+    public static string CopiedNote(int n, string collection) =>
+        n == 1 ? $"Copied 1 connector to “{collection}”" : $"Copied {n} connectors to “{collection}”";
+
+    /// <summary>
     /// Names the connector when there is exactly one ticked, and states the count otherwise: a
     /// removal of one row deserves the same specificity the editor's old delete confirmation gave it,
     /// and a removal of several would only get longer for naming them all.
@@ -159,6 +166,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     private readonly IDialogs dialogs;
     private readonly HashSet<string> checkedNames = new(StringComparer.Ordinal);
     private string? lastError;
+    private string? copyConfirmation;
     /// <summary>What the view last picked, which may name a collection that no longer exists; Selected resolves it.</summary>
     private string? selection;
     /// <summary>
@@ -186,9 +194,35 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// What the last action AppState refused reported, cleared by the next one that succeeds, is
-    /// cancelled, declined at its confirmation, or finds nothing to do.
+    /// cancelled, declined at its confirmation, or finds nothing to do. Every verb writes it, which
+    /// is what makes it the place a copy's confirmation is cleared by the next action — on every
+    /// write, not only a change: most verbs write null over null.
     /// </summary>
-    public string? LastError { get => lastError; private set => Set(ref lastError, value); }
+    public string? LastError
+    {
+        get => lastError;
+        private set
+        {
+            Set(ref lastError, value);
+            CopyConfirmation = null;
+        }
+    }
+
+    /// <summary>
+    /// The last copy's <see cref="CopiedNote"/>, shown on the count line until the next action, the
+    /// next tick or another collection is chosen. Set after the copy's own Report, which clears it.
+    /// </summary>
+    public string? CopyConfirmation
+    {
+        get => copyConfirmation;
+        private set
+        {
+            if (Set(ref copyConfirmation, value))
+            {
+                Raise(nameof(ConnectorCount));
+            }
+        }
+    }
 
     // MARK: selection
 
@@ -217,6 +251,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             selection = value;
             checkedNames.Clear();
             checkedCollection = null;
+            CopyConfirmation = null;
             RefreshRows();
             RaiseSelectionDependents();
         }
@@ -651,7 +686,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// The idle selection bar: how many connectors the collection holds, and nothing else — the
     /// pills, the banner and the ⋯ menu say what kind it is and where its file is. The one
     /// addition is a synced source that could not be read, which no banner reports: without it
-    /// the window would not say why a subscription has stopped updating.
+    /// the window would not say why a subscription has stopped updating. The other is a copy's
+    /// <see cref="CopyConfirmation"/>, while it lasts.
     /// </summary>
     public string ConnectorCount
     {
@@ -659,6 +695,12 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             var collection = SelectedCollection;
             var tally = ConnectorTally(state.Store.Collections.TryGetValue(collection, out var held) ? held.Mcps.Count : 0);
+            // A synced collection's rows cannot be ticked, so a copy's note and a source failure
+            // never share the line.
+            if (copyConfirmation is { } copied)
+            {
+                return tally + " · " + copied;
+            }
             if (!state.IsSynced(collection) || !state.SourceErrors.TryGetValue(collection, out var failure))
             {
                 return tally;
@@ -1050,6 +1092,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         {
             return;
         }
+        CopyConfirmation = null;
         if (checkedCollection != collection)
         {
             checkedNames.Clear();
@@ -1132,10 +1175,10 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// Copy to ▸ New Collection: asks for a name, makes an empty local collection, and copies the
-    /// ticked connectors into it. The window stays on the collection the rows came from and the
-    /// ticks clear, exactly as a copy into an existing collection does. An empty collection rather
-    /// than a copy of the active one, because the point is to start one from the ticked rows alone.
-    /// true when the copies landed.
+    /// ticked connectors into it. The window stays on the collection the rows came from, the
+    /// ticks clear and the count line confirms, exactly as a copy into an existing collection
+    /// does. An empty collection rather than a copy of the active one, because the point is to
+    /// start one from the ticked rows alone. true when the copies landed.
     /// </summary>
     public bool CopyCheckedIntoNewCollection()
     {
@@ -1172,6 +1215,9 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
             return false;
         }
         Uncheck(names);
+        // A clash answered Skip stays where it was, so it is not counted; nothing landed, nothing said.
+        var landed = names.Count(name => choices is null || choices.GetValueOrDefault(name) != ImportChoice.Skip);
+        CopyConfirmation = landed > 0 ? CopiedNote(landed, collection) : null;
         return true;
     }
 

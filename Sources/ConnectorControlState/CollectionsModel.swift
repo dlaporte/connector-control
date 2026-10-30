@@ -52,6 +52,12 @@ public final class CollectionsModel: ObservableObject {
     /// The bar's own tally, e.g. "2 selected".
     public static func selectedCount(_ n: Int) -> String { "\(n) selected" }
 
+    /// What the count line adds after a copy lands, the window staying on the collection the rows
+    /// came from: the only sign, once the ticks have cleared, that the copy happened and where to.
+    public static func copiedNote(_ n: Int, to collection: String) -> String {
+        n == 1 ? "Copied 1 connector to “\(collection)”" : "Copied \(n) connectors to “\(collection)”"
+    }
+
     /// Names the connector when there is exactly one ticked, and states the count otherwise: a
     /// removal of one row deserves the same specificity the editor's old delete confirmation gave it,
     /// and a removal of several would only get longer for naming them all.
@@ -165,8 +171,15 @@ public final class CollectionsModel: ObservableObject {
     }
 
     /// What the last action AppState refused reported, cleared by the next one that succeeds, is
-    /// cancelled, declined at its confirmation, or finds nothing to do.
-    @Published public private(set) var lastError: String?
+    /// cancelled, declined at its confirmation, or finds nothing to do. Every verb writes it, which
+    /// is what makes it the place a copy's confirmation is cleared by the next action.
+    @Published public private(set) var lastError: String? {
+        didSet { copyConfirmation = nil }
+    }
+
+    /// The last copy's `copiedNote`, shown on the count line until the next action, the next tick
+    /// or another collection is chosen. Set after the copy's own `report`, which clears it.
+    @Published public private(set) var copyConfirmation: String?
 
     private let state: AppState
     private let dialogs: Dialogs
@@ -228,6 +241,7 @@ public final class CollectionsModel: ObservableObject {
             selection = newValue
             checkedNames_ = []
             checkedCollection = nil
+            copyConfirmation = nil
         }
     }
 
@@ -524,10 +538,14 @@ public final class CollectionsModel: ObservableObject {
     /// The idle selection bar: how many connectors the collection holds, and nothing else — the
     /// pills, the banner and the `⋯` menu say what kind it is and where its file is. The one
     /// addition is a synced source that could not be read, which no banner reports: without it
-    /// the window would not say why a subscription has stopped updating.
+    /// the window would not say why a subscription has stopped updating. The other is a copy's
+    /// `copyConfirmation`, while it lasts.
     public var connectorCount: String {
         let collection = selectedCollection
         let tally = CollectionsModel.connectorTally(state.store.collections[collection]?.mcps.count ?? 0)
+        // A synced collection's rows cannot be ticked, so a copy's note and a source failure
+        // never share the line.
+        if let copyConfirmation { return tally + " · " + copyConfirmation }
         guard state.isSynced(collection), let failure = state.sourceErrors[collection] else { return tally }
         return tally + " · " + failure
     }
@@ -800,6 +818,7 @@ public final class CollectionsModel: ObservableObject {
         let collection = selectedCollection
         guard !state.isSynced(collection) else { return }
         objectWillChange.send()
+        copyConfirmation = nil
         if checkedCollection != collection {
             checkedNames_ = []
             checkedCollection = collection
@@ -851,10 +870,10 @@ public final class CollectionsModel: ObservableObject {
     }
 
     /// Copy to ▸ New Collection: asks for a name, makes an empty local collection, and copies the
-    /// ticked connectors into it. The window stays on the collection the rows came from and the
-    /// ticks clear, exactly as a copy into an existing collection does. An empty collection rather
-    /// than a copy of the active one, because the point is to start one from the ticked rows alone.
-    /// true when the copies landed.
+    /// ticked connectors into it. The window stays on the collection the rows came from, the
+    /// ticks clear and the count line confirms, exactly as a copy into an existing collection
+    /// does. An empty collection rather than a copy of the active one, because the point is to
+    /// start one from the ticked rows alone. true when the copies landed.
     @discardableResult
     public func copyCheckedIntoNewCollection() -> Bool {
         let names = checkedNames
@@ -880,6 +899,9 @@ public final class CollectionsModel: ObservableObject {
             return false
         }
         uncheck(names)
+        // A clash answered Skip stays where it was, so it is not counted; nothing landed, nothing said.
+        let landed = names.filter { choices[$0] != .skip }.count
+        copyConfirmation = landed > 0 ? CollectionsModel.copiedNote(landed, to: collection) : nil
         return true
     }
 

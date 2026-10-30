@@ -183,7 +183,10 @@ window.
 dimmed and marked "read-only", since its connectors are the author's — then
 **New Collection…**, which asks for a name and makes an empty local
 collection to take the copies. Copies arrive switched off and record where
-they came from. When the destination already holds a name you ticked, the
+they came from. The window stays on the collection you copied from, and the
+count under its name confirms the copy — "5 connectors · Copied 2 connectors
+to “Work”" — until you tick a row, do something else or choose another
+collection. When the destination already holds a name you ticked, the
 Copy sheet asks about each clash: **Replace**, **Keep both**, which lands the
 copy as `<name> 2` and is the default, or **Skip**; the rest are listed as
 "new · arrives off". Replacing a connector in the active collection applies

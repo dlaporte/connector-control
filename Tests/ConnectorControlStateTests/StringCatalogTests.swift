@@ -93,6 +93,8 @@ final class StringCatalogTests: XCTestCase {
         "ClaudeSignature.uninspectableMessage": ["X"],
         "CollectionsModel.connectorTally.many": ["3"],
         "CollectionsModel.connectorTally.one": ["1"],
+        "CollectionsModel.copiedNote.many": ["3", "X"],
+        "CollectionsModel.copiedNote.one": ["X"],
         "CollectionsModel.deleteCheckedMessage.many": ["3"],
         "CollectionsModel.deleteCheckedMessage.one": ["X"],
         "CollectionsModel.deleteConnectorsSentence.many": ["3"],
@@ -392,6 +394,8 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.addConnectorTooltip"] = CollectionsModel.addConnectorTooltip
         actual["CollectionsModel.connectorTally.many"] = CollectionsModel.connectorTally(3)
         actual["CollectionsModel.connectorTally.one"] = CollectionsModel.connectorTally(1)
+        actual["CollectionsModel.copiedNote.many"] = CollectionsModel.copiedNote(3, to: "X")
+        actual["CollectionsModel.copiedNote.one"] = CollectionsModel.copiedNote(1, to: "X")
         actual["CollectionsModel.copyToButton"] = CollectionsModel.copyToButton
         actual["CollectionsModel.deleteAction"] = CollectionsModel.deleteAction
         actual["CollectionsModel.deleteConnectorsSentence.many"] = CollectionsModel.deleteConnectorsSentence(3)
