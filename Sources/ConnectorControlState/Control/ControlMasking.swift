@@ -299,7 +299,7 @@ public enum ControlMasking {
     /// The words of a header's name that name a secret or sign in.
     static let secretHeaderWords: Set<String> = [
         "token", "key", "apikey", "secret", "password", "passwd", "pass", "pwd", "pw", "auth", "authorization",
-        "credential", "credentials", "bearer", "cookie",
+        "credential", "credentials", "bearer", "cookie", "passphrase",
     ]
 
     /// The words of the ASCII name `name`, lowered: split at `-`, `_`, `.`, where a lower-case letter
@@ -340,7 +340,7 @@ public enum ControlMasking {
     static let scopeWords = ["read", "write", "admin", "readonly", "read-only", "rw", "ro", "all", "none"]
 
     /// The words of a name that make its value a password, whatever word it is (`password:admin`).
-    static let passwordWords: Set<String> = ["password", "passwd", "pass", "pwd", "pw"]
+    static let passwordWords: Set<String> = ["password", "passwd", "passphrase", "pass", "pwd", "pw"]
 
     /// Whether a header-shaped word's value reads as written: a path that does not read as a secret
     /// (`secrets:/run/secrets`, but not `X-Api-Key:/Abc9…`), or a scope word under a name with no
@@ -355,12 +355,12 @@ public enum ControlMasking {
     /// Values a single-dash option such as `-update:` or `-useLegacy:` takes, which no password is.
     static let switchWords = ["true", "false", "yes", "no", "on", "off"]
 
-    /// curl's `-u` with its `user:password` glued on (`-uadmin:…`), as `pair(_:)` shows it; nil for
-    /// a switch's value (`-update:true`).
+    /// curl's `-u` with its `user:password` glued on (`-uadmin:…`), as `pair(_:)` shows it; nil
+    /// unless a user's name comes before the ":" - a Go-style flag such as `-url=…` or `-user=…`
+    /// reads as `name=value` - and for a switch's value (`-update:true`).
     static func gluedPair(_ text: String) -> String? {
-        if let piece = cut(text, at: ":"), switchWords.contains(where: { CredentialHeuristics.loweredUnits(piece.after).elementsEqual($0.utf16) }) {
-            return nil
-        }
+        guard let piece = cut(text, at: ":"), isUserName(piece.before),
+              !switchWords.contains(where: { CredentialHeuristics.loweredUnits(piece.after).elementsEqual($0.utf16) }) else { return nil }
         return pair(text)
     }
 

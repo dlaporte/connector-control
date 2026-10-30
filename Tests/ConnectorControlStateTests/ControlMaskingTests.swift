@@ -818,7 +818,7 @@ final class ControlMaskingTests: XCTestCase {
                      ["--scopes", "tokens:read users:write"]]
         for args in plain { XCTAssertEqual(ControlMasking.arguments(args), args) }
         // A digit ends a word of the name, so `auth0` reads as `auth` and its value is hidden.
-        for (text, shown) in [("password:admin", "password: •••"), ("pwd:all", "pwd: •••"), ("X-Api-Key:/Abc9xYz1QwErTy7UiOp3AsDf", "X-Api-Key: •••"), ("token1:hunter2", "token1: •••"), ("apiKey2:hunter2", "apiKey2: •••"), ("auth0:domain", "auth0: •••"), ("apiKey:hunter2", "apiKey: •••"), ("Authorization: hunter2", "Authorization: •••"),
+        for (text, shown) in [("password:admin", "password: •••"), ("passphrase:admin", "passphrase: •••"), ("pwd:all", "pwd: •••"), ("X-Api-Key:/Abc9xYz1QwErTy7UiOp3AsDf", "X-Api-Key: •••"), ("token1:hunter2", "token1: •••"), ("apiKey2:hunter2", "apiKey2: •••"), ("auth0:domain", "auth0: •••"), ("apiKey:hunter2", "apiKey: •••"), ("Authorization: hunter2", "Authorization: •••"),
                               ("password:hunter2", "password: •••"), ("X-Auth-Token: hunter2", "X-Auth-Token: •••")] {
             XCTAssertEqual(ControlMasking.arguments(["--opt", text]), ["--opt", shown])
         }
@@ -835,7 +835,8 @@ final class ControlMaskingTests: XCTestCase {
         XCTAssertEqual(ControlMasking.argument("curl -u admin:hunter2 https://x"), "curl -u admin:••• https://x")
         XCTAssertEqual(ControlMasking.arguments(["--dsn", "admin:hunter2@db/x"]), ["--dsn", "admin:•••@db/x"])
         for args in [["-u", "1000:1000"], ["-u", "admin"], ["--user", "admin:${PW}"], ["-u", "${CC_NEEDS:creds}"], ["--user=${CC_NEEDS:creds}"], ["git@github.com:org/repo.git"], ["a@b.example"],
-                     ["--user", "node:node"], ["--user", "1000:node"], ["--user", "1000:www-data"], ["--user", "www-data:www-data"], ["-update:true"], ["-useLegacy:yes"]] {
+                     ["--user", "node:node"], ["--user", "1000:node"], ["--user", "1000:www-data"], ["--user", "www-data:www-data"], ["-update:true"], ["-useLegacy:yes"],
+                     ["-url=http://localhost:8080"], ["-upstream=localhost:8080"], ["-user=node:node"]] {
             XCTAssertEqual(ControlMasking.arguments(args), args)
         }
         XCTAssertEqual(ControlMasking.arguments(["-u", "admin:123456"]), ["-u", "admin:•••"])

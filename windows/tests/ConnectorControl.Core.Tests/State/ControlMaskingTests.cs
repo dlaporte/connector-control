@@ -984,7 +984,7 @@ public class ControlMaskingTests
             Assert.Equal(args, ControlMasking.Arguments(args));
         }
         // A digit ends a word of the name, so `auth0` reads as `auth` and its value is hidden.
-        foreach (var (text, shown) in new[] { ("password:admin", "password: •••"), ("pwd:all", "pwd: •••"), ("X-Api-Key:/Abc9xYz1QwErTy7UiOp3AsDf", "X-Api-Key: •••"), ("token1:hunter2", "token1: •••"), ("apiKey2:hunter2", "apiKey2: •••"), ("auth0:domain", "auth0: •••"), ("apiKey:hunter2", "apiKey: •••"), ("Authorization: hunter2", "Authorization: •••"),
+        foreach (var (text, shown) in new[] { ("password:admin", "password: •••"), ("passphrase:admin", "passphrase: •••"), ("pwd:all", "pwd: •••"), ("X-Api-Key:/Abc9xYz1QwErTy7UiOp3AsDf", "X-Api-Key: •••"), ("token1:hunter2", "token1: •••"), ("apiKey2:hunter2", "apiKey2: •••"), ("auth0:domain", "auth0: •••"), ("apiKey:hunter2", "apiKey: •••"), ("Authorization: hunter2", "Authorization: •••"),
                      ("password:hunter2", "password: •••"), ("X-Auth-Token: hunter2", "X-Auth-Token: •••") })
         {
             Assert.Equal(["--opt", shown], ControlMasking.Arguments(["--opt", text]));
@@ -1007,6 +1007,7 @@ public class ControlMaskingTests
         [
             ["-u", "1000:1000"], ["-u", "admin"], ["--user", "admin:${PW}"], ["-u", "${CC_NEEDS:creds}"], ["--user=${CC_NEEDS:creds}"], ["git@github.com:org/repo.git"], ["a@b.example"],
             ["--user", "node:node"], ["--user", "1000:node"], ["--user", "1000:www-data"], ["--user", "www-data:www-data"], ["-update:true"], ["-useLegacy:yes"],
+            ["-url=http://localhost:8080"], ["-upstream=localhost:8080"], ["-user=node:node"],
         ];
         foreach (var args in plain)
         {

@@ -1209,8 +1209,11 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
   its value (`--auth Token abc def` shows `def`). After `-u`, `--user` or
   `--proxy-user`, a `name:group` pair reads as `name:•••` unless it is a
   user ID with a group ID or group name (`1000:1000`, `1000:node`), or the
-  group is named as the user (`node:node`). A name such as `auth0:` reads as
-  a header named `auth`, so its value is hidden.
+  group is named as the user (`node:node`). So a user ID with a password of
+  lower-case letters only still shows (`-u 1000:hunter`): that shape can't
+  be told from Docker's user ID and group name. A Go-style `-user=admin:pw`
+  also shows, since it reads as a flag named `-user`. A name such as
+  `auth0:` reads as a header named `auth`, so its value is hidden.
 - A restore asks with the names of the connectors it would put back. A
   backup someone else planted in your backups folder could carry commands
   the question doesn't show; doing that needs write access to your own

@@ -347,7 +347,7 @@ public static class ControlMasking
     internal static readonly IReadOnlySet<string> SecretHeaderWords = new HashSet<string>(StringComparer.Ordinal)
     {
         "token", "key", "apikey", "secret", "password", "passwd", "pass", "pwd", "pw", "auth", "authorization",
-        "credential", "credentials", "bearer", "cookie",
+        "credential", "credentials", "bearer", "cookie", "passphrase",
     };
 
     /// <summary>The words of the ASCII name <paramref name="name"/>, lowered: split at <c>-</c>, <c>_</c>, <c>.</c>, where a lower-case letter
@@ -393,7 +393,7 @@ public static class ControlMasking
     /// <summary>The words of a name that make its value a password, whatever word it is (<c>password:admin</c>).</summary>
     internal static readonly IReadOnlySet<string> PasswordWords = new HashSet<string>(StringComparer.Ordinal)
     {
-        "password", "passwd", "pass", "pwd", "pw",
+        "password", "passwd", "passphrase", "pass", "pwd", "pw",
     };
 
     /// <summary>Whether a header-shaped word's value reads as written: a path that does not read as a secret
@@ -412,11 +412,12 @@ public static class ControlMasking
     /// <summary>Values a single-dash option such as <c>-update:</c> or <c>-useLegacy:</c> takes, which no password is.</summary>
     internal static readonly string[] SwitchWords = ["true", "false", "yes", "no", "on", "off"];
 
-    /// <summary>curl's <c>-u</c> with its <c>user:password</c> glued on (<c>-uadmin:…</c>), as <see cref="Pair"/> shows it; null for
-    /// a switch's value (<c>-update:true</c>).</summary>
+    /// <summary>curl's <c>-u</c> with its <c>user:password</c> glued on (<c>-uadmin:…</c>), as <see cref="Pair"/> shows it; null
+    /// unless a user's name comes before the ":" - a Go-style flag such as <c>-url=…</c> or <c>-user=…</c>
+    /// reads as <c>name=value</c> - and for a switch's value (<c>-update:true</c>).</summary>
     internal static string? GluedPair(string text)
     {
-        if (Cut(text, ":") is { } piece && SwitchWords.Contains(piece.After.ToLowerInvariant()))
+        if (Cut(text, ":") is not { } piece || !IsUserName(piece.Before) || SwitchWords.Contains(piece.After.ToLowerInvariant()))
         {
             return null;
         }
