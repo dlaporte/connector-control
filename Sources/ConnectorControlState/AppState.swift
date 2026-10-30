@@ -1436,7 +1436,7 @@ public final class AppState: ObservableObject {
             let decoded = AppState.decodeDocument(data, fileName: url.lastPathComponent)
             guard let document = decoded.document else {
                 let failure = decoded.failure ?? ""
-                if failure == AppState.newerDocumentError {
+                if decoded.isFinal {
                     // No amount of waiting makes this readable, so it is said at once and never retried.
                     sourceFailures.removeValue(forKey: collection)
                     sourceErrors[collection] = failure
@@ -1547,15 +1547,15 @@ public final class AppState: ObservableObject {
 
     /// The document `data` holds, or the message to show for it, naming `fileName`: the decode
     /// half of `readDocument(at:)`, which `readSource` shares once it has the bytes for its hash.
-    /// The document is nil exactly when the failure is not; a failure equal to
-    /// `newerDocumentError` is the one no retry fixes.
-    static func decodeDocument(_ data: Data, fileName: String) -> (document: CollectionDocument?, failure: String?) {
+    /// The document is nil exactly when the failure is not; `isFinal` marks the one failure no
+    /// retry fixes, a document from a newer app (`newerDocumentError`).
+    static func decodeDocument(_ data: Data, fileName: String) -> (document: CollectionDocument?, failure: String?, isFinal: Bool) {
         do {
-            return (try CollectionDocument.decode(data), nil)
+            return (try CollectionDocument.decode(data), nil, false)
         } catch CollectionDocumentError.newerFormat {
-            return (nil, newerDocumentError)
+            return (nil, newerDocumentError, true)
         } catch {
-            return (nil, sourceUnreadableError(fileName, sourceDetail(error)))
+            return (nil, sourceUnreadableError(fileName, sourceDetail(error)), false)
         }
     }
 

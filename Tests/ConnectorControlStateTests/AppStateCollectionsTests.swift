@@ -920,6 +920,19 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNotNil(state.sourceErrors["B"])
     }
 
+    /// A document from a newer app is said at once and never retried: no wait makes it readable.
+    func testASourceFromANewerAppIsReportedAtOnceAndNotRetried() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try h.subscribe(state, to: CollectionDocumentSamples.dataTeam, at: "t.json", as: "T")
+        var newer = CollectionDocumentSamples.dataTeam.encode()
+        newer = try XCTUnwrap(newer.replacing(at: JSONPointer(["connectorControlCollection"]), with: .int(2)))
+        try newer.serialized().write(to: url)
+        state.recomputePending()   // the source watcher's own read, without waiting on the watcher
+        XCTAssertEqual(state.sourceErrors["T"], AppState.newerDocumentError)
+        XCTAssertTrue(h.delays.pending.isEmpty, "no retry is scheduled")
+    }
+
     /// A retry waiting under the old name dies harmlessly when it fires, and the next failure under
     /// the new one starts a chain of its own: renaming a collection during a backoff must not turn
     /// automatic retries off.

@@ -1040,6 +1040,21 @@ public class AppStateCollectionsTests
         Assert.True(state.SourceErrors.ContainsKey("B"));
     }
 
+    /// <summary>A document from a newer app is said at once and never retried: no wait makes it readable.</summary>
+    [Fact]
+    public void ASourceFromANewerAppIsReportedAtOnceAndNotRetried()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Subscribe(state, CollectionDocumentSamples.DataTeam, "t.json", "T");
+        var newer = CollectionDocumentSamples.DataTeam.Encode()
+            .Replacing(JsonPointer.Parse("/connectorControlCollection")!, JsonValue.Int(2))!;
+        File.WriteAllBytes(path, newer.Serialize());
+        state.RecomputePending();   // the source watcher's own read, without waiting on the watcher
+        Assert.Equal(AppState.NewerDocumentError, state.SourceErrors["T"]);
+        Assert.Empty(h.Delays.Pending);   // no retry is scheduled
+    }
+
     /// <summary>
     /// A retry waiting under the old name dies harmlessly when it fires, and the next failure under
     /// the new one starts a chain of its own: renaming a collection during a backoff must not turn

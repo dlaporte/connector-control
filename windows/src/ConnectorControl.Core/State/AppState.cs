@@ -2124,10 +2124,10 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         else
         {
-            var (decoded, failure) = DecodeDocument(data, Path.GetFileName(path));
+            var (decoded, failure, isFinal) = DecodeDocument(data, Path.GetFileName(path));
             if (decoded is not { } document)
             {
-                if (failure == NewerDocumentError)
+                if (isFinal)
                 {
                     // No amount of waiting makes this readable, so it is said at once and never retried.
                     sourceFailures.Remove(collection);
@@ -2280,7 +2280,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return (null, null, SourceUnreadableError(Path.GetFileName(path), ex.Message));
         }
-        var (document, failure) = DecodeDocument(data, Path.GetFileName(path));
+        var (document, failure, _) = DecodeDocument(data, Path.GetFileName(path));
         return (document, document is null ? null : data, failure);
     }
 
@@ -2288,18 +2288,22 @@ public sealed class AppState : ObservableObject, IDisposable
     /// The document <paramref name="data"/> holds, or the message to show for it, naming
     /// <paramref name="fileName"/>: the decode half of <see cref="ReadDocument"/>, which
     /// <see cref="ReadSource"/> shares once it has the bytes for its hash. The document is null
-    /// exactly when the failure is not; a failure equal to <see cref="NewerDocumentError"/> is
-    /// the one no retry fixes.
+    /// exactly when the failure is not; <c>IsFinal</c> marks the one failure no retry fixes, a
+    /// document from a newer app (<see cref="NewerDocumentError"/>).
     /// </summary>
-    internal static (CollectionDocument? Document, string? Failure) DecodeDocument(byte[] data, string fileName)
+    internal static (CollectionDocument? Document, string? Failure, bool IsFinal) DecodeDocument(byte[] data, string fileName)
     {
         try
         {
-            return (CollectionDocument.Decode(data), null);
+            return (CollectionDocument.Decode(data), null, false);
+        }
+        catch (CollectionDocumentException ex) when (ex.NewerFormatVersion is not null)
+        {
+            return (null, NewerDocumentError, true);
         }
         catch (CollectionDocumentException ex)
         {
-            return (null, ex.NewerFormatVersion is null ? SourceUnreadableError(fileName, ex.Message) : NewerDocumentError);
+            return (null, SourceUnreadableError(fileName, ex.Message), false);
         }
     }
 
