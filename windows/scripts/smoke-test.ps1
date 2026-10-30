@@ -14,7 +14,8 @@
       1. INSTALL assertions, always run. Setup.exe --silent →
          %LOCALAPPDATA%\ConnectorControl\{Update.exe, current\ConnectorControl.exe, current\sq.version},
          with the version and channel read back out of sq.version. The Run key relies on
-         current\ConnectorControl.exe being the stable path it records: asserted here.
+         current\ConnectorControl.exe being the stable path it records: asserted here. So is the
+         Start-menu shortcut's target: current\ConnectorControl.exe itself, not a launcher that runs Update.exe.
       2. LAUNCH assertions. This starts current\ConnectorControl.exe against a throwaway Claude
          config and master-list folder (CONNECTOR_CONTROL_CLAUDE_CONFIG / CONNECTOR_CONTROL_STORE_DIR -
          the same env overrides AppPaths honours), polls up to -Seconds for the first-run
@@ -46,7 +47,7 @@
          ends the app's processes first and only then runs the uninstall hook, so the app is gone when the
          hook takes the entry out of Claude's config, the copy's folder out of the user PATH and deletes the
          copy. Asserted: the app exited, the entry is gone and the rest of the config kept, bin\ is gone,
-         the PATH is clean, nothing wrote to Claude's config afterwards, and crash.log (in the data folder,
+         the PATH is clean, nothing wrote to Claude's config afterwards, the Start-menu shortcut is gone, and crash.log (in the data folder,
          which the uninstall keeps) is still absent, since the hook logs only a failure. (The logs are
          copied to -LogDir before the uninstall, which deletes the install root.)
     Prints "SMOKE PASS" and exits 0; any failed assertion throws.
@@ -123,6 +124,17 @@ Assert-True (Test-Path (Join-Path $installRoot 'Update.exe')) "Update.exe sits b
 $manifest = Get-Content (Join-Path $installRoot 'current/sq.version') -Raw
 Assert-True ($manifest -match "<version>$([regex]::Escape($Version))</version>") "sq.version carries version $Version"
 Assert-True ($manifest -match "<channel>$([regex]::Escape($Channel))</channel>") "sq.version carries channel $Channel"
+# Velopack 1.2.x points the Start-menu shortcut at current\ConnectorControl.exe itself (shortcuts.rs, get_main_exe_path).
+# The install root also gets a stub launcher named after the pack title, which starts Update.exe, but nothing Velopack
+# makes points at it. Asserted because the updater's recovery (VelopackUpdater) counts on it: an Update.exe a refused
+# update left in place is run only by an uninstall or an apply, never by an ordinary launch.
+$startMenuShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Connector Control.lnk'
+Assert-True (Test-Path $startMenuShortcut) "the Start-menu shortcut is $startMenuShortcut"
+$link = (New-Object -ComObject WScript.Shell).CreateShortcut($startMenuShortcut)
+Write-Host "     shortcut: $($link.TargetPath) in $($link.WorkingDirectory)"
+Assert-True ([System.IO.Path]::GetFullPath($link.TargetPath) -eq [System.IO.Path]::GetFullPath($exe)) "the shortcut starts $exe, not a launcher that runs Update.exe (got '$($link.TargetPath)')"
+$stubLauncher = Join-Path $installRoot 'Connector Control.exe'
+Write-Host "     stub launcher at the install root: $(if (Test-Path $stubLauncher) { $stubLauncher } else { '(none)' })"
 if ($ExpectSigned) {
     $exeSignature = Get-AuthenticodeSignature -FilePath $exe
     Assert-True ($exeSignature.Status -eq 'Valid') "installed ConnectorControl.exe is signed"
@@ -286,6 +298,7 @@ while ((Get-Date) -lt $settleUntil) { Start-Sleep -Milliseconds 500 }
 Assert-True ((Get-FileHash $claudeConfig).Hash -eq $configAfterHook -and (Get-Item $claudeConfig).LastWriteTimeUtc -eq $writtenAfterHook) "nothing touched Claude's config after the hook"
 Assert-True (-not ((Get-ServerNames) -contains 'connector-control')) "and the entry has not come back"
 Assert-True (-not (Test-Path $bin)) "nor the copy"
+Assert-True (-not (Test-Path $startMenuShortcut)) "the uninstall took the Start-menu shortcut"
 
 # A clean run says nothing to crash.log: not the copy, not the hook (which logs only a failure).
 if (Test-Path $crashLog) {
