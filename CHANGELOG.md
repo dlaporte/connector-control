@@ -54,8 +54,10 @@ bullet once the section is about to ship.
 - An update package the check can't finish, or one holding a file name Windows can't hold, is
   refused and deleted, and nothing the check didn't pass is applied when the app next starts.
   Before, such a package could be applied at the next launch. An update check cut short by
-  quitting the app no longer leaves every later update refused: the next check puts the installed
-  updater back first.
+  quitting the app no longer leaves every later update refused: the app puts the installed updater
+  back when it starts and before each check, and keeps its saved copy until that has worked.
+- A release install takes only releases: a signed preview package is refused even if a feed
+  offers it.
 - The update dialog shows an image in the release notes as its text and loads nothing. Before, it
   fetched the image, from a network share too.
 - The command interpreter and File Explorer are started by full path, from System32 and the
@@ -96,6 +98,10 @@ bullet once the section is about to ship.
 - A restore writes the backup as Connector Control read it, in the format every apply writes, and
   refuses a backup that lists the same name twice, which Connector Control and Claude would read
   differently. Before, it copied the backup byte for byte.
+- A file that isn't valid JSON — Claude's config, a backup or a collection document — is reported
+  in the same words on both platforms, and the message quotes nothing from the file.
+- A setting changed with `connector-control settings set` shows at once in a Settings window that
+  is already open.
 - A collection file over 1 MB, a backup over 16 MB, or anything that isn't a regular file is
   refused as it is read, so a file swapped for a huge one can't stall the app.
 - In the confirmation dialog each line of what would run is drawn on its own, clipped to its own
