@@ -31,6 +31,9 @@ public sealed class VelopackUpdater : IUpdater
     private readonly Action<string> log;
     private readonly string? savedUpdaterPath;
 
+    /// <summary>How long a failed put-back of the updater waits before its one retry.</summary>
+    private static readonly TimeSpan RestoreRetryDelay = TimeSpan.FromMilliseconds(250);
+
     /// <summary>Where, in the app's data folder, the installed Update.exe is saved while an update is checked.</summary>
     public const string SavedUpdaterFileName = "Update.exe.before-update";
 
@@ -122,6 +125,9 @@ public sealed class VelopackUpdater : IUpdater
         {
             return null;
         }
+        // An updater left in place by an earlier check is put back before this one asks the feed (off the UI thread:
+        // the installed-updater check reads signatures).
+        await Task.Run(() => RecoverInterruptedCheck(), cancellationToken).ConfigureAwait(false);
         var info = await manager.CheckForUpdatesAsync().ConfigureAwait(false);
         if (info is null)
         {
@@ -171,19 +177,77 @@ public sealed class VelopackUpdater : IUpdater
     }
 
     /// <summary>The package check, then the saved Update.exe goes: the check ended, in acceptance or refusal, and the
-    /// restore it was kept for has happened or is not needed. Anything else that ends it keeps the copy for next time.</summary>
+    /// restore it was kept for has happened or is not needed. A refusal whose restore failed keeps the copy, so the next
+    /// launch or check puts it back (<see cref="RecoverInterruptedCheck"/>); so does anything else that ends the check.</summary>
     internal void FinishCheck(UpdateInfo info, byte[]? knownGoodUpdater, UpdateVerifier.RunningIdentity identity)
     {
         try
         {
             VerifyDownloaded(info, knownGoodUpdater, identity);
         }
-        catch (UpdateVerificationException)
+        catch (UpdateVerificationException ex)
         {
-            DeleteSavedUpdater();
+            if (ex.UpdaterLeftInPlace)
+            {
+                log("The refused update's updater is still in place: the copy saved before the download is kept, to be put back at the next launch or update check.");
+            }
+            else
+            {
+                DeleteSavedUpdater();
+            }
             throw;
         }
         DeleteSavedUpdater();
+    }
+
+    /// <summary>
+    /// At launch, once this is the app's only instance, and before every check: when a copy of the updater saved by an
+    /// earlier check is still there, that check never finished or could not put it back, so the installed Update.exe may
+    /// be a refused or unchecked package's. If the installed one fails the check, the saved one is put back and every
+    /// package in packages\ is deleted (<see cref="RecoverSavedUpdater"/>). Never throws: a failure is logged.
+    /// </summary>
+    public void RecoverInterruptedCheck()
+    {
+        if (manager is null || savedUpdaterPath is null || !File.Exists(savedUpdaterPath) || Environment.ProcessPath is not { } runningExe)
+        {
+            return;
+        }
+        try
+        {
+            RecoverSavedUpdater(identify(runningExe));
+        }
+        catch (Exception ex)
+        {
+            log($"The updater saved before an earlier update check could not be checked or put back: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// The recovery <see cref="RecoverInterruptedCheck"/> runs for <paramref name="identity"/>: with a saved copy there, an
+    /// installed Update.exe that passes the check keeps its place and the copy goes, as nothing is left to restore; one
+    /// that fails it is replaced by the copy, and the packages are deleted. True when the copy was put back.
+    /// </summary>
+    internal bool RecoverSavedUpdater(UpdateVerifier.RunningIdentity identity)
+    {
+        if (manager is null || savedUpdaterPath is null || !File.Exists(savedUpdaterPath))
+        {
+            return false;
+        }
+        var location = manager.Location;
+        if (verifyInstalled(location.UpdateExePath, identity) is null)
+        {
+            DeleteSavedUpdater();
+            return false;
+        }
+        if (!RestoreSavedUpdater(location))
+        {
+            return false;
+        }
+        if (verifyInstalled(location.UpdateExePath, identity) is { } problem)
+        {
+            log($"The updater put back from the saved copy does not pass the check either: {problem}");
+        }
+        return true;
     }
 
     /// <summary>Writes <paramref name="updater"/> beside its final name, then moves it there, so the saved copy is never
@@ -308,32 +372,46 @@ public sealed class VelopackUpdater : IUpdater
                 log($"The refused update package could not be deleted: {packagePath}");
             }
         }
+        var leftInPlace = false;
         if (updaterUnknown is not null)
         {
             log($"The updater could not be put back after a refused update: its location is unknown ({updaterUnknown.GetType().Name}: {updaterUnknown.Message})");
+            leftInPlace = true;
         }
         else if (updateExe is not null)
         {
             // Put back the updater that was there before the download; when there was none,
-            // the one there now came from the refused package and goes too. A failure is logged, never
-            // swallowed: the refused package's updater may still be in place.
-            try
+            // the one there now came from the refused package and goes too. A failure is retried once (a scanner may
+            // hold the file for a moment), then logged, never swallowed: the refused package's updater may still be in
+            // place, so the saved copy is kept for the next launch or check to put back.
+            for (var attempt = 1; ; attempt++)
             {
-                if (knownGoodUpdater is not null)
+                try
                 {
-                    File.WriteAllBytes(updateExe, knownGoodUpdater);
+                    if (knownGoodUpdater is not null)
+                    {
+                        File.WriteAllBytes(updateExe, knownGoodUpdater);
+                    }
+                    else if (File.Exists(updateExe))
+                    {
+                        File.Delete(updateExe);
+                    }
+                    break;
                 }
-                else if (File.Exists(updateExe))
+                catch (Exception ex)
                 {
-                    File.Delete(updateExe);
+                    if (attempt < 2)
+                    {
+                        Thread.Sleep(RestoreRetryDelay);
+                        continue;
+                    }
+                    log($"The updater could not be put back after a refused update ({updateExe}): {ex.GetType().Name}: {ex.Message}");
+                    leftInPlace = true;
+                    break;
                 }
-            }
-            catch (Exception ex)
-            {
-                log($"The updater could not be put back after a refused update ({updateExe}): {ex.GetType().Name}: {ex.Message}");
             }
         }
-        throw new UpdateVerificationException(problem);
+        throw new UpdateVerificationException(problem) { UpdaterLeftInPlace = leftInPlace };
     }
 
     /// <summary>

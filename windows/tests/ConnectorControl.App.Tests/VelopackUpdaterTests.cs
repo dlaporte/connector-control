@@ -295,6 +295,7 @@ public class VelopackUpdaterTests
         var updater = new VelopackUpdater(_ => new RecordingSource(), locator,
             verify: (_, _, _, _, _) => "refused",
             verifyInstalled: (path, _) => path is not null && File.Exists(path) && File.ReadAllText(path) == "ours" ? null : "The installed Update.exe is not validly signed",
+            identify: _ => TestIdentity,
             log: logged.Add, savedUpdaterPath: saved);
         return (updater, updateExe, saved, logged);
     }
@@ -394,5 +395,106 @@ public class VelopackUpdaterTests
         var ex = await Assert.ThrowsAsync<UpdateVerificationException>(() => updater.DownloadAsync(new UpdateCheck("1.3.2", null, new UpdateInfo(Asset(), isDowngrade: false)), cancellationToken: TestContext.Current.CancellationToken));
         Assert.Contains("installed Update.exe", ex.Message);
         Assert.Equal(TestIdentity, seen);   // the identity read once per download is what the installed-updater check sees
+    }
+
+    [Fact]
+    public void ARefusalWhoseUpdaterCannotBePutBackKeepsTheSavedCopy()
+    {
+        // The refused package's Update.exe cannot be overwritten (a scanner holds it, the disk is full): the copy saved
+        // before the download is the only good one left, so it stays for the next launch or check to put back.
+        using var packages = new TempDir("vpk");
+        using var data = new TempDir("ccdata");
+        var (updater, updateExe, saved, logged) = Interrupted(packages, data);
+        File.WriteAllText(saved, "ours");
+        Directory.CreateDirectory(updateExe);   // nothing can be written where the updater belongs
+        File.WriteAllText(packages.File(Asset().FileName), "package");
+
+        var ex = Assert.Throws<UpdateVerificationException>(() => updater.FinishCheck(new UpdateInfo(Asset(), isDowngrade: false), "ours"u8.ToArray(), TestIdentity));
+        Assert.True(ex.UpdaterLeftInPlace);
+        Assert.Equal("refused", ex.Message);
+        Assert.Equal("ours", File.ReadAllText(saved));
+        Assert.Contains(logged, line => line.Contains("is kept", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ARefusalWhoseUpdaterIsPutBackSaysSo()
+    {
+        using var packages = new TempDir("vpk");
+        using var data = new TempDir("ccdata");
+        var (updater, updateExe, saved, _) = Interrupted(packages, data);
+        File.WriteAllText(saved, "ours");
+        File.WriteAllText(updateExe, "from the package");
+        var ex = Assert.Throws<UpdateVerificationException>(() => updater.FinishCheck(new UpdateInfo(Asset(), isDowngrade: false), "ours"u8.ToArray(), TestIdentity));
+        Assert.False(ex.UpdaterLeftInPlace);
+        Assert.Equal("ours", File.ReadAllText(updateExe));
+        Assert.False(File.Exists(saved));
+    }
+
+    [Fact]
+    public void TheRecoveryPutsTheSavedUpdaterBackOverOneThatFailsTheCheck()
+    {
+        using var packages = new TempDir("vpk");
+        using var data = new TempDir("ccdata");
+        var (updater, updateExe, saved, logged) = Interrupted(packages, data);
+        File.WriteAllText(updateExe, "from the package");
+        File.WriteAllText(saved, "ours");
+        var unchecked_ = packages.File(Asset().FileName);
+        File.WriteAllText(unchecked_, "never checked");
+
+        Assert.True(updater.RecoverSavedUpdater(TestIdentity));
+
+        Assert.Equal("ours", File.ReadAllText(updateExe));
+        Assert.False(File.Exists(unchecked_), "a package no check passed is deleted");
+        Assert.False(File.Exists(saved));
+        Assert.Contains(logged, line => line.Contains("interrupted", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TheRecoveryLeavesAnUpdaterThatPassesTheCheckAndDropsTheCopy()
+    {
+        using var packages = new TempDir("vpk");
+        using var data = new TempDir("ccdata");
+        var (updater, updateExe, saved, _) = Interrupted(packages, data);
+        File.WriteAllText(updateExe, "ours");
+        File.WriteAllText(saved, "an older one of ours");
+        var package = packages.File(Asset().FileName);
+        File.WriteAllText(package, "checked again before it is offered");
+
+        Assert.False(updater.RecoverSavedUpdater(TestIdentity));
+
+        Assert.Equal("ours", File.ReadAllText(updateExe));
+        Assert.True(File.Exists(package));
+        Assert.False(File.Exists(saved));
+    }
+
+    [Fact]
+    public void TheRecoveryDoesNothingWithoutASavedCopy()
+    {
+        using var packages = new TempDir("vpk");
+        using var data = new TempDir("ccdata");
+        var (updater, updateExe, saved, _) = Interrupted(packages, data);
+        File.WriteAllText(updateExe, "from the package");
+
+        Assert.False(updater.RecoverSavedUpdater(TestIdentity));
+        updater.RecoverInterruptedCheck();
+
+        Assert.Equal("from the package", File.ReadAllText(updateExe));
+        Assert.False(File.Exists(saved));
+    }
+
+    [Fact]
+    public async Task ACheckPutsBackAnUpdaterAnEarlierCheckLeftInPlace()
+    {
+        // The feed may offer nothing newer, so no download would ever reach the recovery in PrepareInstalledUpdater.
+        using var packages = new TempDir("vpk");
+        using var data = new TempDir("ccdata");
+        var (updater, updateExe, saved, _) = Interrupted(packages, data);
+        File.WriteAllText(updateExe, "from the package");
+        File.WriteAllText(saved, "ours");
+
+        Assert.Null(await updater.CheckAsync(TestContext.Current.CancellationToken));   // empty feed = up to date
+
+        Assert.Equal("ours", File.ReadAllText(updateExe));
+        Assert.False(File.Exists(saved));
     }
 }
