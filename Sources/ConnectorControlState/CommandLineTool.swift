@@ -64,5 +64,5 @@ public enum CommandLineToolText {
     // missing while the app runs, so only Windows, whose copy lives outside the install, ever says it.
     public static func missingToolError(_ path: String) -> String { "\(path) is missing. Quit and reopen Connector Control, then try again." }
 
-    public static func occupiedError(_ path: String) -> String { "\(path) already exists and isn’t a link to Connector Control. Remove it, then try again." }
+    public static func occupiedError(_ path: String) -> String { "\(path) already exists and isn’t a link. Remove it, then try again." }
 }

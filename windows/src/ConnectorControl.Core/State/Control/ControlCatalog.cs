@@ -13,7 +13,7 @@ namespace ConnectorControl.Core.State;
 public sealed partial class ControlTools
 {
     public const string StatusGroup = "Status";
-    public const string ConnectorsGroup = "Connectors (the active collection unless --collection names another)";
+    public const string ConnectorsGroup = "Connectors (in the active collection; connectors --collection <name> lists another)";
     public const string CollectionsGroup = "Collections";
     public const string SharingGroup = "Sharing";
     public const string SettingsGroup = "Settings and backups";

@@ -9,7 +9,7 @@ import ConnectorControlCore
 /// the same state however often they repeat say they are idempotent.
 extension ControlTools {
     public static let statusGroup = "Status"
-    public static let connectorsGroup = "Connectors (the active collection unless --collection names another)"
+    public static let connectorsGroup = "Connectors (in the active collection; connectors --collection <name> lists another)"
     public static let collectionsGroup = "Collections"
     public static let sharingGroup = "Sharing"
     public static let settingsGroup = "Settings and backups"

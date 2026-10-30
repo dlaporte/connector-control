@@ -16,7 +16,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public const string ConfirmQuitTitle = "Confirm before quitting";
     public const string NotificationsHeader = "Notifications";
     public const string NotifyTitle = "Notify on external changes";
-    public const string NotifyCaption = "When the master list or a subscribed document changes outside the app.";
+    public const string NotifyCaption = "When the master list, a subscribed document or Claude’s config changes outside the app, and when Claude’s config is rebuilt from your list.";
     public const string UpdatesHeader = "Updates";
     public const string AutoUpdateTitle = "Automatically download and install updates";
     public const string CheckForUpdatesTitle = "Check for Updates";

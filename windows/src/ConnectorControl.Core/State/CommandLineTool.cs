@@ -75,5 +75,5 @@ public static class CommandLineToolText
     // missing while the app runs, so only Windows, whose copy lives outside the install, ever says it.
     public static string MissingToolError(string path) => $"{path} is missing. Quit and reopen Connector Control, then try again.";
 
-    public static string OccupiedError(string path) => $"{path} already exists and isn’t a link to Connector Control. Remove it, then try again.";
+    public static string OccupiedError(string path) => $"{path} already exists and isn’t a link. Remove it, then try again.";
 }

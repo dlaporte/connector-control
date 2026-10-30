@@ -246,7 +246,7 @@
   },
   "CommandLineToolText.notInstalledText": "Not installed",
   "CommandLineToolText.occupiedError": {
-    "format": "{0} already exists and isn’t a link to Connector Control. Remove it, then try again."
+    "format": "{0} already exists and isn’t a link. Remove it, then try again."
   },
   "CommandLineToolText.removeButton": "Remove",
   "CommandLineToolText.removeFailedError": {
@@ -408,7 +408,7 @@
   "ControlTools.connectorCountText": {
     "format": "{0} connectors, {1} on"
   },
-  "ControlTools.connectorsGroup": "Connectors (the active collection unless --collection names another)",
+  "ControlTools.connectorsGroup": "Connectors (in the active collection; connectors --collection <name> lists another)",
   "ControlTools.connectorsHeader": "CONNECTORS",
   "ControlTools.create_collection.cliUsage": "collection new <name>",
   "ControlTools.create_collection.description": "Create an empty collection. It does not become active.",
@@ -1080,7 +1080,7 @@
   },
   "SettingsModel.masterListHeader": "Master List Location",
   "SettingsModel.notificationsHeader": "Notifications",
-  "SettingsModel.notifyCaption": "When the master list or a subscribed document changes outside the app.",
+  "SettingsModel.notifyCaption": "When the master list, a subscribed document or Claude’s config changes outside the app, and when Claude’s config is rebuilt from your list.",
   "SettingsModel.notifyTitle": "Notify on external changes",
   "SettingsModel.previewUpdatesCaption": "Previews update to later previews and the final release.",
   "SettingsModel.restoreButtonTitle": "Restore…",

@@ -17,7 +17,7 @@ public final class SettingsModel: ObservableObject {
     public static let confirmQuitTitle = "Confirm before quitting"
     public static let notificationsHeader = "Notifications"
     public static let notifyTitle = "Notify on external changes"
-    public static let notifyCaption = "When the master list or a subscribed document changes outside the app."
+    public static let notifyCaption = "When the master list, a subscribed document or Claude’s config changes outside the app, and when Claude’s config is rebuilt from your list."
     public static let updatesHeader = "Updates"
     public static let autoUpdateTitle = "Automatically download and install updates"
     public static let checkForUpdatesTitle = "Check for Updates"
