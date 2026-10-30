@@ -96,6 +96,15 @@ public final class SettingsModel: ObservableObject {
         commandLineTool?.changes
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &subscriptions)
+        // A setting changed from outside the window (the command line's `settings set`): launch at login,
+        // the one value this model keeps rather than reads, is read again; the repaint the relay above
+        // sends shows the rest.
+        state.$settingsRevision.dropFirst()
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.setLaunchAtLoginSilently(self.autostart.isEnabled)
+            }
+            .store(in: &subscriptions)
         // A change made in Sparkle's own dialog must not leave the toggle stale.
         updater.automaticallyDownloadsUpdatesPublisher.dropFirst()
             .sink { [weak self] _ in self?.objectWillChange.send() }

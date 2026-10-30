@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 import ConnectorControlCore
 import ConnectorControlTestSupport
@@ -178,6 +179,31 @@ final class ControlToolsDirectTests: XCTestCase {
                        .refusal(ControlTools.keepCountError))
         XCTAssertEqual(rig.call("set_setting", ["key": .string("confirm-quit"), "value": .string("maybe")]),
                        .refusal(ControlTools.switchValueError("confirm-quit")))
+    }
+
+    /// An open Settings window shows a setting the command line changed at once, as its Claude
+    /// group does: its own model hears the change and reads the new values.
+    func testAnOpenSettingsWindowShowsASettingTheCommandLineChanged() throws {
+        let rig = ControlRig(); defer { rig.dispose() }
+        let window = SettingsModel(state: rig.state, settings: rig.h.settings, autostart: rig.autostart, updater: rig.updater)
+        var repaints = 0
+        let subscription = window.objectWillChange.sink { repaints += 1 }
+        defer { subscription.cancel() }
+        XCTAssertFalse(window.launchAtLogin)
+
+        XCTAssertEqual(rig.call("set_setting", ["key": .string("launch-at-login"), "value": .string("on")], as: .cli)?.isError, false)
+        XCTAssertTrue(window.launchAtLogin, "the one value the model keeps is read again")
+        XCTAssertGreaterThan(repaints, 0)
+
+        repaints = 0
+        XCTAssertEqual(rig.call("set_setting", ["key": .string("backups-to-keep"), "value": .string("30")], as: .cli)?.isError, false)
+        XCTAssertGreaterThan(repaints, 0)
+        XCTAssertEqual(window.backupKeepCount, 30)
+
+        repaints = 0
+        XCTAssertEqual(rig.call("set_setting", ["key": .string("confirm-quit"), "value": .string("off")], as: .cli)?.isError, false)
+        XCTAssertGreaterThan(repaints, 0)
+        XCTAssertFalse(window.confirmBeforeQuit)
     }
 
     func testALoginItemThatCannotBeChangedIsRefusedWithTheAppsNote() {

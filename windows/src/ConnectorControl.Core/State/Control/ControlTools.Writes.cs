@@ -304,6 +304,7 @@ public sealed partial class ControlTools
             {
                 var mark = state.AppliedServers;
                 settings.BackupKeepCount = count;
+                state.AnnounceSettingsChanged();
                 return Done([SettingChangedText(key, count.ToString(CultureInfo.InvariantCulture))],
                     [("key", JsonValue.String(key)), ("value", JsonValue.Int(count))],
                     null, mark, RestartToApplyText, touchesClaude: false);
@@ -355,6 +356,8 @@ public sealed partial class ControlTools
                 default:
                     return Refused(NotOneOfError("key", string.Join(", ", ControlSettingKey.All)));
             }
+            // An open Settings window shows the new value at once.
+            state.AnnounceSettingsChanged();
             return Done(lines, [("key", JsonValue.String(key)), ("value", JsonValue.Bool(on))],
                 null, mark, on ? RestartToUseText : RestartToApplyText,
                 touchesClaude: key == ControlSettingKey.ClaudeIntegration);

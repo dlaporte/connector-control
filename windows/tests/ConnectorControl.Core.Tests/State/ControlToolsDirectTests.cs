@@ -201,6 +201,32 @@ public class ControlToolsDirectTests
         Assert.Equal(rig.State.SourceErrors["Data team"], unreadable.Text);
     }
 
+    /// <summary>An open Settings window shows a setting the command line changed at once, as its Claude
+    /// group does: its own model hears the change and reads the new values.</summary>
+    [Fact]
+    public void AnOpenSettingsWindowShowsASettingTheCommandLineChanged()
+    {
+        using var rig = new ControlRig();
+        using var window = new SettingsModel(rig.State, rig.H.Settings, rig.Autostart, rig.Install, rig.Updater, rig.Updates);
+        var heard = new List<System.ComponentModel.PropertyChangedEventArgs>();
+        window.PropertyChanged += (_, e) => heard.Add(e);
+        Assert.False(window.LaunchAtStartup);
+
+        Assert.False(rig.Call("set_setting", Args(("key", Text("launch-at-login")), ("value", Text("on"))), new ControlCaller.Cli())?.IsError);
+        Assert.True(window.LaunchAtStartup, "the one value the model keeps is read again");
+        Assert.Contains(heard, e => ObservableObject.Affects(e, nameof(SettingsModel.LaunchAtStartup)));
+
+        heard.Clear();
+        Assert.False(rig.Call("set_setting", Args(("key", Text("automatic-updates")), ("value", Text("on"))), new ControlCaller.Cli())?.IsError);
+        Assert.Contains(heard, e => ObservableObject.Affects(e, nameof(SettingsModel.AutoUpdate)));
+        Assert.True(window.AutoUpdate);
+
+        heard.Clear();
+        Assert.False(rig.Call("set_setting", Args(("key", Text("backups-to-keep")), ("value", Text("30"))), new ControlCaller.Cli())?.IsError);
+        Assert.Contains(heard, e => ObservableObject.Affects(e, nameof(SettingsModel.BackupKeepCount)));
+        Assert.Equal(30, window.BackupKeepCount);
+    }
+
     [Fact]
     public void SettingsAreSetThroughTheSettingsModel()
     {

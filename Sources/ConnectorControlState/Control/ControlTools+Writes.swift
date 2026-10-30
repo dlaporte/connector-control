@@ -244,6 +244,7 @@ extension ControlTools {
             return .ready(nil, perform: { [self] in
                 let mark = state.appliedServers
                 settings.backupKeepCount = count
+                state.announceSettingsChanged()
                 return done([ControlTools.settingChangedText(key, String(count))], ["key": .string(key), "value": .int(count)],
                             touching: nil, since: mark, restart: ControlTools.restartToApplyText, touchesClaude: false)
             })
@@ -274,6 +275,8 @@ extension ControlTools {
             case ControlSettingKey.confirmClaudeChanges: state.setConfirmClaudeChanges(on)
             default: return ControlTools.refused(ControlTools.notOneOfError("key", ControlSettingKey.all.joined(separator: ", ")))
             }
+            // An open Settings window shows the new value at once.
+            state.announceSettingsChanged()
             return done(lines, ["key": .string(key), "value": .bool(on)], touching: nil, since: mark,
                         restart: on ? ControlTools.restartToUseText : ControlTools.restartToApplyText,
                         touchesClaude: key == ControlSettingKey.claudeIntegration)

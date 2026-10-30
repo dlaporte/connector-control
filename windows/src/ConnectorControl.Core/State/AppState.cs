@@ -204,6 +204,12 @@ public sealed class AppState : ObservableObject, IDisposable
     /// served, or stopped being served — or null while it serves. Settings shows it.</summary>
     public string? ControlEndpointProblem { get => controlEndpointProblem; private set => Set(ref controlEndpointProblem, value); }
 
+    private int settingsRevision;
+    /// <summary>Moves on each time a setting is changed from outside the Settings window — the command line's
+    /// <c>settings set</c> — so an open Settings window shows the new value at once, as its Claude group
+    /// already follows the integration's switches.</summary>
+    public int SettingsRevision { get => settingsRevision; private set => Set(ref settingsRevision, value); }
+
     private bool storeNotPrivate;
     /// <summary>
     /// Windows: the last master-list save could not make mcps.json owner-only — the folder refused
@@ -1405,6 +1411,9 @@ public sealed class AppState : ObservableObject, IDisposable
         RaiseAll();
         return null;
     }
+
+    /// <summary>A setting was changed from outside the Settings window: every open one shows it (<see cref="SettingsRevision"/>).</summary>
+    public void AnnounceSettingsChanged() => SettingsRevision++;
 
     public void SetConfirmClaudeChanges(bool on)
     {

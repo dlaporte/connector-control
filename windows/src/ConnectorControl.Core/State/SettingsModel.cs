@@ -498,6 +498,16 @@ public sealed class SettingsModel : ObservableObject, IDisposable
 
     private void OnStateChanged(object? sender, PropertyChangedEventArgs e)
     {
+        // A setting changed from outside the window (the command line's `settings set`): launch at startup, the
+        // one value this model keeps rather than reads, is read again, and every binding re-reads the rest.
+        // Platform idiom: the Mac's relay repaints the rest from any change AppState announces; WPF bindings
+        // listen by name, so this raises them all.
+        if (e.PropertyName == nameof(AppState.SettingsRevision))
+        {
+            launchAtStartup = autostart.IsEnabled;
+            RaiseAll();
+            return;
+        }
         if (Affects(e, nameof(AppState.ToolStatuses)))
         {
             Raise(nameof(ToolRows));

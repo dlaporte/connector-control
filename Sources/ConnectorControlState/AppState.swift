@@ -110,6 +110,10 @@ public final class AppState: ObservableObject {
     /// Why Claude and the command-line tool cannot reach this app — its control endpoint could not be
     /// served, or stopped being served — or nil while it serves. Settings shows it.
     @Published public private(set) var controlEndpointProblem: String?
+    /// Moves on each time a setting is changed from outside the Settings window — the command line's
+    /// `settings set` — so an open Settings window shows the new value at once, as its Claude group
+    /// already follows the integration's switches.
+    @Published public private(set) var settingsRevision = 0
     @Published public private(set) var needsClaudeRestart = false
     /// True when the last apply threw; keeps a retry affordance visible even
     /// after reload() refreshes lastError.
@@ -964,6 +968,11 @@ public final class AppState: ObservableObject {
         settings.claudeIntegrationOfferAnswered = true
         applyIfChanged()
         return nil
+    }
+
+    /// A setting was changed from outside the Settings window: every open one shows it (`settingsRevision`).
+    public func announceSettingsChanged() {
+        settingsRevision += 1
     }
 
     public func setConfirmClaudeChanges(_ on: Bool) {
