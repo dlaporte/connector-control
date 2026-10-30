@@ -210,6 +210,23 @@ public class ImportModelTests
     }
 
     /// <summary>
+    /// A document named in another spelling of a collection here (é decomposed where the collection
+    /// composes it) is offered a suffixed name, as on the Mac, not one Subscribe would then refuse.
+    /// </summary>
+    [Fact]
+    public void TheDefaultSyncNameSkipsAnotherSpellingOfATakenName()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.AddEmptyCollection("Caf\u00E9"));
+        var team = CollectionDocumentSamples.DataTeam;
+        var document = new CollectionDocument("Cafe\u0301", team.Author, team.Origin, team.Exported, team.Connectors);
+        var model = new ImportModel(state, h.WriteDocument(document, "cafe.json")) { ImportMode = ImportModel.Mode.KeepInSync };
+        Assert.Equal("Cafe\u0301 2", model.SyncName);
+        Assert.Null(model.Perform());
+    }
+
+    /// <summary>
     /// The failure line is the model's: an Import that did not land leaves its reason there, and
     /// only a change of mode takes it away, since the other mode is another question.
     /// </summary>

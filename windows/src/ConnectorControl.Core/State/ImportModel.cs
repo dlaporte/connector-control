@@ -220,7 +220,7 @@ public sealed class ImportModel : ObservableObject
         Author = document.Author;
         rendered = document.Render();
         // The document's name, suffixed until it is one no collection here already answers to.
-        syncName = FreeName.First(document.Name, new HashSet<string>(state.CollectionNames, StringComparer.Ordinal).Contains);
+        syncName = FreeName.First(document.Name, new HashSet<string>(state.CollectionNames, Collection.NameComparer).Contains);
         RebuildRows();
     }
 
