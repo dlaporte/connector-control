@@ -824,7 +824,7 @@ final class ControlMaskingTests: XCTestCase {
         XCTAssertEqual(ControlMasking.argument("--user=admin:hunter2"), "--user=admin:•••")
         XCTAssertEqual(ControlMasking.argument("curl -u admin:hunter2 https://x"), "curl -u admin:••• https://x")
         XCTAssertEqual(ControlMasking.arguments(["--dsn", "admin:hunter2@db/x"]), ["--dsn", "admin:•••@db/x"])
-        for args in [["-u", "1000:1000"], ["-u", "admin"], ["--user", "admin:${PW}"], ["git@github.com:org/repo.git"], ["a@b.example"]] {
+        for args in [["-u", "1000:1000"], ["-u", "admin"], ["--user", "admin:${PW}"], ["-u", "${CC_NEEDS:creds}"], ["--user=${CC_NEEDS:creds}"], ["git@github.com:org/repo.git"], ["a@b.example"]] {
             XCTAssertEqual(ControlMasking.arguments(args), args)
         }
         try assertHidden(["hunter2"], in: local("curl", ["-u", "admin:hunter2", "--user", "root:hunter2", "--dsn", "admin:hunter2@db/x"]))

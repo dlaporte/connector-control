@@ -338,11 +338,12 @@ public static class ControlMasking
     /// <summary>curl's flags whose value is <c>user:password</c>.</summary>
     internal static readonly string[] PairFlags = ["-u", "--user"];
 
-    /// <summary>A pair flag's <c>user:password</c> as a URL's user info shows it; null for a value with no ":", or
-    /// a uid:gid pair of digits (Docker's <c>--user 1000:1000</c>), which read as any argument does.</summary>
+    /// <summary>A pair flag's <c>user:password</c> as a URL's user info shows it; null for a value with no ":", a
+    /// reference (<c>${CC_NEEDS:creds}</c>), or a uid:gid pair of digits (Docker's <c>--user 1000:1000</c>),
+    /// which read as any argument does.</summary>
     internal static string? Pair(string text)
     {
-        if (Cut(text, ":") is not { } piece)
+        if (RefersElsewhere(text) || Cut(text, ":") is not { } piece)
         {
             return null;
         }

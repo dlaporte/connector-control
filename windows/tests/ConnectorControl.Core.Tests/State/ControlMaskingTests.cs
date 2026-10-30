@@ -986,7 +986,7 @@ public class ControlMaskingTests
         Assert.Equal("--user=admin:•••", ControlMasking.Argument("--user=admin:hunter2"));
         Assert.Equal("curl -u admin:••• https://x", ControlMasking.Argument("curl -u admin:hunter2 https://x"));
         Assert.Equal(["--dsn", "admin:•••@db/x"], ControlMasking.Arguments(["--dsn", "admin:hunter2@db/x"]));
-        string[][] plain = [["-u", "1000:1000"], ["-u", "admin"], ["--user", "admin:${PW}"], ["git@github.com:org/repo.git"], ["a@b.example"]];
+        string[][] plain = [["-u", "1000:1000"], ["-u", "admin"], ["--user", "admin:${PW}"], ["-u", "${CC_NEEDS:creds}"], ["--user=${CC_NEEDS:creds}"], ["git@github.com:org/repo.git"], ["a@b.example"]];
         foreach (var args in plain)
         {
             Assert.Equal(args, ControlMasking.Arguments(args));

@@ -291,10 +291,11 @@ public enum ControlMasking {
     /// curl's flags whose value is `user:password`.
     static let pairFlags = ["-u", "--user"]
 
-    /// A pair flag's `user:password` as a URL's user info shows it; nil for a value with no ":", or
-    /// a uid:gid pair of digits (Docker's `--user 1000:1000`), which read as any argument does.
+    /// A pair flag's `user:password` as a URL's user info shows it; nil for a value with no ":", a
+    /// reference (`${CC_NEEDS:creds}`), or a uid:gid pair of digits (Docker's `--user 1000:1000`),
+    /// which read as any argument does.
     static func pair(_ text: String) -> String? {
-        guard let piece = cut(text, at: ":") else { return nil }
+        guard !refersElsewhere(text), let piece = cut(text, at: ":") else { return nil }
         let digits: (String) -> Bool = { !$0.isEmpty && $0.unicodeScalars.allSatisfy { ("0"..."9").contains($0) } }
         if digits(piece.before), digits(piece.after) { return nil }
         return userInfo(text)
