@@ -9,6 +9,8 @@ on:
     paths:
       - '.github/**'
       - 'scripts/**'
+      - 'Package.resolved'
+      - 'CHANGELOG.md'
       - 'windows/scripts/**'
       - 'windows/tools/**'
 
@@ -57,6 +59,19 @@ jobs:
       # than all of them fails the job: proved with a fake gh and curl, on the image the feed jobs use.
       - name: update-preview-feed.sh orders builds against the published releases
         run: ./scripts/tests/update-preview-feed-order.sh
+
+      # The release gate: a changelog section of only empty sub-headings, or no section, fails;
+      # empty sub-headings are dropped from what ships.
+      - name: changelog-section.sh gates a release's notes
+        run: ./scripts/tests/changelog-section.sh
+
+      # Sparkle's tools pin (scripts/mac/sparkle-tools.env) must equal the Sparkle in
+      # Package.resolved, so a Dependabot Sparkle bump fails on its pull request, not 20 minutes
+      # into the next signed build. The runner image ships jq.
+      - name: Sparkle tools pin matches Package.resolved
+        run: |
+          ./scripts/mac/check-sparkle-pin.sh
+          ./scripts/tests/sparkle-pin.sh
 
       - name: PSScriptAnalyzer
         shell: pwsh

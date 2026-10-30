@@ -23,23 +23,12 @@ REPO_URL="${GITHUB_SERVER_URL:-https://github.com}/$GITHUB_REPOSITORY"
 DMG="ConnectorControl_${VERSION}.dmg"
 [ -f "$DMG" ] || { echo "::error::$DMG not found in $(pwd) — run this after the DMG is built, signed, notarized and stapled."; exit 1; }
 
-# Tools version pinned to match Package.resolved's Sparkle dependency: generate_appcast ships
-# alongside the Sparkle.framework the app links, and a drifted pin could sign appcast entries
-# with a tool version the shipped app's framework disagrees with.
-SPARKLE_TOOLS_VERSION=2.10.1
-SPARKLE_SHA256=1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27
-
-# jq, not grep: the "version" field lives under "state", several lines below "identity", so a
-# line-proximity grep never matches it.
-RESOLVED_VERSION=$(jq -r '.pins[] | select(.identity == "sparkle") | .state.version' Package.resolved)
-if [ -z "$RESOLVED_VERSION" ]; then
-  echo "::error::could not find the Sparkle package version in Package.resolved"
-  exit 1
-fi
-if [ "$RESOLVED_VERSION" != "$SPARKLE_TOOLS_VERSION" ]; then
-  echo "::error::Sparkle tools are pinned to $SPARKLE_TOOLS_VERSION but Package.resolved has $RESOLVED_VERSION — bump the pin (and its SHA-256) in the same commit."
-  exit 1
-fi
+# The tools pin (version and SHA-256) lives in sparkle-tools.env, which mac CI also reads through
+# check-sparkle-pin.sh, so a Sparkle bump that leaves the pin behind fails on the pull request.
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"$HERE/check-sparkle-pin.sh"
+# shellcheck source=scripts/mac/sparkle-tools.env
+. "$HERE/sparkle-tools.env"
 
 WORK="${RUNNER_TEMP:-$(mktemp -d)}"
 SPARKLE_TOOLS="$WORK/sparkle-tools"

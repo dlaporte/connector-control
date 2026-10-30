@@ -10,8 +10,9 @@ released), so open the next version's section as soon as the previous
 one ships. A freshly opened section starts with four sub-headings, in
 this order: `### macOS`, `### Windows`, `### Both platforms`, `###
 Release pipeline`; leave a sub-heading's bullets empty rather than
-removing the sub-heading, and drop any sub-heading that never got a
-bullet once the section is about to ship.
+removing the sub-heading. The release build drops any sub-heading that
+never got a bullet from the notes it ships, and fails if no sub-heading
+has one.
 
 ## v1.5.1
 
@@ -22,6 +23,9 @@ bullet once the section is about to ship.
 ### Both platforms
 
 ### Release pipeline
+
+- A release now fails at its first step if its changelog section holds only the empty sub-headings, and drops any sub-heading with no bullets from the notes it publishes, so the GitHub release and both apps’ update dialogs never show bare headings.
+- The Sparkle tools version used to sign the Mac update feed is now checked against the Sparkle the app links on every push that touches `Package.resolved`, so a Sparkle bump fails on its pull request instead of partway through a signed build.
 
 ## v1.5.0
 

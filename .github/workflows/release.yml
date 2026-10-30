@@ -119,12 +119,13 @@ jobs:
       # First, before minutes of build/notarization: the changelog is the
       # single source for the GitHub release notes, the Sparkle update
       # dialog AND the Windows update dialog, and failing here enforces that
-      # every release ships with one.
+      # every release ships with one. --release also drops sub-headings with no
+      # bullets and fails when nothing but sub-headings is left.
       - name: Extract changelog section
         env:
           TAG: ${{ steps.derive.outputs.tag }}
         run: |
-          ./scripts/release/changelog-section.sh "$TAG" > notes.md
+          ./scripts/release/changelog-section.sh --release "$TAG" > notes.md
           cat notes.md
 
       # Releases build from master only. A v* tag pushed from another branch would
