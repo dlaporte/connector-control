@@ -13,6 +13,9 @@ public protocol Dialogs: AnyObject {
     func promptForName(title: String, initial: String) -> String?
     /// One-button alert: something the user is told and can only acknowledge.
     func inform(message: String, informative: String?)
+    /// The confirmation of a change Claude asks for, modal: Don’t Allow is the default, which Return
+    /// and Escape answer, and so does closing the window. True only for Allow.
+    func confirmChange(_ dialog: ConfirmationDialog) -> Bool
 }
 
 public extension Dialogs {

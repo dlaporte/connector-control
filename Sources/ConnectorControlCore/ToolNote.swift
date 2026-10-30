@@ -11,8 +11,7 @@ public struct ToolNote: Equatable, Sendable {
     public static let shellOnlyAdvice =
         "Install it with Homebrew or the official installer, which put it where Claude Desktop looks; version managers such as nvm install elsewhere."
     public static let settingsHeader = "Tools"
-    public static let settingsCaption =
-        "Connectors that run through npx, node, uvx or uv need them installed where Claude Desktop can find them."
+    public static let settingsCaption = "Needed by connectors that run through them, where Claude can find them."
 
     /// Line 1: what is wrong.
     public let text: String

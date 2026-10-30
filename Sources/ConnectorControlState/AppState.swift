@@ -107,6 +107,13 @@ public final class AppState: ObservableObject {
     @Published public private(set) var store: MasterStore = .empty
     /// Settable: the restore sheet reports its failure here.
     @Published public var lastError: String?
+    /// Why Claude and the command-line tool cannot reach this app — its control endpoint could not be
+    /// served, or stopped being served — or nil while it serves. Settings shows it.
+    @Published public private(set) var controlEndpointProblem: String?
+    /// Moves on each time a setting is changed from outside the Settings window — the command line's
+    /// `settings set` — so an open Settings window shows the new value at once, as its Claude group
+    /// already follows the integration's switches.
+    @Published public private(set) var settingsRevision = 0
     @Published public private(set) var needsClaudeRestart = false
     /// True when the last apply threw; keeps a retry affordance visible even
     /// after reload() refreshes lastError.
@@ -150,6 +157,8 @@ public final class AppState: ObservableObject {
     private let host: AppHost
     private let toolProbe: ToolProbing
     private var toolsInFlight: Set<Tool> = []
+    /// Callers waiting for probes to land, with the tools each waits on.
+    private var toolWaiters: [(tools: Set<Tool>, run: MainActorAction)] = []
     private var watcher: FileWatcher?
     private var storeWatcher: FileWatcher?
     /// One watcher per bound synced collection, by collection name.
@@ -249,15 +258,21 @@ public final class AppState: ObservableObject {
     var isDirty: Bool { expandedServers != appliedServers }
 
     /// The enabled connectors as Claude must see them, with `${COLLECTION_DIR}` resolved against
-    /// the active collection's folder on this machine (`collectionDirectory(of:)`). The store
-    /// itself keeps the token, so the same list still resolves on the next machine, and a
-    /// published document carries it as written for each subscriber to resolve against their own
-    /// copy. With no folder the token is written as it stands — guessing one would start the
-    /// wrong program — and the row carries the caution that says so.
+    /// the active collection's folder on this machine (`collectionDirectory(of:)`), plus Connector
+    /// Control's own entry while the integration is on. The store itself keeps the token, so the
+    /// same list still resolves on the next machine, and a published document carries it as
+    /// written for each subscriber to resolve against their own copy. With no folder the token is
+    /// written as it stands — guessing one would start the wrong program — and the row carries the
+    /// caution that says so. The entry joins here and only here: the store, the collections and
+    /// every document never hold it, and it is written, compared, backed up and regenerated like
+    /// every other entry.
     var expandedServers: [String: JSONValue] {
-        let servers = store.enabledServers
-        guard let directory = collectionDirectory(of: activeCollection) else { return servers }
-        return servers.mapValues { Placeholder.expandDirectoryToken(in: $0, directory: directory) }
+        var servers = store.enabledServers
+        if let directory = collectionDirectory(of: activeCollection) {
+            servers = servers.mapValues { Placeholder.expandDirectoryToken(in: $0, directory: directory) }
+        }
+        if let entry = claudeIntegrationEntry { servers[ClaudeIntegration.entryName] = entry }
+        return servers
     }
 
     /// The folder `${COLLECTION_DIR}` stands for in `collection` on this machine, or nil when it
@@ -444,12 +459,21 @@ public final class AppState: ObservableObject {
     /// original, a file from elsewhere — goes into the active collection, and publishing still
     /// keeps back any path or folder it carries. While that collection is subscribed, it is refused
     /// (`restoreRefusal(for:)`).
-    public func restoreClaudeConfig(from backup: URL) throws {
-        if let refusal = restoreRefusal(for: backup) { throw refusal }
+    ///
+    /// `data`, when given, is the backup's content as the caller read it, so what is restored is what
+    /// the caller checked.
+    public func restoreClaudeConfig(from backup: URL, data: Data? = nil) throws {
+        try restoreClaudeConfig(from: backup, data: data,
+                                recorded: BackupCollections.collection(of: backup, in: service.paths.backupsDirURL))
+    }
+
+    /// `restoreClaudeConfig(from:data:)` with the collection the backup's record names, as the caller
+    /// read it (nil for no record), so the refusal and the collection it goes back into follow what
+    /// the caller asked about, not the record as it is by then.
+    public func restoreClaudeConfig(from backup: URL, data: Data?, recorded: String?) throws {
+        if let refusal = restoreRefusal(forRecorded: recorded) { throw refusal }
         var target = store
-        if let recorded = BackupCollections.collection(of: backup, in: service.paths.backupsDirURL) {
-            target.activeCollection = recorded
-        }
+        if let recorded { target.activeCollection = recorded }
         // Every apply backed Claude's file up with ${COLLECTION_DIR} resolved where the store holds
         // it (`collectionDirectory(of:)`): against a synced collection's document folder, or this
         // machine's publish folder. A connector that renders just as the backup does keeps its
@@ -458,7 +482,7 @@ public final class AppState: ObservableObject {
         let collection = target.activeCollection
         let binding = isPublished(collection) ? collectionsCache.published[collection] : nil
         let earlier = (binding?.publishedFolders ?? []).subtracting([binding?.folder ?? ""]).sorted { $0.ordinallyPrecedes($1) }
-        let servers = try service.restoreClaudeConfig(from: backup, mergedWith: target,
+        let servers = try service.restoreClaudeConfig(from: backup, data: data, mergedWith: target,
                                                       publishFolder: collectionDirectory(of: collection),
                                                       earlierFolders: earlier,
                                                       backedUpFrom: collectionsCache.lastAppliedCollection,
@@ -481,7 +505,14 @@ public final class AppState: ObservableObject {
     /// holds that collection's own rendered state, what Claude ran from it, so restoring it there is
     /// consistent with the subscription, and it goes back as any other.
     public func restoreRefusal(for backup: URL) -> RestoreError? {
-        if let recorded = BackupCollections.collection(of: backup, in: service.paths.backupsDirURL) {
+        restoreRefusal(forRecorded: BackupCollections.collection(of: backup, in: service.paths.backupsDirURL))
+    }
+
+    /// `restoreRefusal(for:)` with the collection the backup's record names, as the caller read it
+    /// (nil for no record). Platform idiom: a label tells this from `restoreRefusal(for:)`; the
+    /// Windows mirror, where both would take a string, names it `RestoreRefusalForRecorded`.
+    public func restoreRefusal(forRecorded recorded: String?) -> RestoreError? {
+        if let recorded {
             return store.collections[recorded] == nil ? .collectionGone(recorded) : nil
         }
         return isSynced(activeCollection) ? .subscribedActive(activeCollection) : nil
@@ -507,6 +538,10 @@ public final class AppState: ObservableObject {
         toolsInFlight.subtract(probed)
         guard !disposed else { return }
         toolStatuses.merge(results) { _, new in new }
+        // Whoever waited on these probes hears once every tool they asked about is in.
+        let ready = toolWaiters.filter { $0.tools.isDisjoint(with: toolsInFlight) }
+        toolWaiters.removeAll { $0.tools.isDisjoint(with: toolsInFlight) }
+        ready.forEach { $0.run() }
     }
 
     // MARK: - Restart-required derivation
@@ -790,6 +825,10 @@ public final class AppState: ObservableObject {
         let target = collection ?? activeCollection
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return AppState.nameEmptyError }
+        // Connector Control's own entry goes by this name in Claude's config. A connector already
+        // holding it, from before the name was reserved, may still be saved in place, so the clash
+        // can be resolved by renaming or deleting it; nothing new may take the name.
+        if trimmed == ClaudeIntegration.entryName, trimmed != oldName { return ClaudeIntegration.reservedNameError }
         if trimmed != oldName, store.collections[target]?.mcps[trimmed] != nil {
             return AppState.duplicateNameError(trimmed)
         }
@@ -881,6 +920,104 @@ public final class AppState: ObservableObject {
                 }
             }
         }
+    }
+
+    // MARK: - Claude integration
+
+    /// A connector the active collection already holds under the reserved name — from before the
+    /// name was reserved, or synced in from an older app — leaves no room for Connector Control's
+    /// own entry: Settings dims the switch and names the clash, and nothing is added.
+    public var claudeIntegrationClash: Bool {
+        store.collections[activeCollection]?.mcps[ClaudeIntegration.entryName] != nil
+    }
+
+    /// Whether the app runs from where it will not stay — a translocated copy, or its disk image — so
+    /// what that refuses can be dimmed in Settings, with the reason.
+    public var controlToolIsTransient: Bool { host.controlToolIsTransient }
+
+    /// Connector Control's own entry while the switch is on, the app has a tool to name and no
+    /// connector holds the name; nil otherwise.
+    var claudeIntegrationEntry: JSONValue? {
+        guard settings.claudeIntegrationEnabled, let path = host.controlToolPath, !claudeIntegrationClash else { return nil }
+        // An app run from where it will not stay leaves the entry exactly as Claude's config has it,
+        // rather than write a path that will be gone once the app is moved or its disk image ejected.
+        if host.controlToolIsTransient { return appliedServers[ClaudeIntegration.entryName] }
+        return ClaudeIntegration.entry(toolPath: path)
+    }
+
+    /// The popover's one-time offer: shown until it is answered, never once the setting has been
+    /// decided anywhere (Settings and the command-line tool answer it too), and never where turning
+    /// it on could not work — no bundled tool, a connector holding the name, or an app that runs
+    /// from where it will not stay.
+    public var showsClaudeIntegrationOffer: Bool {
+        !settings.claudeIntegrationOfferAnswered && !settings.claudeIntegrationEnabled
+            && host.controlToolPath != nil && !claudeIntegrationClash && !host.controlToolIsTransient
+    }
+
+    /// Turns the integration on or off from anywhere — Settings, the offer, the command-line tool —
+    /// and applies at once, so the entry appears or goes and Restart Required follows. Deciding it
+    /// answers the offer for good. Turning it on is refused while a connector holds the name, or
+    /// while the app runs from where it will not stay, with the sentence that says so; turning it
+    /// off always goes through. nil on success.
+    @discardableResult
+    public func setClaudeIntegrationEnabled(_ on: Bool) -> String? {
+        if on, claudeIntegrationClash { return ClaudeIntegration.clashNote }
+        if on, host.controlToolIsTransient { return ClaudeIntegration.moveToApplicationsError }
+        objectWillChange.send()
+        settings.claudeIntegrationEnabled = on
+        settings.claudeIntegrationOfferAnswered = true
+        applyIfChanged()
+        return nil
+    }
+
+    /// A setting was changed from outside the Settings window: every open one shows it (`settingsRevision`).
+    public func announceSettingsChanged() {
+        settingsRevision += 1
+    }
+
+    public func setConfirmClaudeChanges(_ on: Bool) {
+        objectWillChange.send()
+        settings.confirmClaudeChanges = on
+    }
+
+    /// The offer's buttons: Turn On turns the integration on; Not Now dismisses the offer for good.
+    public func answerClaudeIntegrationOffer(turnOn: Bool) {
+        if turnOn {
+            setClaudeIntegrationEnabled(true)
+        } else {
+            objectWillChange.send()
+            settings.claudeIntegrationOfferAnswered = true
+        }
+    }
+
+    // MARK: - For the control layer
+
+    /// The app could not serve its control endpoint, or has stopped serving it.
+    public func reportControlEndpointUnavailable() {
+        controlEndpointProblem = ClaudeIntegration.endpointUnavailableText
+    }
+
+    /// Whether Claude Desktop is running now, as the restart logic reads it.
+    public var isClaudeRunning: Bool { claude.isRunning }
+
+    /// Runs `completion` once none of `tools` is being probed: at once when none is, else when the
+    /// last of them is published. A state disposed meanwhile never runs it.
+    public func whenToolsProbed(_ tools: [Tool] = Tool.allCases, _ completion: @escaping MainActorAction) {
+        let wanted = Set(tools)
+        guard !wanted.isDisjoint(with: toolsInFlight) else {
+            completion()
+            return
+        }
+        toolWaiters.append((wanted, completion))
+    }
+
+    /// A change Claude made without asking — confirmations are off, or the user answered after the
+    /// call had already returned. Always announced, whatever "Notify on external changes" says:
+    /// with confirmations off it is the only sign that what Claude runs has changed. The Restart
+    /// Claude action rides along while Claude runs an older config.
+    public func notifyClaudeChange(_ body: String) {
+        notifier.notify(title: Notifications.title, body: body,
+                        category: needsClaudeRestart ? Notifications.restartCategory : nil)
     }
 
     // MARK: - Collections
@@ -1071,6 +1208,14 @@ public final class AppState: ObservableObject {
         let url = URL(fileURLWithPath: path).standardizedFileURL
         let (decoded, bytes, failure) = AppState.readDocument(at: url)
         guard let document = decoded, let data = bytes else { return failure }
+        return subscribe(document: document, data: data, at: url, as: requestedName)
+    }
+
+    /// `subscribe(documentAt:as:)` for a document already read: `document` decoded from `data`, the
+    /// bytes read from `url`. The binding records their hash, so what lands is what the caller decided
+    /// on, and a file that has moved since shows as an update.
+    public func subscribe(document: CollectionDocument, data: Data, at url: URL, as requestedName: String?) -> String? {
+        let url = url.standardizedFileURL
         // Subscribing to what this machine publishes would make the app its own author: every
         // local edit would come straight back as a pending update to itself.
         if let origin = document.origin,
@@ -1215,7 +1360,7 @@ public final class AppState: ObservableObject {
         let url = URL(fileURLWithPath: path)
         let data: Data
         do {
-            data = try Data(contentsOf: url)
+            data = try BoundedRead.data(at: url, limit: AppState.maxDocumentBytes)
         } catch {
             noteSourceFailure(collection, AppState.sourceUnreadableError(url.lastPathComponent, AppState.sourceDetail(error)),
                               manual: manual)
@@ -1298,6 +1443,10 @@ public final class AppState: ObservableObject {
         notifiedSourceHashes.removeValue(forKey: collection)
     }
 
+    /// The most a collection document's read takes: what one message carries, so a document too large
+    /// to send is refused by its read as much as by the size the control tools check first.
+    static let maxDocumentBytes = McpSession.maxMessageBytes
+
     /// The document at `url`, or the message to show for it — the one read-and-decode every
     /// caller that opens a collection document shares. The tuple's document is nil exactly when
     /// the failure is not; the bytes come back too, since the callers that keep a binding hash
@@ -1305,7 +1454,7 @@ public final class AppState: ObservableObject {
     static func readDocument(at url: URL) -> (document: CollectionDocument?, data: Data?, failure: String?) {
         let data: Data
         do {
-            data = try Data(contentsOf: url)
+            data = try BoundedRead.data(at: url, limit: AppState.maxDocumentBytes)
         } catch {
             return (nil, nil, sourceUnreadableError(url.lastPathComponent, sourceDetail(error)))
         }
@@ -1357,6 +1506,17 @@ public final class AppState: ObservableObject {
         let url = URL(fileURLWithPath: path).standardizedFileURL
         let (decoded, _, failure) = AppState.readDocument(at: url)
         guard let document = decoded else { return failure }
+        return importCopies(document: document, at: url, into: collection, choices: choices)
+    }
+
+    /// `importCopies(documentAt:into:choices:)` for a document already read from `url`, so what lands
+    /// is what the caller decided on, not the file as it is by then.
+    public func importCopies(document: CollectionDocument, at url: URL, into collection: String,
+                             choices: [String: ImportChoice]) -> String? {
+        // As `importCopies(documentAt:into:choices:)` guards it.
+        guard store.collections[collection] != nil else { return nil }
+        guard kind(of: collection) == .local else { return AppState.targetMustBeLocalError }
+        let url = url.standardizedFileURL
         let directory = url.deletingLastPathComponent().path
         let rendered = document.render()
         let date = today
@@ -2244,7 +2404,7 @@ public final class AppState: ObservableObject {
             // against a base without a trailing slash by REPLACING its last component, and the
             // store dir only carries that slash when it already exists on disk.
             let url = service.paths.storeDirURL.appendingPathComponent(relative).standardizedFileURL
-            guard let data = try? Data(contentsOf: url) else { continue }
+            guard let data = try? BoundedRead.data(at: url, limit: AppState.maxDocumentBytes) else { continue }
             var binding = cache.synced[name] ?? CollectionsLocalCache.SyncedBinding(path: nil, lastHash: nil, excluded: [:])
             binding.path = url.path
             binding.lastHash = ContentHash.sha256(data)
@@ -2289,6 +2449,10 @@ public final class AppState: ObservableObject {
         }
         return error.localizedDescription
     }
+
+    /// Whether `dispose()` has run: work scheduled for later, such as a restart Claude asked for,
+    /// checks it, as AppState's own delays do.
+    var isDisposed: Bool { disposed }
 
     /// Stops the watchers and the notification hook; pending delays become no-ops.
     public func dispose() {

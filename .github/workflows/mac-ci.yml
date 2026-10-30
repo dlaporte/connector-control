@@ -1,5 +1,6 @@
 # Runs the Swift suite and an ad-hoc build on every push; release.yml re-runs the suite
 # before signing.
+# README.md is watched because ReadmeHelpTests compares its command reference with `help`.
 #
 # No pull_request trigger: every push in this repository is to a branch of the same repo (no
 # forks), so the push trigger below already runs on every branch, including PR branches.
@@ -14,6 +15,7 @@ on:
       - 'Package.swift'
       - 'Package.resolved'
       - 'scripts/**'
+      - 'README.md'
       - '.github/workflows/mac-ci.yml'
 
 permissions:
@@ -49,11 +51,66 @@ jobs:
       - name: Test
         run: ./scripts/test-mac.sh
 
+      # The MCP Inspector (Node 22.19 or later) drives connector-control mcp against the headless
+      # test host: the MCP subset this repo writes for itself, checked by the reference client.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+
+      - name: Build the command-line tool and the test host
+        run: |
+          swift build --product connector-control
+          swift build --product connector-control-test-host
+
+      - name: MCP Inspector check
+        run: ./scripts/mac/inspector-check.sh .build/debug/connector-control .build/debug/connector-control-test-host
+
       # The same assembly the release performs, ad-hoc signed: a broken build-app.sh,
       # generate-icon.swift or Sparkle embedding fails here instead of on a tag.
       - name: Build the app bundle
         run: ./scripts/build-app.sh
 
+      # The tool inside the bundle: signed on its own, before the app, with its own identifier, and
+      # runnable from there without an app.
+      - name: The nested tool's signature
+        run: |
+          TOOL="build/Connector Control.app/Contents/MacOS/connector-control"
+          codesign --verify --strict --verbose=2 "$TOOL"
+          codesign --verify --strict --deep --verbose=2 "build/Connector Control.app"
+          # Captured first: grep -q leaving a pipe early would end codesign with SIGPIPE, which pipefail
+          # reports as a failure.
+          details=$(codesign -d --verbose=2 "$TOOL" 2>&1)
+          grep -qx 'Identifier=com.dlaporte.connector-control.cli' <<< "$details" \
+            || { echo "::error::$TOOL is not signed as com.dlaporte.connector-control.cli"; exit 1; }
+          "$TOOL" --version
+          usage=$("$TOOL" help)
+          [ "$(head -1 <<< "$usage")" = 'Usage: connector-control <command> [options]' ] \
+            || { echo "::error::help printed something else"; exit 1; }
+
+      # A Sparkle update replaces the bundle and ends only the app; the relay Claude runs from the old
+      # bundle must carry on. CI cannot run a signed update, so the replacement is done by hand here.
+      - name: A running relay survives the app being replaced
+        run: ./scripts/mac/relay-check.sh "build/Connector Control.app" .build/debug/connector-control-test-host
+
       # Proves make-dmg.sh too, the same way, before a tag ever reaches it.
       - name: Build the DMG
         run: ./scripts/make-dmg.sh build/ConnectorControl-ci.dmg
+
+      # A busy hdiutil is retried and nothing else is: proved with a fake hdiutil, no image made.
+      - name: make-dmg.sh retries only a busy hdiutil
+        run: ./scripts/tests/make-dmg-retry.sh
+
+      # Each build reads one update feed, picked from its version: releases/latest for a stable
+      # version, the preview-feed prerelease's appcast for X.Y.Z-preview.N. build-app.sh fails on
+      # a mismatched pairing itself; this proves both directions on the bundle that ships.
+      # Rebuilding as a preview reuses the release build above, so it costs seconds.
+      - name: The update feed follows the version
+        run: |
+          PLIST="build/Connector Control.app/Contents/Info.plist"
+          feed() { /usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$PLIST"; }
+          VERSION=9.8.7 ./scripts/build-app.sh
+          [ "$(feed)" = "https://github.com/dlaporte/connector-control/releases/latest/download/appcast.xml" ] \
+            || { echo "::error::stable 9.8.7 reads $(feed)"; exit 1; }
+          VERSION=9.8.7-preview.3 ./scripts/build-app.sh
+          [ "$(feed)" = "https://github.com/dlaporte/connector-control/releases/download/preview-feed/appcast.xml" ] \
+            || { echo "::error::9.8.7-preview.3 reads $(feed)"; exit 1; }

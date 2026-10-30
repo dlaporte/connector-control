@@ -4,7 +4,14 @@
 # preview is cut from, and the commits since the last real preview or release, whichever is
 # more recent.
 #
-#   preview-notes.sh <tag> <version> <next> <number>
+#   preview-notes.sh [--dialog] <tag> <version> <next> <number>
+#
+#   --dialog  print only what an update dialog shows: the opening line and the CHANGELOG
+#             section. That text is embedded in the preview's Sparkle appcast (and so shows in
+#             a Mac preview's update dialog), where "download the DMG", "back to the stable
+#             release" and a commit list mean nothing to someone already updating — the same
+#             split release.yml makes between notes.md (the appcast) and body.md (the release
+#             page). Without it, the full notes for the GitHub prerelease's body.
 #
 #   <tag>     the preview's release tag (preview-<n> or preview-dry-<n>)
 #   <version> the full preview version, <next>-preview.<number>
@@ -16,10 +23,15 @@
 # the current directory.
 set -euo pipefail
 
-TAG=${1:?usage: preview-notes.sh <tag> <version> <next> <number>}
-VERSION=${2:?usage: preview-notes.sh <tag> <version> <next> <number>}
-NEXT=${3:?usage: preview-notes.sh <tag> <version> <next> <number>}
-NUMBER=${4:?usage: preview-notes.sh <tag> <version> <next> <number>}
+DIALOG=false
+if [ "${1:-}" = --dialog ]; then
+  DIALOG=true
+  shift
+fi
+TAG=${1:?usage: preview-notes.sh [--dialog] <tag> <version> <next> <number>}
+VERSION=${2:?usage: preview-notes.sh [--dialog] <tag> <version> <next> <number>}
+NEXT=${3:?usage: preview-notes.sh [--dialog] <tag> <version> <next> <number>}
+NUMBER=${4:?usage: preview-notes.sh [--dialog] <tag> <version> <next> <number>}
 : "${GITHUB_SHA:?GITHUB_SHA must be set}"
 : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
 [ -f CHANGELOG.md ] || { echo "::error::CHANGELOG.md not found in $(pwd)"; exit 1; }
@@ -49,19 +61,21 @@ fi
 
 echo "**Preview** build \`$VERSION\` of Connector Control for macOS and Windows, from commit ${GITHUB_SHA:0:7} (tag \`$TAG\`)."
 echo
-echo "> A preview for invited testers. It is a GitHub prerelease: the stable apps never see it and their update feeds are untouched. Both apps are code-signed (Developer ID and notarized on the Mac, Azure Artifact Signing on Windows). A Windows preview install updates itself to later previews and to the final release; a Mac preview does not, so download each new preview."
-echo
-echo "### Install"
-echo
-echo "- **Mac:** download \`ConnectorControl_$VERSION.dmg\`, open it and drag Connector Control to Applications over the stable copy. Your connectors, settings and backups are kept."
-echo "- **Windows:** download \`ConnectorControl-win-x64-Setup.exe\` (Intel/AMD) or \`ConnectorControl-win-arm64-Setup.exe\` (Arm) and run it; see [Installation ▸ Windows]($REPO_URL/blob/master/README.md#windows)."
-echo
-echo "### Back to the stable release"
-echo
-echo "- **Mac:** download the DMG from the [latest release]($REPO_URL/releases/latest) and drag it over the preview."
-echo "- **Windows:** uninstall from Settings ▸ Apps ▸ Installed apps, then run the stable Setup.exe from the latest release."
-echo "- App data is left in place either way. Anything a preview feature wrote that the stable app does not understand is ignored, not deleted."
-echo
+if [ "$DIALOG" = false ]; then
+  echo "> A preview for invited testers. It is a GitHub prerelease: the stable apps never see it and their update feeds are untouched. Both apps are code-signed (Developer ID and notarized on the Mac, Azure Artifact Signing on Windows). A preview install updates itself, on both platforms, to later previews and to the final release."
+  echo
+  echo "### Install"
+  echo
+  echo "- **Mac:** download \`ConnectorControl_$VERSION.dmg\`, open it and drag Connector Control to Applications over the stable copy. Your connectors, settings and backups are kept."
+  echo "- **Windows:** download \`ConnectorControl-win-x64-Setup.exe\` (Intel/AMD) or \`ConnectorControl-win-arm64-Setup.exe\` (Arm) and run it; see [Installation ▸ Windows]($REPO_URL/blob/master/README.md#windows)."
+  echo
+  echo "### Back to the stable release"
+  echo
+  echo "- **Mac:** download the DMG from the [latest release]($REPO_URL/releases/latest) and drag it over the preview."
+  echo "- **Windows:** uninstall from Settings ▸ Apps ▸ Installed apps, then run the stable Setup.exe from the latest release."
+  echo "- App data is left in place either way. Anything a preview feature wrote that the stable app does not understand is ignored, not deleted."
+  echo
+fi
 echo "### Changes planned for v$NEXT (CHANGELOG.md)"
 echo
 # preview.yml's derive step has already checked that "## v$NEXT" exists, so any failure here
@@ -79,6 +93,7 @@ scripts/release/changelog-section.sh "v$NEXT" \
       { print }
       END { if (heading != "" && body != "") printf "%s", held }
   '
+[ "$DIALOG" = false ] || exit 0
 echo
 echo "### Commits since $BASE_LABEL"
 echo

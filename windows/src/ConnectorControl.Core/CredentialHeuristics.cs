@@ -4,6 +4,9 @@ namespace ConnectorControl.Core;
 /// Warnings for the publish preview, never edits: the exporter knows env values and the remote
 /// auth fields are secrets, but a token typed into an argument is indistinguishable from data.
 /// These patterns catch the common shapes; a placeholder marker is by definition not a secret.
+/// Prefixes, names, lengths and characters are read one UTF-16 unit at a time on both platforms,
+/// so the same text reads the same: a combining mark after a prefix or a name does not hide it,
+/// and a character beyond the Basic Plane is two units, neither a letter nor a digit.
 /// </summary>
 public static class CredentialHeuristics
 {
@@ -35,17 +38,54 @@ public static class CredentialHeuristics
     /// </summary>
     public static bool NamesASecret(string name)
     {
+        // Platform idiom: ToLowerInvariant lowers unit by unit here, one to one, and leaves İ (U+0130),
+        // whose lower case is two scalars, as it is; the Mac mirror lowers each unit only where its
+        // lower case is one unit, to match it.
         var lowered = name.ToLowerInvariant();
         return SecretNames.Any(lowered.Contains);
     }
 
     private static readonly string[] SecretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"];
 
+    /// <summary>Whether <paramref name="word"/> is an authentication scheme that comes before a credential in a header's
+    /// value — <c>Bearer</c>, <c>Basic</c> or <c>Token</c> — whatever its case.</summary>
+    public static bool IsSchemeWord(string word) =>
+        SchemeWords.Contains(word.ToLowerInvariant(), StringComparer.Ordinal);
+
+    private static readonly string[] SchemeWords = ["bearer", "basic", "token"];
+
+    /// <summary>
+    /// Whether an environment variable's value names code to run: a program (<c>GIT_ASKPASS</c>,
+    /// <c>GIT_SSH_COMMAND</c>, any name holding <c>ASKPASS</c>, a <c>*_CREDENTIAL_PROVIDER</c> such as Cargo's
+    /// <c>CARGO_REGISTRY_CREDENTIAL_PROVIDER</c>), git configuration that can name one (<c>GIT_CONFIG_*</c>), a
+    /// library or module loaded first (<c>LD_PRELOAD</c>, <c>NODE_OPTIONS</c>, <c>JAVA_TOOL_OPTIONS</c>) or a
+    /// script a shell or interpreter runs first (<c>BASH_ENV</c>, <c>PYTHONSTARTUP</c>). Whatever its case,
+    /// since Windows reads names so. The confirmation dialog shows such a value in full even when
+    /// its name reads as a secret's: it is code that would run, which the person allowing must see.
+    /// </summary>
+    public static bool NamesAProgramToRun(string name)
+    {
+        // Platform idiom: ToLowerInvariant lowers unit by unit here, as the Mac mirror lowers to match it.
+        var lowered = name.ToLowerInvariant();
+        return ProgramNames.Contains(lowered, StringComparer.Ordinal)
+            || lowered.StartsWith("git_config_", StringComparison.Ordinal)
+            || lowered.Contains("askpass", StringComparison.Ordinal)
+            || lowered.EndsWith("_credential_provider", StringComparison.Ordinal);
+    }
+
+    private static readonly string[] ProgramNames =
+    [
+        "git_ssh", "git_ssh_command", "git_exec_path", "node_options", "ld_preload",
+        "dyld_insert_libraries", "pythonstartup", "bash_env", "env", "perl5opt", "rubyopt", "java_tool_options",
+        "_java_options",
+    ];
+
     /// <summary>
     /// Whether <paramref name="value"/> takes its secret from somewhere else rather than holding it: one
     /// or more <c>${NAME}</c> or <c>$NAME</c> references — an environment variable, a
-    /// <c>${CC_NEEDS:NAME}</c> placeholder — with, beside them, at most one word of letters, an
-    /// authentication scheme such as <c>Bearer</c>. A <c>$NAME</c> without braces counts only as
+    /// <c>${CC_NEEDS:NAME}</c> placeholder — with, beside them, at most one word of letters before them, an
+    /// authentication scheme such as <c>Bearer</c>, <c>SSWS</c> or <c>Bot</c>. Text after a reference
+    /// (<c>${CC_NEEDS:PW}hunter</c>) can be the secret itself. A <c>$NAME</c> without braces counts only as
     /// <see cref="ShellVariableEnd"/> reads one. Walked one UTF-16 unit at a time, as the Mac walks
     /// Unicode scalars.
     /// </summary>
@@ -53,6 +93,7 @@ public static class CredentialHeuristics
     {
         var rest = new System.Text.StringBuilder();
         var references = 0;
+        var textAfterReference = false;
         var index = 0;
         while (index < value.Length)
         {
@@ -71,12 +112,16 @@ public static class CredentialHeuristics
             }
             else
             {
+                if (references > 0 && value[index] != ' ')
+                {
+                    textAfterReference = true;
+                }
                 rest.Append(value[index]);
                 index++;
             }
         }
         var words = rest.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return references > 0 && words.Length <= 1 && words.All(word => word.All(char.IsAsciiLetter));
+        return references > 0 && !textAfterReference && words.Length <= 1 && words.All(word => word.All(char.IsAsciiLetter));
     }
 
     /// <summary>

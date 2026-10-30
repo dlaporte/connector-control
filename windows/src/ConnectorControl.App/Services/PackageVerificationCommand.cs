@@ -16,11 +16,11 @@ internal static partial class PackageVerificationCommand
 {
     /// <summary>
     /// <c>ConnectorControl-&lt;version&gt;-&lt;rid&gt;-full.nupkg</c>, the name `vpk pack` gives the
-    /// package it produces. The version may carry a prerelease suffix (`1.3.3-preview.2`) and the rid
-    /// itself contains a hyphen (`win-x64`); only the numeric major.minor.patch is wanted, so
-    /// everything between it and the trailing `-full.nupkg` is swallowed rather than parsed.
+    /// package it produces. The version may carry a prerelease label (`1.3.3-preview.2`), which is part of
+    /// what the package must carry; the rid itself contains a hyphen (`win-x64`), so the label is matched
+    /// as short as it can be and the rid as `win-` and one word.
     /// </summary>
-    [GeneratedRegex(@"^ConnectorControl-(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:-.+)?-full\.nupkg$")]
+    [GeneratedRegex(@"^ConnectorControl-(?<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+?)?)-win-[0-9a-z]+-full\.nupkg$")]
     private static partial Regex NupkgNamePattern();
 
     public static bool TryRun(string[] args, out int exitCode) =>
@@ -31,7 +31,7 @@ internal static partial class PackageVerificationCommand
     /// given the identity it needs to check against) and <paramref name="processPath"/> replaces
     /// <see cref="Environment.ProcessPath"/> as the running app's own location.
     /// </summary>
-    internal static bool TryRun(string[] args, Func<string, string?, Version, Version, string?> verify, string? processPath, out int exitCode)
+    internal static bool TryRun(string[] args, Func<string, string?, string, string, string?> verify, string? processPath, out int exitCode)
     {
         exitCode = 0;
         if (!Contains(args, "--verify-package"))
@@ -74,7 +74,12 @@ internal static partial class PackageVerificationCommand
             exitCode = 2;
             return true;
         }
-        var runningVersion = UpdateVerifier.EmbeddedVersion(processPath);
+        if (UpdateVerifier.EmbeddedVersion(processPath) is not { } runningVersion)
+        {
+            WriteReport(reportPath, "This app carries no product version, so the running version could not be read.");
+            exitCode = 2;
+            return true;
+        }
         var updateExePath = FindUpdateExe(processPath);
         string? problem;
         try
@@ -105,10 +110,10 @@ internal static partial class PackageVerificationCommand
             : "OK\nchecked: package entries, main executable version, installed updater";
 
     /// <summary>Builds the running app's identity and defers to the real check.</summary>
-    private static string? ProductionVerify(string packagePath, string? updateExePath, Version runningVersion, Version feedVersion)
+    private static string? ProductionVerify(string packagePath, string? updateExePath, string runningVersion, string feedVersion)
     {
         var identity = UpdateVerifier.ExpectedIdentity(Environment.ProcessPath!);
-        return UpdateVerifier.Verify(packagePath, updateExePath, identity, runningVersion, feedVersion);
+        return UpdateVerifier.Verify(packagePath, updateExePath, identity, runningVersion, feedVersion, App.Log);
     }
 
     /// <summary>
@@ -128,19 +133,11 @@ internal static partial class PackageVerificationCommand
         return File.Exists(candidate) ? candidate : null;
     }
 
-    internal static bool TryParseFeedVersion(string nupkgFileName, out Version version)
+    internal static bool TryParseFeedVersion(string nupkgFileName, out string version)
     {
         var match = NupkgNamePattern().Match(nupkgFileName);
-        if (!match.Success)
-        {
-            version = new Version(0, 0, 0);
-            return false;
-        }
-        version = new Version(
-            int.Parse(match.Groups["major"].Value),
-            int.Parse(match.Groups["minor"].Value),
-            int.Parse(match.Groups["patch"].Value));
-        return true;
+        version = match.Success ? match.Groups["version"].Value : "";
+        return match.Success;
     }
 
     private static void WriteReport(string reportPath, string text)

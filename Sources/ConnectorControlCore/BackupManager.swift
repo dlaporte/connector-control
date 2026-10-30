@@ -22,7 +22,7 @@ public struct BackupManager: Sendable {
         let fm = FileManager.default
         guard fm.fileExists(atPath: url.path) else { return }
         let series = url.deletingPathExtension().lastPathComponent
-        let dest = originalSnapshotPath(series: series)
+        let dest = originalPath(series: series)
         guard !fm.fileExists(atPath: dest.path) else { return }
         // Written like every other private file (created 0600, atomically), not
         // copied: copyItem would inherit the source's mode — Claude's config is
@@ -34,11 +34,19 @@ public struct BackupManager: Sendable {
     /// The `.original.json` snapshot's URL for a series — what `ensureOriginalSnapshot`
     /// writes once and never prunes — when it exists on disk; nil otherwise.
     public func originalSnapshotURL(series: String) -> URL? {
-        let dest = originalSnapshotPath(series: series)
+        let dest = originalPath(series: series)
         return FileManager.default.fileExists(atPath: dest.path) ? dest : nil
     }
 
-    private func originalSnapshotPath(series: String) -> URL {
+    /// Every backup the Restore sheet offers for a series: the timestamped ones newest first, then
+    /// the first-run original when there is one.
+    public func restorableBackups(series: String) throws -> [URL] {
+        var found = try backups(series: series)
+        if let original = originalSnapshotURL(series: series) { found.append(original) }
+        return found
+    }
+
+    private func originalPath(series: String) -> URL {
         backupsDir.appendingPathComponent("\(series).original.json")
     }
 

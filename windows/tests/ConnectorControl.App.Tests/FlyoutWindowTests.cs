@@ -612,4 +612,69 @@ public class FlyoutWindowTests
             Collect(child, found);
         }
     }
+
+    [Fact]
+    public void TheOfferShowsUntilAnsweredAndWaitsBehindAnError()
+    {
+        using var h = new AppStateHarness { ControlToolPath = "/x/connector-control" };
+        using var state = h.Create();
+        var services = h.Services();
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            using var model = new FlyoutModel(state, h.Settings);
+            var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates, h.Dialogs));
+            try
+            {
+                Layout(window);
+                Assert.Equal(Visibility.Visible, window.ClaudeOfferStrip.Visibility);
+                Assert.Equal(ClaudeIntegration.OfferNotNowButton, window.ClaudeOfferNotNow.Content);
+                Assert.Equal(ClaudeIntegration.OfferTurnOnButton, window.ClaudeOfferTurnOn.Content);
+                state.LastError = "Something failed.";
+                Assert.Equal(Visibility.Collapsed, window.ClaudeOfferStrip.Visibility);
+                state.LastError = null;
+                Assert.Equal(Visibility.Visible, window.ClaudeOfferStrip.Visibility);
+                window.ClaudeOfferNotNow.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                Assert.Equal(Visibility.Collapsed, window.ClaudeOfferStrip.Visibility);
+                Assert.True(h.Settings.ClaudeIntegrationOfferAnswered);
+                Assert.False(h.Settings.ClaudeIntegrationEnabled);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void TurnOnWhenTheWriteFailsShowsTheRetryFooterAndHidesTheOffer()
+    {
+        using var h = new AppStateHarness { ControlToolPath = "/x/connector-control" };
+        using var state = h.Create();
+        h.Drain();
+        File.WriteAllText(h.ClaudeConfigPath, "{oops");
+        var services = h.Services();
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            using var model = new FlyoutModel(state, h.Settings);
+            var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates, h.Dialogs));
+            try
+            {
+                Layout(window);
+                window.ClaudeOfferTurnOn.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                h.Drain();
+                Assert.True(h.Settings.ClaudeIntegrationOfferAnswered);
+                Assert.True(h.Settings.ClaudeIntegrationEnabled);
+                Assert.NotNull(state.LastError);
+                Assert.Equal(Visibility.Collapsed, window.ClaudeOfferStrip.Visibility);
+                Assert.Equal(Visibility.Visible, window.FooterPanel.Visibility);
+                Assert.Equal("Apply Failed — Retry", window.FooterTitle.Text);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
 }

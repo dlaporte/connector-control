@@ -8,7 +8,7 @@
 #                               deliberate goldens-regeneration skip, stops the run here
 #   mac              (macos-15) .github/workflows/mac-build.yml: build, sign, notarize, DMG,
 #                               appcast -> artifact "mac-dmg-appcast". preview.yml calls the
-#                               same file, without the appcast.
+#                               same file.
 #   windows          (windows)  .github/workflows/windows-build.yml with require-signing: true —
 #                               that file's own gate job proves all six Windows signing secrets
 #                               exist (a release is never unsigned) before test, then matrix
@@ -16,14 +16,17 @@
 #                               then silent install + launch of the x64 package with the
 #                               signature required and the arm64 Setup.exe signature checked.
 #                               preview.yml calls the same file.
-#   publish          (ubuntu)   the ONLY writer: creates the release WITH the DMG and appcast
+#   publish          (ubuntu)   the writer: creates the release WITH the DMG and appcast
 #                               attached (so it is never "latest" without its feed), uploads the
 #                               Windows assets (never overwriting a published one), verifies
 #                               releases/latest and the served appcast (version, build,
 #                               enclosure, EdDSA signature)
+#   preview-feed     (ubuntu)   after publish: copies the release's appcast onto the Mac preview
+#                               feed, so preview installs move on to this release. Allowed to
+#                               fail without failing the release (see the job).
 #
 # Trigger: exact vX.Y.Z tags only (see below). workflow_dispatch runs everything EXCEPT
-# publish — a rehearsal that cannot create a release (its version input names the
+# publish and preview-feed — a rehearsal that cannot create a release (its version input names the
 # CHANGELOG section and stamps the packages; the artifacts are the only output).
 #
 # Required secrets. The Mac set belongs in the "signing" GitHub Environment (Settings ▸
@@ -63,7 +66,7 @@ on:
         required: true
         type: string
 
-# Read-only by default; only the publish job raises this to contents: write.
+# Read-only by default; only the publish and preview-feed jobs raise this to contents: write.
 permissions:
   contents: read
 
@@ -159,11 +162,8 @@ jobs:
     # preview.yml calls. Its one job names the "signing" environment, and its header lists the
     # Mac secrets and says why they arrive by inherit rather than by name.
     #
-    # Not yet proved end to end from here. A preview run proves mac-build.yml itself (preview-6
-    # is its first), but only this caller passes appcast-tag, so the notes download, the
-    # Sparkle appcast and the mac-dmg-appcast upload first run in the full release rehearsal
-    # from master that is owed before v1.4.0. The master gate above keeps a dispatch from any
-    # other branch from rehearsing it sooner, deliberately.
+    # preview.yml passes appcast-tag too, so every preview run, dry or real, exercises the notes
+    # download, the Sparkle appcast and the mac-dmg-appcast upload this release depends on.
     uses: ./.github/workflows/mac-build.yml
     with:
       version: ${{ needs.prepare.outputs.version }}
@@ -200,7 +200,8 @@ jobs:
   publish:
     name: Publish release
     needs: [prepare, mac, windows]
-    # The only job that writes anything. A workflow_dispatch rehearsal never reaches it.
+    # Writes the release; preview-feed, after it, writes only the preview feed. A
+    # workflow_dispatch rehearsal reaches neither.
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -314,8 +315,56 @@ jobs:
           # An unsigned item is refused by Sparkle at update time and looks perfectly fine on
           # the release page — the failure mode is "1.3.0 is live, nobody's Mac updates".
           grep -q 'sparkle:edSignature="[^"][^"]*"' served-appcast.xml || { echo "::error::served appcast item carries no EdDSA signature"; exit 1; }
+          # The feed's own signature: SURequireSignedFeed makes Sparkle reject an appcast without
+          # its sparkle-signatures block, however well its item is signed.
+          grep -q 'sparkle-signatures:' served-appcast.xml || { echo "::error::served appcast carries no sparkle-signatures block"; exit 1; }
           {
             echo "## Sparkle appcast for $TAG"
             echo
             echo "- releases/latest: $LATEST; appcast redirect: $REDIRECT; build $BUILD"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  preview-feed:
+    name: Update the Mac preview feed
+    needs: [prepare, publish]
+    # Mac preview installs read the preview feed, not releases/latest; this copies the release's
+    # published appcast onto it so they are offered this release (scripts/release/
+    # update-preview-feed.sh, the script preview.yml calls, which never moves the feed
+    # backwards). A separate job rather than a step in publish, so the preview feed can never
+    # fail, delay or interleave with the release: it starts only once publish has created and
+    # verified the release, releases/latest and the stable appcast, and nothing runs after it.
+    # continue-on-error keeps the run green when it fails — the release is out and correct —
+    # while the job still shows red, with its error annotation, in the run's graph; Re-run this
+    # job retries only the feed. Stable installs never read the feed, so a failure here only
+    # leaves preview installs on their preview until the job is re-run or the next preview
+    # publishes.
+    if: github.event_name == 'push'
+    continue-on-error: true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    # Shared with preview.yml's job of the same name: the feed's compare-then-replace is not
+    # atomic, and a preview and a release publishing at once must not interleave it.
+    concurrency:
+      group: preview-feed
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Update and verify the preview feed
+        run: |
+          if ! ./scripts/release/update-preview-feed.sh "$TAG"; then
+            echo "::error title=Preview feed not updated::$TAG is released and the stable feed is verified, but Mac preview installs were not pointed at it. Re-run this job; the release itself needs nothing."
+            {
+              echo "## Preview feed NOT updated"
+              echo
+              echo "$TAG is released and verified. Mac preview installs are not offered it until this job is re-run (or the next preview publishes)."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

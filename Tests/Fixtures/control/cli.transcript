@@ -1,0 +1,13 @@
+# The command-line tool is the user: a gated change applies without asking, and it alone may change the two Claude settings.
+#! caller cli
+> {"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"connector-control","version":"1.2.2"}}}
+< {"id":0,"jsonrpc":"2.0","result":{"capabilities":{"tools":{}},"protocolVersion":"2025-11-25","serverInfo":{"name":"connector-control","version":"1.2.2"}}}
+> {"jsonrpc":"2.0","method":"notifications/initialized"}
+> {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"add_connector","arguments":{"name":"notion","config":{"command":"npx","args":["-y","@notionhq/notion-mcp-server"],"env":{"NOTION_TOKEN":"${CC_NEEDS:NOTION_TOKEN}"}}}}}
+< {"id":1,"jsonrpc":"2.0","result":{"content":[{"text":"Added “notion” to “Default”, switched on.\nIt needs a value for “NOTION_TOKEN”: fill it in Connector Control.","type":"text"}],"isError":false,"structuredContent":{"applied":true,"collection":"Default","enabled":true,"name":"notion","needs":["NOTION_TOKEN"],"restartRequired":false}}}
+> {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"set_setting","arguments":{"key":"confirm-claude-changes","value":"off"}}}
+< {"id":2,"jsonrpc":"2.0","result":{"content":[{"text":"confirm-claude-changes is now off.","type":"text"}],"isError":false,"structuredContent":{"applied":true,"key":"confirm-claude-changes","restartRequired":false,"value":false}}}
+> {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"set_setting","arguments":{"key":"claude-integration","value":"off"}}}
+< {"id":3,"jsonrpc":"2.0","result":{"content":[{"text":"Claude integration is off.","type":"text"}],"isError":false,"structuredContent":{"applied":true,"key":"claude-integration","restartRequired":false,"value":false}}}
+> {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_settings","arguments":{}}}
+< {"id":4,"jsonrpc":"2.0","result":{"content":[{"text":"launch-at-login           off\nconfirm-restart           on\nconfirm-quit              on\nnotify-external-changes   on\nautomatic-updates         off\nbackups-to-keep           20\nclaude-integration        off\nconfirm-claude-changes    off","type":"text"}],"isError":false,"structuredContent":{"settings":{"automatic-updates":false,"backups-to-keep":20,"claude-integration":false,"confirm-claude-changes":false,"confirm-quit":true,"confirm-restart":true,"launch-at-login":false,"notify-external-changes":true}}}}

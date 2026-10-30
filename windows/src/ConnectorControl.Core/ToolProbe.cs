@@ -190,7 +190,7 @@ public sealed class ToolProbe : IToolProbe
     /// A .cmd/.bat launcher needs the command interpreter (<c>cmd.exe /d /c "path" --version</c>);
     /// everything else runs directly. No console window, stdin not inherited.
     /// </summary>
-    private static ProcessStartInfo StartInfo(string path)
+    internal static ProcessStartInfo StartInfo(string path)
     {
         var info = new ProcessStartInfo
         {
@@ -204,7 +204,7 @@ public sealed class ToolProbe : IToolProbe
         if (OperatingSystem.IsWindows()
             && (ext.Equals(".cmd", StringComparison.OrdinalIgnoreCase) || ext.Equals(".bat", StringComparison.OrdinalIgnoreCase)))
         {
-            info.FileName = "cmd.exe";
+            info.FileName = SystemPrograms.CommandInterpreter;
             info.ArgumentList.Add("/d");
             info.ArgumentList.Add("/c");
             info.ArgumentList.Add(path);

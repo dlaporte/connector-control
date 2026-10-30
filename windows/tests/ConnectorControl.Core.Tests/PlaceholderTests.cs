@@ -59,4 +59,16 @@ public class PlaceholderTests
         Assert.Equal(JsonValue.String(@"C:\Users\d\Acme\mcp"), expanded.ValueAt(new JsonPointer(["env", "ROOT"])));
         Assert.False(Placeholder.UsesDirectoryToken(expanded));
     }
+
+    /// <summary>A combining mark after a marker's closing brace does not hide the marker: the brace is found
+    /// unit by unit, as the Mac mirror finds it scalar by scalar, so both read the same names.</summary>
+    [Fact]
+    public void ACombiningMarkAfterTheClosingBraceKeepsTheMarker()
+    {
+        Assert.Equal(["KEY"], Placeholder.NamesIn("${CC_NEEDS:KEY}\u0301"));
+        Assert.Equal(["A", "B"], Placeholder.NamesIn("${CC_NEEDS:A}\u0301${CC_NEEDS:B}"));
+        Assert.Empty(Placeholder.NamesIn("${CC_NEEDS:\u0301KEY}"));
+        Assert.Empty(Placeholder.NamesIn("x${CC_NEEDS:KEY"));
+        Assert.Equal(["KEY"], Placeholder.UnfilledNamesIn(JsonValue.Object(("env", JsonValue.Object(("K", JsonValue.String("${CC_NEEDS:KEY}\u0301")))))));
+    }
 }

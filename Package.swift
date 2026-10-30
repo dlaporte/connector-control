@@ -4,6 +4,12 @@ import PackageDescription
 let package = Package(
     name: "ConnectorControl",
     platforms: [.macOS(.v14)],
+    products: [
+        .executable(name: "ConnectorControl", targets: ["ConnectorControl"]),
+        // The command-line tool build-app.sh puts at Contents/MacOS/connector-control.
+        .executable(name: "connector-control", targets: ["ConnectorControlCLI"]),
+        .executable(name: "connector-control-test-host", targets: ["ConnectorControlTestHost"]),
+    ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.0"),
     ],
@@ -15,11 +21,26 @@ let package = Package(
         .target(
             name: "ConnectorControlState",
             dependencies: ["ConnectorControlCore"]),
+        // Everything between bytes and ControlTools: the server the apps run, the client and relay
+        // the command-line tool runs, and the Mac's socket. Foundation only, so it runs under
+        // `swift test`; the Windows port keeps the same code in ConnectorControl.Core/Transport.
+        .target(
+            name: "ConnectorControlTransport",
+            dependencies: ["ConnectorControlCore", "ConnectorControlState"]),
+        .executableTarget(
+            name: "ConnectorControlCLI",
+            dependencies: ["ConnectorControlCore", "ConnectorControlState", "ConnectorControlTransport"]),
+        // The real control layer over a sandbox folder, headless, for the MCP Inspector and the relay
+        // checks in CI. Never shipped: build-app.sh builds only the app and the tool.
+        .executableTarget(
+            name: "ConnectorControlTestHost",
+            dependencies: ["ConnectorControlCore", "ConnectorControlState", "ConnectorControlTransport"]),
         .executableTarget(
             name: "ConnectorControl",
             dependencies: [
                 "ConnectorControlCore",
                 "ConnectorControlState",
+                "ConnectorControlTransport",
                 .product(name: "Sparkle", package: "Sparkle"),
             ]),
         // Test support shared by both test targets (TempDir, fixtures, ACL
@@ -36,6 +57,10 @@ let package = Package(
             dependencies: ["ConnectorControlCore", "ConnectorControlTestSupport"]),
         .testTarget(
             name: "ConnectorControlStateTests",
-            dependencies: ["ConnectorControlState", "ConnectorControlTestSupport"]),
+            dependencies: ["ConnectorControlState", "ConnectorControlTransport", "ConnectorControlTestSupport"]),
+        // The app's own views, where a test needs AppKit's layout: the confirmation dialog's code lines.
+        .testTarget(
+            name: "ConnectorControlAppTests",
+            dependencies: ["ConnectorControl", "ConnectorControlState"]),
     ]
 )

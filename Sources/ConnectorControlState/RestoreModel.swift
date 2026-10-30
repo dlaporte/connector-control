@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import ConnectorControlCore
 
 /// RestoreSheetView state. The confirmation is a sheet:
 /// requestRestore opens it (and clears the previous attempt's error),
@@ -25,6 +26,9 @@ public final class RestoreModel: ObservableObject {
     @Published public private(set) var restoreError: String?
     /// True while the confirmation sheet is up.
     @Published public private(set) var confirming = false
+    /// What the confirmation was asked about: the selected backup's record and content as Restore
+    /// read them, so what is restored is the backup as it was when the user was asked.
+    private var asked: (backup: URL, recorded: String?, data: Data)?
 
     public init(state: AppState) {
         self.state = state
@@ -38,11 +42,7 @@ public final class RestoreModel: ObservableObject {
 
     public func load() {
         do {
-            var found = try state.service.backups.backups(series: RestoreModel.series)
-            if let original = state.service.backups.originalSnapshotURL(series: RestoreModel.series) {
-                found.append(original)
-            }
-            backups = found
+            backups = try state.service.backups.restorableBackups(series: RestoreModel.series)
         } catch {
             restoreError = error.localizedDescription
         }
@@ -55,23 +55,37 @@ public final class RestoreModel: ObservableObject {
     /// sheet opens.
     public func requestRestore() {
         restoreError = nil
+        asked = nil
         guard let backup = selection else { return }
-        if let refusal = state.restoreRefusal(for: backup) {
+        let recorded = BackupCollections.collection(of: backup, in: state.service.paths.backupsDirURL)
+        if let refusal = state.restoreRefusal(forRecorded: recorded) {
             restoreError = refusal.localizedDescription
+            return
+        }
+        // A backup that cannot be read says so at once, as a refusal does: there is nothing to ask about.
+        // Platform idiom: every error lands here; the Windows mirror catches the I/O and access errors
+        // a read throws.
+        do {
+            asked = (backup, recorded, try BoundedRead.data(at: backup, limit: ConfigService.maxBackupBytes))
+        } catch {
+            restoreError = error.localizedDescription
             return
         }
         confirming = true
     }
 
+    /// Leaves `asked` alone: SwiftUI may close the confirmation, which lands here, before it runs the
+    /// Restore button's action, and the next `requestRestore()` replaces it anyway.
     public func cancelRestore() { confirming = false }
 
     /// The sheet's Restore button: restore through AppState (which syncs the
     /// baseline). True when restored and the sheet should close.
     public func confirmRestore() -> Bool {
         confirming = false
-        guard let backup = selection else { return false }
+        guard let asked else { return false }
+        self.asked = nil
         do {
-            try state.restoreClaudeConfig(from: backup)
+            try state.restoreClaudeConfig(from: asked.backup, data: asked.data, recorded: asked.recorded)
             return true
         } catch let refusal as RestoreError {
             // A refusal is the sheet's alone, as the one before the confirmation is: nothing was

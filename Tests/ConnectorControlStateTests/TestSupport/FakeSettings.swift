@@ -9,6 +9,9 @@ final class FakeSettings: AppSettings {
     var notifyExternalChanges = true
     var confirmBeforeRestart = true
     var confirmBeforeQuit = true
+    var claudeIntegrationEnabled = false
+    var confirmClaudeChanges = true
+    var claudeIntegrationOfferAnswered = false
     var lastApplyDate: Date?
     var sweepVersion = 0
 }

@@ -5,9 +5,10 @@ namespace ConnectorControl.App.Views;
 
 /// <summary>
 /// IDialogs on WPF. Given a window — the editor's, whose dialogs center on it — or given none,
-/// which is App's instance, shared by AppState, the update coordinator and the Collections window's
-/// model: that one centers on whichever of our windows is active, and with none of ours up it
-/// centers on screen and is forced to the front, like the Mac's NSApp.activate before NSAlert.
+/// which is App's instance, shared by AppState, the update coordinator, the confirmer of Claude's
+/// changes and the Collections window's model: that one centers on whichever of our windows is
+/// active, and with none of ours up it centers on screen above every other window and asks to be
+/// activated (see <see cref="Present"/>).
 /// <see cref="Present"/> is also how every dialog here is shown, Settings' Restore and the
 /// Collections window's five among them.
 /// </summary>
@@ -44,6 +45,8 @@ public sealed class WpfDialogs : IDialogs
     public bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown) =>
         UpdateDialog.Show(ResolveOwner(), newVersion, currentVersion, notesMarkdown);
 
+    public bool ConfirmChange(ConfirmationDialog dialog) => ConfirmDialog.ShowChange(ResolveOwner(), dialog);
+
     internal static void Present(Window dialog, Window? owner)
     {
         if (owner is { IsVisible: true })
@@ -53,6 +56,11 @@ public sealed class WpfDialogs : IDialogs
         }
         else
         {
+            // Platform idiom: the Mac activates the app before its alert and so takes the keyboard from
+            // whatever is in front. Here the dialog is drawn above every other window, Claude's included, and
+            // asks to be activated once loaded; Windows' foreground lock can refuse that to an app in the
+            // background. The keys then stay with the app in front and none reaches the dialog, which is
+            // safe: it is answered with a click.
             dialog.WindowStartupLocation = WindowStartupLocation.CenterScreen;
             dialog.Topmost = true;
         }

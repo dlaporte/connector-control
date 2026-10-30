@@ -29,6 +29,9 @@ final class UserDefaultsSettingsTests: XCTestCase {
         XCTAssertTrue(settings.confirmBeforeQuit)
         XCTAssertNil(settings.lastApplyDate)
         XCTAssertEqual(settings.sweepVersion, 0)
+        XCTAssertFalse(settings.claudeIntegrationEnabled)
+        XCTAssertTrue(settings.confirmClaudeChanges)
+        XCTAssertFalse(settings.claudeIntegrationOfferAnswered)
 
         let applied = Date(timeIntervalSince1970: 1_788_523_200)
         settings.masterStoreDir = "/tmp/synced"
@@ -39,6 +42,9 @@ final class UserDefaultsSettingsTests: XCTestCase {
         settings.confirmBeforeQuit = false
         settings.lastApplyDate = applied
         settings.sweepVersion = 2
+        settings.claudeIntegrationEnabled = true
+        settings.confirmClaudeChanges = false
+        settings.claudeIntegrationOfferAnswered = true
 
         // Read back through a second instance over the same suite: the values are on disk, under DefaultsKey's names.
         let again = UserDefaultsSettings(defaults: defaults)
@@ -50,6 +56,10 @@ final class UserDefaultsSettingsTests: XCTestCase {
         XCTAssertFalse(again.confirmBeforeQuit)
         XCTAssertEqual(again.lastApplyDate, applied)
         XCTAssertEqual(again.sweepVersion, 2)
+        XCTAssertTrue(again.claudeIntegrationEnabled)
+        XCTAssertFalse(again.confirmClaudeChanges)
+        XCTAssertTrue(again.claudeIntegrationOfferAnswered)
+        XCTAssertEqual(defaults.object(forKey: DefaultsKey.claudeIntegrationEnabled.rawValue) as? Bool, true)
         XCTAssertEqual(defaults.string(forKey: DefaultsKey.masterStoreDir.rawValue), "/tmp/synced")
 
         // nil removes the key.

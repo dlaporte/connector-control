@@ -325,6 +325,9 @@ public struct RenderedCollection: Equatable, Sendable {
 /// Mirror: windows/src/ConnectorControl.Core/CollectionDocument.cs
 public struct CollectionDocument: Equatable, Sendable {
     public static let formatVersion = 1
+    /// Why a document is refused when it does not parse: fixed words, alike on both platforms, that quote
+    /// nothing from the file.
+    public static let notJSONError = "not JSON"
     public static let fileExtension = "json"
 
     /// The document's name in a publish folder: the slug publishing fixed, never re-derived from
@@ -423,7 +426,7 @@ public struct CollectionDocument: Equatable, Sendable {
 
     public static func decode(_ data: Data) throws -> CollectionDocument {
         let json: JSONValue
-        do { json = try JSONValue.parse(data) } catch { throw CollectionDocumentError.malformed("not JSON: \(error.localizedDescription)") }
+        do { json = try JSONValue.parse(data) } catch { throw CollectionDocumentError.malformed(notJSONError) }
         return try decode(json)
     }
 
@@ -452,7 +455,14 @@ public struct CollectionDocument: Equatable, Sendable {
 
     public func render() -> RenderedCollection {
         var out: [String: RenderedConnector] = [:]
+        var excluded: [String: String] = [:]
         for (name, connector) in connectors {
+            // Connector Control adds an entry of this name on each machine itself; a document's
+            // connector under it could never be told apart from that entry in Claude's config.
+            if name == MasterStore.reservedConnectorName {
+                excluded[name] = MasterStore.reservedConnectorNameError
+                continue
+            }
             let env = connector.env.reduce(into: [String: String]()) { acc, pair in
                 switch pair.value {
                 case .hint: acc[pair.key] = Placeholder.marker(pair.key)
@@ -489,9 +499,9 @@ public struct CollectionDocument: Equatable, Sendable {
             }
             out[name] = RenderedConnector(config: config, needs: needs, authoredOn: authoredOn)
         }
-        // The Windows build excludes connectors the cmd /c launcher cannot carry safely; a Mac
-        // never writes that launcher, so nothing is excluded here.
-        return RenderedCollection(connectors: out, excluded: [:])
+        // The Windows build also excludes connectors the cmd /c launcher cannot carry safely; a Mac
+        // never writes that launcher.
+        return RenderedCollection(connectors: out, excluded: excluded)
     }
 
     /// A remote connector's `additional` fields (whatever the form the config came from cannot

@@ -75,6 +75,24 @@ final class JSONValueTests: XCTestCase {
         }
     }
 
+    /// A number written with a fraction or an exponent that is a whole number reads as that integer
+    /// exactly, past where a double is exact; the 64-bit extremes read as doubles, as `JSONDecoder` gives
+    /// them. The Windows mirror reads the token itself to give the same.
+    func testWholeNumbersWithAFractionOrExponentReadExactly() throws {
+        let cases: [(String, JSONValue)] = [
+            ("9007199254740993.0", .int(9_007_199_254_740_993)),
+            ("123456789012345678.0", .int(123_456_789_012_345_678)),
+            ("1234567890123456780e-1", .int(123_456_789_012_345_678)),
+            ("-9223372036854775807.0", .int(-9_223_372_036_854_775_807)),
+            ("-9223372036854775808.0", .double(-9_223_372_036_854_775_808.0)),
+            ("9223372036854775807.0", .double(9_223_372_036_854_775_808.0)),
+            ("1e19", .double(1e19)),
+        ]
+        for (text, expected) in cases {
+            XCTAssertEqual(try JSONValue.parse(Data("[\(text)]".utf8)), .array([expected]), text)
+        }
+    }
+
     func testIntAndDoubleWithSameValueAreDifferentKinds() {
         XCTAssertNotEqual(JSONValue.int(2), JSONValue.double(2.0))
     }
@@ -93,6 +111,11 @@ final class JSONValueTests: XCTestCase {
         XCTAssertThrowsError(try JSONValue.parse(Data(#"{"a": 1"#.utf8)))
     }
 
+    func testAnEscapedLoneSurrogateThrows() {
+        XCTAssertThrowsError(try JSONValue.parse(Data(#""\ud800""#.utf8)))
+        XCTAssertThrowsError(try JSONValue.parse(Data(#"{"\udc00":1}"#.utf8)))
+    }
+
     /// A file saved by an editor that writes a BOM (common on Windows) must
     /// still parse — Foundation's JSONDecoder skips it.
     func testUtf8BomIsAccepted() throws {
@@ -105,5 +128,28 @@ final class JSONValueTests: XCTestCase {
         XCTAssertEqual(try JSONValue.parse(Data("42".utf8)), .int(42))
         XCTAssertEqual(try JSONValue.parse(Data(#""hello""#.utf8)), .string("hello"))
         XCTAssertEqual(try JSONValue.parse(Data("true".utf8)), .bool(true))
+    }
+
+    /// A comma before a closing bracket or brace is refused, as the Windows reader refuses it, where
+    /// `JSONDecoder` reads one; a comma or bracket inside a string is only text.
+    func testATrailingCommaIsRefused() {
+        for text in ["[1,]", #"{"a":1,}"#, "[1 , \n\t\r ]", #"[[1,],2]"#, #"{"a":{"b":[],},"c":1}"#] {
+            XCTAssertThrowsError(try JSONValue.parse(Data(text.utf8)), text)
+        }
+        XCTAssertEqual(try JSONValue.parse(Data(#"["a,]",",}"]"#.utf8)), .array([.string("a,]"), .string(",}")]))
+        XCTAssertEqual(try JSONValue.parse(Data(#"{"a":"x\",}"}"#.utf8)), .object(["a": .string(#"x",}"#)]))
+        XCTAssertEqual(try JSONValue.parse(Data("[1, 2]".utf8)), .array([.int(1), .int(2)]))
+    }
+
+    /// Arrays and objects nest at most 64 deep, as the Windows reader allows, so a document reads
+    /// the same on both platforms; brackets inside a string do not count.
+    func testNestingDeeperThan64IsRefused() {
+        func nested(_ depth: Int) -> Data {
+            Data((String(repeating: "[", count: depth) + String(repeating: "]", count: depth)).utf8)
+        }
+        XCTAssertNoThrow(try JSONValue.parse(nested(64)))
+        XCTAssertThrowsError(try JSONValue.parse(nested(65)))
+        XCTAssertThrowsError(try JSONValue.parse(nested(70)))
+        XCTAssertNoThrow(try JSONValue.parse(Data(("[\"" + String(repeating: "[", count: 70) + "\"]").utf8)))
     }
 }

@@ -47,4 +47,14 @@ final class PlaceholderTests: XCTestCase {
         XCTAssertEqual(expanded.value(at: JSONPointer(["env", "ROOT"])), .string("/Users/d/Acme/mcp"))
         XCTAssertFalse(Placeholder.usesDirectoryToken(expanded))
     }
+
+    /// A combining mark after a marker's closing brace does not hide the marker: the brace is found
+    /// scalar by scalar, as the Windows mirror finds it unit by unit, so both read the same names.
+    func testACombiningMarkAfterTheClosingBraceKeepsTheMarker() {
+        XCTAssertEqual(Placeholder.names(in: "${CC_NEEDS:KEY}\u{301}"), ["KEY"])
+        XCTAssertEqual(Placeholder.names(in: "${CC_NEEDS:A}\u{301}${CC_NEEDS:B}"), ["A", "B"])
+        XCTAssertEqual(Placeholder.names(in: "${CC_NEEDS:\u{301}KEY}"), [])
+        XCTAssertEqual(Placeholder.names(in: "x${CC_NEEDS:KEY"), [])
+        XCTAssertEqual(Placeholder.unfilledNames(in: .object(["env": .object(["K": .string("${CC_NEEDS:KEY}\u{301}")])])), ["KEY"])
+    }
 }

@@ -261,7 +261,7 @@ final class AppStateWatcherTests: XCTestCase {
         XCTAssertThrowsError(try state.restoreClaudeConfig(from: bad)) { error in
             XCTAssertEqual(error as? ClaudeConfigError, .malformed(
                 "backup bad.json is not a valid config file "
-                + "(The data couldn’t be read because it isn’t in the correct format.)"))
+                + "(the text does not parse as JSON)"))
         }
         XCTAssertEqual(try Data(contentsOf: h.claudeConfigURL), before)
     }

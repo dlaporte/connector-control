@@ -21,16 +21,27 @@ public enum Placeholder {
     /// Marker names in order of first appearance; a malformed marker (bad name, no closing brace)
     /// is plain text.
     public static func names(in text: String) -> [String] {
+        // Platform idiom: searched scalar by scalar, as the Windows mirror searches UTF-16 units; a
+        // Swift Character would carry a combining mark after the closing brace along with it, so
+        // the brace would not be found and the marker would read as plain text on the Mac only.
+        let scalars = Array(text.unicodeScalars)
+        let prefix = Array(markerPrefix.unicodeScalars)
         var out: [String] = []
-        var rest = Substring(text)
-        while let range = rest.range(of: markerPrefix) {
-            let afterPrefix = rest[range.upperBound...]
-            guard let close = afterPrefix.firstIndex(of: "}") else { break }
-            let name = String(afterPrefix[..<close])
+        var index = 0
+        while let start = firstIndex(of: prefix, in: scalars, from: index) {
+            let nameStart = start + prefix.count
+            guard let close = scalars[nameStart...].firstIndex(of: "}") else { break }
+            let name = String(String.UnicodeScalarView(scalars[nameStart..<close]))
             if isValidName(name), !out.contains(name) { out.append(name) }
-            rest = afterPrefix[afterPrefix.index(after: close)...]
+            index = close + 1
         }
         return out
+    }
+
+    /// Where `needle` first starts in `scalars` at or after `from`, or nil.
+    private static func firstIndex(of needle: [Unicode.Scalar], in scalars: [Unicode.Scalar], from: Int) -> Int? {
+        guard scalars.count - needle.count >= from else { return nil }
+        return (from...(scalars.count - needle.count)).first { scalars[$0..<($0 + needle.count)].elementsEqual(needle) }
     }
 
     public static func containsMarker(_ text: String) -> Bool { !names(in: text).isEmpty }

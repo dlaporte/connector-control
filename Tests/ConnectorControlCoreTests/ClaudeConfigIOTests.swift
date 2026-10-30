@@ -111,4 +111,77 @@ final class ClaudeConfigIOTests: XCTestCase {
         XCTAssertEqual(Set(try ClaudeConfigIO.readMCPServers(at: url).keys),
                        ["scoutbook", "service-now"])
     }
+
+    /// A key the top level or mcpServers names twice — exactly, or in two spellings Unicode counts as
+    /// the same text — is refused: this app's parser keeps one and Claude's may keep the other.
+    func testARepeatedKeyIsRefusedExactlyOrAsAnEquivalentSpelling() {
+        let repeated = [
+            #"{"x": 1, "x": 2}"#,
+            #"{"mcpServers": {"a": {}, "a": {}}}"#,
+            "{\"mcpServers\": {\"caf\u{E9}\": {}, \"cafe\u{301}\": {}}}",
+            #"{"mcpServers": {"caf\u00e9": {}, "cafe\u0301": {}}}"#,
+            #"{"mcpServers": {"\u0061": {}, "a": {}}}"#,
+            "\u{FEFF}{\"mcpServers\": {\"a\": {}, \"a\": {}}}",
+        ]
+        for json in repeated {
+            XCTAssertThrowsError(try ClaudeConfigIO.requireUniqueKeys(in: Data(json.utf8)), json) {
+                XCTAssertEqual($0 as? ClaudeConfigError, .malformed(ClaudeConfigIO.repeatedKeyError))
+            }
+        }
+    }
+
+    /// A config that is not UTF-8 is refused as malformed, as the Windows reader refuses it, and the key
+    /// check never reads it as UTF-8: a brace inside one of its strings must not count as one.
+    func testAConfigThatIsNotUTF8IsRefusedAsMalformed() throws {
+        let encodings: [String.Encoding] = [.utf16LittleEndian, .utf16BigEndian, .utf16, .utf32LittleEndian, .utf32BigEndian, .utf32]
+        for json in [#"{"k":"∀}}"}"#, #"{"mcpServers":{"a":{},"a":{}}}"#] {
+            for encoding in encodings {
+                let data = try XCTUnwrap(json.data(using: encoding))
+                XCTAssertThrowsError(try ClaudeConfigIO.parseRoot(data), "\(json) \(encoding)") {
+                    guard case ClaudeConfigError.malformed = $0 else { return XCTFail("wrong error: \($0)") }
+                }
+                XCTAssertThrowsError(try ClaudeConfigIO.requireUniqueKeys(in: data), "\(json) \(encoding)") {
+                    guard case ClaudeConfigError.malformed = $0 else { return XCTFail("wrong error: \($0)") }
+                }
+            }
+        }
+    }
+
+    /// Below mcpServers' own names, and inside a string, nothing is refused: the file is written as it
+    /// was parsed, so what Claude reads there is what this app read.
+    func testOnlyTheTopLevelAndTheServersNamesAreChecked() {
+        let unique = [
+            #"{"mcpServers": {"a": {"env": {"K": "1", "K": "2"}}}}"#,
+            #"{"mcpServers": {"a": {}, "b": {}}, "other": {"a": 1, "a": 2}}"#,
+            #"{"k": "{\"a\":1,\"a\":2}", "mcpServers": {"a": [{"b": 1}, {"b": 2}]}, "m": ["x", "x"]}"#,
+            #"{"mcpServers": "a", "other": {"mcpServers": {"a": 1, "a": 2}}}"#,
+            "",
+        ]
+        for json in unique {
+            XCTAssertNoThrow(try ClaudeConfigIO.requireUniqueKeys(in: Data(json.utf8)), json)
+        }
+    }
+
+    /// A Claude config nested deeper than 64 is refused as malformed, as the Windows reader refuses it.
+    func testAConfigNestedDeeperThan64IsRefusedAsMalformed() throws {
+        func config(_ depth: Int) -> Data {
+            Data(("{\"k\":" + String(repeating: "[", count: depth - 1) + String(repeating: "]", count: depth - 1) + "}").utf8)
+        }
+        XCTAssertNoThrow(try ClaudeConfigIO.parseRoot(config(64)))
+        XCTAssertThrowsError(try ClaudeConfigIO.parseRoot(config(65))) {
+            guard case ClaudeConfigError.malformed = $0 else { return XCTFail("wrong error: \($0)") }
+        }
+        XCTAssertThrowsError(try ClaudeConfigIO.parseRoot(config(70)))
+    }
+
+    /// A Claude config with a trailing comma is refused as malformed, as the Windows reader and Claude
+    /// Desktop refuse it, where JSONSerialization reads one.
+    func testAConfigWithATrailingCommaIsRefusedAsMalformed() throws {
+        for text in [#"{"mcpServers":{},}"#, #"{"mcpServers":{"a":{"command":"npx","args":["x",]}}}"#] {
+            XCTAssertThrowsError(try ClaudeConfigIO.parseRoot(Data(text.utf8)), text) {
+                guard case ClaudeConfigError.malformed = $0 else { return XCTFail("wrong error: \($0)") }
+            }
+        }
+        XCTAssertNoThrow(try ClaudeConfigIO.parseRoot(Data(#"{"mcpServers":{"a":{"command":",}"}}}"#.utf8)))
+    }
 }

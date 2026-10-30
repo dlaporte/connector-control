@@ -2,6 +2,7 @@ import XCTest
 import ConnectorControlCore
 import ConnectorControlTestSupport
 @testable import ConnectorControlState
+@testable import ConnectorControlTransport
 
 /// Mirror: windows/tests/ConnectorControl.Core.Tests/State/StringCatalogTests.cs
 ///
@@ -101,10 +102,114 @@ final class StringCatalogTests: XCTestCase {
         "CollectionsModel.editLabel": ["X"],
         "CollectionsModel.selectedCount": ["3"],
         "CollectionsModel.stopSyncingMessage": ["X"],
+        "CommandLineToolText.installFailedError": ["X"],
+        "CommandLineToolText.installedInText": ["X"],
+        "CommandLineToolText.missingToolError": ["X"],
+        "CommandLineToolText.occupiedError": ["X"],
+        "CommandLineToolText.removeFailedError": ["X"],
+        "CommandLineToolText.scriptsCaption": ["X"],
         "ConfigService.corruptStoreNote": ["X"],
         "ConfigService.corruptStoreRestoredNote": ["X", "Y"],
         "ConfigService.invalidBackupError": ["X", "Y"],
         "ConfigService.invalidBackupMcpServersError": ["X"],
+        "ControlCaller.callingItselfText": ["X"],
+        "ControlCommandLine.missingValueError": ["X"],
+        "ControlCommandLine.unknownCommandError": ["X"],
+        "ControlCommandLine.unknownOptionError": ["X"],
+        "ControlCommandLine.usageError": ["X"],
+        "ControlCommandLine.versionLine": ["X"],
+        "ControlMasking.assignment": ["X", "Y"],
+        "ControlMasking.oauthClientText": ["X", "Y"],
+        "ControlMasking.remoteBridgeType": ["X"],
+        "ControlTools.addActiveMessage": ["X", "Y"],
+        "ControlTools.addMessage": ["X", "Y"],
+        "ControlTools.addTitle": ["X", "Y"],
+        "ControlTools.addedNotification": ["X", "Y", "Z"],
+        "ControlTools.addedText": ["X", "Y", "Z"],
+        "ControlTools.addsClause": ["X"],
+        "ControlTools.appliedUpdateNotification": ["X", "Y"],
+        "ControlTools.appliedUpdateText": ["X"],
+        "ControlTools.applyUpdateTitle": ["X", "Y"],
+        "ControlTools.arrivedOffText.many": ["3"],
+        "ControlTools.arrivedOffText.one": ["1"],
+        "ControlTools.changeActiveMessage": ["X"],
+        "ControlTools.changeMessage": ["X"],
+        "ControlTools.changeTitle": ["X", "Y"],
+        "ControlTools.changedNotification": ["X", "Y", "Z"],
+        "ControlTools.changedText": ["X", "Y"],
+        "ControlTools.changesClause": ["X"],
+        "ControlTools.connectorCountText": ["3", "7"],
+        "ControlTools.createdText": ["X"],
+        "ControlTools.deleteActiveMessage": ["X"],
+        "ControlTools.deleteCollectionTitle": ["X", "Y"],
+        "ControlTools.deleteMessage": ["X"],
+        "ControlTools.deleteTitle": ["X", "Y"],
+        "ControlTools.deletedCollectionNotification": ["X", "Y"],
+        "ControlTools.deletedCollectionText": ["X"],
+        "ControlTools.deletedNotification": ["X", "Y", "Z"],
+        "ControlTools.deletedText": ["X", "Y"],
+        "ControlTools.deletesClause": ["X"],
+        "ControlTools.detail": ["X", "Y"],
+        "ControlTools.documentTooLargeError": ["X"],
+        "ControlTools.duplicateSubscribedError": ["X"],
+        "ControlTools.duplicatedText": ["X", "Y"],
+        "ControlTools.emptyCollectionText": ["X"],
+        "ControlTools.fromFooter": ["X"],
+        "ControlTools.importMessage.many": ["3", "X"],
+        "ControlTools.importMessage.one": ["1", "X"],
+        "ControlTools.importNewMessage.many": ["3", "X"],
+        "ControlTools.importNewMessage.one": ["1", "X"],
+        "ControlTools.importReplacingMessage.many": ["3", "X"],
+        "ControlTools.importReplacingMessage.one": ["1", "X"],
+        "ControlTools.importTitle": ["X", "Y"],
+        "ControlTools.importedNotification.many": ["X", "3", "Y"],
+        "ControlTools.importedNotification.one": ["X", "1", "Y"],
+        "ControlTools.importedReplacingText.many": ["3", "X"],
+        "ControlTools.importedReplacingText.one": ["1", "X"],
+        "ControlTools.importedText.many": ["3", "X"],
+        "ControlTools.importedText.one": ["1", "X"],
+        "ControlTools.installHint": ["X", "Y"],
+        "ControlTools.integrationSetText": ["X"],
+        "ControlTools.missingArgumentError": ["X"],
+        "ControlTools.needsNewerAppError": ["X"],
+        "ControlTools.needsValuesText": ["X"],
+        "ControlTools.noBackupError": ["X"],
+        "ControlTools.noConnectorError": ["X", "Y"],
+        "ControlTools.noUpdateError": ["X"],
+        "ControlTools.notAFileError": ["X"],
+        "ControlTools.notOneOfError": ["X", "Y"],
+        "ControlTools.notSubscribedError": ["X"],
+        "ControlTools.nothingToImportError": ["X"],
+        "ControlTools.pendingUpdateText": ["X", "Y"],
+        "ControlTools.renamedCollectionText": ["X", "Y"],
+        "ControlTools.renamedNotification": ["X", "Y", "Z"],
+        "ControlTools.renamedText": ["X", "Y"],
+        "ControlTools.restartTitle": ["X"],
+        "ControlTools.restoreActivatingText": ["X"],
+        "ControlTools.restoreIntoText": ["X"],
+        "ControlTools.restoreTitle": ["X", "Y"],
+        "ControlTools.restoredNotification": ["X", "Y"],
+        "ControlTools.restoredText": ["X"],
+        "ControlTools.savedNotAppliedText": ["X"],
+        "ControlTools.settingChangedText": ["X", "Y"],
+        "ControlTools.settingNotForClaudeError": ["X"],
+        "ControlTools.statusTitle": ["X"],
+        "ControlTools.subscribeMessage.many": ["X", "3"],
+        "ControlTools.subscribeMessage.one": ["X", "1"],
+        "ControlTools.subscribeTitle": ["X", "Y"],
+        "ControlTools.subscribedNotification": ["X", "Y", "Z"],
+        "ControlTools.subscribedText": ["X", "Y"],
+        "ControlTools.switchValueError": ["X"],
+        "ControlTools.switchedNotification": ["X", "Y"],
+        "ControlTools.switchedText": ["X"],
+        "ControlTools.turnedOffNotification": ["X", "Y"],
+        "ControlTools.turnedOffText": ["X", "Y"],
+        "ControlTools.turnedOnNotification": ["X", "Y"],
+        "ControlTools.turnedOnText": ["X", "Y"],
+        "ControlTools.unchangedError": ["X"],
+        "ControlTools.unknownToolError": ["X"],
+        "ControlTools.upToDateText": ["X"],
+        "ControlTools.wrongTypeError": ["X", "Y"],
         "CopyModel.title": ["X"],
         "EditTarget.editTitle": ["X"],
         "EditorModel.additionalTitle": ["3", "a, b"],
@@ -146,9 +251,9 @@ final class StringCatalogTests: XCTestCase {
         "PublishModel.warningLine": ["X", "Y"],
         "RestoreModel.confirmMessage": ["X"],
         "ReviewModel.title": ["X"],
-        "SettingsModel.keepCountLabel": ["3"],
         "SettingsModel.loginItemFailureNote": ["X"],
         "SettingsModel.versionText": ["X"],
+        "ToolFooterLine.installText": ["X", "Y", "Z"],
         "ToolNote.shellOnlyText": ["X"],
     ]
 
@@ -206,6 +311,12 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.targetMustBeLocalError"] = AppState.targetMustBeLocalError
         actual["AppState.unpublishedDirectoryCaution"] = AppState.unpublishedDirectoryCaution
         actual["AppState.unreviewedConnectorError"] = AppState.unreviewedConnectorError("X")
+        actual["AppVersion.developmentBuild"] = AppVersion.developmentBuild
+
+        // MARK: BoundedRead
+
+        actual["BoundedRead.notAFileError"] = BoundedRead.notAFileError
+        actual["BoundedRead.tooLargeError"] = BoundedRead.tooLargeError
 
         // MARK: ClaudeConfigIO
         // Both messages are inline literals inside guard/throw statements, not
@@ -213,7 +324,20 @@ final class StringCatalogTests: XCTestCase {
         // and cross-checked against ClaudeConfigIOTests.swift's real-parse assertions.
 
         actual["ClaudeConfigIO.mcpServersNotObjectError"] = "mcpServers is not a JSON object"
+        actual["ClaudeConfigIO.notJSONError"] = ClaudeConfigIO.notJSONError
+        actual["ClaudeConfigIO.repeatedKeyError"] = ClaudeConfigIO.repeatedKeyError
         actual["ClaudeConfigIO.topLevelNotObjectError"] = "top level is not a JSON object"
+
+        // MARK: ClaudeIntegration
+
+        actual["ClaudeIntegration.clashNote"] = ClaudeIntegration.clashNote
+        actual["ClaudeIntegration.endpointUnavailableText"] = ClaudeIntegration.endpointUnavailableText
+        actual["ClaudeIntegration.moveToApplicationsError"] = ClaudeIntegration.moveToApplicationsError
+        actual["ClaudeIntegration.offerBody"] = ClaudeIntegration.offerBody
+        actual["ClaudeIntegration.offerNotNowButton"] = ClaudeIntegration.offerNotNowButton
+        actual["ClaudeIntegration.offerTitle"] = ClaudeIntegration.offerTitle
+        actual["ClaudeIntegration.offerTurnOnButton"] = ClaudeIntegration.offerTurnOnButton
+        actual["ClaudeIntegration.reservedNameError"] = ClaudeIntegration.reservedNameError
 
         // MARK: ClaudeRestarter / ClaudeSignature
         // ClaudeRestarter.swift lives in the ConnectorControl app target (AppKit),
@@ -244,6 +368,7 @@ final class StringCatalogTests: XCTestCase {
         // MARK: CollectionDocument
 
         actual["CollectionDocument.credentialLiteralPhrase"] = CollectionDocument.credentialLiteralPhrase
+        actual["CollectionDocument.notJSONError"] = CollectionDocument.notJSONError
         actual["CollectionDocument.credentialReferencePhrase"] = CollectionDocument.credentialReferencePhrase
         actual["CollectionDocument.credentialUserOnlyPhrase"] = CollectionDocument.credentialUserOnlyPhrase
 
@@ -300,6 +425,231 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.subscribedPill"] = CollectionsModel.subscribedPill
         actual["CollectionsModel.updateAvailableStatus"] = CollectionsModel.updateAvailableStatus
         actual["CollectionsModel.windowTitle"] = CollectionsModel.windowTitle
+
+        // MARK: CommandLineToolText
+
+        actual["CommandLineToolText.adminPrompt"] = CommandLineToolText.adminPrompt
+        actual["CommandLineToolText.helpCommand"] = CommandLineToolText.helpCommand
+        actual["CommandLineToolText.inPathText"] = CommandLineToolText.inPathText
+        actual["CommandLineToolText.installButton"] = CommandLineToolText.installButton
+        actual["CommandLineToolText.installFailedError"] = CommandLineToolText.installFailedError("X")
+        actual["CommandLineToolText.installedInText"] = CommandLineToolText.installedInText("X")
+        actual["CommandLineToolText.missingToolError"] = CommandLineToolText.missingToolError("X")
+        actual["CommandLineToolText.notInstalledText"] = CommandLineToolText.notInstalledText
+        actual["CommandLineToolText.occupiedError"] = CommandLineToolText.occupiedError("X")
+        actual["CommandLineToolText.removeButton"] = CommandLineToolText.removeButton
+        actual["CommandLineToolText.removeFailedError"] = CommandLineToolText.removeFailedError("X")
+        actual["CommandLineToolText.runHelpCaption"] = CommandLineToolText.runHelpCaption
+        actual["CommandLineToolText.scriptsCaption"] = CommandLineToolText.scriptsCaption("X")
+
+        // MARK: ControlMasking / ControlText
+
+        actual["ControlClient.droppedError"] = ControlClient.droppedError
+        actual["ControlClient.elevatedError"] = ControlClient.elevatedError
+        actual["ControlClient.notRunningError"] = ControlClient.notRunningError
+        actual["ControlClient.startingText"] = ControlClient.startingText
+        actual["ControlClient.unreachableError"] = ControlClient.unreachableError
+        actual["ControlCommandLine.missingValueError"] = ControlCommandLine.missingValueError("X")
+        actual["ControlCommandLine.unknownCommandError"] = ControlCommandLine.unknownCommandError("X")
+        actual["ControlCommandLine.unknownOptionError"] = ControlCommandLine.unknownOptionError("X")
+        actual["ControlCommandLine.usageError"] = ControlCommandLine.usageError("X")
+        actual["ControlCommandLine.versionLine"] = ControlCommandLine.versionLine("X")
+        actual["ControlMasking.addedPrefix"] = ControlMasking.addedPrefix
+        actual["ControlMasking.argsLabel"] = ControlMasking.argsLabel
+        actual["ControlMasking.assignment"] = ControlMasking.assignment("X", "Y")
+        actual["ControlMasking.commandLabel"] = ControlMasking.commandLabel
+        actual["ControlMasking.envLabel"] = ControlMasking.envLabel
+        actual["ControlMasking.headersLabel"] = ControlMasking.headersLabel
+        actual["ControlMasking.mask"] = ControlMasking.mask
+        actual["ControlMasking.nameLabel"] = ControlMasking.nameLabel
+        actual["ControlMasking.needsValueState"] = ControlMasking.needsValueState
+        actual["ControlMasking.oauthClientText"] = ControlMasking.oauthClientText("X", "Y")
+        actual["ControlMasking.oauthLabel"] = ControlMasking.oauthLabel
+        actual["ControlMasking.otherLabel"] = ControlMasking.otherLabel
+        actual["ControlMasking.remoteBridgeType"] = ControlMasking.remoteBridgeType("X")
+        actual["ControlMasking.removedPrefix"] = ControlMasking.removedPrefix
+        actual["ControlMasking.scopesLabel"] = ControlMasking.scopesLabel
+        actual["ControlMasking.setState"] = ControlMasking.setState
+        actual["ControlMasking.setText"] = ControlMasking.setText
+        actual["ControlMasking.typeLabel"] = ControlMasking.typeLabel
+        actual["ControlMasking.urlLabel"] = ControlMasking.urlLabel
+        actual["ControlRelay.restartedError"] = ControlRelay.restartedError
+        actual["ControlText.listAnd"] = ControlText.listAnd
+
+        // MARK: ConfirmationDialog / TextRun
+
+        actual["ConfirmationDialog.allowButton"] = ConfirmationDialog.allowButton
+        actual["ConfirmationDialog.dontAllowButton"] = ConfirmationDialog.dontAllowButton
+        actual["TextRun.cutMark"] = TextRun.cutMark
+
+        // MARK: ControlCaller / ControlSettingKey / ControlTools
+
+        actual["ControlCaller.callingItselfText"] = ControlCaller.callingItselfText("X")
+        actual["ControlCaller.claudeName"] = ControlCaller.claudeName
+        actual["ControlCaller.unknownClientName"] = ControlCaller.unknownClientName
+        actual["ControlSettingKey.automaticUpdates"] = ControlSettingKey.automaticUpdates
+        actual["ControlSettingKey.backupsToKeep"] = ControlSettingKey.backupsToKeep
+        actual["ControlSettingKey.claudeIntegration"] = ControlSettingKey.claudeIntegration
+        actual["ControlSettingKey.confirmClaudeChanges"] = ControlSettingKey.confirmClaudeChanges
+        actual["ControlSettingKey.confirmQuit"] = ControlSettingKey.confirmQuit
+        actual["ControlSettingKey.confirmRestart"] = ControlSettingKey.confirmRestart
+        actual["ControlSettingKey.launchAtLogin"] = ControlSettingKey.launchAtLogin
+        actual["ControlSettingKey.notifyExternalChanges"] = ControlSettingKey.notifyExternalChanges
+        actual["ControlTools.activeCollectionLabel"] = ControlTools.activeCollectionLabel
+        actual["ControlTools.activeMark"] = ControlTools.activeMark
+        actual["ControlTools.addActiveMessage"] = ControlTools.addActiveMessage("X", "Y")
+        actual["ControlTools.addMessage"] = ControlTools.addMessage("X", "Y")
+        actual["ControlTools.addTitle"] = ControlTools.addTitle("X", "Y")
+        actual["ControlTools.addedNotification"] = ControlTools.addedNotification("X", "Y", "Z")
+        actual["ControlTools.addedText"] = ControlTools.addedText("X", "Y", "Z")
+        actual["ControlTools.addsClause"] = ControlTools.addsClause("X")
+        actual["ControlTools.appliedUpdateNotification"] = ControlTools.appliedUpdateNotification("X", "Y")
+        actual["ControlTools.appliedUpdateText"] = ControlTools.appliedUpdateText("X")
+        actual["ControlTools.applyUpdateTitle"] = ControlTools.applyUpdateTitle("X", "Y")
+        actual["ControlTools.argumentsNotObjectError"] = ControlTools.argumentsNotObjectError
+        actual["ControlTools.arrivedOffText.many"] = ControlTools.arrivedOffText(3)
+        actual["ControlTools.arrivedOffText.one"] = ControlTools.arrivedOffText(1)
+        actual["ControlTools.booleanKind"] = ControlTools.booleanKind
+        actual["ControlTools.changeActiveMessage"] = ControlTools.changeActiveMessage("X")
+        actual["ControlTools.changeMessage"] = ControlTools.changeMessage("X")
+        actual["ControlTools.changeTitle"] = ControlTools.changeTitle("X", "Y")
+        actual["ControlTools.changedNotification"] = ControlTools.changedNotification("X", "Y", "Z")
+        actual["ControlTools.changedText"] = ControlTools.changedText("X", "Y")
+        actual["ControlTools.changedWhileAskingError"] = ControlTools.changedWhileAskingError
+        actual["ControlTools.changesClause"] = ControlTools.changesClause("X")
+        actual["ControlTools.claudeGroup"] = ControlTools.claudeGroup
+        actual["ControlTools.claudeLabel"] = ControlTools.claudeLabel
+        actual["ControlTools.claudeNotRunning"] = ControlTools.claudeNotRunning
+        actual["ControlTools.claudeRunning"] = ControlTools.claudeRunning
+        actual["ControlTools.claudeRunningRestart"] = ControlTools.claudeRunningRestart
+        actual["ControlTools.clauseSeparator"] = ControlTools.clauseSeparator
+        actual["ControlTools.collectionHeader"] = ControlTools.collectionHeader
+        actual["ControlTools.collectionsGroup"] = ControlTools.collectionsGroup
+        actual["ControlTools.configShapeError"] = ControlTools.configShapeError
+        actual["ControlTools.connectorCountText"] = ControlTools.connectorCountText(3, 7)
+        actual["ControlTools.connectorsGroup"] = ControlTools.connectorsGroup
+        actual["ControlTools.connectorsHeader"] = ControlTools.connectorsHeader
+        actual["ControlTools.createdText"] = ControlTools.createdText("X")
+        actual["ControlTools.declinedError"] = ControlTools.declinedError
+        actual["ControlTools.deleteActiveMessage"] = ControlTools.deleteActiveMessage("X")
+        actual["ControlTools.deleteCollectionTitle"] = ControlTools.deleteCollectionTitle("X", "Y")
+        actual["ControlTools.deleteMessage"] = ControlTools.deleteMessage("X")
+        actual["ControlTools.deleteTitle"] = ControlTools.deleteTitle("X", "Y")
+        actual["ControlTools.deletedCollectionNotification"] = ControlTools.deletedCollectionNotification("X", "Y")
+        actual["ControlTools.deletedCollectionText"] = ControlTools.deletedCollectionText("X")
+        actual["ControlTools.deletedNotification"] = ControlTools.deletedNotification("X", "Y", "Z")
+        actual["ControlTools.deletedText"] = ControlTools.deletedText("X", "Y")
+        actual["ControlTools.deletesClause"] = ControlTools.deletesClause("X")
+        actual["ControlTools.detail"] = ControlTools.detail("X", "Y")
+        actual["ControlTools.documentTooLargeError"] = ControlTools.documentTooLargeError("X")
+        actual["ControlTools.duplicateSubscribedError"] = ControlTools.duplicateSubscribedError("X")
+        actual["ControlTools.duplicatedText"] = ControlTools.duplicatedText("X", "Y")
+        actual["ControlTools.emptyCollectionText"] = ControlTools.emptyCollectionText("X")
+        actual["ControlTools.fromFooter"] = ControlTools.fromFooter("X")
+        actual["ControlTools.helpOptions"] = ControlTools.helpOptions
+        actual["ControlTools.helpUsage"] = ControlTools.helpUsage
+        actual["ControlTools.idHeader"] = ControlTools.idHeader
+        actual["ControlTools.importMessage.many"] = ControlTools.importMessage(3, "X")
+        actual["ControlTools.importMessage.one"] = ControlTools.importMessage(1, "X")
+        actual["ControlTools.importNewMessage.many"] = ControlTools.importNewMessage(3, "X")
+        actual["ControlTools.importNewMessage.one"] = ControlTools.importNewMessage(1, "X")
+        actual["ControlTools.importReplacingMessage.many"] = ControlTools.importReplacingMessage(3, "X")
+        actual["ControlTools.importReplacingMessage.one"] = ControlTools.importReplacingMessage(1, "X")
+        actual["ControlTools.importTitle"] = ControlTools.importTitle("X", "Y")
+        actual["ControlTools.importedNotification.many"] = ControlTools.importedNotification("X", 3, "Y")
+        actual["ControlTools.importedNotification.one"] = ControlTools.importedNotification("X", 1, "Y")
+        actual["ControlTools.importedReplacingText.many"] = ControlTools.importedReplacingText(3, "X")
+        actual["ControlTools.importedReplacingText.one"] = ControlTools.importedReplacingText(1, "X")
+        actual["ControlTools.importedText.many"] = ControlTools.importedText(3, "X")
+        actual["ControlTools.importedText.one"] = ControlTools.importedText(1, "X")
+        actual["ControlTools.installHint"] = ControlTools.installHint("X", "Y")
+        actual["ControlTools.integerKind"] = ControlTools.integerKind
+        actual["ControlTools.integrationLabel"] = ControlTools.integrationLabel
+        actual["ControlTools.integrationOffError"] = ControlTools.integrationOffError
+        actual["ControlTools.integrationOnConfirming"] = ControlTools.integrationOnConfirming
+        actual["ControlTools.integrationOnNotConfirming"] = ControlTools.integrationOnNotConfirming
+        actual["ControlTools.integrationSetText"] = ControlTools.integrationSetText("X")
+        actual["ControlTools.intoOrNewCollectionError"] = ControlTools.intoOrNewCollectionError
+        actual["ControlTools.keepCountError"] = ControlTools.keepCountError
+        actual["ControlTools.kindHeader"] = ControlTools.kindHeader
+        actual["ControlTools.listKind"] = ControlTools.listKind
+        actual["ControlTools.localKind"] = ControlTools.localKind
+        actual["ControlTools.masterListLabel"] = ControlTools.masterListLabel
+        actual["ControlTools.missingArgumentError"] = ControlTools.missingArgumentError("X")
+        actual["ControlTools.nameHeader"] = ControlTools.nameHeader
+        actual["ControlTools.needsNewerAppError"] = ControlTools.needsNewerAppError("X")
+        actual["ControlTools.needsValuesText"] = ControlTools.needsValuesText("X")
+        actual["ControlTools.noBackupError"] = ControlTools.noBackupError("X")
+        actual["ControlTools.noBackupsText"] = ControlTools.noBackupsText
+        actual["ControlTools.noConnectorError"] = ControlTools.noConnectorError("X", "Y")
+        actual["ControlTools.noQuestionError"] = ControlTools.noQuestionError
+        actual["ControlTools.noUpdateError"] = ControlTools.noUpdateError("X")
+        actual["ControlTools.notAFileError"] = ControlTools.notAFileError("X")
+        actual["ControlTools.notOneOfError"] = ControlTools.notOneOfError("X", "Y")
+        actual["ControlTools.notSubscribedError"] = ControlTools.notSubscribedError("X")
+        actual["ControlTools.nothingToChangeError"] = ControlTools.nothingToChangeError
+        actual["ControlTools.nothingToImportError"] = ControlTools.nothingToImportError("X")
+        actual["ControlTools.objectKind"] = ControlTools.objectKind
+        actual["ControlTools.offWord"] = ControlTools.offWord
+        actual["ControlTools.onWord"] = ControlTools.onWord
+        actual["ControlTools.pendingUpdateText"] = ControlTools.pendingUpdateText("X", "Y")
+        actual["ControlTools.problemLabel"] = ControlTools.problemLabel
+        actual["ControlTools.publishedFileStaysText"] = ControlTools.publishedFileStaysText
+        actual["ControlTools.publishedKind"] = ControlTools.publishedKind
+        actual["ControlTools.queuedText"] = ControlTools.queuedText
+        actual["ControlTools.relaySummary"] = ControlTools.relaySummary
+        actual["ControlTools.relayUsage"] = ControlTools.relayUsage
+        actual["ControlTools.renamedCollectionText"] = ControlTools.renamedCollectionText("X", "Y")
+        actual["ControlTools.renamedNotification"] = ControlTools.renamedNotification("X", "Y", "Z")
+        actual["ControlTools.renamedText"] = ControlTools.renamedText("X", "Y")
+        actual["ControlTools.restartItselfTitle"] = ControlTools.restartItselfTitle
+        actual["ControlTools.restartMessage"] = ControlTools.restartMessage
+        actual["ControlTools.restartTitle"] = ControlTools.restartTitle("X")
+        actual["ControlTools.restartToApplyText"] = ControlTools.restartToApplyText
+        actual["ControlTools.restartToUseText"] = ControlTools.restartToUseText
+        actual["ControlTools.restartingText"] = ControlTools.restartingText
+        actual["ControlTools.restoreActivatingText"] = ControlTools.restoreActivatingText("X")
+        actual["ControlTools.restoreIntoText"] = ControlTools.restoreIntoText("X")
+        actual["ControlTools.restoreTitle"] = ControlTools.restoreTitle("X", "Y")
+        actual["ControlTools.restoredNotification"] = ControlTools.restoredNotification("X", "Y")
+        actual["ControlTools.restoredText"] = ControlTools.restoredText("X")
+        actual["ControlTools.runsHeader"] = ControlTools.runsHeader
+        actual["ControlTools.savedNotAppliedText"] = ControlTools.savedNotAppliedText("X")
+        actual["ControlTools.settingChangedText"] = ControlTools.settingChangedText("X", "Y")
+        actual["ControlTools.settingNotForClaudeError"] = ControlTools.settingNotForClaudeError("X")
+        actual["ControlTools.settingsGroup"] = ControlTools.settingsGroup
+        actual["ControlTools.sharingGroup"] = ControlTools.sharingGroup
+        actual["ControlTools.statusGroup"] = ControlTools.statusGroup
+        actual["ControlTools.statusTitle"] = ControlTools.statusTitle("X")
+        actual["ControlTools.subscribeMessage.many"] = ControlTools.subscribeMessage("X", 3)
+        actual["ControlTools.subscribeMessage.one"] = ControlTools.subscribeMessage("X", 1)
+        actual["ControlTools.subscribeTitle"] = ControlTools.subscribeTitle("X", "Y")
+        actual["ControlTools.subscribedKind"] = ControlTools.subscribedKind
+        actual["ControlTools.subscribedNotification"] = ControlTools.subscribedNotification("X", "Y", "Z")
+        actual["ControlTools.subscribedText"] = ControlTools.subscribedText("X", "Y")
+        actual["ControlTools.switchValueError"] = ControlTools.switchValueError("X")
+        actual["ControlTools.switchedNotification"] = ControlTools.switchedNotification("X", "Y")
+        actual["ControlTools.switchedText"] = ControlTools.switchedText("X")
+        actual["ControlTools.takesEffectFooter"] = ControlTools.takesEffectFooter
+        actual["ControlTools.textKind"] = ControlTools.textKind
+        actual["ControlTools.tooLongToShowError"] = ControlTools.tooLongToShowError
+        actual["ControlTools.turnedOffNotification"] = ControlTools.turnedOffNotification("X", "Y")
+        actual["ControlTools.turnedOffText"] = ControlTools.turnedOffText("X", "Y")
+        actual["ControlTools.turnedOnNotification"] = ControlTools.turnedOnNotification("X", "Y")
+        actual["ControlTools.turnedOnText"] = ControlTools.turnedOnText("X", "Y")
+        actual["ControlTools.unchangedError"] = ControlTools.unchangedError("X")
+        actual["ControlTools.unknownToolError"] = ControlTools.unknownToolError("X")
+        actual["ControlTools.upToDateText"] = ControlTools.upToDateText("X")
+        actual["ControlTools.updateAvailableKind"] = ControlTools.updateAvailableKind
+        actual["ControlTools.waitingText"] = ControlTools.waitingText
+        actual["ControlTools.wrongTypeError"] = ControlTools.wrongTypeError("X", "Y")
+        for tool in ControlTools.catalog {
+            actual["ControlTools.\(tool.name).description"] = tool.description
+            actual["ControlTools.\(tool.name).cliUsage"] = tool.cliUsage
+        }
+        for (name, title) in ControlTools.titles {
+            actual["ControlTools.titles.\(name)"] = title
+        }
 
         // MARK: CopyModel
 
@@ -510,22 +860,38 @@ final class StringCatalogTests: XCTestCase {
 
         actual["SettingsModel.autoUpdateTitle"] = SettingsModel.autoUpdateTitle
         actual["SettingsModel.backupsCaption"] = SettingsModel.backupsCaption
+        actual["SettingsModel.backupsFooter"] = SettingsModel.backupsFooter
         actual["SettingsModel.backupsHeader"] = SettingsModel.backupsHeader
+        actual["SettingsModel.backupsTitle"] = SettingsModel.backupsTitle
         actual["SettingsModel.checkForUpdatesTitle"] = SettingsModel.checkForUpdatesTitle
+        actual["SettingsModel.chooseButtonTitle"] = SettingsModel.chooseButtonTitle
         actual["SettingsModel.chooseTitle"] = SettingsModel.chooseTitle
         actual["SettingsModel.claudeAppHeader"] = SettingsModel.claudeAppHeader
         actual["SettingsModel.claudeAppRejectedTitle"] = SettingsModel.claudeAppRejectedTitle
+        actual["SettingsModel.claudeIntegrationCaption"] = SettingsModel.claudeIntegrationCaption
+        actual["SettingsModel.claudeIntegrationHeader"] = SettingsModel.claudeIntegrationHeader
+        actual["SettingsModel.claudeIntegrationTitle"] = SettingsModel.claudeIntegrationTitle
         actual["SettingsModel.claudeTab"] = SettingsModel.claudeTab
+        actual["SettingsModel.commandLineToolHeader"] = SettingsModel.commandLineToolHeader
+        actual["SettingsModel.confirmClaudeChangesOffCaption"] = SettingsModel.confirmClaudeChangesOffCaption
+        actual["SettingsModel.confirmClaudeChangesOnCaption"] = SettingsModel.confirmClaudeChangesOnCaption
+        actual["SettingsModel.confirmClaudeChangesTitle"] = SettingsModel.confirmClaudeChangesTitle
         actual["SettingsModel.confirmQuitTitle"] = SettingsModel.confirmQuitTitle
         actual["SettingsModel.confirmRestartTitle"] = SettingsModel.confirmRestartTitle
+        actual["SettingsModel.confirmationsHeader"] = SettingsModel.confirmationsHeader
         actual["SettingsModel.generalTab"] = SettingsModel.generalTab
-        actual["SettingsModel.keepCountLabel"] = SettingsModel.keepCountLabel(3)
         actual["SettingsModel.launchAtLoginTitle"] = SettingsModel.launchAtLoginTitle
         actual["SettingsModel.loginItemApprovalNote"] = SettingsModel.loginItemApprovalNote
         actual["SettingsModel.loginItemFailureNote"] = SettingsModel.loginItemFailureNote("X")
+        actual["SettingsModel.masterListFooter"] = SettingsModel.masterListFooter
         actual["SettingsModel.masterListHeader"] = SettingsModel.masterListHeader
+        actual["SettingsModel.notificationsHeader"] = SettingsModel.notificationsHeader
+        actual["SettingsModel.notifyCaption"] = SettingsModel.notifyCaption
         actual["SettingsModel.notifyTitle"] = SettingsModel.notifyTitle
+        actual["SettingsModel.previewUpdatesCaption"] = SettingsModel.previewUpdatesCaption
+        actual["SettingsModel.restoreButtonTitle"] = SettingsModel.restoreButtonTitle
         actual["SettingsModel.revealInFinderTitle"] = SettingsModel.revealInFinderTitle
+        actual["SettingsModel.startupHeader"] = SettingsModel.startupHeader
         actual["SettingsModel.storageTab"] = SettingsModel.storageTab
         actual["SettingsModel.toolsCaption"] = SettingsModel.toolsCaption
         actual["SettingsModel.toolsHeader"] = SettingsModel.toolsHeader
@@ -533,14 +899,17 @@ final class StringCatalogTests: XCTestCase {
         actual["SettingsModel.useDefaultTitle"] = SettingsModel.useDefaultTitle
         actual["SettingsModel.versionText"] = SettingsModel.versionText("X")
 
-        // MARK: ToolFamily / ToolNote
+        // MARK: ToolFamily / ToolFooterLine / ToolNote
 
         actual["ToolFamily.nodeJS.installCommand"] = ToolFamily.nodeJS.installCommand
         actual["ToolFamily.nodeJS.linkTitle"] = ToolFamily.nodeJS.linkTitle
         actual["ToolFamily.nodeJS.linkURL"] = ToolFamily.nodeJS.linkURL.absoluteString
+        actual["ToolFamily.nodeJS.toolNames"] = ToolFamily.nodeJS.toolNames
         actual["ToolFamily.uv.installCommand"] = ToolFamily.uv.installCommand
         actual["ToolFamily.uv.linkTitle"] = ToolFamily.uv.linkTitle
         actual["ToolFamily.uv.linkURL"] = ToolFamily.uv.linkURL.absoluteString
+        actual["ToolFamily.uv.toolNames"] = ToolFamily.uv.toolNames
+        actual["ToolFooterLine.installText"] = ToolFooterLine.installText("X", "Y", "Z")
         actual["ToolNote.checkingText"] = ToolNote.checkingText
         actual["ToolNote.foundText"] = ToolNote.foundText
         // ToolNote.missingText(_:) itself is internal (an implementation detail of

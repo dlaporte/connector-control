@@ -287,7 +287,7 @@ public class AppStateWatcherTests
         var ex = Assert.Throws<ClaudeConfigException>(() => state.RestoreClaudeConfig(bad));
         Assert.Equal(
             "backup bad.json is not a valid config file "
-                + "('n' is an invalid start of a property name. Expected a '\"'. LineNumber: 0 | BytePositionInLine: 1.)",
+                + "(the text does not parse as JSON)",
             ex.Detail);
         Assert.Equal(before, File.ReadAllBytes(h.ClaudeConfigPath));
     }

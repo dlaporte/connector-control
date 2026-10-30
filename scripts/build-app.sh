@@ -23,9 +23,10 @@ SIGNING_IDENTITY="${SIGNING_IDENTITY:--}"
 # and, at >=10000, safely above the run numbers releases <=1.2.2 shipped
 # with. A preview of X.Y.Z (X.Y.Z-preview.N) gets the number just below the
 # release's, with N as a second component: 1.4.0-preview.3 is 10399.3, so
-# Sparkle ranks it above every earlier release, below 1.4.0 (which it is
-# then offered when that ships), and previews in order among themselves.
-# Any other -suffix (1.3.0-beta1) is ignored for the numeric derivation.
+# Sparkle ranks it above every earlier release, below 1.4.0 (which the
+# preview feed offers it when that ships), and previews in order among
+# themselves. Any other -suffix (1.3.0-beta1) is ignored for the numeric
+# derivation.
 if [ -z "${BUILD_NUMBER:-}" ]; then
     BASE="${VERSION%%-*}"
     IFS=. read -r MAJ MIN PAT <<< "$BASE"
@@ -35,17 +36,38 @@ if [ -z "${BUILD_NUMBER:-}" ]; then
     esac
 fi
 
+# SUFeedURL: which appcast this build checks. A preview (X.Y.Z-preview.N) reads the preview
+# feed, the appcast.xml of the permanent preview-feed prerelease, which every published preview
+# and every stable release replaces (scripts/release/update-preview-feed.sh) — so a preview
+# install moves on to later previews and to the final release, as a Windows preview does.
+# Everything else reads the stable feed at releases/latest, which a prerelease never is. Decided
+# here, from the version alone, and not from BUILD_NUMBER, which a caller may preset; the plist
+# check below fails the build if the pairing ever comes out otherwise.
+STABLE_FEED="https://github.com/dlaporte/connector-control/releases/latest/download/appcast.xml"
+PREVIEW_FEED="https://github.com/dlaporte/connector-control/releases/download/preview-feed/appcast.xml"
+case "$VERSION" in
+    *-preview.*) FEED_URL="$PREVIEW_FEED" ;;
+    *)           FEED_URL="$STABLE_FEED" ;;
+esac
+
 if [ "${UNIVERSAL:-0}" = "1" ]; then
     swift build -c release --product ConnectorControl --arch arm64 --arch x86_64
+    swift build -c release --product connector-control --arch arm64 --arch x86_64
     BIN=".build/apple/Products/Release/ConnectorControl"
+    TOOL=".build/apple/Products/Release/connector-control"
 else
     swift build -c release --product ConnectorControl
+    swift build -c release --product connector-control
     BIN=".build/release/ConnectorControl"
+    TOOL=".build/release/connector-control"
 fi
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp "$BIN" "$APP/Contents/MacOS/Connector Control"
+# The command-line tool Claude's entry runs by its full path, beside the app's own executable. It links
+# nothing from Contents/Frameworks, so it needs no rpath.
+cp "$TOOL" "$APP/Contents/MacOS/connector-control"
 
 # Embed Sparkle: SwiftPM links it as @rpath but doesn't assemble bundles, so
 # the framework is copied out of the resolved artifact and the executable is
@@ -98,7 +120,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHumanReadableCopyright</key><string>© 2026 David LaPorte</string>
-    <key>SUFeedURL</key><string>https://github.com/dlaporte/connector-control/releases/latest/download/appcast.xml</string>
+    <key>SUFeedURL</key><string>${FEED_URL}</string>
     <key>SUPublicEDKey</key><string>UmpM6nLMC8udcgUZ4IYigUgqFHziHPNsYilHc7Nn/3Q=</string>
     <key>SUEnableAutomaticChecks</key><true/>
     <key>SUAutomaticallyUpdate</key><false/>
@@ -108,14 +130,37 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+# The feed pairing, read back from the plist just written: a stable install pointed at the
+# preview feed would be offered previews, and a preview pointed at the stable feed would never
+# see the next preview. Either is a build failure, on every CI, preview and release build.
+WRITTEN_FEED=$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$APP/Contents/Info.plist")
+case "$VERSION" in
+    *-preview.*) WANT_FEED="$PREVIEW_FEED" ;;
+    *)           WANT_FEED="$STABLE_FEED" ;;
+esac
+if [ "$WRITTEN_FEED" != "$WANT_FEED" ]; then
+    echo "error: version $VERSION was given SUFeedURL $WRITTEN_FEED, expected $WANT_FEED" >&2
+    exit 1
+fi
+# Stated a second time on its own terms, independent of the URL constants above.
+if [[ "$VERSION" != *-preview.* && "$WRITTEN_FEED" == *preview-feed* ]]; then
+    echo "error: stable version $VERSION must never read the preview feed ($WRITTEN_FEED)" >&2
+    exit 1
+fi
+
+# Every nested executable is signed before the app, the command-line tool included: codesign does not
+# sign other executables in Contents/MacOS along with the app, and strict verification — and
+# notarization — refuse one that is unsigned.
+TOOL_ID="com.dlaporte.connector-control.cli"
 if [ "$SIGNING_IDENTITY" = "-" ]; then
-    # Local dev: Sparkle keeps its own shipped signature; ad-hoc sign the app.
+    # Local dev: Sparkle keeps its own shipped signature; ad-hoc sign the tool, then the app.
+    codesign --force --sign - --identifier "$TOOL_ID" "$APP/Contents/MacOS/connector-control"
     codesign --force --sign - "$APP"
 else
     # Notarization requires every nested Mach-O be signed with the same
     # Developer ID + hardened runtime, inside-out per Sparkle's non-Xcode
     # signing docs: XPC services, Autoupdate, Updater.app, the framework,
-    # then the app. (No --deep: it mis-signs nested bundles.)
+    # then the command-line tool, then the app. (No --deep: it mis-signs nested bundles.)
     FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
     codesign --force --options runtime --timestamp --preserve-metadata=entitlements \
         --sign "$SIGNING_IDENTITY" "$FRAMEWORK/Versions/B/XPCServices/Downloader.xpc"
@@ -127,10 +172,13 @@ else
         --sign "$SIGNING_IDENTITY" "$FRAMEWORK/Versions/B/Updater.app"
     codesign --force --options runtime --timestamp \
         --sign "$SIGNING_IDENTITY" "$FRAMEWORK"
+    codesign --force --options runtime --timestamp --identifier "$TOOL_ID" \
+        --sign "$SIGNING_IDENTITY" "$APP/Contents/MacOS/connector-control"
     # Hardened runtime + timestamp are required for notarization.
     codesign --force --options runtime --timestamp \
         --sign "$SIGNING_IDENTITY" "$APP"
 fi
 codesign --verify --strict "$APP"
+codesign --verify --strict "$APP/Contents/MacOS/connector-control"
 echo "Built: $APP (version ${VERSION}, signed: ${SIGNING_IDENTITY})"
 echo "Install: cp -R \"$APP\" /Applications/"

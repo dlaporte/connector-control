@@ -25,6 +25,9 @@ public class SettingsStoreTests : IDisposable
         Assert.True(s.ConfirmBeforeQuit);
         Assert.Null(s.LastApplyDate);
         Assert.Equal(0, s.SweepVersion);
+        Assert.False(s.ClaudeIntegrationEnabled);
+        Assert.True(s.ConfirmClaudeChanges);
+        Assert.False(s.ClaudeIntegrationOfferAnswered);
         Assert.False(s.AutoUpdate);
         Assert.False(s.TrayTipShown);
         Assert.Null(s.DeclinedUpdateVersion);
@@ -48,6 +51,9 @@ public class SettingsStoreTests : IDisposable
         s.ConfirmBeforeQuit = false;
         s.LastApplyDate = new DateTime(2026, 9, 3, 12, 34, 56, DateTimeKind.Utc);
         s.SweepVersion = 1;
+        s.ClaudeIntegrationEnabled = true;
+        s.ConfirmClaudeChanges = false;
+        s.ClaudeIntegrationOfferAnswered = true;
         s.AutoUpdate = true;
         s.TrayTipShown = true;
         s.DeclinedUpdateVersion = "1.4.0";
@@ -64,6 +70,9 @@ public class SettingsStoreTests : IDisposable
         Assert.Equal(new DateTime(2026, 9, 3, 12, 34, 56, DateTimeKind.Utc), again.LastApplyDate);
         Assert.Equal(DateTimeKind.Utc, again.LastApplyDate!.Value.Kind);
         Assert.Equal(1, again.SweepVersion);
+        Assert.True(again.ClaudeIntegrationEnabled);
+        Assert.False(again.ConfirmClaudeChanges);
+        Assert.True(again.ClaudeIntegrationOfferAnswered);
         Assert.True(again.AutoUpdate);
         Assert.True(again.TrayTipShown);
         Assert.Equal("1.4.0", again.DeclinedUpdateVersion);
@@ -84,6 +93,9 @@ public class SettingsStoreTests : IDisposable
         s.ConfirmBeforeQuit = false;
         s.LastApplyDate = DateTime.UtcNow;
         s.SweepVersion = 1;
+        s.ClaudeIntegrationEnabled = true;
+        s.ConfirmClaudeChanges = false;
+        s.ClaudeIntegrationOfferAnswered = true;
         s.AutoUpdate = true;
         s.TrayTipShown = true;
         s.DeclinedUpdateVersion = "1.4.0";
@@ -91,8 +103,9 @@ public class SettingsStoreTests : IDisposable
         var root = JsonValue.Parse(File.ReadAllBytes(Path));
         Assert.Equal(
             [
-                "autoUpdate", "backupKeepCount", "claudeConfigPath", "claudeLaunchTarget",
-                "confirmBeforeQuit", "confirmBeforeRestart", "declinedUpdateVersion", "lastApplyDate",
+                "autoUpdate", "backupKeepCount", "claudeConfigPath", "claudeIntegrationEnabled",
+                "claudeIntegrationOfferAnswered", "claudeLaunchTarget", "confirmBeforeQuit",
+                "confirmBeforeRestart", "confirmClaudeChanges", "declinedUpdateVersion", "lastApplyDate",
                 "masterStoreDir", "notifyExternalChanges", "sweepVersion", "trayTipShown",
             ],
             root.ObjectProperties.Keys.ToArray());

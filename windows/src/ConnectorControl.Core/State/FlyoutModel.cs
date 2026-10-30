@@ -37,6 +37,8 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     /// cannot drift; two names, so neither call site has to lie about what it is marking.
     /// </summary>
     public const string CautionGlyph = ToolWarningGlyph;
+    /// <summary>The offer's star: news, not a caution. Platform idiom: the Segoe icon fonts have no sparkle, which the Mac draws with an SF Symbol.</summary>
+    public const string OfferGlyph = "✦";
     /// <summary>
     /// The amber dot's spoken form, beside the title that uses it so a view finds it here. The
     /// words are the Collections model's for the same condition, borrowed rather than written
@@ -150,6 +152,17 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
         state.CollectionBanner is { } banner ? CollectionBannerPresentation.Button(banner) : null;
 
     public bool HasCollectionBanner => state.CollectionBanner is not null;
+
+    // Platform idiom: the flyout's error strip also carries two lasting Windows cautions (a store others can read,
+    // a settings file that would not save) the Mac has no counterpart for; the offer waits only behind the error
+    // both platforms have.
+    /// <summary>The one-time offer of the Claude integration, in the banner slot: shown until it is answered,
+    /// and only while neither an error nor a collection banner holds the slot — it waits behind both.</summary>
+    public bool ShowsClaudeIntegrationOffer => state.ShowsClaudeIntegrationOffer && state.LastError is null && !HasCollectionBanner;
+
+    /// <summary>Turn On or Not Now; either answers the offer for good. After Turn On the banner goes, and
+    /// Restart Required follows while Claude runs.</summary>
+    public void AnswerClaudeIntegrationOffer(bool turnOn) => state.AnswerClaudeIntegrationOffer(turnOn);
 
     public ObservableCollection<ConnectorRow> Rows { get; }
 

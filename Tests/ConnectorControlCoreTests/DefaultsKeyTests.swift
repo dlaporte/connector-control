@@ -7,6 +7,7 @@ final class DefaultsKeyTests: XCTestCase {
         XCTAssertEqual(Set(DefaultsKey.allCases.map(\.rawValue)), [
             "masterStoreDir", "claudeAppPath", "backupKeepCount", "notifyExternalChanges",
             "confirmBeforeRestart", "confirmBeforeQuit", "lastApplyDate", "sweepVersion",
+            "claudeIntegrationEnabled", "confirmClaudeChanges", "claudeIntegrationOfferAnswered",
         ])
     }
 }

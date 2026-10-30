@@ -6,6 +6,10 @@ namespace ConnectorControl.Core;
 /// </summary>
 public sealed class ConfigService
 {
+    /// <summary>The most a backup restore reads. Claude's config runs to kilobytes; this is far past any real
+    /// one, and still little enough to read on the UI thread.</summary>
+    public const int MaxBackupBytes = 16 * 1_048_576;
+
     public AppPaths Paths { get; }
     public BackupManager Backups { get; }
 
@@ -276,9 +280,12 @@ public sealed class ConfigService
     }
 
     /// <summary>
-    /// Backup the current file, copy the chosen backup over it, then adopt the
+    /// Backup the current file, write the chosen backup over it as parsed, then adopt the
     /// snapshot into the store. The backup is validated BEFORE the live file is
     /// touched. Returns the restored file's servers (the caller's new baseline).
+    /// A backup that names a key twice is refused, and what is written is the backup as this app
+    /// parsed it, not its raw bytes: Claude then reads exactly the servers this app read, whichever
+    /// of two repeated keys either parser would keep.
     /// </summary>
     /// <param name="publishFolder">
     /// The folder <c>${COLLECTION_DIR}</c> stands for in the active collection on this machine — the
@@ -292,18 +299,25 @@ public sealed class ConfigService
     /// saved store has active.
     /// </param>
     /// <param name="earlierFolders">The folders it published into before, which <see cref="Reconciler.AdoptSnapshot"/> counts the same way.</param>
+    /// <param name="data">
+    /// When given, the backup's content as the caller read it, so what is restored is what the caller
+    /// checked. Platform idiom: it comes last here, after the optional parameters already there; the
+    /// Mac mirror takes it after <c>backup</c>, where a label reads it as the backup's.
+    /// </param>
     public IReadOnlyDictionary<string, JsonValue> RestoreClaudeConfig(string backupPath, MasterStore store,
                                                                      string? publishFolder = null,
                                                                      IReadOnlyList<string>? earlierFolders = null,
                                                                      string? backedUpFrom = null,
-                                                                     bool activating = false)
+                                                                     bool activating = false,
+                                                                     byte[]? data = null)
     {
-        var data = File.ReadAllBytes(backupPath);
+        data ??= BoundedRead.Data(backupPath, MaxBackupBytes);
         var name = Path.GetFileName(backupPath);
         JsonValue root;
         try
         {
             root = ClaudeConfigIO.ParseRoot(data);
+            ClaudeConfigIO.RequireUniqueKeys(data);
         }
         catch (ClaudeConfigException ex)
         {
@@ -315,7 +329,7 @@ public sealed class ConfigService
             throw new ClaudeConfigException($"backup {name} has an invalid mcpServers section");
         }
         RecordBackup(Backups.BackUp(Paths.ClaudeConfigPath, "claude_desktop_config"), backedUpFrom);
-        AtomicFile.Write(data, Paths.ClaudeConfigPath);
+        AtomicFile.Write(ClaudeConfigIO.Serialized(root), Paths.ClaudeConfigPath);
         // The bytes just written are what was already parsed above — reading the servers back off
         // the disk file would just reparse the same bytes a second time.
         IReadOnlyDictionary<string, JsonValue> servers = rawServers is null

@@ -1,0 +1,7 @@
+# A gated change: declined.
+#! answer deny
+> {"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"claude-ai","version":"0.1.0"}}}
+< {"id":0,"jsonrpc":"2.0","result":{"capabilities":{"tools":{}},"protocolVersion":"2025-11-25","serverInfo":{"name":"connector-control","version":"1.2.2"}}}
+> {"jsonrpc":"2.0","method":"notifications/initialized"}
+> {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"add_connector","arguments":{"name":"notion","config":{"command":"npx","args":["-y","@notionhq/notion-mcp-server"],"env":{"NOTION_TOKEN":"${CC_NEEDS:NOTION_TOKEN}"}}}}}
+< {"id":1,"jsonrpc":"2.0","result":{"content":[{"text":"You declined this change in Connector Control.","type":"text"}],"isError":true,"structuredContent":{"error":"You declined this change in Connector Control."}}}

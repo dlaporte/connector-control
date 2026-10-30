@@ -31,6 +31,10 @@ final class AppStateHarness {
     let background = BackgroundQueue()
     /// The clock every lastApplyDate is stamped with; tests move it.
     var now = ISO8601DateFormatter().date(from: "2026-09-04T12:00:00Z")!
+    /// The bundled tool's path the next create() hands AppState; nil unless a test sets one.
+    var controlToolPath: String?
+    /// Whether the next create()'s app runs from where it will not stay.
+    var controlToolIsTransient = false
     private var created: [AppState] = []
     private var models: [CollectionsModel] = []
 
@@ -39,7 +43,8 @@ final class AppStateHarness {
     var host: AppHost {
         AppHost(marshal: { [ui] in ui.post($0) }, delay: { [delays] in delays.add($0, $1) },
                 now: { [unowned self] in MainActor.assumeIsolated { self.now } },
-                background: { [background] in background.add($0) })
+                background: { [background] in background.add($0) },
+                controlToolPath: controlToolPath, controlToolIsTransient: controlToolIsTransient)
     }
 
     /// Runs the queued background work and pumps what it posted, until

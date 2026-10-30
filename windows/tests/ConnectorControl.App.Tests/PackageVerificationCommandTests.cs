@@ -22,7 +22,7 @@ public class PackageVerificationCommandTests : IDisposable
         return path;
     }
 
-    private static string? NeverCalled(string packagePath, string? updateExePath, Version runningVersion, Version feedVersion) =>
+    private static string? NeverCalled(string packagePath, string? updateExePath, string runningVersion, string feedVersion) =>
         throw new InvalidOperationException("verify should not have been called");
 
     [Theory]
@@ -87,13 +87,15 @@ public class PackageVerificationCommandTests : IDisposable
     }
 
     [Theory]
-    [InlineData("ConnectorControl-1.3.3-win-x64-full.nupkg", 1, 3, 3)]
-    [InlineData("ConnectorControl-1.3.3-preview.2-win-x64-full.nupkg", 1, 3, 3)]
-    [InlineData("ConnectorControl-2.0.10-win-arm64-full.nupkg", 2, 0, 10)]
-    public void ParsesFeedVersionFromTheNupkgName(string name, int major, int minor, int patch)
+    [InlineData("ConnectorControl-1.3.3-win-x64-full.nupkg", "1.3.3")]
+    [InlineData("ConnectorControl-1.3.3-preview.2-win-x64-full.nupkg", "1.3.3-preview.2")]
+    [InlineData("ConnectorControl-1.5.0-preview.12-win-arm64-full.nupkg", "1.5.0-preview.12")]
+    [InlineData("ConnectorControl-2.0.10-win-arm64-full.nupkg", "2.0.10")]
+    public void ParsesTheFullFeedVersionFromTheNupkgName(string name, string expected)
     {
+        // The prerelease label is part of the version the package must carry: a preview is not its release.
         Assert.True(PackageVerificationCommand.TryParseFeedVersion(name, out var version));
-        Assert.Equal(new Version(major, minor, patch), version);
+        Assert.Equal(expected, version);
     }
 
     [Fact]
@@ -132,8 +134,8 @@ public class PackageVerificationCommandTests : IDisposable
         var nupkg = Nupkg("ConnectorControl-1.3.3-preview.2-win-x64-full.nupkg");
         var report = dir.File("report.txt");
         string? seenPackage = null;
-        Version? seenRunning = null;
-        Version? seenFeed = null;
+        string? seenRunning = null;
+        string? seenFeed = null;
         PackageVerificationCommand.TryRun(
             ["--verify-package", nupkg, "--report", report],
             (package, _, running, feed) =>
@@ -146,7 +148,7 @@ public class PackageVerificationCommandTests : IDisposable
             RunningExe, out _);
         Assert.Equal(nupkg, seenPackage);
         Assert.Equal(UpdateVerifier.EmbeddedVersion(RunningExe), seenRunning);
-        Assert.Equal(new Version(1, 3, 3), seenFeed);
+        Assert.Equal("1.3.3-preview.2", seenFeed);
     }
 
     [Fact]

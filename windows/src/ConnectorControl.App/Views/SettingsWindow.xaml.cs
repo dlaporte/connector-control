@@ -3,22 +3,24 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using ConnectorControl.Core;
 using ConnectorControl.Core.State;
 using Microsoft.Win32;
 using ConnectorControl.App.Services;
 
 namespace ConnectorControl.App.Views;
 
-/// <summary>Single instance, 480×560, three tabs; autostart re-read whenever the window activates.</summary>
+/// <summary>Single instance, 480×820, three tabs, none of which scrolls, every row in one shape as on the Mac;
+/// autostart and the command-line tool re-read whenever the window activates.</summary>
 public partial class SettingsWindow : Window
 {
     private readonly AppState state;
 
-    public SettingsWindow(AppState state, PlatformServices services, UpdateCoordinator updates)
+    public SettingsWindow(AppState state, PlatformServices services, UpdateCoordinator updates, ICommandLineTool? commandLineTool = null)
     {
         InitializeComponent();
         this.state = state;
-        Model = new SettingsModel(state, services.Settings, services.Autostart, services.ClaudeInstall, services.Updater, updates);
+        Model = new SettingsModel(state, services.Settings, services.Autostart, services.ClaudeInstall, services.Updater, updates, commandLineTool);
         DataContext = Model;
         GeneralTabItem.Header = TabHeader("", null, SettingsModel.GeneralTab);
         StorageTabItem.Header = TabHeader("", null, SettingsModel.StorageTab);
@@ -36,6 +38,12 @@ public partial class SettingsWindow : Window
             {
                 var icon = await Task.Run(() => ClaudeIconLoader.Load(services.ClaudeInstall.Detect()));
                 ClaudeTabItem.Header = TabHeader("", icon, SettingsModel.ClaudeTab);
+                // The Claude App group's first row shows the same icon, as the Mac's shows the app's.
+                if (icon is not null)
+                {
+                    ClaudeAppIcon.Source = icon;
+                    ClaudeAppIcon.Visibility = Visibility.Visible;
+                }
             }
             catch (Exception)
             {
@@ -86,7 +94,7 @@ public partial class SettingsWindow : Window
         var arguments = Directory.Exists(dir) ? $"/select,\"{dir}\"" : $"\"{Path.GetDirectoryName(dir) ?? dir}\"";
         try
         {
-            Process.Start(new ProcessStartInfo("explorer.exe", arguments) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(SystemPrograms.Explorer, arguments) { UseShellExecute = true });
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {
@@ -132,4 +140,6 @@ public partial class SettingsWindow : Window
     }
 
     private void OnUseDefaultLaunchTarget(object sender, RoutedEventArgs e) => Model.UseDefaultLaunchTarget();
+
+    private void OnCommandLineTool(object sender, RoutedEventArgs e) => Model.CommandLineToolAction();
 }

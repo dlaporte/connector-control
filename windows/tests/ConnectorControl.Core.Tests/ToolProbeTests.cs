@@ -141,4 +141,15 @@ public class ToolProbeTests : IDisposable
         var silent = Stub("uvx", "bin", windowsBody: "@exit /b 3\r\n", unixBody: "exit 3");
         Assert.Equal(new ToolStatus(silent, null), new ToolProbe(Env(Bin)).Probe([Tool.Uvx])[Tool.Uvx]);
     }
+
+    /// <summary>Windows only, no Mac counterpart: the Mac runs a tool directly. A .cmd launcher runs under the
+    /// System32 command interpreter by its full path, never a cmd.exe found first in the app's own folder.</summary>
+    [Fact]
+    public void ALauncherRunsUnderTheSystemCommandInterpreter()
+    {
+        var launcher = dir.File("npx.cmd");
+        var info = ToolProbe.StartInfo(launcher);
+        Assert.Equal(OperatingSystem.IsWindows() ? Path.Combine(Environment.SystemDirectory, "cmd.exe") : launcher, info.FileName);
+        Assert.True(Path.IsPathFullyQualified(info.FileName));
+    }
 }

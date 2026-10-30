@@ -20,12 +20,18 @@
 # release; mac-ci.yml and windows-ci.yml trigger on branch pushes only, so one preview tag starts
 # exactly one workflow run.
 #
-# A prerelease is never releases/latest, so the Mac app's Sparkle appcast at
-# releases/latest/download/appcast.xml is untouched — no appcast is built here at all. A Mac
-# preview keeps the stable feed: build-app.sh gives <next>-preview.<n> the build number just
-# below <next>'s, so it is never offered an older stable version and is offered v<next> when
-# that ships (between previews, Mac testers download again). A Windows preview install
-# (prerelease version) follows prereleases and the final release (VelopackUpdater).
+# A prerelease is never releases/latest, so the stable Mac feed at
+# releases/latest/download/appcast.xml is untouched. A Mac preview reads its own feed instead:
+# build-app.sh gives a <next>-preview.<n> version SUFeedURL
+# releases/download/preview-feed/appcast.xml, the one asset of the permanent preview-feed
+# prerelease. Each real preview builds a signed appcast for its DMG (mac-build.yml, the same key
+# and make-appcast.sh as a release), attaches it to preview-<n> beside the DMG, and then copies
+# that published appcast onto preview-feed (scripts/release/update-preview-feed.sh, which
+# creates preview-feed on its first run and never moves the feed backwards); release.yml does
+# the same with each stable release. So a Mac preview install updates itself to later previews
+# and to the final release, as a Windows preview install (prerelease version) does through
+# VelopackUpdater. The build number build-app.sh derives, just below <next>'s, is what orders
+# them. A dry run builds and signs the appcast too, and never touches preview-feed.
 #
 # The mac job, .github/workflows/mac-build.yml (the same file release.yml calls), reads the
 # Apple certificate and notarization account from the "signing" GitHub Environment, whose
@@ -43,6 +49,10 @@ on:
   push:
     tags:
       - 'preview-*'
+      # The preview feed's own tag (see the header) names no preview. update-preview-feed.sh
+      # creates it with GITHUB_TOKEN, which starts no workflow anyway; this keeps a hand-pushed
+      # one from starting a run that could only fail its digits check.
+      - '!preview-feed'
   workflow_dispatch:
     inputs:
       number:
@@ -55,7 +65,7 @@ on:
         default: true
         type: boolean
 
-# Read-only by default; only the publish job raises this to contents: write.
+# Read-only by default; only the publish and preview-feed jobs raise this to contents: write.
 permissions:
   contents: read
 
@@ -143,14 +153,22 @@ jobs:
           VERSION: ${{ steps.derive.outputs.version }}
           NEXT: ${{ steps.derive.outputs.next }}
           NUMBER: ${{ steps.derive.outputs.number }}
+        # Two texts, as release.yml has: notes.md is what the update dialogs show (embedded in
+        # the Mac appcast and the Windows packages), body.md the prerelease's page, which adds
+        # the install and go-back instructions and the commit list a dialog has no use for.
         run: |
-          ./scripts/release/preview-notes.sh "$TAG" "$VERSION" "$NEXT" "$NUMBER" > notes.md
+          ./scripts/release/preview-notes.sh --dialog "$TAG" "$VERSION" "$NEXT" "$NUMBER" > notes.md
+          ./scripts/release/preview-notes.sh "$TAG" "$VERSION" "$NEXT" "$NUMBER" > body.md
           cat notes.md
+          echo '---'
+          cat body.md
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: notes
-          path: notes.md
+          path: |
+            notes.md
+            body.md
           if-no-files-found: error
 
   mac-test:
@@ -169,13 +187,15 @@ jobs:
   mac:
     name: macOS
     needs: [prepare, mac-test]
-    # build, sign, notarize, DMG -> artifact mac-dmg, with no Sparkle appcast: the same file
-    # release.yml calls. Its one job names the "signing" environment, and its header lists the
-    # Mac secrets and says why they arrive by inherit rather than by name.
+    # build, sign, notarize, DMG, Sparkle appcast pointing at this preview's tag -> artifact
+    # mac-dmg-appcast: the same file release.yml calls. Its one job names the "signing"
+    # environment, and its header lists the Mac secrets and says why they arrive by inherit
+    # rather than by name.
     uses: ./.github/workflows/mac-build.yml
     with:
       version: ${{ needs.prepare.outputs.version }}
-      artifact: mac-dmg
+      appcast-tag: ${{ needs.prepare.outputs.tag }}
+      artifact: mac-dmg-appcast
     secrets: inherit
 
   windows:
@@ -200,8 +220,9 @@ jobs:
   publish:
     name: Publish prerelease
     needs: [prepare, mac, windows]
-    # The only job that writes anything. A dry run — a preview-dry-<n> tag or a dispatch with
-    # dry_run — skips it entirely, so it creates no release and uploads no assets.
+    # With preview-feed after it, the only jobs that write anything. A dry run — a
+    # preview-dry-<n> tag or a dispatch with dry_run — skips both entirely, so it creates no
+    # release, uploads no assets and leaves the preview feed alone.
     if: needs.prepare.outputs.dry != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -222,7 +243,7 @@ jobs:
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: mac-dmg
+          name: mac-dmg-appcast
           path: mac
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -240,13 +261,16 @@ jobs:
       # instead of the ref that was dispatched. --prerelease is the whole point: a prerelease is
       # never releases/latest, so the Mac appcast at releases/latest/download/appcast.xml keeps
       # resolving to the last stable release. --latest is NEVER passed here, in any form. The
-      # DMG is attached at creation so the prerelease is never visible without its Mac download.
-      - name: Create the prerelease, with the DMG attached
+      # DMG and its appcast are attached at creation, together, so the prerelease is never
+      # visible without its Mac download, and a re-run keeps (or refuses to half-complete) the
+      # published pair — the appcast the preview feed is copied from always signs the DMG
+      # testers download.
+      - name: Create the prerelease, with the DMG and its appcast attached
         run: |
           ./scripts/release/ensure-release.sh "$TAG" --prerelease \
             --title "Connector Control $VERSION (preview)" \
-            --notes notes/notes.md --target "$GITHUB_SHA" \
-            "mac/ConnectorControl_$VERSION.dmg"
+            --notes notes/body.md --target "$GITHUB_SHA" \
+            "mac/ConnectorControl_$VERSION.dmg" mac/appcast.xml
 
       # gh, not vpk, uploads everything; a re-run skips a RID whose assets are all published
       # (and refuses to complete a half-published one) — the reasons are in the script, which
@@ -257,7 +281,7 @@ jobs:
       - name: Verify the release
         run: |
           ./scripts/release/verify-release.sh "$TAG" --prerelease \
-            "ConnectorControl_$VERSION.dmg" \
+            "ConnectorControl_$VERSION.dmg" appcast.xml \
             ConnectorControl-win-x64-Setup.exe ConnectorControl-win-arm64-Setup.exe \
             "ConnectorControl-$VERSION-win-x64-full.nupkg" "ConnectorControl-$VERSION-win-arm64-full.nupkg" \
             releases.win-x64.json releases.win-arm64.json
@@ -277,3 +301,33 @@ jobs:
             echo "- Release: $REPO_URL/releases/tag/$TAG"
             echo "- releases/latest unchanged: $LATEST"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  preview-feed:
+    name: Update the Mac preview feed
+    needs: [prepare, publish]
+    # Skipped with publish on a dry run, so a dry run never touches preview-feed. A failure here
+    # fails the preview: a Mac preview the feed does not announce is not delivered to anyone
+    # already on a preview.
+    if: needs.prepare.outputs.dry != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    # Shared with release.yml's job of the same name: the feed's compare-then-replace is not
+    # atomic, and a preview and a release publishing at once must not interleave it.
+    concurrency:
+      group: preview-feed
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Copies preview-<n>'s published appcast.xml onto preview-feed (creating it the first
+      # time), unless the feed already announces a newer build; then fetches the feed the way
+      # Sparkle does and checks it, and that releases/latest is still a stable v* release.
+      - name: Update and verify the preview feed
+        run: ./scripts/release/update-preview-feed.sh "$TAG"

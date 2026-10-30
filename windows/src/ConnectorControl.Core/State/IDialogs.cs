@@ -22,4 +22,8 @@ public interface IDialogs
 
     /// <summary>Update-available dialog; true for "Install and Relaunch", false for "Later".</summary>
     bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown);
+
+    /// <summary>The confirmation of a change Claude asks for, modal: Don’t Allow is the default, which Return
+    /// and Escape answer, and so does closing the window. True only for Allow.</summary>
+    bool ConfirmChange(ConfirmationDialog dialog);
 }

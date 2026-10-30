@@ -3,6 +3,7 @@ using ConnectorControl.Core;
 using ConnectorControl.Core.Services;
 using ConnectorControl.Core.State;
 using ConnectorControl.Core.Tests.TestSupport;
+using ConnectorControl.Core.Transport;
 using JsonTextValue = System.Text.Json.Nodes.JsonValue;
 
 namespace ConnectorControl.Core.Tests.State;
@@ -107,10 +108,114 @@ public class StringCatalogTests
         ["CollectionsModel.editLabel"] = ["X"],
         ["CollectionsModel.selectedCount"] = ["3"],
         ["CollectionsModel.stopSyncingMessage"] = ["X"],
+        ["CommandLineToolText.installFailedError"] = ["X"],
+        ["CommandLineToolText.installedInText"] = ["X"],
+        ["CommandLineToolText.missingToolError"] = ["X"],
+        ["CommandLineToolText.occupiedError"] = ["X"],
+        ["CommandLineToolText.removeFailedError"] = ["X"],
+        ["CommandLineToolText.scriptsCaption"] = ["X"],
         ["ConfigService.corruptStoreNote"] = ["X"],
         ["ConfigService.corruptStoreRestoredNote"] = ["X", "Y"],
         ["ConfigService.invalidBackupError"] = ["X", "Y"],
         ["ConfigService.invalidBackupMcpServersError"] = ["X"],
+        ["ControlCaller.callingItselfText"] = ["X"],
+        ["ControlCommandLine.missingValueError"] = ["X"],
+        ["ControlCommandLine.unknownCommandError"] = ["X"],
+        ["ControlCommandLine.unknownOptionError"] = ["X"],
+        ["ControlCommandLine.usageError"] = ["X"],
+        ["ControlCommandLine.versionLine"] = ["X"],
+        ["ControlMasking.assignment"] = ["X", "Y"],
+        ["ControlMasking.oauthClientText"] = ["X", "Y"],
+        ["ControlMasking.remoteBridgeType"] = ["X"],
+        ["ControlTools.addActiveMessage"] = ["X", "Y"],
+        ["ControlTools.addMessage"] = ["X", "Y"],
+        ["ControlTools.addTitle"] = ["X", "Y"],
+        ["ControlTools.addedNotification"] = ["X", "Y", "Z"],
+        ["ControlTools.addedText"] = ["X", "Y", "Z"],
+        ["ControlTools.addsClause"] = ["X"],
+        ["ControlTools.appliedUpdateNotification"] = ["X", "Y"],
+        ["ControlTools.appliedUpdateText"] = ["X"],
+        ["ControlTools.applyUpdateTitle"] = ["X", "Y"],
+        ["ControlTools.arrivedOffText.many"] = ["3"],
+        ["ControlTools.arrivedOffText.one"] = ["1"],
+        ["ControlTools.changeActiveMessage"] = ["X"],
+        ["ControlTools.changeMessage"] = ["X"],
+        ["ControlTools.changeTitle"] = ["X", "Y"],
+        ["ControlTools.changedNotification"] = ["X", "Y", "Z"],
+        ["ControlTools.changedText"] = ["X", "Y"],
+        ["ControlTools.changesClause"] = ["X"],
+        ["ControlTools.connectorCountText"] = ["3", "7"],
+        ["ControlTools.createdText"] = ["X"],
+        ["ControlTools.deleteActiveMessage"] = ["X"],
+        ["ControlTools.deleteCollectionTitle"] = ["X", "Y"],
+        ["ControlTools.deleteMessage"] = ["X"],
+        ["ControlTools.deleteTitle"] = ["X", "Y"],
+        ["ControlTools.deletedCollectionNotification"] = ["X", "Y"],
+        ["ControlTools.deletedCollectionText"] = ["X"],
+        ["ControlTools.deletedNotification"] = ["X", "Y", "Z"],
+        ["ControlTools.deletedText"] = ["X", "Y"],
+        ["ControlTools.deletesClause"] = ["X"],
+        ["ControlTools.detail"] = ["X", "Y"],
+        ["ControlTools.documentTooLargeError"] = ["X"],
+        ["ControlTools.duplicateSubscribedError"] = ["X"],
+        ["ControlTools.duplicatedText"] = ["X", "Y"],
+        ["ControlTools.emptyCollectionText"] = ["X"],
+        ["ControlTools.fromFooter"] = ["X"],
+        ["ControlTools.importMessage.many"] = ["3", "X"],
+        ["ControlTools.importMessage.one"] = ["1", "X"],
+        ["ControlTools.importNewMessage.many"] = ["3", "X"],
+        ["ControlTools.importNewMessage.one"] = ["1", "X"],
+        ["ControlTools.importReplacingMessage.many"] = ["3", "X"],
+        ["ControlTools.importReplacingMessage.one"] = ["1", "X"],
+        ["ControlTools.importTitle"] = ["X", "Y"],
+        ["ControlTools.importedNotification.many"] = ["X", "3", "Y"],
+        ["ControlTools.importedNotification.one"] = ["X", "1", "Y"],
+        ["ControlTools.importedReplacingText.many"] = ["3", "X"],
+        ["ControlTools.importedReplacingText.one"] = ["1", "X"],
+        ["ControlTools.importedText.many"] = ["3", "X"],
+        ["ControlTools.importedText.one"] = ["1", "X"],
+        ["ControlTools.installHint"] = ["X", "Y"],
+        ["ControlTools.integrationSetText"] = ["X"],
+        ["ControlTools.missingArgumentError"] = ["X"],
+        ["ControlTools.needsNewerAppError"] = ["X"],
+        ["ControlTools.needsValuesText"] = ["X"],
+        ["ControlTools.noBackupError"] = ["X"],
+        ["ControlTools.noConnectorError"] = ["X", "Y"],
+        ["ControlTools.noUpdateError"] = ["X"],
+        ["ControlTools.notAFileError"] = ["X"],
+        ["ControlTools.notOneOfError"] = ["X", "Y"],
+        ["ControlTools.notSubscribedError"] = ["X"],
+        ["ControlTools.nothingToImportError"] = ["X"],
+        ["ControlTools.pendingUpdateText"] = ["X", "Y"],
+        ["ControlTools.renamedCollectionText"] = ["X", "Y"],
+        ["ControlTools.renamedNotification"] = ["X", "Y", "Z"],
+        ["ControlTools.renamedText"] = ["X", "Y"],
+        ["ControlTools.restartTitle"] = ["X"],
+        ["ControlTools.restoreActivatingText"] = ["X"],
+        ["ControlTools.restoreIntoText"] = ["X"],
+        ["ControlTools.restoreTitle"] = ["X", "Y"],
+        ["ControlTools.restoredNotification"] = ["X", "Y"],
+        ["ControlTools.restoredText"] = ["X"],
+        ["ControlTools.savedNotAppliedText"] = ["X"],
+        ["ControlTools.settingChangedText"] = ["X", "Y"],
+        ["ControlTools.settingNotForClaudeError"] = ["X"],
+        ["ControlTools.statusTitle"] = ["X"],
+        ["ControlTools.subscribeMessage.many"] = ["X", "3"],
+        ["ControlTools.subscribeMessage.one"] = ["X", "1"],
+        ["ControlTools.subscribeTitle"] = ["X", "Y"],
+        ["ControlTools.subscribedNotification"] = ["X", "Y", "Z"],
+        ["ControlTools.subscribedText"] = ["X", "Y"],
+        ["ControlTools.switchValueError"] = ["X"],
+        ["ControlTools.switchedNotification"] = ["X", "Y"],
+        ["ControlTools.switchedText"] = ["X"],
+        ["ControlTools.turnedOffNotification"] = ["X", "Y"],
+        ["ControlTools.turnedOffText"] = ["X", "Y"],
+        ["ControlTools.turnedOnNotification"] = ["X", "Y"],
+        ["ControlTools.turnedOnText"] = ["X", "Y"],
+        ["ControlTools.unchangedError"] = ["X"],
+        ["ControlTools.unknownToolError"] = ["X"],
+        ["ControlTools.upToDateText"] = ["X"],
+        ["ControlTools.wrongTypeError"] = ["X", "Y"],
         ["CopyModel.title"] = ["X"],
         ["EditTarget.editTitle"] = ["X"],
         ["EditorModel.additionalTitle"] = ["3", "a, b"],
@@ -157,9 +262,9 @@ public class StringCatalogTests
         ["RemotePattern.cmdUnsafeReason"] = ["Server URL"],
         ["RestoreModel.confirmMessage"] = ["X"],
         ["ReviewModel.title"] = ["X"],
-        ["SettingsModel.keepCountLabel"] = ["3"],
         ["SettingsModel.loginItemFailureNote"] = ["X"],
         ["SettingsModel.versionText"] = ["X"],
+        ["ToolFooterLine.installText"] = ["X", "Y", "Z"],
         ["UpdateCoordinator.availableDetail"] = ["X", "Y"],
         ["UpdateCoordinator.upToDateDetail"] = ["X"],
     };
@@ -223,6 +328,12 @@ public class StringCatalogTests
         actual["AppState.targetMustBeLocalError"] = AppState.TargetMustBeLocalError;
         actual["AppState.unpublishedDirectoryCaution"] = AppState.UnpublishedDirectoryCaution;
         actual["AppState.unreviewedConnectorError"] = AppState.UnreviewedConnectorError("X");
+        actual["AppVersion.developmentBuild"] = AppVersion.DevelopmentBuild;
+
+        // MARK: BoundedRead
+
+        actual["BoundedRead.notAFileError"] = BoundedRead.NotAFileError;
+        actual["BoundedRead.tooLargeError"] = BoundedRead.TooLargeError;
 
         // MARK: ClaudeConfigIO
         // Both messages are inline literals inside a throw, not exposed as callable
@@ -230,7 +341,20 @@ public class StringCatalogTests
         // this project's own JSON-parsing test coverage.
 
         actual["ClaudeConfigIO.mcpServersNotObjectError"] = "mcpServers is not a JSON object";
+        actual["ClaudeConfigIO.notJSONError"] = ClaudeConfigIO.NotJsonError;
+        actual["ClaudeConfigIO.repeatedKeyError"] = ClaudeConfigIO.RepeatedKeyError;
         actual["ClaudeConfigIO.topLevelNotObjectError"] = "top level is not a JSON object";
+
+        // MARK: ClaudeIntegration
+
+        actual["ClaudeIntegration.clashNote"] = ClaudeIntegration.ClashNote;
+        actual["ClaudeIntegration.endpointUnavailableText"] = ClaudeIntegration.EndpointUnavailableText;
+        actual["ClaudeIntegration.moveToApplicationsError"] = ClaudeIntegration.MoveToApplicationsError;
+        actual["ClaudeIntegration.offerBody"] = ClaudeIntegration.OfferBody;
+        actual["ClaudeIntegration.offerNotNowButton"] = ClaudeIntegration.OfferNotNowButton;
+        actual["ClaudeIntegration.offerTitle"] = ClaudeIntegration.OfferTitle;
+        actual["ClaudeIntegration.offerTurnOnButton"] = ClaudeIntegration.OfferTurnOnButton;
+        actual["ClaudeIntegration.reservedNameError"] = ClaudeIntegration.ReservedNameError;
 
         // MARK: ClaudeProcess / ClaudePublisher / ClaudeRestarter / ClaudeSignature
         // ClaudeProcess.cs lives in ConnectorControl.App, which this Core test project
@@ -252,6 +376,7 @@ public class StringCatalogTests
         // MARK: CollectionDocument
 
         actual["CollectionDocument.credentialLiteralPhrase"] = CollectionDocument.CredentialLiteralPhrase;
+        actual["CollectionDocument.notJSONError"] = CollectionDocument.NotJsonError;
         actual["CollectionDocument.credentialReferencePhrase"] = CollectionDocument.CredentialReferencePhrase;
         actual["CollectionDocument.credentialUserOnlyPhrase"] = CollectionDocument.CredentialUserOnlyPhrase;
 
@@ -309,6 +434,234 @@ public class StringCatalogTests
         actual["CollectionsModel.subscribedPill"] = CollectionsModel.SubscribedPill;
         actual["CollectionsModel.updateAvailableStatus"] = CollectionsModel.UpdateAvailableStatus;
         actual["CollectionsModel.windowTitle"] = CollectionsModel.WindowTitle;
+
+        // MARK: CommandLineToolText
+
+        actual["CommandLineToolText.adminPrompt"] = CommandLineToolText.AdminPrompt;
+        actual["CommandLineToolText.helpCommand"] = CommandLineToolText.HelpCommand;
+        actual["CommandLineToolText.inPathText"] = CommandLineToolText.InPathText;
+        actual["CommandLineToolText.installButton"] = CommandLineToolText.InstallButton;
+        actual["CommandLineToolText.installFailedError"] = CommandLineToolText.InstallFailedError("X");
+        actual["CommandLineToolText.installedInText"] = CommandLineToolText.InstalledInText("X");
+        actual["CommandLineToolText.missingToolError"] = CommandLineToolText.MissingToolError("X");
+        actual["CommandLineToolText.notInstalledText"] = CommandLineToolText.NotInstalledText;
+        actual["CommandLineToolText.occupiedError"] = CommandLineToolText.OccupiedError("X");
+        actual["CommandLineToolText.removeButton"] = CommandLineToolText.RemoveButton;
+        actual["CommandLineToolText.removeFailedError"] = CommandLineToolText.RemoveFailedError("X");
+        actual["CommandLineToolText.runHelpCaption"] = CommandLineToolText.RunHelpCaption;
+        actual["CommandLineToolText.scriptsCaption"] = CommandLineToolText.ScriptsCaption("X");
+
+        // MARK: ControlMasking / ControlText
+
+        actual["ControlClient.droppedError"] = ControlClient.DroppedError;
+        actual["ControlClient.elevatedError"] = ControlClient.ElevatedError;
+        actual["ControlClient.notRunningError"] = ControlClient.NotRunningError;
+        actual["ControlClient.startingText"] = ControlClient.StartingText;
+        actual["ControlClient.unreachableError"] = ControlClient.UnreachableError;
+        actual["ControlCommandLine.missingValueError"] = ControlCommandLine.MissingValueError("X");
+        actual["ControlCommandLine.unknownCommandError"] = ControlCommandLine.UnknownCommandError("X");
+        actual["ControlCommandLine.unknownOptionError"] = ControlCommandLine.UnknownOptionError("X");
+        actual["ControlCommandLine.usageError"] = ControlCommandLine.UsageError("X");
+        actual["ControlCommandLine.versionLine"] = ControlCommandLine.VersionLine("X");
+        actual["ControlMasking.addedPrefix"] = ControlMasking.AddedPrefix;
+        actual["ControlMasking.argsLabel"] = ControlMasking.ArgsLabel;
+        actual["ControlMasking.assignment"] = ControlMasking.Assignment("X", "Y");
+        actual["ControlMasking.commandLabel"] = ControlMasking.CommandLabel;
+        actual["ControlMasking.envLabel"] = ControlMasking.EnvLabel;
+        actual["ControlMasking.headersLabel"] = ControlMasking.HeadersLabel;
+        actual["ControlMasking.mask"] = ControlMasking.Mask;
+        actual["ControlMasking.nameLabel"] = ControlMasking.NameLabel;
+        actual["ControlMasking.needsValueState"] = ControlMasking.NeedsValueState;
+        actual["ControlMasking.oauthClientText"] = ControlMasking.OauthClientText("X", "Y");
+        actual["ControlMasking.oauthLabel"] = ControlMasking.OauthLabel;
+        actual["ControlMasking.otherLabel"] = ControlMasking.OtherLabel;
+        actual["ControlMasking.remoteBridgeType"] = ControlMasking.RemoteBridgeType("X");
+        actual["ControlMasking.removedPrefix"] = ControlMasking.RemovedPrefix;
+        actual["ControlMasking.scopesLabel"] = ControlMasking.ScopesLabel;
+        actual["ControlMasking.setState"] = ControlMasking.SetState;
+        actual["ControlMasking.setText"] = ControlMasking.SetText;
+        actual["ControlMasking.typeLabel"] = ControlMasking.TypeLabel;
+        actual["ControlMasking.urlLabel"] = ControlMasking.UrlLabel;
+        actual["ControlRelay.restartedError"] = ControlRelay.RestartedError;
+        actual["ControlText.listAnd"] = ControlText.ListAnd;
+
+        // MARK: ConfirmationDialog / TextRun
+
+        actual["ConfirmationDialog.allowButton"] = ConfirmationDialog.AllowButton;
+        actual["ConfirmationDialog.dontAllowButton"] = ConfirmationDialog.DontAllowButton;
+        actual["TextRun.cutMark"] = TextRun.CutMark;
+
+        // MARK: ControlCaller / ControlSettingKey / ControlTools
+
+        actual["ControlCaller.callingItselfText"] = ControlCaller.CallingItselfText("X");
+        actual["ControlCaller.claudeName"] = ControlCaller.ClaudeName;
+        actual["ControlCaller.unknownClientName"] = ControlCaller.UnknownClientName;
+        actual["ControlSettingKey.automaticUpdates"] = ControlSettingKey.AutomaticUpdates;
+        actual["ControlSettingKey.backupsToKeep"] = ControlSettingKey.BackupsToKeep;
+        actual["ControlSettingKey.claudeIntegration"] = ControlSettingKey.ClaudeIntegration;
+        actual["ControlSettingKey.confirmClaudeChanges"] = ControlSettingKey.ConfirmClaudeChanges;
+        actual["ControlSettingKey.confirmQuit"] = ControlSettingKey.ConfirmQuit;
+        actual["ControlSettingKey.confirmRestart"] = ControlSettingKey.ConfirmRestart;
+        actual["ControlSettingKey.launchAtLogin"] = ControlSettingKey.LaunchAtLogin;
+        actual["ControlSettingKey.notifyExternalChanges"] = ControlSettingKey.NotifyExternalChanges;
+        actual["ControlTools.activeCollectionLabel"] = ControlTools.ActiveCollectionLabel;
+        actual["ControlTools.activeMark"] = ControlTools.ActiveMark;
+        actual["ControlTools.addActiveMessage"] = ControlTools.AddActiveMessage("X", "Y");
+        actual["ControlTools.addMessage"] = ControlTools.AddMessage("X", "Y");
+        actual["ControlTools.addTitle"] = ControlTools.AddTitle("X", "Y");
+        actual["ControlTools.addedNotification"] = ControlTools.AddedNotification("X", "Y", "Z");
+        actual["ControlTools.addedText"] = ControlTools.AddedText("X", "Y", "Z");
+        actual["ControlTools.addsClause"] = ControlTools.AddsClause("X");
+        actual["ControlTools.appliedUpdateNotification"] = ControlTools.AppliedUpdateNotification("X", "Y");
+        actual["ControlTools.appliedUpdateText"] = ControlTools.AppliedUpdateText("X");
+        actual["ControlTools.applyUpdateTitle"] = ControlTools.ApplyUpdateTitle("X", "Y");
+        actual["ControlTools.argumentsNotObjectError"] = ControlTools.ArgumentsNotObjectError;
+        actual["ControlTools.arrivedOffText.many"] = ControlTools.ArrivedOffText(3);
+        actual["ControlTools.arrivedOffText.one"] = ControlTools.ArrivedOffText(1);
+        actual["ControlTools.booleanKind"] = ControlTools.BooleanKind;
+        actual["ControlTools.changeActiveMessage"] = ControlTools.ChangeActiveMessage("X");
+        actual["ControlTools.changeMessage"] = ControlTools.ChangeMessage("X");
+        actual["ControlTools.changeTitle"] = ControlTools.ChangeTitle("X", "Y");
+        actual["ControlTools.changedNotification"] = ControlTools.ChangedNotification("X", "Y", "Z");
+        actual["ControlTools.changedText"] = ControlTools.ChangedText("X", "Y");
+        actual["ControlTools.changedWhileAskingError"] = ControlTools.ChangedWhileAskingError;
+        actual["ControlTools.changesClause"] = ControlTools.ChangesClause("X");
+        actual["ControlTools.claudeGroup"] = ControlTools.ClaudeGroup;
+        actual["ControlTools.claudeLabel"] = ControlTools.ClaudeLabel;
+        actual["ControlTools.claudeNotRunning"] = ControlTools.ClaudeNotRunning;
+        actual["ControlTools.claudeRunning"] = ControlTools.ClaudeRunning;
+        actual["ControlTools.claudeRunningRestart"] = ControlTools.ClaudeRunningRestart;
+        actual["ControlTools.clauseSeparator"] = ControlTools.ClauseSeparator;
+        actual["ControlTools.collectionHeader"] = ControlTools.CollectionHeader;
+        actual["ControlTools.collectionsGroup"] = ControlTools.CollectionsGroup;
+        actual["ControlTools.configShapeError"] = ControlTools.ConfigShapeError;
+        actual["ControlTools.connectorCountText"] = ControlTools.ConnectorCountText(3, 7);
+        actual["ControlTools.connectorsGroup"] = ControlTools.ConnectorsGroup;
+        actual["ControlTools.connectorsHeader"] = ControlTools.ConnectorsHeader;
+        actual["ControlTools.createdText"] = ControlTools.CreatedText("X");
+        actual["ControlTools.declinedError"] = ControlTools.DeclinedError;
+        actual["ControlTools.deleteActiveMessage"] = ControlTools.DeleteActiveMessage("X");
+        actual["ControlTools.deleteCollectionTitle"] = ControlTools.DeleteCollectionTitle("X", "Y");
+        actual["ControlTools.deleteMessage"] = ControlTools.DeleteMessage("X");
+        actual["ControlTools.deleteTitle"] = ControlTools.DeleteTitle("X", "Y");
+        actual["ControlTools.deletedCollectionNotification"] = ControlTools.DeletedCollectionNotification("X", "Y");
+        actual["ControlTools.deletedCollectionText"] = ControlTools.DeletedCollectionText("X");
+        actual["ControlTools.deletedNotification"] = ControlTools.DeletedNotification("X", "Y", "Z");
+        actual["ControlTools.deletedText"] = ControlTools.DeletedText("X", "Y");
+        actual["ControlTools.deletesClause"] = ControlTools.DeletesClause("X");
+        actual["ControlTools.detail"] = ControlTools.Detail("X", "Y");
+        actual["ControlTools.documentTooLargeError"] = ControlTools.DocumentTooLargeError("X");
+        actual["ControlTools.duplicateSubscribedError"] = ControlTools.DuplicateSubscribedError("X");
+        actual["ControlTools.duplicatedText"] = ControlTools.DuplicatedText("X", "Y");
+        actual["ControlTools.emptyCollectionText"] = ControlTools.EmptyCollectionText("X");
+        actual["ControlTools.fromFooter"] = ControlTools.FromFooter("X");
+        actual["ControlTools.helpOptions"] = ControlTools.HelpOptions;
+        actual["ControlTools.helpUsage"] = ControlTools.HelpUsage;
+        actual["ControlTools.idHeader"] = ControlTools.IdHeader;
+        actual["ControlTools.importMessage.many"] = ControlTools.ImportMessage(3, "X");
+        actual["ControlTools.importMessage.one"] = ControlTools.ImportMessage(1, "X");
+        actual["ControlTools.importNewMessage.many"] = ControlTools.ImportNewMessage(3, "X");
+        actual["ControlTools.importNewMessage.one"] = ControlTools.ImportNewMessage(1, "X");
+        actual["ControlTools.importReplacingMessage.many"] = ControlTools.ImportReplacingMessage(3, "X");
+        actual["ControlTools.importReplacingMessage.one"] = ControlTools.ImportReplacingMessage(1, "X");
+        actual["ControlTools.importTitle"] = ControlTools.ImportTitle("X", "Y");
+        actual["ControlTools.importedNotification.many"] = ControlTools.ImportedNotification("X", 3, "Y");
+        actual["ControlTools.importedNotification.one"] = ControlTools.ImportedNotification("X", 1, "Y");
+        actual["ControlTools.importedReplacingText.many"] = ControlTools.ImportedReplacingText(3, "X");
+        actual["ControlTools.importedReplacingText.one"] = ControlTools.ImportedReplacingText(1, "X");
+        actual["ControlTools.importedText.many"] = ControlTools.ImportedText(3, "X");
+        actual["ControlTools.importedText.one"] = ControlTools.ImportedText(1, "X");
+        actual["ControlTools.installHint"] = ControlTools.InstallHint("X", "Y");
+        actual["ControlTools.integerKind"] = ControlTools.IntegerKind;
+        actual["ControlTools.integrationLabel"] = ControlTools.IntegrationLabel;
+        actual["ControlTools.integrationOffError"] = ControlTools.IntegrationOffError;
+        actual["ControlTools.integrationOnConfirming"] = ControlTools.IntegrationOnConfirming;
+        actual["ControlTools.integrationOnNotConfirming"] = ControlTools.IntegrationOnNotConfirming;
+        actual["ControlTools.integrationSetText"] = ControlTools.IntegrationSetText("X");
+        actual["ControlTools.intoOrNewCollectionError"] = ControlTools.IntoOrNewCollectionError;
+        actual["ControlTools.keepCountError"] = ControlTools.KeepCountError;
+        actual["ControlTools.kindHeader"] = ControlTools.KindHeader;
+        actual["ControlTools.listKind"] = ControlTools.ListKind;
+        actual["ControlTools.localKind"] = ControlTools.LocalKind;
+        actual["ControlTools.masterListLabel"] = ControlTools.MasterListLabel;
+        actual["ControlTools.missingArgumentError"] = ControlTools.MissingArgumentError("X");
+        actual["ControlTools.nameHeader"] = ControlTools.NameHeader;
+        actual["ControlTools.needsNewerAppError"] = ControlTools.NeedsNewerAppError("X");
+        actual["ControlTools.needsValuesText"] = ControlTools.NeedsValuesText("X");
+        actual["ControlTools.networkPathError"] = ControlTools.NetworkPathError;
+        actual["ControlTools.noBackupError"] = ControlTools.NoBackupError("X");
+        actual["ControlTools.noBackupsText"] = ControlTools.NoBackupsText;
+        actual["ControlTools.noConnectorError"] = ControlTools.NoConnectorError("X", "Y");
+        actual["ControlTools.noQuestionError"] = ControlTools.NoQuestionError;
+        actual["ControlTools.noUpdateError"] = ControlTools.NoUpdateError("X");
+        actual["ControlTools.notAFileError"] = ControlTools.NotAFileError("X");
+        actual["ControlTools.notOneOfError"] = ControlTools.NotOneOfError("X", "Y");
+        actual["ControlTools.notSubscribedError"] = ControlTools.NotSubscribedError("X");
+        actual["ControlTools.nothingToChangeError"] = ControlTools.NothingToChangeError;
+        actual["ControlTools.nothingToImportError"] = ControlTools.NothingToImportError("X");
+        actual["ControlTools.objectKind"] = ControlTools.ObjectKind;
+        actual["ControlTools.offWord"] = ControlTools.OffWord;
+        actual["ControlTools.onWord"] = ControlTools.OnWord;
+        actual["ControlTools.pendingUpdateText"] = ControlTools.PendingUpdateText("X", "Y");
+        actual["ControlTools.problemLabel"] = ControlTools.ProblemLabel;
+        actual["ControlTools.publishedFileStaysText"] = ControlTools.PublishedFileStaysText;
+        actual["ControlTools.publishedKind"] = ControlTools.PublishedKind;
+        actual["ControlTools.queuedText"] = ControlTools.QueuedText;
+        actual["ControlTools.relaySummary"] = ControlTools.RelaySummary;
+        actual["ControlTools.relayUsage"] = ControlTools.RelayUsage;
+        actual["ControlTools.renamedCollectionText"] = ControlTools.RenamedCollectionText("X", "Y");
+        actual["ControlTools.renamedNotification"] = ControlTools.RenamedNotification("X", "Y", "Z");
+        actual["ControlTools.renamedText"] = ControlTools.RenamedText("X", "Y");
+        actual["ControlTools.restartItselfTitle"] = ControlTools.RestartItselfTitle;
+        actual["ControlTools.restartMessage"] = ControlTools.RestartMessage;
+        actual["ControlTools.restartTitle"] = ControlTools.RestartTitle("X");
+        actual["ControlTools.restartToApplyText"] = ControlTools.RestartToApplyText;
+        actual["ControlTools.restartToUseText"] = ControlTools.RestartToUseText;
+        actual["ControlTools.restartingText"] = ControlTools.RestartingText;
+        actual["ControlTools.restoreActivatingText"] = ControlTools.RestoreActivatingText("X");
+        actual["ControlTools.restoreIntoText"] = ControlTools.RestoreIntoText("X");
+        actual["ControlTools.restoreTitle"] = ControlTools.RestoreTitle("X", "Y");
+        actual["ControlTools.restoredNotification"] = ControlTools.RestoredNotification("X", "Y");
+        actual["ControlTools.restoredText"] = ControlTools.RestoredText("X");
+        actual["ControlTools.runsHeader"] = ControlTools.RunsHeader;
+        actual["ControlTools.savedNotAppliedText"] = ControlTools.SavedNotAppliedText("X");
+        actual["ControlTools.settingChangedText"] = ControlTools.SettingChangedText("X", "Y");
+        actual["ControlTools.settingNotForClaudeError"] = ControlTools.SettingNotForClaudeError("X");
+        actual["ControlTools.settingsGroup"] = ControlTools.SettingsGroup;
+        actual["ControlTools.sharingGroup"] = ControlTools.SharingGroup;
+        actual["ControlTools.statusGroup"] = ControlTools.StatusGroup;
+        actual["ControlTools.statusTitle"] = ControlTools.StatusTitle("X");
+        actual["ControlTools.subscribeMessage.many"] = ControlTools.SubscribeMessage("X", 3);
+        actual["ControlTools.subscribeMessage.one"] = ControlTools.SubscribeMessage("X", 1);
+        actual["ControlTools.subscribeTitle"] = ControlTools.SubscribeTitle("X", "Y");
+        actual["ControlTools.subscribedKind"] = ControlTools.SubscribedKind;
+        actual["ControlTools.subscribedNotification"] = ControlTools.SubscribedNotification("X", "Y", "Z");
+        actual["ControlTools.subscribedText"] = ControlTools.SubscribedText("X", "Y");
+        actual["ControlTools.switchValueError"] = ControlTools.SwitchValueError("X");
+        actual["ControlTools.switchedNotification"] = ControlTools.SwitchedNotification("X", "Y");
+        actual["ControlTools.switchedText"] = ControlTools.SwitchedText("X");
+        actual["ControlTools.takesEffectFooter"] = ControlTools.TakesEffectFooter;
+        actual["ControlTools.textKind"] = ControlTools.TextKind;
+        actual["ControlTools.tooLongToShowError"] = ControlTools.TooLongToShowError;
+        actual["ControlTools.turnedOffNotification"] = ControlTools.TurnedOffNotification("X", "Y");
+        actual["ControlTools.turnedOffText"] = ControlTools.TurnedOffText("X", "Y");
+        actual["ControlTools.turnedOnNotification"] = ControlTools.TurnedOnNotification("X", "Y");
+        actual["ControlTools.turnedOnText"] = ControlTools.TurnedOnText("X", "Y");
+        actual["ControlTools.unchangedError"] = ControlTools.UnchangedError("X");
+        actual["ControlTools.unknownToolError"] = ControlTools.UnknownToolError("X");
+        actual["ControlTools.upToDateText"] = ControlTools.UpToDateText("X");
+        actual["ControlTools.updateAvailableKind"] = ControlTools.UpdateAvailableKind;
+        actual["ControlTools.waitingText"] = ControlTools.WaitingText;
+        actual["ControlTools.wrongTypeError"] = ControlTools.WrongTypeError("X", "Y");
+        foreach (var tool in ControlTools.Catalog)
+        {
+            actual[$"ControlTools.{tool.Name}.description"] = tool.Description;
+            actual[$"ControlTools.{tool.Name}.cliUsage"] = tool.CliUsage;
+        }
+        foreach (var (name, title) in ControlTools.Titles)
+        {
+            actual[$"ControlTools.titles.{name}"] = title;
+        }
 
         // MARK: CopyModel
 
@@ -545,39 +898,58 @@ public class StringCatalogTests
 
         actual["SettingsModel.autoUpdateTitle"] = SettingsModel.AutoUpdateTitle;
         actual["SettingsModel.backupsCaption"] = SettingsModel.BackupsCaption;
+        actual["SettingsModel.backupsFooter"] = SettingsModel.BackupsFooter;
         actual["SettingsModel.backupsHeader"] = SettingsModel.BackupsHeader;
+        actual["SettingsModel.backupsTitle"] = SettingsModel.BackupsTitle;
         actual["SettingsModel.checkForUpdatesTitle"] = SettingsModel.CheckForUpdatesTitle;
+        actual["SettingsModel.chooseButtonTitle"] = SettingsModel.ChooseButtonTitle;
         actual["SettingsModel.chooseTitle"] = SettingsModel.ChooseTitle;
         actual["SettingsModel.claudeAppHeader"] = SettingsModel.ClaudeAppHeader;
         actual["SettingsModel.claudeAppRejectedTitle"] = SettingsModel.LaunchTargetRejectedTitle;
+        actual["SettingsModel.claudeIntegrationCaption"] = SettingsModel.ClaudeIntegrationCaption;
+        actual["SettingsModel.claudeIntegrationHeader"] = SettingsModel.ClaudeIntegrationHeader;
+        actual["SettingsModel.claudeIntegrationTitle"] = SettingsModel.ClaudeIntegrationTitle;
         actual["SettingsModel.claudeTab"] = SettingsModel.ClaudeTab;
+        actual["SettingsModel.commandLineToolHeader"] = SettingsModel.CommandLineToolHeader;
+        actual["SettingsModel.confirmClaudeChangesOffCaption"] = SettingsModel.ConfirmClaudeChangesOffCaption;
+        actual["SettingsModel.confirmClaudeChangesOnCaption"] = SettingsModel.ConfirmClaudeChangesOnCaption;
+        actual["SettingsModel.confirmClaudeChangesTitle"] = SettingsModel.ConfirmClaudeChangesTitle;
         actual["SettingsModel.confirmQuitTitle"] = SettingsModel.ConfirmQuitTitle;
         actual["SettingsModel.confirmRestartTitle"] = SettingsModel.ConfirmRestartTitle;
+        actual["SettingsModel.confirmationsHeader"] = SettingsModel.ConfirmationsHeader;
         actual["SettingsModel.configPathLabel"] = SettingsModel.ConfigPathLabel;
         actual["SettingsModel.generalTab"] = SettingsModel.GeneralTab;
         // Inline literals inside InstallKindText's switch expression — not named constants.
         actual["SettingsModel.installKindLegacyText"] = "Legacy installer";
         actual["SettingsModel.installKindMsixText"] = "MSIX package";
-        actual["SettingsModel.keepCountLabel"] = SettingsModel.KeepCountLabelFor(3);
         actual["SettingsModel.launchAtLoginTitle"] = SettingsModel.LaunchAtStartupTitle;
         actual["SettingsModel.launchTargetLabel"] = SettingsModel.LaunchTargetLabel;
         actual["SettingsModel.loginItemFailureNote"] = SettingsModel.StartupEntryFailureNote("X");
+        actual["SettingsModel.masterListFooter"] = SettingsModel.MasterListFooter;
         actual["SettingsModel.masterListHeader"] = SettingsModel.MasterListHeader;
+        actual["SettingsModel.notificationsHeader"] = SettingsModel.NotificationsHeader;
+        actual["SettingsModel.notifyCaption"] = SettingsModel.NotifyCaption;
         actual["SettingsModel.notifyTitle"] = SettingsModel.NotifyTitle;
+        actual["SettingsModel.previewUpdatesCaption"] = SettingsModel.PreviewUpdatesCaption;
+        actual["SettingsModel.restoreButtonTitle"] = SettingsModel.RestoreButtonTitle;
         actual["SettingsModel.revealInFinderTitle"] = SettingsModel.ShowInExplorerTitle;
+        actual["SettingsModel.startupHeader"] = SettingsModel.StartupHeader;
         actual["SettingsModel.storageTab"] = SettingsModel.StorageTab;
         actual["SettingsModel.updatesHeader"] = SettingsModel.UpdatesHeader;
         actual["SettingsModel.useDefaultTitle"] = SettingsModel.UseDefaultTitle;
         actual["SettingsModel.versionText"] = SettingsModel.VersionTextFor("X");
 
-        // MARK: ToolFamily / ToolInfo / ToolNote
+        // MARK: ToolFamily / ToolInfo / ToolFooterLine / ToolNote
 
         actual["ToolFamily.nodeJS.installCommand"] = ToolInfo.InstallCommand(ToolFamily.NodeJs);
         actual["ToolFamily.nodeJS.linkTitle"] = ToolInfo.LinkTitle(ToolFamily.NodeJs);
         actual["ToolFamily.nodeJS.linkURL"] = ToolInfo.LinkUrl(ToolFamily.NodeJs);
+        actual["ToolFamily.nodeJS.toolNames"] = ToolInfo.ToolNames(ToolFamily.NodeJs);
         actual["ToolFamily.uv.installCommand"] = ToolInfo.InstallCommand(ToolFamily.Uv);
         actual["ToolFamily.uv.linkTitle"] = ToolInfo.LinkTitle(ToolFamily.Uv);
         actual["ToolFamily.uv.linkURL"] = ToolInfo.LinkUrl(ToolFamily.Uv);
+        actual["ToolFamily.uv.toolNames"] = ToolInfo.ToolNames(ToolFamily.Uv);
+        actual["ToolFooterLine.installText"] = ToolFooterLine.InstallText("X", "Y", "Z");
         actual["ToolNote.checkingText"] = ToolNote.CheckingText;
         actual["ToolNote.foundText"] = ToolNote.FoundText;
         actual["ToolNote.missingText"] = ToolNote.MissingText(Tool.Npx);
@@ -598,6 +970,10 @@ public class StringCatalogTests
         actual["UpdateCoordinator.updateRefusedMessage"] = UpdateCoordinator.UpdateRefusedMessage;
         actual["UpdateCoordinator.upToDateDetail"] = UpdateCoordinator.UpToDateDetail("X");
         actual["UpdateCoordinator.upToDateMessage"] = UpdateCoordinator.UpToDateMessage;
+
+        // MARK: UserPath
+
+        actual["UserPath.notTextError"] = UserPath.NotTextError;
 
         // MARK: - Compare every key against the fixture's Windows side
 

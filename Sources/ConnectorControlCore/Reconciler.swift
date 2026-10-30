@@ -26,7 +26,10 @@ public enum Reconciler {
         var ingested: [String] = []
         let destination = target ?? store.activeCollection
 
-        for (name, config) in claudeServers where result.mcps[name] == nil {
+        // Connector Control's own entry is in Claude's file because the app put it there; taking it
+        // into the store would sync it, share it and show it as a row.
+        for (name, config) in claudeServers
+        where result.mcps[name] == nil && name != MasterStore.reservedConnectorName {
             if isExternalAddition(name: name, config: config, baseline: baseline) {
                 let kept = keptName(name, config, in: result.collections[destination]?.mcps ?? [:])
                 if result.collections[destination]?.mcps[kept] == nil {
@@ -92,7 +95,10 @@ public enum Reconciler {
         for (name, entry) in result.mcps where entry.enabled && servers[name] == nil {
             result.mcps[name]?.enabled = false
         }
-        for (name, config) in servers {
+        // A backup taken while the integration was on holds the app's own entry; the restore puts
+        // it back in Claude's file, and the next apply adds or drops it by the setting, but the
+        // store never takes it in.
+        for (name, config) in servers where name != MasterStore.reservedConnectorName {
             let held = result.mcps[name]
             var entry = held ?? MCPEntry(enabled: true, config: config)
             let rendersAsSnapshot = held.map { held in

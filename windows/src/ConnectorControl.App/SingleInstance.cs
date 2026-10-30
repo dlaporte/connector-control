@@ -1,3 +1,5 @@
+using ConnectorControl.Core.Transport;
+
 namespace ConnectorControl.App;
 
 /// <summary>
@@ -5,9 +7,10 @@ namespace ConnectorControl.App;
 /// on a named event; a second launch sets that event so the running app shows
 /// its flyout and then exits — the Windows answer to re-opening a bundled app on
 /// the Mac, and the difference between "nothing happened" and "there it is".
-/// The one launch that must stay silent is Windows starting us with
-/// <c>-ToastActivated</c> to deliver a toast click: the toolkit's COM server routes
-/// that to the running process on its own, so the second instance just leaves.
+/// Two launches must stay silent: Windows starting us with <c>-ToastActivated</c> to
+/// deliver a toast click — the toolkit's COM server routes that to the running process
+/// on its own — and the command-line tool starting us with <c>--background</c>, which
+/// asks only for the app to be running. The second instance just leaves.
 /// </summary>
 public sealed class SingleInstance : IDisposable
 {
@@ -41,6 +44,35 @@ public sealed class SingleInstance : IDisposable
     /// <summary>Windows started this process to deliver a toast activation, not because a user asked for the app.</summary>
     public static bool IsToastActivation(IEnumerable<string> arguments) =>
         arguments.Any(a => string.Equals(a, ToastActivatedArgument, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The command-line tool started the app because nothing answered: it asked only for the app to
+    /// be running, so a second instance leaves without a word, as for a toast.</summary>
+    public static bool IsBackgroundLaunch(IEnumerable<string> arguments) =>
+        arguments.Any(a => string.Equals(a, ControlEndpoint.BackgroundArgument, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The lock alone, for the uninstall hook: held, it makes any app started meanwhile a second instance, which
+    /// leaves before it touches anything. Waits up to <paramref name="timeout"/> for it; an owner that was ended
+    /// without letting go (Velopack stops the app before the hook) hands it over. Null when it could not be had.
+    /// The caller releases it on the thread that took it.
+    /// </summary>
+    internal static Mutex? Hold(string nameSuffix, TimeSpan timeout)
+    {
+        var mutex = new Mutex(initiallyOwned: false, MutexName + nameSuffix);
+        try
+        {
+            if (mutex.WaitOne(timeout))
+            {
+                return mutex;
+            }
+        }
+        catch (AbandonedMutexException)
+        {
+            return mutex;   // acquired: its last owner died holding it
+        }
+        mutex.Dispose();
+        return null;
+    }
 
     /// <summary>Second instance: ask the running one to come forward.</summary>
     public void SignalShow() => showRequested.Set();

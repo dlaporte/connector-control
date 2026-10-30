@@ -695,6 +695,62 @@ public class AppStateCollectionsTests
         Assert.Equal(["Data team"], state.WatchedSourceCollections);
     }
 
+    /// <summary>What was decided on is what lands: the decoded document is used, not the file as it is now.</summary>
+    [Fact]
+    public void ImportingADecodedDocumentUsesItNotTheFileOnDisk()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.WriteDocument(OneLocalConnector("asked", "echo", []), "tools.json");
+        var (decided, _, _) = AppState.ReadDocument(path);
+        AppStateHarness.WriteDocumentAt(OneLocalConnector("swapped", "evil", []), path);
+        Assert.Null(state.ImportCopies(decided!, path, state.ActiveCollection,
+            new Dictionary<string, ImportChoice>(StringComparer.Ordinal) { ["asked"] = ImportChoice.Add }));
+        var held = state.Store.Collections[state.ActiveCollection].Mcps;
+        Assert.True(held.ContainsKey("asked"));
+        Assert.False(held.ContainsKey("swapped"));
+    }
+
+    /// <summary>A subscription to a document already read binds the file's standard path, as one by path does.</summary>
+    [Fact]
+    public void SubscribingToADecodedDocumentBindsItsStandardPath()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.WriteDocument(OneLocalConnector("asked", "echo", []), "tools.json");
+        var roundabout = Path.Combine(Path.GetDirectoryName(path)!, ".", "tools.json");
+        var (decided, bytes, _) = AppState.ReadDocument(path);
+        Assert.Null(state.Subscribe(decided!, bytes!, roundabout, null));
+        Assert.Equal(Path.GetFullPath(path), state.SourceBinding("Tools")?.Path);
+    }
+
+    /// <summary>A document over the limit is refused by the read itself, whatever a size checked beforehand said.</summary>
+    [Fact]
+    public void ADocumentOverTheLimitIsRefusedByItsRead()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.Dir.File("big.json");
+        File.WriteAllBytes(path, Enumerable.Repeat((byte)' ', McpSession.MaxMessageBytes + 1).ToArray());
+        var (document, data, failure) = AppState.ReadDocument(path);
+        Assert.Null(document);
+        Assert.Null(data);
+        Assert.Equal(AppState.SourceUnreadableError("big.json", BoundedRead.TooLargeError), failure);
+    }
+
+    [Fact]
+    public void SubscribingToADecodedDocumentUsesItAndHashesItsBytes()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = h.WriteDocument(OneLocalConnector("asked", "echo", []), "tools.json");
+        var (decided, bytes, _) = AppState.ReadDocument(path);
+        AppStateHarness.WriteDocumentAt(OneLocalConnector("swapped", "evil", []), path);
+        Assert.Null(state.Subscribe(decided!, bytes!, path, null));
+        Assert.Equal(["asked"], state.Store.Collections["Tools"].Mcps.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(ContentHash.Sha256(bytes!), state.CollectionsCache.Synced["Tools"].LastHash);
+    }
+
     [Fact]
     public void SubscribeNamesTheCollectionAndRefusesWhatItCannotRead()
     {
@@ -2140,6 +2196,26 @@ public class AppStateCollectionsTests
         Assert.False(JsonText.FileContains(clientsDoc, teamFolder));
         Assert.Null(s.PublishError);
         Assert.Equal(team, s.CollectionsCache.LastAppliedCollection);
+    }
+
+    /// <summary>The collection a restore goes back into follows the record its caller read, not the record as
+    /// it is by then: one read as having none goes into the active collection.</summary>
+    [Fact]
+    public void ARestoreFollowsTheRecordItsCallerRead()
+    {
+        using var h = new AppStateHarness();
+        using var s = h.Create();
+        Assert.Null(s.CreateActiveCopy("Gone"));
+        Assert.Null(s.Upsert("gone-only", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("g")))), null, "Gone"));
+        s.Apply();
+        s.SwitchCollection("Default");   // backs up what Gone put in Claude's file, recorded as Gone's
+        var backup = s.Service.Backups.Backups("claude_desktop_config")[0];
+        Assert.Null(s.DeleteCollection("Gone"));
+        Assert.IsType<RestoreCollectionGoneException>(s.RestoreRefusal(backup));
+        Assert.Null(s.RestoreRefusalForRecorded(null));
+        s.RestoreClaudeConfig(backup, null, null);
+        Assert.Equal("Default", s.ActiveCollection);
+        Assert.True(s.Store.Collections["Default"].Mcps.ContainsKey("gone-only"));
     }
 
     [Fact]

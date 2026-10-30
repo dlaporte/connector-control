@@ -1,0 +1,12 @@
+# A direct change runs without asking; the two Claude settings are the user's alone, and Claude is refused them.
+> {"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"claude-ai","version":"0.1.0"}}}
+< {"id":0,"jsonrpc":"2.0","result":{"capabilities":{"tools":{}},"protocolVersion":"2025-11-25","serverInfo":{"name":"connector-control","version":"1.2.2"}}}
+> {"jsonrpc":"2.0","method":"notifications/initialized"}
+> {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"set_connector_enabled","arguments":{"name":"github","enabled":false}}}
+< {"id":1,"jsonrpc":"2.0","result":{"content":[{"text":"Turned off “github” in “Default”.","type":"text"}],"isError":false,"structuredContent":{"applied":true,"collection":"Default","enabled":false,"name":"github","restartRequired":false}}}
+> {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_connectors","arguments":{}}}
+< {"id":2,"jsonrpc":"2.0","result":{"content":[{"text":"      NAME      RUNS\non    aws-mcp   aws-mcp.us-east-1.api.aws\noff   github    npx …\/server-github\non    splunk    harvard.splunkcloud.com","type":"text"}],"isError":false,"structuredContent":{"collection":"Default","connectors":[{"caution":null,"enabled":true,"name":"aws-mcp","runs":"aws-mcp.us-east-1.api.aws"},{"caution":null,"enabled":false,"name":"github","runs":"npx …\/server-github"},{"caution":null,"enabled":true,"name":"splunk","runs":"harvard.splunkcloud.com"}]}}}
+> {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"set_setting","arguments":{"key":"claude-integration","value":"off"}}}
+< {"id":3,"jsonrpc":"2.0","result":{"content":[{"text":"Only you can change claude-integration, in Connector Control or with the command-line tool.","type":"text"}],"isError":true,"structuredContent":{"error":"Only you can change claude-integration, in Connector Control or with the command-line tool."}}}
+> {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"set_setting","arguments":{"key":"confirm-claude-changes","value":"off"}}}
+< {"id":4,"jsonrpc":"2.0","result":{"content":[{"text":"Only you can change confirm-claude-changes, in Connector Control or with the command-line tool.","type":"text"}],"isError":true,"structuredContent":{"error":"Only you can change confirm-claude-changes, in Connector Control or with the command-line tool."}}}

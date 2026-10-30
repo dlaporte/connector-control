@@ -189,4 +189,16 @@ public class RemotePatternTests
         Assert.True(RemotePattern.IsMarker(RemotePattern.DefaultPackage));
         Assert.Equal(RemotePattern.DefaultPackage, RemotePattern.Decode(RemotePattern.Make(SafeUrl, RemoteLaunchStyle.Npx))!.Package);
     }
+
+    /// <summary>OAuth client info nested deeper than 64 is not read, as the Mac mirror does not read it.</summary>
+    [Fact]
+    public void DeepOAuthClientInfoIsNotRead()
+    {
+        static JsonValue Config(string info) => JsonValue.Object(("command", JsonValue.String("npx")),
+            ("args", JsonValue.Array(new[] { "-y", "mcp-remote", "https://h.example/mcp", "--static-oauth-client-info", info }.Select(JsonValue.String))));
+        var deep = """{"client_id":"a","client_secret":"b","x":""" + new string('[', 70) + new string(']', 70) + "}";
+        Assert.Equal(RemotePattern.Decode(Config("not json"))?.Auth, RemotePattern.Decode(Config(deep))?.Auth);
+        Assert.Equal(new RemoteAuth.OAuthClient("a", "b", ""),
+            RemotePattern.Decode(Config("""{"client_id":"a","client_secret":"b"}"""))?.Auth);
+    }
 }

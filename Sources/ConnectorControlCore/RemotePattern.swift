@@ -210,13 +210,13 @@ public extension RemotePattern {
                 i += 2
             case "--static-oauth-client-info" where i + 1 < args.count:
                 if let obj = parseJSONObject(args[i + 1]) {
-                    clientID = obj["client_id"] as? String
-                    clientSecret = obj["client_secret"] as? String
+                    clientID = string(obj["client_id"])
+                    clientSecret = string(obj["client_secret"])
                 }
                 i += 2
             case "--static-oauth-client-metadata" where i + 1 < args.count:
                 if let obj = parseJSONObject(args[i + 1]) {
-                    scopes = obj["scope"] as? String
+                    scopes = string(obj["scope"])
                 }
                 i += 2
             default:
@@ -250,8 +250,15 @@ public extension RemotePattern {
         return String(decoding: data, as: UTF8.self)
     }
 
-    private static func parseJSONObject(_ text: String) -> [String: Any]? {
-        guard let data = text.data(using: .utf8) else { return nil }
-        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    /// Read with `JSONValue.parse`, as the Windows mirror reads with `JsonValue.Parse`, so the
+    /// same nesting limit decides on both whether a sign-in's JSON is read.
+    private static func parseJSONObject(_ text: String) -> [String: JSONValue]? {
+        guard case .object(let object)? = try? JSONValue.parse(Data(text.utf8)) else { return nil }
+        return object
+    }
+
+    private static func string(_ value: JSONValue?) -> String? {
+        if case .string(let text)? = value { return text }
+        return nil
     }
 }

@@ -219,4 +219,28 @@ public class ReconcilerTests
         // With no folder published from here, the snapshot is adopted as written.
         Assert.Equal(Expanded, Reconciler.AdoptSnapshot(s, Servers(("x", Expanded))).Store.Mcps["x"].Config);
     }
+
+    // MARK: the reserved name
+
+    private static readonly JsonValue ReservedEntry = JsonValue.Object(
+        ("command", JsonValue.String("/x/connector-control")), ("args", JsonValue.Array([JsonValue.String("mcp")])));
+
+    [Fact]
+    public void TheReservedEntryIsNeverIngested()
+    {
+        var outcome = Reconciler.Reconcile(MasterStore.Empty(), Servers(("connector-control", ReservedEntry), ("new", ConfigA)));
+        Assert.False(outcome.Store.Mcps.ContainsKey("connector-control"));
+        Assert.True(outcome.Store.Mcps.ContainsKey("new"));
+        Assert.Equal(["new"], outcome.Ingested);
+    }
+
+    [Fact]
+    public void ARestoredSnapshotNeverAdoptsTheReservedEntry()
+    {
+        var outcome = Reconciler.AdoptSnapshot(Store(("a", new McpEntry(true, ConfigA))),
+                                               Servers(("connector-control", ReservedEntry), ("a", ConfigA)));
+        Assert.False(outcome.Store.Mcps.ContainsKey("connector-control"));
+        Assert.True(outcome.Store.Mcps["a"].Enabled);
+        Assert.False(outcome.StoreChanged);
+    }
 }

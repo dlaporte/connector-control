@@ -1,3 +1,4 @@
+using System.Text;
 using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests;
@@ -344,6 +345,23 @@ public class ConfigServiceTests : IDisposable
         Assert.Equal(3, ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath).Count);
     }
 
+    /// <summary>The restore applies the bytes it is handed — the ones its caller checked — not the file as it
+    /// is by then.</summary>
+    [Fact]
+    public void RestoreUsesTheBytesItIsGivenNotTheFileNow()
+    {
+        var store = service.LoadAndReconcile().Store;
+        store.Mcps["aws-mcp"] = store.Mcps["aws-mcp"] with { Enabled = false };
+        service.Apply(store.EnabledServers);   // backs up the 3-server file
+        var backup = service.Backups.Backups("claude_desktop_config")[0];
+        var checkedBytes = File.ReadAllBytes(backup);
+        File.WriteAllText(backup, """{"mcpServers":{"swapped":{"command":"evil"}}}""");
+        service.RestoreClaudeConfig(backup, store, data: checkedBytes);
+        var restored = ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath);
+        Assert.Equal(3, restored.Count);
+        Assert.False(restored.ContainsKey("swapped"));
+    }
+
     [Fact]
     public void RestoreClaudeConfigAdoptsSnapshotIntoStore()
     {
@@ -470,12 +488,66 @@ public class ConfigServiceTests : IDisposable
         File.WriteAllText(bad, "{not json");
         var before = File.ReadAllBytes(paths.ClaudeConfigPath);
         var ex = Assert.Throws<ClaudeConfigException>(() => service.RestoreClaudeConfig(bad, store));
-        // The parenthesised detail is .NET's own JSON error text, as the Mac's is Foundation's.
+        // The parenthesised detail is fixed words, alike on both platforms, quoting nothing from the file.
         Assert.Equal(
             "backup bad-backup.json is not a valid config file "
-                + "('n' is an invalid start of a property name. Expected a '\"'. LineNumber: 0 | BytePositionInLine: 1.)",
+                + "(the text does not parse as JSON)",
             ex.Detail);
         Assert.Equal(before, File.ReadAllBytes(paths.ClaudeConfigPath));
+    }
+
+    /// <summary>A backup that names a server twice is refused before the live file is touched: what it lists
+    /// and what Claude would run from it could differ.</summary>
+    [Fact]
+    public void RestoreRefusesABackupNamingAServerTwice()
+    {
+        service.LoadAndReconcile();
+        var before = File.ReadAllBytes(paths.ClaudeConfigPath);
+        foreach (var (name, json) in new[]
+                 {
+                     ("exact.json", """{"mcpServers": {"a": {"command": "x"}, "a": {"command": "y"}}}"""),
+                     ("equivalent.json", "{\"mcpServers\": {\"caf\u00e9\": {}, \"cafe\u0301\": {}}}"),
+                 })
+        {
+            var backup = dir.File(name);
+            File.WriteAllText(backup, json);
+            var refused = Assert.Throws<ClaudeConfigException>(() => service.RestoreClaudeConfig(backup, MasterStore.Empty()));
+            Assert.Equal($"backup {name} is not a valid config file ({ClaudeConfigIO.RepeatedKeyError})", refused.Detail);
+        }
+        // Live config must be untouched.
+        Assert.Equal(before, File.ReadAllBytes(paths.ClaudeConfigPath));
+    }
+
+    /// <summary>A backup that is not UTF-8 is refused as malformed before the live file is touched, a repeated
+    /// name in it too: its keys are never read as UTF-8 bytes.</summary>
+    [Fact]
+    public void RestoreRefusesABackupThatIsNotUTF8()
+    {
+        service.LoadAndReconcile();
+        var before = File.ReadAllBytes(paths.ClaudeConfigPath);
+        foreach (var (name, json) in new[] { ("plain.json", """{"k":"∀}}"}"""), ("twice.json", """{"mcpServers":{"a":{},"a":{}}}""") })
+        {
+            var backup = dir.File(name);
+            File.WriteAllBytes(backup, new UnicodeEncoding(bigEndian: false, byteOrderMark: false).GetBytes(json));
+            var refused = Assert.Throws<ClaudeConfigException>(() => service.RestoreClaudeConfig(backup, MasterStore.Empty()));
+            Assert.StartsWith($"backup {name} is not a valid config file (", refused.Detail, StringComparison.Ordinal);
+        }
+        // Live config must be untouched.
+        Assert.Equal(before, File.ReadAllBytes(paths.ClaudeConfigPath));
+    }
+
+    /// <summary>The restore writes what it parsed, not the backup's bytes: whatever parser reads the file next
+    /// reads what this app read.</summary>
+    [Fact]
+    public void RestoreWritesWhatItParsed()
+    {
+        var store = service.LoadAndReconcile().Store;
+        var backup = dir.File("nested.json");
+        File.WriteAllText(backup, """{"mcpServers": {"a": {"command": "x", "env": {"K": "first", "K": "second"}}}}""");
+        var servers = service.RestoreClaudeConfig(backup, store);
+        Assert.Equal(JsonValue.String("first"), servers["a"].ValueAt(JsonPointer.Parse("/env/K")!));
+        Assert.DoesNotContain("second", File.ReadAllText(paths.ClaudeConfigPath), StringComparison.Ordinal);
+        Assert.Equal(servers, ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath));
     }
 
     /// <summary>
@@ -492,6 +564,20 @@ public class ConfigServiceTests : IDisposable
         var servers = service.RestoreClaudeConfig(empty, store);
         Assert.Empty(servers);
         Assert.Empty(ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath));
+    }
+
+    [Fact]
+    public void ALoadNeverIngestsTheReservedEntryButReturnsItWithTheFilesServers()
+    {
+        var reserved = JsonValue.Object(("command", JsonValue.String("/x/connector-control")), ("args", JsonValue.Array([JsonValue.String("mcp")])));
+        var servers = ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        servers["connector-control"] = reserved;
+        ClaudeConfigIO.Write(servers, paths.ClaudeConfigPath);
+        var result = service.LoadAndReconcile();
+        // The entry is the app's own, never a stored connector.
+        Assert.False(result.Store.Mcps.ContainsKey("connector-control"));
+        // What the file holds is reported whole, so the caller's comparison sees the entry.
+        Assert.Equal(reserved, result.ClaudeServers!["connector-control"]);
     }
 }
 

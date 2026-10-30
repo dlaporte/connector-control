@@ -449,7 +449,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// double quotes is a quote, and a backslash anywhere else is itself, as a Windows path needs.
     /// An unterminated quote runs to the end.
     /// </summary>
-    private static List<string> ShellWords(string text)
+    internal static List<string> ShellWords(string text)
     {
         var words = new List<string>();
         System.Text.StringBuilder? word = null;

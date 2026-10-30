@@ -4,7 +4,9 @@
     Publishes the Windows app for one runtime and packs it with Velopack.
 
 .DESCRIPTION
-    1. dotnet publish (self-contained, -p:Version=<Version>) into windows/artifacts/publish/<Runtime>
+    1. dotnet publish (self-contained, -p:Version=<Version>) into windows/artifacts/publish/<Runtime>,
+       and ConnectorControl.Cli single-file and self-contained, copied in beside ConnectorControl.exe as
+       connector-control.exe
     2. `vpk pack` into windows/artifacts/<Runtime>:
          ConnectorControl-<Runtime>-Setup.exe
          ConnectorControl-<Version>-<Runtime>-full.nupkg
@@ -69,6 +71,8 @@ $windowsDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $project = Join-Path $windowsDir 'src/ConnectorControl.App/ConnectorControl.App.csproj'
 $icon = Join-Path $windowsDir 'assets/ConnectorControl.ico'
 $publishDir = Join-Path $windowsDir "artifacts/publish/$Runtime"
+$cliProject = Join-Path $windowsDir 'src/ConnectorControl.Cli/ConnectorControl.Cli.csproj'
+$cliPublishDir = Join-Path $windowsDir "artifacts/publish-cli/$Runtime"
 $outputDir = Join-Path $windowsDir "artifacts/$Runtime"
 
 function Invoke-Native {
@@ -86,6 +90,22 @@ Invoke-Native 'dotnet publish' 'dotnet' @(
     'publish', $project, '-c', 'Release', '-r', $Runtime, '--self-contained', 'true', "-p:Version=$Version", '-o', $publishDir)
 $mainExe = Join-Path $publishDir 'ConnectorControl.exe'
 if (-not (Test-Path $mainExe)) { throw "publish produced no $mainExe" }
+
+Write-Host "== Publish the command-line tool $Runtime, version $Version"
+if (Test-Path $cliPublishDir) { Remove-Item -Recurse -Force $cliPublishDir }
+# Single-file and self-contained: the app keeps a copy of it in %LOCALAPPDATA%\Connector Control\bin,
+# outside the update folder, where it runs with nothing beside it. Trimmed and compressed, since the
+# packaged tool and that copy each carry the runtime: about 11 MB instead of 70. These are the flags
+# windows-build.yml's "Publish the command-line tool as it ships" step uses, so CI's Inspector check
+# runs the build that ships: change them in both places.
+Invoke-Native 'dotnet publish (connector-control)' 'dotnet' @(
+    'publish', $cliProject, '-c', 'Release', '-r', $Runtime, '--self-contained', 'true',
+    '-p:PublishSingleFile=true', '-p:EnableCompressionInSingleFile=true', '-p:PublishTrimmed=true',
+    "-p:Version=$Version", '-o', $cliPublishDir)
+$cliExe = Join-Path $cliPublishDir 'connector-control.exe'
+if (-not (Test-Path $cliExe)) { throw "publish produced no $cliExe" }
+# Only the exe: the publish folder's .pdb stays out of the package.
+Copy-Item -Path $cliExe -Destination (Join-Path $publishDir 'connector-control.exe')
 
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 $vpkGlobal = @('--skip-updates', '--yes')        # no vpk self-update check (it stalled a Mac run for 5 min); no prompts
@@ -126,6 +146,47 @@ $expected = @(
     "assets.$Runtime.json")
 foreach ($name in $expected) {
     if (-not (Test-Path (Join-Path $outputDir $name))) { throw "vpk pack did not produce $name in $outputDir" }
+}
+
+if ($AzureTrustedSignFile) {
+    # vpk signs the binaries in the pack folder that are not signed yet; the tool must be one of them, or every
+    # installed client would refuse this update (UpdateVerifier requires the app's own signature on it). Checked
+    # in the package itself, as a client would read it, before the smoke job ever installs it.
+    $nupkg = Join-Path $outputDir "ConnectorControl-$Version-$Runtime-full.nupkg"
+    $check = Join-Path ([System.IO.Path]::GetTempPath()) "cc-signcheck-$([guid]::NewGuid().ToString('N'))"
+    New-Item -ItemType Directory -Force -Path $check | Out-Null
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($nupkg)
+        try {
+            $extract = {
+                param([string] $fileName)
+                $found = $zip.Entries | Where-Object { [System.IO.Path]::GetFileName($_.FullName) -eq $fileName } | Select-Object -First 1
+                if (-not $found) { throw "$nupkg carries no $fileName" }
+                $target = Join-Path $check $fileName
+                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($found, $target)
+                $target
+            }
+            $extracted = & $extract 'connector-control.exe'
+            $extractedApp = & $extract 'ConnectorControl.exe'
+        }
+        finally {
+            $zip.Dispose()
+        }
+        $signature = Get-AuthenticodeSignature -FilePath $extracted
+        if ($signature.Status -ne 'Valid') { throw "connector-control.exe in $nupkg is not validly signed ($($signature.Status))" }
+        # The same signer as the app: the one check a win-arm64 package gets before it is published, and what
+        # UpdateVerifier compares on the client.
+        $appSignature = Get-AuthenticodeSignature -FilePath $extractedApp
+        if ($appSignature.Status -ne 'Valid') { throw "ConnectorControl.exe in $nupkg is not validly signed ($($appSignature.Status))" }
+        if ($signature.SignerCertificate.Subject -ne $appSignature.SignerCertificate.Subject) {
+            throw "connector-control.exe is signed by '$($signature.SignerCertificate.Subject)', ConnectorControl.exe by '$($appSignature.SignerCertificate.Subject)'"
+        }
+        Write-Host "== connector-control.exe in the package is signed by $($signature.SignerCertificate.Subject)"
+    }
+    finally {
+        Remove-Item -Recurse -Force $check -ErrorAction SilentlyContinue
+    }
 }
 
 Write-Host "== Packed into $outputDir"

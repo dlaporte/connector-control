@@ -604,6 +604,54 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.watchedSourceCollections, ["Data team"])
     }
 
+    /// What was decided on is what lands: the decoded document is used, not the file as it is now.
+    func testImportingADecodedDocumentUsesItNotTheFileOnDisk() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try h.writeDocument(oneLocalConnector("asked", command: "echo", args: []), named: "tools.json")
+        let (decided, _, _) = AppState.readDocument(at: url)
+        try h.writeDocument(oneLocalConnector("swapped", command: "evil", args: []), at: url)
+        XCTAssertNil(state.importCopies(document: try XCTUnwrap(decided), at: url,
+                                        into: state.activeCollection, choices: ["asked": .add]))
+        let held = state.store.collections[state.activeCollection]?.mcps ?? [:]
+        XCTAssertNotNil(held["asked"])
+        XCTAssertNil(held["swapped"])
+    }
+
+    /// A subscription to a document already read binds the file's standard path, as one by path does.
+    func testSubscribingToADecodedDocumentBindsItsStandardPath() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try h.writeDocument(oneLocalConnector("asked", command: "echo", args: []), named: "tools.json")
+        let roundabout = url.deletingLastPathComponent().appendingPathComponent(".").appendingPathComponent("tools.json")
+        let (decided, bytes, _) = AppState.readDocument(at: url)
+        XCTAssertNil(state.subscribe(document: try XCTUnwrap(decided), data: try XCTUnwrap(bytes), at: roundabout, as: nil))
+        XCTAssertEqual(state.sourceBinding(of: "Tools")?.path, url.standardizedFileURL.path)
+    }
+
+    /// A document over the limit is refused by the read itself, whatever a size checked beforehand said.
+    func testADocumentOverTheLimitIsRefusedByItsRead() throws {
+        let (h, _) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = h.dir.file("big.json")
+        try Data(repeating: UInt8(ascii: " "), count: McpSession.maxMessageBytes + 1).write(to: url)
+        let (document, data, failure) = AppState.readDocument(at: url)
+        XCTAssertNil(document)
+        XCTAssertNil(data)
+        XCTAssertEqual(failure, AppState.sourceUnreadableError("big.json", BoundedRead.tooLargeError))
+    }
+
+    func testSubscribingToADecodedDocumentUsesItAndHashesItsBytes() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try h.writeDocument(oneLocalConnector("asked", command: "echo", args: []), named: "tools.json")
+        let (decided, bytes, _) = AppState.readDocument(at: url)
+        try h.writeDocument(oneLocalConnector("swapped", command: "evil", args: []), at: url)
+        XCTAssertNil(state.subscribe(document: try XCTUnwrap(decided), data: try XCTUnwrap(bytes), at: url, as: nil))
+        XCTAssertEqual(state.store.collections["Tools"]?.mcps.keys.sorted(), ["asked"])
+        XCTAssertEqual(state.collectionsCache.synced["Tools"]?.lastHash, ContentHash.sha256(try XCTUnwrap(bytes)))
+    }
+
     func testSubscribeNamesTheCollectionAndRefusesWhatItCannotRead() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
@@ -1828,6 +1876,25 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertFalse(try jsonFile(clientsDoc, contains: teamFolder))
         XCTAssertNil(s.publishError)
         XCTAssertEqual(s.collectionsCache.lastAppliedCollection, team)
+    }
+
+    /// The collection a restore goes back into follows the record its caller read, not the record as
+    /// it is by then: one read as having none goes into the active collection.
+    func testARestoreFollowsTheRecordItsCallerRead() throws {
+        let (h, s) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(s.createActiveCopy(named: "Gone"))
+        XCTAssertNil(s.upsert(name: "gone-only", entry: MCPEntry(enabled: true, config: .object(["command": .string("g")])),
+                              renamedFrom: nil, in: "Gone"))
+        s.apply()
+        s.switchCollection(to: "Default")   // backs up what Gone put in Claude's file, recorded as Gone's
+        let backup = try XCTUnwrap(try s.service.backups.backups(series: "claude_desktop_config").first)
+        XCTAssertNil(s.deleteCollection(named: "Gone"))
+        XCTAssertEqual(s.restoreRefusal(for: backup), .collectionGone("Gone"))
+        XCTAssertNil(s.restoreRefusal(forRecorded: nil))
+        try s.restoreClaudeConfig(from: backup, data: nil, recorded: nil)
+        XCTAssertEqual(s.activeCollection, "Default")
+        XCTAssertNotNil(s.store.collections["Default"]?.mcps["gone-only"])
     }
 
     func testARestoreOfABackupWhoseCollectionIsGoneIsRefused() throws {

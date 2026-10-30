@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
 using System.Runtime.Versioning;
 using ConnectorControl.Core;
+using ConnectorControl.Core.State;
 
 namespace ConnectorControl.App.Services;
 
@@ -12,11 +13,12 @@ namespace ConnectorControl.App.Services;
 /// come from the same GitHub release, so whoever can write release assets could ship anything.
 /// This app's own binaries are Authenticode-signed by its publisher, an identity a release
 /// token does not carry: before an update is staged, the replaced Update.exe and every
-/// executable inside the package (found by content, not by name) must be validly signed —
-/// this app's own files and the updater by the same organization as the running app, the
-/// runtime and libraries it is built from by that organization or one in
-/// <see cref="TrustedOrganizations"/> — and the package's own ConnectorControl.exe must
-/// carry the version the feed advertises, so an old signed release cannot be replayed as new.
+/// executable inside the package (found by content, not by name) must be validly signed, with
+/// revocation checked — this app's own files and the updater by the running app's own certificate
+/// subject, every attribute of it, the runtime and libraries it is built from by that subject or an
+/// organization in <see cref="TrustedOrganizations"/> — and the package's own ConnectorControl.exe must
+/// carry the version the feed advertises, prerelease label and all, so an old signed release or
+/// preview cannot be replayed as a newer one.
 /// Sparkle's pinned EdDSA key plays this role on the Mac. Known residual: any library this
 /// publisher ever signed is interchangeable with any other inside a package; only the main
 /// executable is bound to a version.
@@ -25,7 +27,7 @@ public static class UpdateVerifier
 {
     public const string NotInstalledSuffix = "; the update was not installed.";
 
-    /// <summary>The binary whose embedded file version must match the feed; every package carries it.</summary>
+    /// <summary>The binary whose embedded product version must match the feed; every package carries it.</summary>
     public const string MainExecutable = "ConnectorControl.exe";
 
     /// <summary>
@@ -39,18 +41,21 @@ public static class UpdateVerifier
 
     /// <summary>
     /// The files an attacker would have to replace to run code in this app's name: its own
-    /// executables and assemblies, and the updater. These must carry this app's own signature;
-    /// a trusted third party's is not enough.
+    /// executables and assemblies, the command-line tool, and the updater. These must carry this
+    /// app's own signature; a trusted third party's is not enough.
     /// </summary>
     internal static bool MustBeOurs(string fileName) =>
         fileName.StartsWith("ConnectorControl", StringComparison.OrdinalIgnoreCase)
+        // The command-line tool: Claude's entry runs its copy, and the PATH may.
+        || fileName.StartsWith("connector-control", StringComparison.OrdinalIgnoreCase)
         || string.Equals(fileName, "Squirrel.exe", StringComparison.OrdinalIgnoreCase)
         || string.Equals(fileName, "Update.exe", StringComparison.OrdinalIgnoreCase);
 
     private const string CannotValidateSelf = "This app's own signature could not be validated, so an update cannot be checked against it";
 
-    /// <summary>What the running app's signature says about who may sign an update; read once per download.</summary>
-    public readonly record struct RunningIdentity(string? Organization, bool Unsigned);
+    /// <summary>What the running app's signature says about who may sign an update; read once per download.
+    /// <see cref="Subject"/> is its certificate's full subject DN, null when its signature could not be validated.</summary>
+    public readonly record struct RunningIdentity(string? Subject, bool Unsigned);
 
     /// <summary>
     /// Null when the update may be staged; otherwise a user-facing reason. Only an UNSIGNED running
@@ -58,18 +63,21 @@ public static class UpdateVerifier
     /// inert there anyway. A running app whose signature cannot be validated refuses: that is the
     /// machine, not the build, and an unverifiable identity must not become "accept everything".
     /// </summary>
-    public static string? Verify(string packagePath, string? updateExePath, RunningIdentity identity, Version runningVersion, Version feedVersion)
+    public static string? Verify(string packagePath, string? updateExePath, RunningIdentity identity, string runningVersion, string feedVersion,
+        Action<string>? log = null)
     {
+        // One revocation session for the whole update: said once, and skipped for the rest once undeterminable.
+        var revocation = new Revocation.Session(log);
         if (!OperatingSystem.IsWindows())
         {
             return null;
         }
-        if (!TryExpectedOrganization(identity, out var expected, out var organizationProblem))
+        if (!TryExpectedSubject(identity, out var expected, out var subjectProblem))
         {
-            return organizationProblem;
+            return subjectProblem;
         }
         if (updateExePath is not null && File.Exists(updateExePath)
-            && VerifyFile(updateExePath, expected, "Update.exe", mustBeOurs: true) is { } updaterProblem)
+            && VerifyFile(updateExePath, expected, "Update.exe", mustBeOurs: true, revocation) is { } updaterProblem)
         {
             return updaterProblem;
         }
@@ -82,6 +90,10 @@ public static class UpdateVerifier
             string? mainExecutable = null;
             foreach (var entry in zip.Entries)
             {
+                if (HasInvalidCharacter(entry.FullName))
+                {
+                    return $"The update package contains an entry named \"{Shown(entry.FullName)}\", with a character no Windows file name can hold{NotInstalledSuffix}";
+                }
                 if (IsSuspiciousEntryName(entry.FullName))
                 {
                     return $"The update package contains an entry named \"{entry.FullName}\", which Windows would rename on extraction{NotInstalledSuffix}";
@@ -117,7 +129,7 @@ public static class UpdateVerifier
                 {
                     return SizeProblem(entry, actual);
                 }
-                if (VerifyFile(extracted, expected, name + " inside the update", MustBeOurs(name)) is { } problem)
+                if (VerifyFile(extracted, expected, name + " inside the update", MustBeOurs(name), revocation) is { } problem)
                 {
                     return problem;
                 }
@@ -135,12 +147,13 @@ public static class UpdateVerifier
                 // "Nothing failed" is not "everything passed": a real package always carries the app.
                 return $"The update package does not contain {MainExecutable}{NotInstalledSuffix}";
             }
-            return VersionProblem(mainExecutable, runningVersion, feedVersion);
+            return VersionProblem(EmbeddedVersion(mainExecutable), runningVersion, feedVersion);
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or NotSupportedException)
+        catch (Exception ex)
         {
-            // Any other exception propagates; the coordinator treats that as a failed download too. Closed either way.
-            return $"The update package could not be read ({ex.Message}){NotInstalledSuffix}";
+            // Every exception is a refusal, whatever its type: one that escaped here would skip the caller's
+            // deletion of the package and its restore of the updater.
+            return Unreadable(ex);
         }
         finally
         {
@@ -152,26 +165,26 @@ public static class UpdateVerifier
     /// Before anything is downloaded: Velopack would run the INSTALLED Update.exe to apply a delta,
     /// so it must already be ours. Null when it is (or when there is no identity to compare against).
     /// </summary>
-    public static string? VerifyInstalledUpdater(string? updateExePath, RunningIdentity identity)
+    public static string? VerifyInstalledUpdater(string? updateExePath, RunningIdentity identity, Action<string>? log = null)
     {
         if (!OperatingSystem.IsWindows() || updateExePath is null || !File.Exists(updateExePath))
         {
             return null;
         }
-        if (!TryExpectedOrganization(identity, out var expected, out var problem))
+        if (!TryExpectedSubject(identity, out var expected, out var problem))
         {
             return problem;
         }
-        return VerifyFile(updateExePath, expected, "The installed Update.exe", mustBeOurs: true);
+        return VerifyFile(updateExePath, expected, "The installed Update.exe", mustBeOurs: true, new Revocation.Session(log));
     }
 
     /// <summary>
-    /// True when there is an organization to check a file's signer against; <paramref name="expected"/>
+    /// True when there is a subject to check a file's signer against; <paramref name="expected"/>
     /// carries it. False and <paramref name="expected"/> null either because the running app is
     /// unsigned (a dev build: <paramref name="problem"/> is also null, meaning skip every check) or
     /// because its own signature could not be validated (<paramref name="problem"/> carries why).
     /// </summary>
-    private static bool TryExpectedOrganization(RunningIdentity identity, [NotNullWhen(true)] out string? expected, out string? problem)
+    private static bool TryExpectedSubject(RunningIdentity identity, [NotNullWhen(true)] out string? expected, out string? problem)
     {
         if (identity.Unsigned)
         {
@@ -179,35 +192,45 @@ public static class UpdateVerifier
             problem = null;
             return false;
         }
-        if (identity.Organization is not { } organization)
+        if (identity.Subject is not { } subject)
         {
             expected = null;
             problem = CannotValidateSelf + NotInstalledSuffix;
             return false;
         }
-        expected = organization;
+        expected = subject;
         problem = null;
         return true;
     }
 
-    /// <summary>The running app's signer organization, normalized; <c>Unsigned</c> when it carries no signature at all.</summary>
+    /// <summary>
+    /// The running app's signer subject; <c>Unsigned</c> when it carries no signature at all. Read from the app
+    /// itself, never configured, so a build signed by any certificate holds its updates to that same subject. The
+    /// issuer is not pinned: the signing service rotates its intermediates, and a pinned one would strand every
+    /// install at the next rotation. No revocation check here: this is the app judging itself.
+    /// </summary>
     [SupportedOSPlatform("windows")]
     internal static RunningIdentity ExpectedIdentity(string runningExePath)
     {
         var signer = AuthenticodeVerifier.SignerSubject(runningExePath);
-        return new RunningIdentity(signer.Identity?.Organization, signer.Unsigned);
+        return new RunningIdentity(signer.Identity?.Subject, signer.Unsigned);
     }
 
-    /// <summary>Null when <paramref name="path"/> is validly signed by <paramref name="expectedOrganization"/>; else why not.</summary>
+    /// <summary>
+    /// Null when <paramref name="path"/> is validly signed, revocation included, by <paramref name="expectedSubject"/>
+    /// — every attribute of it, not just the O= another certificate could share — or, when it need not be ours, by an
+    /// organization in <see cref="TrustedOrganizations"/>; else why not. A revocation status that could not be
+    /// determined is said once to <paramref name="revocation"/>'s log and does not refuse (<see cref="Revocation"/>).
+    /// </summary>
     [SupportedOSPlatform("windows")]
-    internal static string? VerifyFile(string path, string expectedOrganization, string displayName, bool mustBeOurs)
+    internal static string? VerifyFile(string path, string expectedSubject, string displayName, bool mustBeOurs, Revocation.Session? revocation = null)
     {
-        var signer = AuthenticodeVerifier.SignerSubject(path);
+        var signer = AuthenticodeVerifier.SignerSubject(path, revocation ?? new Revocation.Session(null));
         if (signer.Identity is not { } identity)
         {
             return $"{displayName} is not validly signed{NotInstalledSuffix}";
         }
-        if (identity.Organization == expectedOrganization)
+        if (SignerIdentity.SameSubject(identity.Subject, expectedSubject))
         {
             return null;
         }
@@ -224,34 +247,69 @@ public static class UpdateVerifier
 
     /// <summary>
     /// The version baked into the signed executable is the one the attacker cannot rewrite: it must
-    /// equal what the feed advertises (no relabeling an old release as new) and must not be older
-    /// than what is running (no downgrade to a build without this check). <paramref name="runningVersion"/>
-    /// and <paramref name="feedVersion"/> are already major.minor.patch (<see cref="VelopackUpdater"/>'s
-    /// own NumericVersion normalizes them before this is ever called).
+    /// equal what the feed advertises (no relabeling an old release or preview as a newer one) and must
+    /// not be older than what is running (no downgrade to a build without this check), nor a preview when what is
+    /// running is a release (the stable feed's filter is not trusted alone). All three are
+    /// full Semantic Versions, the downgrade judged by SemVer precedence: every 1.5.0 preview and the 1.5.0 release
+    /// share the file version 1.5.0.0, so only the prerelease label tells them apart. Windows only: the
+    /// Mac's Sparkle feed is signed with the app's own key, and its build numbers already order previews.
     /// </summary>
-    internal static string? VersionProblem(string mainExecutablePath, Version runningVersion, Version feedVersion)
+    internal static string? VersionProblem(string? embedded, string runningVersion, string feedVersion)
     {
-        var embedded = EmbeddedVersion(mainExecutablePath);
-        if (embedded != feedVersion)
+        if (embedded is null)
+        {
+            return $"{MainExecutable} inside the update carries no version{NotInstalledSuffix}";
+        }
+        if (!SameVersion(embedded, feedVersion))
         {
             return $"{MainExecutable} inside the update is version {embedded}, but the update feed says {feedVersion}{NotInstalledSuffix}";
         }
-        if (embedded < runningVersion)
+        if (ControlVersion.IsNewer(runningVersion, embedded))
         {
             return $"{MainExecutable} inside the update is version {embedded}, older than the installed {runningVersion}{NotInstalledSuffix}";
+        }
+        // A release install never takes a preview, whatever the feed offers: the stable feed's filter is not the only
+        // thing keeping one out. A preview install still takes its release.
+        if (IsPrerelease(embedded) && ControlVersion.Semantic(runningVersion) is { } running && !IsPrerelease(running))
+        {
+            return $"{MainExecutable} inside the update is the preview {embedded}, and the installed {runningVersion} takes releases only{NotInstalledSuffix}";
         }
         return null;
     }
 
-    /// <summary>The file version baked into a signed executable, major.minor.build.</summary>
-    internal static Version EmbeddedVersion(string path)
-    {
-        var info = FileVersionInfo.GetVersionInfo(path);
-        return new Version(info.FileMajorPart, info.FileMinorPart, info.FileBuildPart);
-    }
+    /// <summary>Whether <paramref name="version"/> carries a prerelease label, as 1.5.0-preview.3 does.</summary>
+    private static bool IsPrerelease(string version) =>
+        ControlVersion.Semantic(version) is { } semantic && semantic.Contains('-');
+
+    /// <summary>The same SemVer, build metadata aside, and readable: a version that cannot be read matches nothing.
+    /// Exact text rather than precedence: SemVer forbids the leading zeros that would make two spellings equal.</summary>
+    private static bool SameVersion(string one, string other) =>
+        ControlVersion.Semantic(one) is { } a && string.Equals(a, ControlVersion.Semantic(other), StringComparison.Ordinal);
+
+    /// <summary>
+    /// The product version baked into a signed executable — the build's informational version,
+    /// "1.5.0-preview.3+1a2b3c4" for a preview — as SemVer without its build metadata; null when it carries none.
+    /// </summary>
+    internal static string? EmbeddedVersion(string path) =>
+        FileVersionInfo.GetVersionInfo(path).ProductVersion is { } product ? ControlVersion.Semantic(product) : null;
+
+    /// <summary>The refusal for a package the check could not finish reading.</summary>
+    internal static string Unreadable(Exception ex) => $"The update package could not be read ({ex.Message}){NotInstalledSuffix}";
 
     private static string SizeProblem(ZipArchiveEntry entry, long actual) =>
         $"The update package entry \"{entry.FullName}\" declares {entry.Length} bytes but holds {actual}{NotInstalledSuffix}";
+
+    /// <summary>A path segment holding a character no Windows file name can: NUL, a control character, or one of
+    /// <c>&lt; &gt; : " | ? *</c> (<see cref="Path.GetInvalidFileNameChars"/> on Windows, which includes NUL).</summary>
+    internal static bool HasInvalidCharacter(string entryName)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        return entryName.Split('/', '\\').Any(segment => segment.IndexOfAny(invalid) >= 0);
+    }
+
+    /// <summary>An entry name as a refusal can show it: control characters, NUL among them, as \uXXXX.</summary>
+    private static string Shown(string entryName) =>
+        string.Concat(entryName.Select(c => char.IsControl(c) ? $"\\u{(int)c:X4}" : c.ToString()));
 
     /// <summary>Reads up to the first two bytes of <paramref name="stream"/> into <paramref name="magic"/>; a shorter stream returns the shorter count.</summary>
     private static int ReadMagic(Stream stream, Span<byte> magic) => stream.ReadAtLeast(magic, 2, throwOnEndOfStream: false);
@@ -276,9 +334,17 @@ public static class UpdateVerifier
         return total;
     }
 
-    /// <summary>A path segment Windows would rewrite on extraction (trailing dot or space), an NTFS stream (colon), or a walk upward.</summary>
+    /// <summary>
+    /// A path segment Windows would rewrite on extraction (trailing dot or space), an NTFS stream (colon), a walk
+    /// upward, or a character no Windows file name can hold (NUL, control characters, <c>&lt; &gt; " | ? *</c>):
+    /// such an entry cannot be checked as written, and the name Velopack would give it is not the one checked.
+    /// </summary>
     internal static bool IsSuspiciousEntryName(string entryName)
     {
+        if (HasInvalidCharacter(entryName))
+        {
+            return true;
+        }
         foreach (var segment in entryName.Split('/', '\\'))
         {
             if (segment == "..")

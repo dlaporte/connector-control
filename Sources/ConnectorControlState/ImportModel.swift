@@ -168,6 +168,9 @@ public final class ImportModel: ObservableObject {
 
     private let state: AppState
     private let rendered: RenderedCollection?
+    /// The document as the sheet read it, and its bytes: what the user reviewed is what Import lands,
+    /// whatever the file holds by then.
+    private let loaded: (document: CollectionDocument, data: Data, url: URL)?
 
     /// `selected` is the collection the Collections window is showing, which is the target when
     /// it is local; otherwise, or with nothing selected, the active collection is, as it was
@@ -176,7 +179,7 @@ public final class ImportModel: ObservableObject {
         self.state = state
         self.path = path
         let url = URL(fileURLWithPath: path).standardizedFileURL
-        let (document, _, failure) = AppState.readDocument(at: url)
+        let (document, data, failure) = AppState.readDocument(at: url)
         // The target picker is filled either way, so a sheet that cannot read its document still
         // shows the collection the user was in.
         let locals = state.localCollectionNames
@@ -185,14 +188,16 @@ public final class ImportModel: ObservableObject {
         } else {
             targetCollection = locals.contains(state.activeCollection) ? state.activeCollection : (locals.first ?? "")
         }
-        guard let document else {
+        guard let document, let data else {
             loadError = failure
             documentName = url.lastPathComponent
             author = nil
             rendered = nil
+            loaded = nil
             syncName = ""
             return
         }
+        loaded = (document, data, url)
         documentName = document.name
         author = document.author
         rendered = document.render()
@@ -283,7 +288,8 @@ public final class ImportModel: ObservableObject {
     }
 
     private func land() -> String? {
-        if let loadError { return loadError }
+        // Nothing was loaded exactly when there is a load error to say.
+        guard let loaded else { return loadError }
         switch mode {
         case .addToCollection:
             var choices: [String: ImportChoice] = [:]
@@ -291,18 +297,12 @@ public final class ImportModel: ObservableObject {
                 choices[row.name] = row.include && row.excludedReason == nil ? row.choice : .skip
             }
             if let name = newCollectionName {
-                // The document is read again before anything is made. A file moved, deleted or
-                // rewritten while the sheet was open would otherwise leave an empty collection
-                // behind, and a second Import would be refused because that collection exists.
-                let url = URL(fileURLWithPath: path).standardizedFileURL
-                let (document, _, unreadable) = AppState.readDocument(at: url)
-                if document == nil { return unreadable }
                 if let error = state.addEmptyCollection(named: name) { return error }
-                return state.importCopies(documentAt: path, into: name, choices: choices)
+                return state.importCopies(document: loaded.document, at: loaded.url, into: name, choices: choices)
             }
-            return state.importCopies(documentAt: path, into: targetCollection, choices: choices)
+            return state.importCopies(document: loaded.document, at: loaded.url, into: targetCollection, choices: choices)
         case .keepInSync:
-            return state.subscribe(documentAt: path, as: syncName)
+            return state.subscribe(document: loaded.document, data: loaded.data, at: loaded.url, as: syncName)
         }
     }
 

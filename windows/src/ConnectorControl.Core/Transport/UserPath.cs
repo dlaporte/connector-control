@@ -1,0 +1,48 @@
+namespace ConnectorControl.Core.Transport;
+
+/// <summary>
+/// Windows only: the Mac puts the tool on PATH with a link in /usr/local/bin.
+///
+/// The user PATH as Windows keeps it — entries between semicolons, unexpanded — and one folder in it. An
+/// entry is the folder whatever its case, quotes, trailing backslash or %VARIABLES%; every other entry is
+/// left exactly as it was written.
+/// </summary>
+public static class UserPath
+{
+    /// <summary>Why the user PATH is left alone when the registry holds it as something other than text.</summary>
+    public const string NotTextError = "Your user PATH in the registry isn’t text, so it was left as it is.";
+
+    /// <summary>The registry's Path value as the text it is; null when there is none. A list or binary data there is
+    /// no PATH this app can change without losing it, so it throws <see cref="IOException"/>, which the tool reports
+    /// and writes nothing over.</summary>
+    public static string? Text(object? value) => value switch
+    {
+        null => null,
+        string text => text,
+        _ => throw new IOException(NotTextError),
+    };
+
+    public static bool Contains(string? path, string folder) =>
+        (path ?? "").Split(';').Any(entry => Same(entry, folder));
+
+    public static string Adding(string? path, string folder)
+    {
+        if (Contains(path, folder))
+        {
+            return path!;
+        }
+        // Appended after every entry as written, empty ones included, so removing the folder gives the PATH back.
+        return string.IsNullOrEmpty(path) ? folder : path + ";" + folder;
+    }
+
+    public static string Removing(string? path, string folder) =>
+        string.Join(";", (path ?? "").Split(';').Where(entry => !Same(entry, folder)));
+
+    private static bool Same(string entry, string folder) =>
+        entry.Trim().Length > 0 && string.Equals(Normal(entry), Normal(folder), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Slashes fold to backslashes, so <c>C:/Users/me/bin</c> is the folder too. 8.3 short names
+    /// (<c>PROGRA~1</c>) are not expanded: that takes the file system, and a PATH entry written so is rare.</summary>
+    private static string Normal(string entry) =>
+        Environment.ExpandEnvironmentVariables(entry.Trim().Trim('"')).Replace('/', '\\').TrimEnd('\\');
+}

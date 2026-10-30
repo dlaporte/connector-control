@@ -38,13 +38,22 @@ public class CollectionDocumentTests
         Assert.Null(malformed.NewerFormatVersion);
     }
 
+    /// <summary>A document that does not parse is refused in fixed words, alike on both platforms, quoting nothing from it.</summary>
+    [Fact]
+    public void ADocumentThatDoesNotParseIsRefusedInFixedWords()
+    {
+        var refused = Assert.Throws<CollectionDocumentException>(
+            () => CollectionDocument.Decode(System.Text.Encoding.UTF8.GetBytes("{\"apiKey\": hunter2}")));
+        Assert.Equal(CollectionDocument.NotJsonError, refused.Message);
+    }
+
     [Fact]
     public void RenderProducesThisPlatformsLaunchersWithMarkers()
     {
         var rendered = Sample.Render();
         Assert.Empty(rendered.Excluded);
         var notion = rendered.Connectors["notion"];
-        // Platform-forced difference: Windows launches the bridge through cmd /c, the Mac runs npx directly.
+        // Platform idiom: Windows launches the bridge through cmd /c, the Mac runs npx directly.
         Assert.Equal(JsonValue.String("cmd"), notion.Config.ValueAt(new JsonPointer(["command"])));
         Assert.Equal(JsonValue.String("/c"), notion.Config.ValueAt(new JsonPointer(["args", "0"])));
         Assert.Equal(JsonValue.String("npx"), notion.Config.ValueAt(new JsonPointer(["args", "1"])));
@@ -649,6 +658,12 @@ public class CollectionDocumentTests
         // A reference beside more than a scheme word.
         Assert.Equal(["headers.Authorization looks like a credential"], Header("Authorization", "Bearer ${A} extra"));
         Assert.Empty(Header("X-Team", "${TEAM}"));
+        foreach (var scheme in new[] { "SSWS", "Bot", "ApiKey" })
+        {
+            Assert.Equal(["headers.Authorization refers to a credential"], Header("Authorization", $"{scheme} ${{T}}"));
+        }
+        // Text after a reference can be the secret.
+        Assert.Equal(["headers.Authorization looks like a credential"], Header("Authorization", "${A}hunter"));
         Assert.Equal(["url.userinfo names a user"], Url("https://reader@db.example.com/mcp"));
         Assert.Equal(["url.userinfo names a user"], Url("https://reader:@db.example.com/mcp"));
         Assert.Equal(["url.userinfo refers to a credential"], Url("https://reader:${DB_PASSWORD}@db.example.com/mcp"));
@@ -689,5 +704,14 @@ public class CollectionDocumentTests
         Assert.Equal(["url.query[0] looks like a credential"], Warnings("https://mcp.example.com/mcp?dGhpc2lzYXNlY3JldHRva2VuMTIzNDU2Nzg5MA=="));
         Assert.Equal(["url.query.k looks like a credential"], Warnings("https://mcp.example.com/mcp?k=Zq8RkT2mWx7LpN4vHc9J"));   // a random query value
         Assert.Empty(Warnings("https://mcp.example.com/v2/servers/gmail-tools/sse#section-2"));
+    }
+
+    [Fact]
+    public void AConnectorNamedLikeConnectorControlsOwnEntryNeverComesAcross()
+    {
+        var rendered = CollectionDocumentSamples.WithReservedConnector(CollectionDocumentSamples.DataTeam).Render();
+        Assert.False(rendered.Connectors.ContainsKey("connector-control"));
+        Assert.Equal("connector-control is reserved for Connector Control itself.", rendered.Excluded["connector-control"]);
+        Assert.True(rendered.Connectors.ContainsKey("github"));
     }
 }

@@ -1,6 +1,9 @@
 /// Warnings for the publish preview, never edits: the exporter knows env values and the remote
 /// auth fields are secrets, but a token typed into an argument is indistinguishable from data.
 /// These patterns catch the common shapes; a placeholder marker is by definition not a secret.
+/// Prefixes, names, lengths and characters are read one UTF-16 unit at a time on both platforms,
+/// so the same text reads the same: a combining mark after a prefix or a name does not hide it,
+/// and a character beyond the Basic Plane is two units, neither a letter nor a digit.
 public enum CredentialHeuristics {
     static let prefixes = ["sk-", "ghp_", "xox", "Bearer "]
     private static let letterCategories: Set<Unicode.GeneralCategory> = [
@@ -9,12 +12,14 @@ public enum CredentialHeuristics {
 
     public static func looksLikeCredential(_ value: String) -> Bool {
         if Placeholder.containsMarker(value) { return false }
-        if prefixes.contains(where: { value.hasPrefix($0) }) { return true }
-        guard value.count >= 32, !value.contains(" "), !value.contains("/") else { return false }
+        let units = Array(value.utf16)
+        if prefixes.contains(where: { units.starts(with: $0.utf16) }) { return true }
+        guard units.count >= 32, !units.contains(0x20), !units.contains(0x2F) else { return false }
         // By general category, as C#'s char.IsLetter and char.IsDigit read them: a letter is L*, a
         // digit is a decimal digit (Nd) — not "²", "½" or a Roman numeral, which isNumber takes.
-        let letters = value.unicodeScalars.contains { letterCategories.contains($0.properties.generalCategory) }
-        let digits = value.unicodeScalars.contains { $0.properties.generalCategory == .decimalNumber }
+        let scalars = units.compactMap(Unicode.Scalar.init)
+        let letters = scalars.contains { letterCategories.contains($0.properties.generalCategory) }
+        let digits = scalars.contains { $0.properties.generalCategory == .decimalNumber }
         return letters && digits
     }
 
@@ -23,21 +28,74 @@ public enum CredentialHeuristics {
     /// Collections window's target column leaves out whatever follows a flag named so, and the
     /// publish preview flags a header or a URL parameter named so.
     public static func namesASecret(_ name: String) -> Bool {
-        let lowered = name.lowercased()
-        return secretNames.contains { lowered.contains($0) }
+        // Platform idiom: each unit is lowered to its lower case here only where that is one unit,
+        // to match the Windows mirror's ToLowerInvariant, which lowers unit by unit, one to one.
+        let lowered = loweredUnits(name)
+        return secretNames.contains { contains(lowered, Array($0.utf16)) }
+    }
+
+    /// `text` lowered unit by unit, as C#'s ToLowerInvariant lowers it: a unit whose lower case is
+    /// one scalar in the Basic Plane becomes it, and any other stays as it is — half of a surrogate
+    /// pair, and İ (U+0130), whose lower case is two scalars, i and a combining dot, and which
+    /// ToLowerInvariant leaves unchanged.
+    public static func loweredUnits(_ text: String) -> [UInt16] {
+        text.utf16.map { unit in
+            guard let scalar = Unicode.Scalar(unit) else { return unit }
+            let lower = Array(scalar.properties.lowercaseMapping.unicodeScalars)
+            guard lower.count == 1, lower[0].value <= 0xFFFF else { return unit }
+            return UInt16(lower[0].value)
+        }
+    }
+
+    static func contains(_ units: [UInt16], _ needle: [UInt16]) -> Bool {
+        guard units.count >= needle.count else { return false }
+        return (0...(units.count - needle.count)).contains { units[$0..<($0 + needle.count)].elementsEqual(needle) }
     }
 
     private static let secretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"]
 
+    /// Whether `word` is an authentication scheme that comes before a credential in a header's
+    /// value — `Bearer`, `Basic` or `Token` — whatever its case.
+    public static func isSchemeWord(_ word: String) -> Bool {
+        let lowered = loweredUnits(word)
+        return schemeWords.contains { lowered.elementsEqual($0.utf16) }
+    }
+
+    private static let schemeWords = ["bearer", "basic", "token"]
+
+    /// Whether an environment variable's value names code to run: a program (`GIT_ASKPASS`,
+    /// `GIT_SSH_COMMAND`, any name holding `ASKPASS`, a `*_CREDENTIAL_PROVIDER` such as Cargo's
+    /// `CARGO_REGISTRY_CREDENTIAL_PROVIDER`), git configuration that can name one (`GIT_CONFIG_*`), a
+    /// library or module loaded first (`LD_PRELOAD`, `NODE_OPTIONS`, `JAVA_TOOL_OPTIONS`) or a
+    /// script a shell or interpreter runs first (`BASH_ENV`, `PYTHONSTARTUP`). Whatever its case,
+    /// since Windows reads names so. The confirmation dialog shows such a value in full even when
+    /// its name reads as a secret's: it is code that would run, which the person allowing must see.
+    public static func namesAProgramToRun(_ name: String) -> Bool {
+        // Platform idiom: lowered unit by unit, as namesASecret lowers, to match ToLowerInvariant.
+        let lowered = loweredUnits(name)
+        return programNames.contains { lowered.elementsEqual($0.utf16) }
+            || lowered.starts(with: "git_config_".utf16)
+            || contains(lowered, Array("askpass".utf16))
+            || lowered.reversed().starts(with: "_credential_provider".utf16.reversed())
+    }
+
+    private static let programNames = [
+        "git_ssh", "git_ssh_command", "git_exec_path", "node_options", "ld_preload",
+        "dyld_insert_libraries", "pythonstartup", "bash_env", "env", "perl5opt", "rubyopt", "java_tool_options",
+        "_java_options",
+    ]
+
     /// Whether `value` takes its secret from somewhere else rather than holding it: one or more
     /// `${NAME}` or `$NAME` references — an environment variable, a `${CC_NEEDS:NAME}` placeholder —
-    /// with, beside them, at most one word of letters, an authentication scheme such as `Bearer`.
-    /// A `$NAME` without braces counts only as `shellVariableEnd` reads one. Walked one Unicode
-    /// scalar at a time, as the Windows mirror walks UTF-16 units.
+    /// with, beside them, at most one word of letters before them, an authentication scheme such as
+    /// `Bearer`, `SSWS` or `Bot`. Text after a reference (`${CC_NEEDS:PW}hunter`) can be the secret
+    /// itself. A `$NAME` without braces counts only as `shellVariableEnd` reads one.
+    /// Walked one Unicode scalar at a time, as the Windows mirror walks UTF-16 units.
     public static func isReference(_ value: String) -> Bool {
         let scalars = Array(value.unicodeScalars)
         var rest: [Unicode.Scalar] = []
         var references = 0
+        var textAfterReference = false
         var index = 0
         while index < scalars.count {
             if scalars[index] == "$", index + 1 < scalars.count, scalars[index + 1] == "{",
@@ -49,12 +107,14 @@ public enum CredentialHeuristics {
                 references += 1
                 index = end
             } else {
+                if references > 0, scalars[index] != " " { textAfterReference = true }
                 rest.append(scalars[index])
                 index += 1
             }
         }
         let words = rest.split(separator: " ")
-        return references > 0 && words.count <= 1 && words.allSatisfy { $0.allSatisfy { ("A"..."Z").contains($0) || ("a"..."z").contains($0) } }
+        return references > 0 && !textAfterReference && words.count <= 1
+            && words.allSatisfy { $0.allSatisfy { ("A"..."Z").contains($0) || ("a"..."z").contains($0) } }
     }
 
     /// Where the `$NAME` whose name starts at `start` ends, or nil where the text there is no such
@@ -82,9 +142,9 @@ public enum CredentialHeuristics {
     /// real path or package name nearly always has a dot, a hyphen or no digits. The Collections
     /// window's target column leaves such a word out, and the publish preview flags one in a URL.
     public static func looksLikeRandomToken(_ text: String) -> Bool {
-        let body = text.unicodeScalars.filter { $0 != "/" && $0 != "\\" }
+        let body = text.utf16.filter { $0 != 0x2F && $0 != 0x5C }
         return body.count >= 20
-            && body.contains { ("A"..."Z").contains($0) } && body.contains { ("a"..."z").contains($0) }
-            && body.contains { ("0"..."9").contains($0) } && !body.contains { $0 == "." || $0 == "-" || $0 == "_" }
+            && body.contains { (0x41...0x5A).contains($0) } && body.contains { (0x61...0x7A).contains($0) }
+            && body.contains { (0x30...0x39).contains($0) } && !body.contains { $0 == 0x2E || $0 == 0x2D || $0 == 0x5F }
     }
 }

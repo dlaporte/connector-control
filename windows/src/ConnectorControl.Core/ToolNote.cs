@@ -12,7 +12,7 @@ public sealed record ToolNote(string Text, string LinkTitle, string LinkUrl, str
     public const string FoundText = "Found";
     public const string NotFoundText = "Not found";
     public const string SettingsHeader = "Tools";
-    public const string SettingsCaption = "Connectors that run through npx, node, uvx or uv need them installed where Claude Desktop can find them.";
+    public const string SettingsCaption = "Needed by connectors that run through them, where Claude can find them.";
 
     public static string MissingText(Tool tool) =>
         $"{ToolInfo.Name(tool)} wasn’t found, so Claude Desktop won’t be able to start this connector.";

@@ -33,6 +33,14 @@ public enum ToolFamily: Equatable, Sendable {
         }
     }
 
+    /// The family's tools, as the Settings Tools footer names them: the one it is named after first.
+    public var toolNames: String {
+        switch self {
+        case .nodeJS: return "node and npx"
+        case .uv: return "uv and uvx"
+        }
+    }
+
     public var linkURL: URL {
         switch self {
         case .nodeJS: return URL(string: "https://nodejs.org/en/download")!
@@ -40,9 +48,9 @@ public enum ToolFamily: Equatable, Sendable {
         }
     }
 
-    /// The macOS install command; the Windows port shows winget's command
-    /// instead. Homebrew installs into the PATH floor Claude
+    /// The macOS install command. Homebrew installs into the PATH floor Claude
     /// Desktop adds for itself, so running this clears the note.
+    // Platform idiom: Homebrew here; the Windows port shows winget's command, which installs into the user PATH.
     public var installCommand: String {
         switch self {
         case .nodeJS: return "brew install node"

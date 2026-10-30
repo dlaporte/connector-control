@@ -91,9 +91,12 @@ public sealed class AppState : ObservableObject, IDisposable
     private readonly IToolProbe toolProbe;
     private readonly Dictionary<Tool, ToolStatus> toolStatuses = [];
     private readonly HashSet<Tool> toolsInFlight = [];
+    /// <summary>Callers waiting for probes to land, with the tools each waits on.</summary>
+    private readonly List<(HashSet<Tool> Tools, Action Run)> toolWaiters = [];
 
     private MasterStore store = MasterStore.Empty();
     private string? lastError;
+    private string? controlEndpointProblem;
     private bool needsClaudeRestart;
     private bool applyRetryNeeded;
     private IReadOnlyDictionary<string, JsonValue> appliedServers = EmptyServers;
@@ -197,6 +200,16 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>Settable: the restore dialog reports its failure here.</summary>
     public string? LastError { get => lastError; set => Set(ref lastError, value); }
 
+    /// <summary>Why Claude and the command-line tool cannot reach this app — its control endpoint could not be
+    /// served, or stopped being served — or null while it serves. Settings shows it.</summary>
+    public string? ControlEndpointProblem { get => controlEndpointProblem; private set => Set(ref controlEndpointProblem, value); }
+
+    private int settingsRevision;
+    /// <summary>Moves on each time a setting is changed from outside the Settings window — the command line's
+    /// <c>settings set</c> — so an open Settings window shows the new value at once, as its Claude group
+    /// already follows the integration's switches.</summary>
+    public int SettingsRevision { get => settingsRevision; private set => Set(ref settingsRevision, value); }
+
     private bool storeNotPrivate;
     /// <summary>
     /// Windows: the last master-list save could not make mcps.json owner-only — the folder refused
@@ -220,6 +233,12 @@ public sealed class AppState : ObservableObject, IDisposable
     /// dialog's New Collection name. The Mac's <c>dialogs</c> is public for the same reason.
     /// </summary>
     public IDialogs Dialogs => dialogs;
+
+    /// <summary>
+    /// The settings behind this state, which the control layer reads the gate's settings and the
+    /// last apply date from. The Mac's <c>settings</c> is public for the same reason.
+    /// </summary>
+    public ISettings Settings => settings;
 
     /// <summary>The sidecar beside the master list, reconciled with the store on every load.</summary>
     public CollectionsFile CollectionsFile { get => collectionsFile; private set => Set(ref collectionsFile, value); }
@@ -261,22 +280,29 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>
     /// The enabled connectors as Claude must see them, with <c>${COLLECTION_DIR}</c> resolved
-    /// against the active collection's folder on this machine (<see cref="CollectionDirectory"/>).
-    /// The store itself keeps the token, so the same list still resolves on the next machine, and
-    /// a published document carries it as written for each subscriber to resolve against their own
-    /// copy. With no folder the token is written as it stands — guessing one would start the wrong
-    /// program — and the row carries the caution that says so.
+    /// against the active collection's folder on this machine (<see cref="CollectionDirectory"/>),
+    /// plus Connector Control's own entry while the integration is on. The store itself keeps the
+    /// token, so the same list still resolves on the next machine, and a published document
+    /// carries it as written for each subscriber to resolve against their own copy. With no folder
+    /// the token is written as it stands — guessing one would start the wrong program — and the
+    /// row carries the caution that says so. The entry joins here and only here: the store, the
+    /// collections and every document never hold it, and it is written, compared, backed up and
+    /// regenerated like every other entry.
     /// </summary>
     internal IReadOnlyDictionary<string, JsonValue> ExpandedServers
     {
         get
         {
-            var servers = Store.EnabledServers;
-            if (CollectionDirectory(ActiveCollection) is not { } directory)
+            var servers = new Dictionary<string, JsonValue>(Store.EnabledServers, StringComparer.Ordinal);
+            if (CollectionDirectory(ActiveCollection) is { } directory)
             {
-                return servers;
+                servers = servers.ToDictionary(p => p.Key, p => Placeholder.ExpandDirectoryToken(p.Value, directory), StringComparer.Ordinal);
             }
-            return servers.ToDictionary(p => p.Key, p => Placeholder.ExpandDirectoryToken(p.Value, directory), StringComparer.Ordinal);
+            if (ClaudeIntegrationEntry is { } entry)
+            {
+                servers[ClaudeIntegration.EntryName] = entry;
+            }
+            return servers;
         }
     }
 
@@ -399,6 +425,13 @@ public sealed class AppState : ObservableObject, IDisposable
                 toolStatuses[tool] = status;
             }
             Raise(nameof(ToolStatuses));
+            // Whoever waited on these probes hears once every tool they asked about is in.
+            var ready = toolWaiters.Where(waiter => !waiter.Tools.Overlaps(toolsInFlight)).ToList();
+            toolWaiters.RemoveAll(waiter => !waiter.Tools.Overlaps(toolsInFlight));
+            foreach (var waiter in ready)
+            {
+                waiter.Run();
+            }
         });
     }
 
@@ -600,15 +633,27 @@ public sealed class AppState : ObservableObject, IDisposable
     /// record — older than the record, the first-run original, a file from elsewhere — goes into the
     /// active collection, and publishing still keeps back any path or folder it carries. While that
     /// collection is subscribed, it is refused (<see cref="RestoreRefusal"/>).
+    /// <para>
+    /// <paramref name="data"/>, when given, is the backup's content as the caller read it, so what is
+    /// restored is what the caller checked.
+    /// </para>
     /// </summary>
-    public void RestoreClaudeConfig(string backupPath)
+    public void RestoreClaudeConfig(string backupPath, byte[]? data = null) =>
+        RestoreClaudeConfig(backupPath, data, BackupCollections.CollectionOf(backupPath, Service.Paths.BackupsDir));
+
+    /// <summary>
+    /// <see cref="RestoreClaudeConfig(string, byte[])"/> with the collection the backup's record names, as
+    /// the caller read it (null for no record), so the refusal and the collection it goes back into
+    /// follow what the caller asked about, not the record as it is by then.
+    /// </summary>
+    public void RestoreClaudeConfig(string backupPath, byte[]? data, string? recorded)
     {
-        if (RestoreRefusal(backupPath) is { } refusal)
+        if (RestoreRefusalForRecorded(recorded) is { } refusal)
         {
             throw refusal;
         }
         var target = Store.Clone();
-        if (BackupCollections.CollectionOf(backupPath, Service.Paths.BackupsDir) is { } recorded)
+        if (recorded is not null)
         {
             target.ActiveCollection = recorded;
         }
@@ -622,7 +667,8 @@ public sealed class AppState : ObservableObject, IDisposable
         var earlier = binding is null ? [] : binding.PublishedFolders.Where(f => f != binding.Folder).Order(StringComparer.Ordinal).ToList();
         var servers = Service.RestoreClaudeConfig(backupPath, target, CollectionDirectory(collection), earlier,
             backedUpFrom: CollectionsCache.LastAppliedCollection,
-            activating: !string.Equals(collection, Store.ActiveCollection, StringComparison.Ordinal));
+            activating: !string.Equals(collection, Store.ActiveCollection, StringComparison.Ordinal),
+            data: data);
         RecordApplied(collection, servers.Keys);
         AppliedServers = servers;
         hasLoadedOnce = true;
@@ -640,9 +686,17 @@ public sealed class AppState : ObservableObject, IDisposable
     /// collection is different: it holds that collection's own rendered state, what Claude ran from
     /// it, so restoring it there is consistent with the subscription, and it goes back as any other.
     /// </summary>
-    public Exception? RestoreRefusal(string backupPath)
+    public Exception? RestoreRefusal(string backupPath) =>
+        RestoreRefusalForRecorded(BackupCollections.CollectionOf(backupPath, Service.Paths.BackupsDir));
+
+    /// <summary>
+    /// <see cref="RestoreRefusal"/> with the collection the backup's record names, as the caller read it
+    /// (null for no record). Platform idiom: its name tells it from <see cref="RestoreRefusal"/>, which
+    /// also takes a string; the Mac mirror tells them apart by a label, <c>restoreRefusal(forRecorded:)</c>.
+    /// </summary>
+    public Exception? RestoreRefusalForRecorded(string? recorded)
     {
-        if (BackupCollections.CollectionOf(backupPath, Service.Paths.BackupsDir) is { } recorded)
+        if (recorded is not null)
         {
             return Store.Collections.ContainsKey(recorded) ? null : new RestoreCollectionGoneException(recorded);
         }
@@ -1073,6 +1127,13 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return NameEmptyError;
         }
+        // Connector Control's own entry goes by this name in Claude's config. A connector already
+        // holding it, from before the name was reserved, may still be saved in place, so the clash
+        // can be resolved by renaming or deleting it; nothing new may take the name.
+        if (trimmed == ClaudeIntegration.EntryName && trimmed != renamedFrom)
+        {
+            return ClaudeIntegration.ReservedNameError;
+        }
         // Read-only until both guards pass: a rejected save must leave no trace, and creating the
         // collection up front would leave an empty one behind. Swift's optional chain does the
         // same by construction.
@@ -1278,6 +1339,134 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         _ = PerformRestartClaudeAsync();
     }
+
+    // MARK: Claude integration
+
+    /// <summary>
+    /// A connector the active collection already holds under the reserved name — from before the
+    /// name was reserved, or synced in from an older app — leaves no room for Connector Control's
+    /// own entry: Settings dims the switch and names the clash, and nothing is added.
+    /// </summary>
+    public bool ClaudeIntegrationClash =>
+        Store.Collections.TryGetValue(ActiveCollection, out var collection) && collection.Mcps.ContainsKey(ClaudeIntegration.EntryName);
+
+    /// <summary>
+    /// Whether the app runs from where it will not stay — a translocated copy, or its disk image — so
+    /// what that refuses can be dimmed in Settings, with the reason.
+    /// </summary>
+    public bool ControlToolIsTransient => host.ControlToolIsTransient;
+
+    /// <summary>
+    /// Connector Control's own entry while the switch is on, the app has a tool to name and no
+    /// connector holds the name; null otherwise.
+    /// </summary>
+    internal JsonValue? ClaudeIntegrationEntry
+    {
+        get
+        {
+            if (!settings.ClaudeIntegrationEnabled || host.ControlToolPath is not { } path || ClaudeIntegrationClash)
+            {
+                return null;
+            }
+            // An app run from where it will not stay leaves the entry exactly as Claude's config has it,
+            // rather than write a path that will be gone once the app is moved or its disk image ejected.
+            if (host.ControlToolIsTransient)
+            {
+                return AppliedServers.GetValueOrDefault(ClaudeIntegration.EntryName);
+            }
+            return ClaudeIntegration.Entry(path);
+        }
+    }
+
+    /// <summary>
+    /// The popover's one-time offer: shown until it is answered, never once the setting has been
+    /// decided anywhere (Settings and the command-line tool answer it too), and never where turning
+    /// it on could not work — no bundled tool, a connector holding the name, or an app that runs
+    /// from where it will not stay.
+    /// </summary>
+    public bool ShowsClaudeIntegrationOffer =>
+        !settings.ClaudeIntegrationOfferAnswered && !settings.ClaudeIntegrationEnabled
+        && host.ControlToolPath is not null && !ClaudeIntegrationClash && !host.ControlToolIsTransient;
+
+    /// <summary>
+    /// Turns the integration on or off from anywhere — Settings, the offer, the command-line tool —
+    /// and applies at once, so the entry appears or goes and Restart Required follows. Deciding it
+    /// answers the offer for good. Turning it on is refused while a connector holds the name, or
+    /// while the app runs from where it will not stay, with the sentence that says so; turning it
+    /// off always goes through. Null on success.
+    /// </summary>
+    public string? SetClaudeIntegrationEnabled(bool on)
+    {
+        if (on && ClaudeIntegrationClash)
+        {
+            return ClaudeIntegration.ClashNote;
+        }
+        if (on && host.ControlToolIsTransient)
+        {
+            return ClaudeIntegration.MoveToApplicationsError;
+        }
+        settings.ClaudeIntegrationEnabled = on;
+        settings.ClaudeIntegrationOfferAnswered = true;
+        ApplyIfChanged();
+        RaiseAll();
+        return null;
+    }
+
+    /// <summary>A setting was changed from outside the Settings window: every open one shows it (<see cref="SettingsRevision"/>).</summary>
+    public void AnnounceSettingsChanged() => SettingsRevision++;
+
+    public void SetConfirmClaudeChanges(bool on)
+    {
+        settings.ConfirmClaudeChanges = on;
+        RaiseAll();
+    }
+
+    /// <summary>The offer's buttons: Turn On turns the integration on; Not Now dismisses the offer for good.</summary>
+    public void AnswerClaudeIntegrationOffer(bool turnOn)
+    {
+        if (turnOn)
+        {
+            SetClaudeIntegrationEnabled(true);
+        }
+        else
+        {
+            settings.ClaudeIntegrationOfferAnswered = true;
+            RaiseAll();
+        }
+    }
+
+    // MARK: for the control layer
+
+    /// <summary>The app could not serve its control endpoint, or has stopped serving it.</summary>
+    public void ReportControlEndpointUnavailable() => ControlEndpointProblem = ClaudeIntegration.EndpointUnavailableText;
+
+    /// <summary>Whether Claude Desktop is running now, as the restart logic reads it.</summary>
+    public bool IsClaudeRunning => claude.Snapshot().IsRunning;
+
+    /// <summary>
+    /// Runs <paramref name="completion"/> once none of <paramref name="tools"/> (all four when null)
+    /// is being probed: at once when none is, else when the last of them is published. A state
+    /// disposed meanwhile never runs it.
+    /// </summary>
+    public void WhenToolsProbed(IReadOnlyList<Tool>? tools, Action completion)
+    {
+        var wanted = new HashSet<Tool>(tools ?? ToolInfo.All);
+        if (!wanted.Overlaps(toolsInFlight))
+        {
+            completion();
+            return;
+        }
+        toolWaiters.Add((wanted, completion));
+    }
+
+    /// <summary>
+    /// A change Claude made without asking — confirmations are off, or the user answered after the
+    /// call had already returned. Always announced, whatever "Notify on external changes" says:
+    /// with confirmations off it is the only sign that what Claude runs has changed. The Restart
+    /// Claude action rides along while Claude runs an older config.
+    /// </summary>
+    public void NotifyClaudeChange(string body) =>
+        notifier.Notify(Notifications.Title, body, NeedsClaudeRestart ? Notifications.RestartCategory : null);
 
     // MARK: collections
 
@@ -1673,10 +1862,22 @@ public sealed class AppState : ObservableObject, IDisposable
     {
         var full = Path.GetFullPath(path);
         var (document, data, failure) = ReadDocument(full);
-        if (document is null)
+        if (document is null || data is null)
         {
             return failure;
         }
+        return Subscribe(document, data, full, requestedName);
+    }
+
+    /// <summary>
+    /// <see cref="Subscribe(string, string?)"/> for a document already read: <paramref name="document"/>
+    /// decoded from <paramref name="data"/>, the bytes read from <paramref name="path"/>. The binding
+    /// records their hash, so what lands is what the caller decided on, and a file that has moved since
+    /// shows as an update.
+    /// </summary>
+    public string? Subscribe(CollectionDocument document, byte[] data, string path, string? requestedName)
+    {
+        var full = Path.GetFullPath(path);
         // Subscribing to what this machine publishes would make the app its own author: every
         // local edit would come straight back as a pending update to itself.
         if (document.Origin is { } origin && CollectionsFile.Collections.Values.Any(e => e.Publish?.Origin == origin))
@@ -1694,7 +1895,7 @@ public sealed class AppState : ObservableObject, IDisposable
         Store.Collections[name] = new Collection(result.Entries);
         SetSidecarEntry(name, new CollectionsFile.Entry(
             CollectionKind.Synced, Path.GetFileName(full), RelativeToStore(full), document.Origin, result.Needs));
-        var hash = ContentHash.Sha256(data!);
+        var hash = ContentHash.Sha256(data);
         SetBinding(name, new CollectionsLocalCache.SyncedBinding(full, hash, rendered.Excluded));
         pendingRendered[name] = new RenderedSource(rendered, hash, document.Origin);
         notifiedSourceHashes[name] = hash;
@@ -1866,7 +2067,7 @@ public sealed class AppState : ObservableObject, IDisposable
         byte[] data;
         try
         {
-            data = File.ReadAllBytes(path);
+            data = BoundedRead.Data(path, MaxDocumentBytes);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
@@ -1984,6 +2185,10 @@ public sealed class AppState : ObservableObject, IDisposable
         notifiedSourceHashes.Remove(collection);
     }
 
+    /// <summary>The most a collection document's read takes: what one message carries, so a document too large
+    /// to send is refused by its read as much as by the size the control tools check first.</summary>
+    internal const int MaxDocumentBytes = McpSession.MaxMessageBytes;
+
     /// <summary>
     /// The document at <paramref name="path"/>, or the message to show for it — the one
     /// read-and-decode every caller that opens a collection document shares. The tuple's document
@@ -1995,7 +2200,7 @@ public sealed class AppState : ObservableObject, IDisposable
         byte[] data;
         try
         {
-            data = File.ReadAllBytes(path);
+            data = BoundedRead.Data(path, MaxDocumentBytes);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
@@ -2067,6 +2272,26 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return failure;
         }
+        return ImportCopies(document, full, collection, choices);
+    }
+
+    /// <summary>
+    /// <see cref="ImportCopies(string, string, IReadOnlyDictionary{string, ImportChoice})"/> for a document
+    /// already read from <paramref name="path"/>, so what lands is what the caller decided on, not the
+    /// file as it is by then.
+    /// </summary>
+    public string? ImportCopies(CollectionDocument document, string path, string collection, IReadOnlyDictionary<string, ImportChoice> choices)
+    {
+        // As ImportCopies(path, collection, choices) guards it.
+        if (!Store.Collections.TryGetValue(collection, out var target))
+        {
+            return null;
+        }
+        if (KindOf(collection) != CollectionKind.Local)
+        {
+            return TargetMustBeLocalError;
+        }
+        var full = Path.GetFullPath(path);
         var directory = Path.GetDirectoryName(full) ?? full;
         var rendered = document.Render();
         var date = Today;
@@ -3109,7 +3334,7 @@ public sealed class AppState : ObservableObject, IDisposable
             byte[] data;
             try
             {
-                data = File.ReadAllBytes(path);
+                data = BoundedRead.Data(path, MaxDocumentBytes);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
@@ -3338,6 +3563,10 @@ public sealed class AppState : ObservableObject, IDisposable
         NewCredentialException credential => NewCredentialError(credential.Connector),
         _ => error.Message,
     };
+
+    /// <summary>Whether <see cref="Dispose"/> has run: work scheduled for later, such as a restart Claude asked
+    /// for, checks it, as AppState's own delays do.</summary>
+    internal bool IsDisposed => disposed;
 
     public void Dispose()
     {

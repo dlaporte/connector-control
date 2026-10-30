@@ -14,6 +14,10 @@ public struct IngestedElsewhere: Equatable, Sendable {
 /// Orchestrates every stateful operation, guaranteeing the backup-before-write
 /// invariant. The UI layer calls only this type for file operations.
 public struct ConfigService: Sendable {
+    /// The most a backup restore reads. Claude's config runs to kilobytes; this is far past any real
+    /// one, and still little enough to read on the UI thread.
+    public static let maxBackupBytes = 16 * 1_048_576
+
     public let paths: AppPaths
     public let backups: BackupManager
 
@@ -236,11 +240,14 @@ public struct ConfigService: Sendable {
         try file.save(to: paths.collectionsFileURL, staging: paths.stagingDirURL)
     }
 
-    /// Backup the current file, copy the chosen backup over it, then adopt the
+    /// Backup the current file, write the chosen backup over it as parsed, then adopt the
     /// snapshot into the store — a restore is the user deliberately making the
     /// snapshot the truth, and anything less would leave a divergence for the
     /// next reload to regenerate away, silently undoing the restore.
-    /// The backup's content is validated BEFORE the live file is touched.
+    /// The backup's content is validated BEFORE the live file is touched. A backup that names a key
+    /// twice is refused, and what is written is the backup as this app parsed it, not its raw bytes:
+    /// Claude then reads exactly the servers this app read, whichever of two repeated keys either
+    /// parser would keep.
     /// Returns the restored file's servers so the caller can sync its
     /// reconciliation baseline to them.
     /// `publishFolder` is the folder `${COLLECTION_DIR}` stands for in the active collection on this
@@ -253,18 +260,24 @@ public struct ConfigService: Sendable {
     /// collection the backup was taken from, and says `activating` when that is not the collection
     /// the saved store has active. `backedUpFrom`, as `apply` takes it, records the file this
     /// restore overwrites.
+    ///
+    /// `data`, when given, is the backup's content as the caller read it, so what is restored is what
+    /// the caller checked. Platform idiom: it follows `backup` here, where a label reads it as the
+    /// backup's; the Windows mirror takes it last, after the optional parameters already there.
     @discardableResult
     public func restoreClaudeConfig(from backup: URL,
+                                    data: Data? = nil,
                                     mergedWith store: MasterStore,
                                     publishFolder: String? = nil,
                                     earlierFolders: [String] = [],
                                     backedUpFrom collection: String? = nil,
                                     activating: Bool = false) throws
         -> [String: JSONValue] {
-        let data = try Data(contentsOf: backup)
+        let data = try data ?? BoundedRead.data(at: backup, limit: ConfigService.maxBackupBytes)
         let root: [String: Any]
         do {
             root = try ClaudeConfigIO.parseRoot(data)
+            try ClaudeConfigIO.requireUniqueKeys(in: data)
         } catch ClaudeConfigError.malformed(let detail) {
             throw ClaudeConfigError.malformed(
                 "backup \(backup.lastPathComponent) is not a valid config file (\(detail))")
@@ -277,7 +290,7 @@ public struct ConfigService: Sendable {
                 "backup \(backup.lastPathComponent) has an invalid mcpServers section")
         }
         recordBackup(try backups.backUp(fileAt: paths.claudeConfigURL, series: "claude_desktop_config"), from: collection)
-        try AtomicFile.write(data, to: paths.claudeConfigURL, staging: paths.stagingDirURL)
+        try AtomicFile.write(try ClaudeConfigIO.serialized(root), to: paths.claudeConfigURL, staging: paths.stagingDirURL)
         let servers = (root["mcpServers"] as? [String: Any] ?? [:]).mapValues(JSONValue.init(any:))
         let outcome = Reconciler.adoptSnapshot(store: store, servers: servers, publishFolder: publishFolder,
                                                earlierFolders: earlierFolders)

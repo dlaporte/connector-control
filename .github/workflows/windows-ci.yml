@@ -1,6 +1,7 @@
 # Build and test the Windows app on every push that touches it. Sources/ConnectorControlCore
 # is watched too: the Core tests assert Apple Foundation's JSON output byte for byte against
 # the goldens under Tests/Fixtures, so a Mac serialization change must re-run them here.
+# README.md is watched because ReadmeHelpTests compares its command reference with `help`.
 #
 # The build itself is .github/workflows/windows-build.yml with package: false — the same
 # restore/build/test release.yml and preview.yml run, without the packaging.
@@ -16,6 +17,7 @@ on:
       - 'windows/**'
       - 'Tests/Fixtures/**'
       - 'Sources/ConnectorControlCore/**'
+      - 'README.md'
       - '.github/workflows/windows-ci.yml'
       - '.github/workflows/windows-build.yml'
 

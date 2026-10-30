@@ -23,6 +23,7 @@ struct PopoverView: View {
             Divider()
             if let error = model.errorMessage { errorBanner(error) }
             if let text = model.collectionBannerText { collectionBanner(text) }
+            if model.showsClaudeIntegrationOffer { claudeIntegrationOffer }
             mcpList
             if model.showFooter {
                 Divider()
@@ -125,6 +126,36 @@ struct PopoverView: View {
             .fixedSize(horizontal: false, vertical: true)
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // Platform idiom: the background carries the tint here, as the collection banner's orange does; the
+    // Windows flyout marks both banners with their borders.
+    /// The one-time offer, in the collection banner's slot and shape, tinted as news rather than a caution.
+    private var claudeIntegrationOffer: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(ClaudeIntegration.offerTitle).bold()
+                    Text(ClaudeIntegration.offerBody)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: PopoverModel.offerGlyph).foregroundStyle(Color.accentColor)
+                    .accessibilityHidden(true)
+            }
+            .font(.caption)
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                Button(ClaudeIntegration.offerNotNowButton) { model.answerClaudeIntegrationOffer(turnOn: false) }
+                    .buttonStyle(.link)
+                Button(ClaudeIntegration.offerTurnOnButton) { model.answerClaudeIntegrationOffer(turnOn: true) }
+                    .buttonStyle(.borderedProminent)
+            }
+            .controlSize(.small)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.accentColor.opacity(0.12))
     }
 
     /// The one collection with news, active or not. Its buttons take a line of their own rather

@@ -704,4 +704,82 @@ public class FlyoutModelTests
         // Refusing changes nothing, the error included.
         Assert.Equal(blocked, state.PublishError);
     }
+
+    // MARK: The offer
+
+    /// <summary>Shown once, in the banner slot: it waits behind an error and behind a collection's news, and
+    /// Not Now dismisses it for good without turning anything on.</summary>
+    [Fact]
+    public void TheOfferWaitsBehindOtherBannersAndNotNowDismissesIt()
+    {
+        using var h = new AppStateHarness { ControlToolPath = "/x/connector-control" };
+        using var state = h.Create();
+        using var flyout = new FlyoutModel(state, h.Settings);
+        Assert.True(flyout.ShowsClaudeIntegrationOffer);
+        state.LastError = "Something failed.";
+        Assert.False(flyout.ShowsClaudeIntegrationOffer, "an error holds the slot");
+        state.LastError = null;
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
+        {
+            ["Default"] = new CollectionDiff(["jira"], [], []),
+        };
+        Assert.False(flyout.ShowsClaudeIntegrationOffer, "so does a collection's news");
+        state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal);
+        Assert.True(flyout.ShowsClaudeIntegrationOffer);
+        flyout.AnswerClaudeIntegrationOffer(turnOn: false);
+        Assert.False(flyout.ShowsClaudeIntegrationOffer);
+        Assert.True(h.Settings.ClaudeIntegrationOfferAnswered);
+        Assert.False(h.Settings.ClaudeIntegrationEnabled);
+    }
+
+    /// <summary>Turn On adds the entry and the banner goes; while Claude runs, Restart Required takes over. The
+    /// entry is never a row.</summary>
+    [Fact]
+    public void TurnOnTurnsItOnAndRestartRequiredFollows()
+    {
+        using var h = new AppStateHarness { ControlToolPath = "/x/connector-control" };
+        using var state = h.Create();
+        h.Drain();
+        h.ClaudeRunningSince(1);
+        using var flyout = new FlyoutModel(state, h.Settings);
+        flyout.AnswerClaudeIntegrationOffer(turnOn: true);
+        h.Drain();
+        Assert.False(flyout.ShowsClaudeIntegrationOffer);
+        Assert.True(h.Settings.ClaudeIntegrationEnabled);
+        Assert.Equal(ClaudeIntegration.Entry("/x/connector-control"), h.ClaudeServers()[ClaudeIntegration.EntryName]);
+        Assert.Equal(FooterKind.RestartRequired, flyout.Footer);
+        Assert.DoesNotContain(flyout.Rows, r => r.Name == ClaudeIntegration.EntryName);
+    }
+
+    /// <summary>Windows only: the Mac has neither caution, so its offer never waits for one, and nor does this.</summary>
+    [Fact]
+    public void ALastingCautionDoesNotHoldTheOfferBack()
+    {
+        using var h = new AppStateHarness { ControlToolPath = "/x/connector-control" };
+        using var state = h.Create();
+        using var flyout = new FlyoutModel(state, h.Settings);
+        state.StoreNotPrivate = true;
+        h.Settings.LastSaveError = "Disk full";
+        Assert.True(flyout.HasError);
+        Assert.True(flyout.ShowsClaudeIntegrationOffer);
+    }
+
+    /// <summary>Turn On with a Claude config that will not take the write: the answer stands and the setting is
+    /// on, the failure is the app's error, and the retry footer offers another go while the banner is gone.</summary>
+    [Fact]
+    public void TurnOnWhenTheWriteFailsKeepsTheAnswerAndOffersARetry()
+    {
+        using var h = new AppStateHarness { ControlToolPath = "/x/connector-control" };
+        using var state = h.Create();
+        h.Drain();
+        File.WriteAllText(h.ClaudeConfigPath, "{oops");
+        using var flyout = new FlyoutModel(state, h.Settings);
+        flyout.AnswerClaudeIntegrationOffer(turnOn: true);
+        h.Drain();
+        Assert.True(h.Settings.ClaudeIntegrationOfferAnswered);
+        Assert.True(h.Settings.ClaudeIntegrationEnabled);
+        Assert.NotNull(state.LastError);
+        Assert.Equal(FooterKind.RetryApply, flyout.Footer);
+        Assert.False(flyout.ShowsClaudeIntegrationOffer);
+    }
 }

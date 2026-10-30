@@ -30,12 +30,16 @@ public static class ToolInfo
         return null;
     }
 
+    /// <summary>The family's tools, as the Settings Tools footer names them: the one it is named after first.</summary>
+    public static string ToolNames(ToolFamily family) => family == ToolFamily.NodeJs ? "node and npx" : "uv and uvx";
+
     public static string LinkTitle(ToolFamily family) => family == ToolFamily.NodeJs ? "Install Node.js" : "Install uv";
 
     public static string LinkUrl(ToolFamily family) =>
         family == ToolFamily.NodeJs ? "https://nodejs.org/en/download" : "https://docs.astral.sh/uv/getting-started/installation/";
 
     /// <summary>Winget installs into the user PATH, which is what makes the note go away.</summary>
+    // Platform idiom: winget here; the Mac shows Homebrew's command, which installs into Claude Desktop's PATH floor.
     public static string InstallCommand(ToolFamily family) =>
         family == ToolFamily.NodeJs ? "winget install OpenJS.NodeJS.LTS" : "winget install astral-sh.uv";
 }

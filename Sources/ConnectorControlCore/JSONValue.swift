@@ -41,8 +41,19 @@ extension JSONValue: Codable {
 }
 
 public extension JSONValue {
+    /// Strict parse, refusing arrays and objects nested deeper than `McpSession.maxNestingDepth` and a
+    /// trailing comma (`McpSession.hasTrailingComma`).
     static func parse(_ data: Data) throws -> JSONValue {
-        try JSONDecoder().decode(JSONValue.self, from: data)
+        // Platform idiom: the Windows reader refuses nesting past 64 itself, where JSONDecoder reads
+        // to 512; held to the same limit here, so a document reads, and is masked, alike on both.
+        let text = String(decoding: data, as: UTF8.self)
+        guard McpSession.nests(atMost: McpSession.maxNestingDepth, text) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "nested too deeply"))
+        }
+        guard !McpSession.hasTrailingComma(text) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "trailing comma"))
+        }
+        return try JSONDecoder().decode(JSONValue.self, from: data)
     }
 
     func serialized() throws -> Data {
@@ -55,6 +66,25 @@ public extension JSONValue {
         let e = JSONEncoder()
         e.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         return (try? e.encode(self)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+    }
+
+    /// One line of compact, key-sorted JSON: the control layer's wire format. JSONSerialization
+    /// writes it, which the Windows mirror reproduces byte for byte
+    /// (`AppleJsonFormat.SerializationCompact`, pinned by the serialization-compact goldens).
+    ///
+    /// `escapingSlashes: false` is for what the command line prints under `--json`, which people and
+    /// scripts read: a path comes out as written. The wire is always escaped.
+    func compactLine(escapingSlashes: Bool = true) -> String {
+        // JSONSerialization raises an Objective-C exception, which aborts the process, for NaN and
+        // infinity, so a value it cannot write is checked for first. Wrapped in an array so a bare
+        // fragment is checked too.
+        guard JSONSerialization.isValidJSONObject([anyValue]),
+              let data = try? JSONSerialization.data(withJSONObject: anyValue,
+                                                   options: escapingSlashes ? [.sortedKeys, .fragmentsAllowed]
+                                                       : [.sortedKeys, .fragmentsAllowed, .withoutEscapingSlashes]) else {
+            return "null"
+        }
+        return String(decoding: data, as: UTF8.self)
     }
 
     var anyValue: Any {

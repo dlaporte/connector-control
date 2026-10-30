@@ -116,4 +116,16 @@ final class RemotePatternTests: XCTestCase {
         XCTAssertTrue(RemotePattern.isValidHTTPURL("https://x.dev/mcp?a=b&c=d"))
         XCTAssertTrue(RemotePattern.isValidHTTPURL("https://127.0.0.1:1/mcp&ver"))
     }
+
+    /// OAuth client info nested deeper than 64 is not read, as the Windows reader does not read it.
+    func testDeepOAuthClientInfoIsNotRead() {
+        func config(_ info: String) -> JSONValue {
+            .object(["command": .string("npx"), "args": .array(["-y", "mcp-remote", "https://h.example/mcp",
+                                                                 "--static-oauth-client-info", info].map(JSONValue.string))])
+        }
+        let deep = #"{"client_id":"a","client_secret":"b","x":"# + String(repeating: "[", count: 70) + String(repeating: "]", count: 70) + "}"
+        XCTAssertEqual(RemotePattern.decode(config(deep))?.auth, RemotePattern.decode(config("not json"))?.auth)
+        XCTAssertEqual(RemotePattern.decode(config(#"{"client_id":"a","client_secret":"b"}"#))?.auth,
+                       .oauthClient(clientID: "a", clientSecret: "b", scopes: ""))
+    }
 }

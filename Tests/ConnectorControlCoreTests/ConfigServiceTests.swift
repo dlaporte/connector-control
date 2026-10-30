@@ -302,6 +302,21 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL).count, 3)
     }
 
+    /// The restore applies the bytes it is handed — the ones its caller checked — not the file as it
+    /// is by then.
+    func testRestoreUsesTheBytesItIsGivenNotTheFileNow() throws {
+        var store = try service.loadAndReconcile().store
+        store.mcps["aws-mcp"]?.enabled = false
+        try service.apply(servers: store.enabledServers)  // backs up the 3-server file
+        let backup = try XCTUnwrap(try service.backups.backups(series: "claude_desktop_config").first)
+        let checked = try Data(contentsOf: backup)
+        try Data(#"{"mcpServers":{"swapped":{"command":"evil"}}}"#.utf8).write(to: backup)
+        try service.restoreClaudeConfig(from: backup, data: checked, mergedWith: store)
+        let restored = try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL)
+        XCTAssertEqual(restored.count, 3)
+        XCTAssertNil(restored["swapped"])
+    }
+
     func testRestoreClaudeConfigAdoptsSnapshotIntoStore() throws {
         var store = try service.loadAndReconcile().store
         store.mcps["aws-mcp"]?.enabled = false
@@ -454,10 +469,56 @@ final class ConfigServiceTests: XCTestCase {
                 return XCTFail("wrong error: \($0)")
             }
             XCTAssertEqual(detail, "backup bad-backup.json is not a valid config file "
-                           + "(The data couldn’t be read because it isn’t in the correct format.)")
+                           + "(the text does not parse as JSON)")
         }
         XCTAssertEqual(try Data(contentsOf: paths.claudeConfigURL), before,
                        "live config must be untouched after refused restore")
+    }
+
+    /// A backup that names a server twice is refused before the live file is touched: what it lists
+    /// and what Claude would run from it could differ.
+    func testRestoreRefusesABackupNamingAServerTwice() throws {
+        _ = try service.loadAndReconcile()
+        let before = try Data(contentsOf: paths.claudeConfigURL)
+        for (name, json) in [("exact.json", #"{"mcpServers": {"a": {"command": "x"}, "a": {"command": "y"}}}"#),
+                             ("equivalent.json", "{\"mcpServers\": {\"caf\u{E9}\": {}, \"cafe\u{301}\": {}}}")] {
+            let backup = dir.appendingPathComponent(name)
+            try Data(json.utf8).write(to: backup)
+            XCTAssertThrowsError(try service.restoreClaudeConfig(from: backup, mergedWith: .empty)) {
+                XCTAssertEqual($0 as? ClaudeConfigError,
+                               .malformed("backup \(name) is not a valid config file (\(ClaudeConfigIO.repeatedKeyError))"))
+            }
+        }
+        XCTAssertEqual(try Data(contentsOf: paths.claudeConfigURL), before, "live config must be untouched")
+    }
+
+    /// A backup that is not UTF-8 is refused as malformed before the live file is touched, a repeated
+    /// name in it too: its keys are never read as UTF-8 bytes.
+    func testRestoreRefusesABackupThatIsNotUTF8() throws {
+        _ = try service.loadAndReconcile()
+        let before = try Data(contentsOf: paths.claudeConfigURL)
+        for (name, json) in [("plain.json", #"{"k":"∀}}"}"#), ("twice.json", #"{"mcpServers":{"a":{},"a":{}}}"#)] {
+            let backup = dir.appendingPathComponent(name)
+            try XCTUnwrap(json.data(using: .utf16LittleEndian)).write(to: backup)
+            XCTAssertThrowsError(try service.restoreClaudeConfig(from: backup, mergedWith: .empty)) {
+                guard case ClaudeConfigError.malformed(let detail) = $0 else { return XCTFail("wrong error: \($0)") }
+                XCTAssertTrue(detail.hasPrefix("backup \(name) is not a valid config file ("), detail)
+            }
+        }
+        XCTAssertEqual(try Data(contentsOf: paths.claudeConfigURL), before, "live config must be untouched")
+    }
+
+    /// The restore writes what it parsed, not the backup's bytes: whatever parser reads the file next
+    /// reads what this app read.
+    func testRestoreWritesWhatItParsed() throws {
+        let store = try service.loadAndReconcile().store
+        let backup = dir.appendingPathComponent("nested.json")
+        try Data(#"{"mcpServers": {"a": {"command": "x", "env": {"K": "first", "K": "second"}}}}"#.utf8).write(to: backup)
+        let servers = try service.restoreClaudeConfig(from: backup, mergedWith: store)
+        XCTAssertEqual(servers["a"]?.value(at: JSONPointer(["env", "K"])), .string("first"))
+        let written = try String(contentsOf: paths.claudeConfigURL, encoding: .utf8)
+        XCTAssertFalse(written.contains("second"), written)
+        XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL), servers)
     }
 
     /// parseRoot treats zero bytes as an empty root (the same rule
@@ -471,6 +532,17 @@ final class ConfigServiceTests: XCTestCase {
         let servers = try service.restoreClaudeConfig(from: empty, mergedWith: store)
         XCTAssertEqual(servers, [:])
         XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL), [:])
+    }
+
+    func testALoadNeverIngestsTheReservedEntryButReturnsItWithTheFilesServers() throws {
+        let reserved = JSONValue.object(["command": .string("/x/connector-control"), "args": .array([.string("mcp")])])
+        var servers = try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL)
+        servers["connector-control"] = reserved
+        try ClaudeConfigIO.write(mcpServers: servers, to: paths.claudeConfigURL)
+        let result = try service.loadAndReconcile()
+        XCTAssertNil(result.store.mcps["connector-control"], "the entry is the app's own, never a stored connector")
+        XCTAssertEqual(result.claudeServers?["connector-control"], reserved,
+                       "what the file holds is reported whole, so the caller's comparison sees the entry")
     }
 }
 

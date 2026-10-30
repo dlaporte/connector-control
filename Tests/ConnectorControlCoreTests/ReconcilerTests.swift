@@ -198,4 +198,23 @@ final class ReconcilerTests: XCTestCase {
         XCTAssertEqual(Reconciler.adoptSnapshot(store: s, servers: ["x": expanded]).store.mcps["x"]?.config, expanded,
                        "with no folder published from here, the snapshot is adopted as written")
     }
+
+    // MARK: the reserved name
+
+    func testTheReservedEntryIsNeverIngested() {
+        let reserved = JSONValue.object(["command": .string("/x/connector-control"), "args": .array([.string("mcp")])])
+        let outcome = Reconciler.reconcile(store: .empty, claudeServers: ["connector-control": reserved, "new": configA])
+        XCTAssertNil(outcome.store.mcps["connector-control"])
+        XCTAssertNotNil(outcome.store.mcps["new"])
+        XCTAssertEqual(outcome.ingested, ["new"])
+    }
+
+    func testARestoredSnapshotNeverAdoptsTheReservedEntry() {
+        let reserved = JSONValue.object(["command": .string("/x/connector-control"), "args": .array([.string("mcp")])])
+        let outcome = Reconciler.adoptSnapshot(store: store(["a": MCPEntry(config: configA)]),
+                                               servers: ["connector-control": reserved, "a": configA])
+        XCTAssertNil(outcome.store.mcps["connector-control"])
+        XCTAssertEqual(outcome.store.mcps["a"]?.enabled, true)
+        XCTAssertFalse(outcome.storeChanged)
+    }
 }

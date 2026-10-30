@@ -25,6 +25,13 @@ public sealed class FakeDialogs : IDialogs
     public List<PromptCall> Prompts { get; } = [];
     public List<InformCall> Informs { get; } = [];
     public List<OfferCall> Offers { get; } = [];
+    /// <summary>What ConfirmChange answers: Don’t Allow unless a test says otherwise.</summary>
+    public bool NextChangeAnswer { get; set; }
+    /// <summary>Run while a change's confirmation is up, before it is answered.</summary>
+    public Action? DuringChange { get; set; }
+    /// <summary>Thrown by ConfirmChange, once recorded, when set: a dialog that fails once it may be showing.</summary>
+    public Exception? ChangeFailure { get; set; }
+    public List<ConfirmationDialog> ChangeQuestions { get; } = [];
 
     public bool Confirm(string message, string? informativeText, string primaryTitle, string cancelTitle, bool destructive,
                         bool cancelIsDefault)
@@ -50,5 +57,16 @@ public sealed class FakeDialogs : IDialogs
             throw OfferFailure;
         }
         return NextOffer;
+    }
+
+    public bool ConfirmChange(ConfirmationDialog dialog)
+    {
+        ChangeQuestions.Add(dialog);
+        DuringChange?.Invoke();
+        if (ChangeFailure is not null)
+        {
+            throw ChangeFailure;
+        }
+        return NextChangeAnswer;
     }
 }

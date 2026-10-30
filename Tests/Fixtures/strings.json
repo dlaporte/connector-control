@@ -103,8 +103,21 @@
   "AppState.unreviewedConnectorError": {
     "format": "“{0}” hasn’t been reviewed for publishing. Open Publishing Settings to review it."
   },
+  "AppVersion.developmentBuild": "development build",
+  "BoundedRead.notAFileError": "It isn’t a file.",
+  "BoundedRead.tooLargeError": "The file is too large.",
   "ClaudeConfigIO.mcpServersNotObjectError": "mcpServers is not a JSON object",
+  "ClaudeConfigIO.notJSONError": "the text does not parse as JSON",
+  "ClaudeConfigIO.repeatedKeyError": "the same name appears more than once",
   "ClaudeConfigIO.topLevelNotObjectError": "top level is not a JSON object",
+  "ClaudeIntegration.clashNote": "A connector named “connector-control” already exists. Rename it to turn this on.",
+  "ClaudeIntegration.endpointUnavailableText": "Claude and the command-line tool can’t reach Connector Control. Quit any other copy that is running, then restart this one.",
+  "ClaudeIntegration.moveToApplicationsError": "Move Connector Control to Applications, then try again.",
+  "ClaudeIntegration.offerBody": "Claude could list, switch and edit your connectors for you. This adds a connector named connector-control to Claude.",
+  "ClaudeIntegration.offerNotNowButton": "Not Now",
+  "ClaudeIntegration.offerTitle": "Let Claude manage Connector Control?",
+  "ClaudeIntegration.offerTurnOnButton": "Turn On",
+  "ClaudeIntegration.reservedNameError": "connector-control is reserved for Connector Control itself.",
   "ClaudeProcess.notAClaudePackageError": {
     "win": {
       "format": "{0} is not a Claude Desktop package. Choose the real Claude Desktop under Settings ▸ Claude."
@@ -141,6 +154,7 @@
   "CollectionDocument.credentialLiteralPhrase": "looks like a credential",
   "CollectionDocument.credentialReferencePhrase": "refers to a credential",
   "CollectionDocument.credentialUserOnlyPhrase": "names a user",
+  "CollectionDocument.notJSONError": "not JSON",
   "CollectionsModel.activePill": "Active",
   "CollectionsModel.addCollectionTooltip": "Add Collection",
   "CollectionsModel.addConnectorDisabledTooltip": "Additions go in a local collection.",
@@ -217,6 +231,34 @@
   "CollectionsModel.subscribedPill": "Subscribed",
   "CollectionsModel.updateAvailableStatus": "update available",
   "CollectionsModel.windowTitle": "Collections",
+  "CommandLineToolText.adminPrompt": "Connector Control needs your password to change the connector-control command in /usr/local/bin.",
+  "CommandLineToolText.helpCommand": "connector-control help",
+  "CommandLineToolText.inPathText": "In your PATH",
+  "CommandLineToolText.installButton": "Install",
+  "CommandLineToolText.installFailedError": {
+    "format": "The command-line tool couldn’t be installed: {0}"
+  },
+  "CommandLineToolText.installedInText": {
+    "format": "Installed in {0}"
+  },
+  "CommandLineToolText.missingToolError": {
+    "format": "{0} is missing. Quit and reopen Connector Control, then try again."
+  },
+  "CommandLineToolText.notInstalledText": "Not installed",
+  "CommandLineToolText.occupiedError": {
+    "format": "{0} already exists and isn’t a link. Remove it, then try again."
+  },
+  "CommandLineToolText.removeButton": "Remove",
+  "CommandLineToolText.removeFailedError": {
+    "format": "The command-line tool couldn’t be removed: {0}"
+  },
+  "CommandLineToolText.runHelpCaption": {
+    "mac": "Run connector-control help in Terminal.",
+    "win": "Run connector-control help in a new terminal."
+  },
+  "CommandLineToolText.scriptsCaption": {
+    "format": "Scripts can always use {0}"
+  },
   "ConfigService.corruptStoreNote": {
     "format": "The MCP list file was unreadable; it was preserved as {0} and rebuilt from Claude’s config."
   },
@@ -230,6 +272,469 @@
     "format": "backup {0} has an invalid mcpServers section"
   },
   "ConfigService.malformedClaudeConfigNote": "Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.",
+  "ConfirmationDialog.allowButton": "Allow",
+  "ConfirmationDialog.dontAllowButton": "Don’t Allow",
+  "ControlCaller.callingItselfText": {
+    "format": "An app calling itself “{0}”"
+  },
+  "ControlCaller.claudeName": "Claude",
+  "ControlCaller.unknownClientName": "Another app",
+  "ControlClient.droppedError": "Connector Control closed the connection before answering.",
+  "ControlClient.elevatedError": "Run connector-control without administrator rights: Connector Control runs as you, and an elevated copy can’t reach it.",
+  "ControlClient.notRunningError": "Connector Control isn’t running.",
+  "ControlClient.startingText": "Starting Connector Control…",
+  "ControlClient.unreachableError": "Connector Control isn’t running and couldn’t be started.",
+  "ControlCommandLine.missingValueError": {
+    "format": "“{0}” needs a value."
+  },
+  "ControlCommandLine.unknownCommandError": {
+    "format": "There’s no command named “{0}”. Run connector-control help to see them all."
+  },
+  "ControlCommandLine.unknownOptionError": {
+    "format": "“{0}” isn’t an option of this command."
+  },
+  "ControlCommandLine.usageError": {
+    "format": "Usage: connector-control {0}"
+  },
+  "ControlCommandLine.versionLine": {
+    "format": "connector-control {0}"
+  },
+  "ControlMasking.addedPrefix": "  + ",
+  "ControlMasking.argsLabel": "args",
+  "ControlMasking.assignment": {
+    "format": "{0} = {1}"
+  },
+  "ControlMasking.commandLabel": "command",
+  "ControlMasking.envLabel": "env",
+  "ControlMasking.headersLabel": "headers",
+  "ControlMasking.mask": "•••",
+  "ControlMasking.nameLabel": "name",
+  "ControlMasking.needsValueState": "needs value",
+  "ControlMasking.oauthClientText": {
+    "format": "client {0}, secret {1}"
+  },
+  "ControlMasking.oauthLabel": "oauth",
+  "ControlMasking.otherLabel": "other",
+  "ControlMasking.remoteBridgeType": {
+    "format": "remote, through {0}"
+  },
+  "ControlMasking.removedPrefix": "  − ",
+  "ControlMasking.scopesLabel": "scopes",
+  "ControlMasking.setState": "set",
+  "ControlMasking.setText": "••• (set)",
+  "ControlMasking.typeLabel": "type",
+  "ControlMasking.urlLabel": "url",
+  "ControlRelay.restartedError": "Connector Control restarted — try again.",
+  "ControlSettingKey.automaticUpdates": "automatic-updates",
+  "ControlSettingKey.backupsToKeep": "backups-to-keep",
+  "ControlSettingKey.claudeIntegration": "claude-integration",
+  "ControlSettingKey.confirmClaudeChanges": "confirm-claude-changes",
+  "ControlSettingKey.confirmQuit": "confirm-quit",
+  "ControlSettingKey.confirmRestart": "confirm-restart",
+  "ControlSettingKey.launchAtLogin": "launch-at-login",
+  "ControlSettingKey.notifyExternalChanges": "notify-external-changes",
+  "ControlText.listAnd": " and ",
+  "ControlTools.activeCollectionLabel": "Active collection",
+  "ControlTools.activeMark": "active",
+  "ControlTools.addActiveMessage": {
+    "format": "It would join “{0}”, the collection Claude is running, switched {1}, and run:"
+  },
+  "ControlTools.addMessage": {
+    "format": "It would join “{0}”, switched {1}, and run:"
+  },
+  "ControlTools.addTitle": {
+    "format": "{0} wants to add “{1}”"
+  },
+  "ControlTools.add_connector.cliUsage": "add <name> --json <config> | --file <path> [--off]",
+  "ControlTools.add_connector.description": "Add a connector. config is what Claude Desktop runs, as its config file holds it: {\"command\": ..., \"args\": [...], \"env\": {...}} for a local server, or an npx mcp-remote command line for a remote one. Never write a secret the user has not given you: put ${CC_NEEDS:NAME} in its place, and the user fills it in in Connector Control. The connector goes into the active collection unless collection names another, switched on unless enabled is false.",
+  "ControlTools.addedNotification": {
+    "format": "{0} added “{1}” to “{2}”."
+  },
+  "ControlTools.addedText": {
+    "format": "Added “{0}” to “{1}”, switched {2}."
+  },
+  "ControlTools.addsClause": {
+    "format": "adds {0}"
+  },
+  "ControlTools.appliedUpdateNotification": {
+    "format": "{0} applied the update to “{1}”."
+  },
+  "ControlTools.appliedUpdateText": {
+    "format": "Applied the update to “{0}”."
+  },
+  "ControlTools.applyUpdateTitle": {
+    "format": "{0} wants to update “{1}”"
+  },
+  "ControlTools.apply_update.cliUsage": "apply-update <collection>",
+  "ControlTools.apply_update.description": "Apply the update waiting for a subscribed collection. get_pending_update shows what it changes.",
+  "ControlTools.argumentsNotObjectError": "The arguments must be a JSON object.",
+  "ControlTools.arrivedOffText.many": {
+    "format": "{0} connectors arrived switched off."
+  },
+  "ControlTools.arrivedOffText.one": {
+    "format": "{0} connector arrived switched off."
+  },
+  "ControlTools.booleanKind": "true or false",
+  "ControlTools.changeActiveMessage": {
+    "format": "In “{0}”, the collection Claude is running:"
+  },
+  "ControlTools.changeMessage": {
+    "format": "In “{0}”:"
+  },
+  "ControlTools.changeTitle": {
+    "format": "{0} wants to change “{1}”"
+  },
+  "ControlTools.changedNotification": {
+    "format": "{0} changed “{1}” in “{2}”."
+  },
+  "ControlTools.changedText": {
+    "format": "Changed “{0}” in “{1}”."
+  },
+  "ControlTools.changedWhileAskingError": "This changed while Connector Control was asking, so nothing was done. Ask again.",
+  "ControlTools.changesClause": {
+    "format": "changes {0}"
+  },
+  "ControlTools.check_tools.cliUsage": "doctor",
+  "ControlTools.check_tools.description": "Whether npx, node, uvx and uv are installed where Claude can find them. A connector launched through a missing one shows only \"server disconnected\" in Claude.",
+  "ControlTools.claudeGroup": "Claude",
+  "ControlTools.claudeLabel": "Claude",
+  "ControlTools.claudeNotRunning": "not running",
+  "ControlTools.claudeRunning": "running",
+  "ControlTools.claudeRunningRestart": "running · restart required",
+  "ControlTools.clauseSeparator": "; ",
+  "ControlTools.collectionHeader": "COLLECTION",
+  "ControlTools.collectionsGroup": "Collections",
+  "ControlTools.configShapeError": "A connector’s config needs a “command” or a “url”.",
+  "ControlTools.connectorCountText": {
+    "format": "{0} connectors, {1} on"
+  },
+  "ControlTools.connectorsGroup": "Connectors (in the active collection; connectors --collection <name> lists another)",
+  "ControlTools.connectorsHeader": "CONNECTORS",
+  "ControlTools.create_collection.cliUsage": "collection new <name>",
+  "ControlTools.create_collection.description": "Create an empty collection. It does not become active.",
+  "ControlTools.createdText": {
+    "format": "Created “{0}”."
+  },
+  "ControlTools.declinedError": "You declined this change in Connector Control.",
+  "ControlTools.deleteActiveMessage": {
+    "format": "From “{0}”, the collection Claude is running. A copy remains in Backups."
+  },
+  "ControlTools.deleteCollectionTitle": {
+    "format": "{0} wants to delete the collection “{1}”"
+  },
+  "ControlTools.deleteMessage": {
+    "format": "From “{0}”. A copy remains in Backups."
+  },
+  "ControlTools.deleteTitle": {
+    "format": "{0} wants to delete {1}"
+  },
+  "ControlTools.delete_collection.cliUsage": "collection delete <name>",
+  "ControlTools.delete_collection.description": "Delete a collection and its connectors. A copy remains in Connector Control's backups; a subscribed collection's file is left alone.",
+  "ControlTools.delete_connectors.cliUsage": "delete <name>…",
+  "ControlTools.delete_connectors.description": "Delete connectors. A copy remains in Connector Control's backups.",
+  "ControlTools.deletedCollectionNotification": {
+    "format": "{0} deleted the collection “{1}”."
+  },
+  "ControlTools.deletedCollectionText": {
+    "format": "Deleted the collection “{0}”."
+  },
+  "ControlTools.deletedNotification": {
+    "format": "{0} deleted {1} from “{2}”."
+  },
+  "ControlTools.deletedText": {
+    "format": "Deleted {0} from “{1}”."
+  },
+  "ControlTools.deletesClause": {
+    "format": "deletes {0}"
+  },
+  "ControlTools.detail": {
+    "format": "{0} · {1}"
+  },
+  "ControlTools.documentTooLargeError": {
+    "format": "“{0}” is over 1 MB, too large for a collection file."
+  },
+  "ControlTools.duplicateSubscribedError": {
+    "format": "“{0}” is subscribed; copy it in Connector Control with Make Local Copy."
+  },
+  "ControlTools.duplicate_collection.cliUsage": "collection duplicate <name> <new>",
+  "ControlTools.duplicate_collection.description": "Copy a collection under a new name. The copy holds the same connectors, each on or off as it is, and does not become active. A subscribed collection is copied in Connector Control instead.",
+  "ControlTools.duplicatedText": {
+    "format": "Copied “{0}” as “{1}”."
+  },
+  "ControlTools.emptyCollectionText": {
+    "format": "“{0}” has no connectors."
+  },
+  "ControlTools.fromFooter": {
+    "format": "From “{0}”"
+  },
+  "ControlTools.get_connector.cliUsage": "show <name> [--reveal]",
+  "ControlTools.get_connector.description": "Show one connector, with its secrets masked. Gives its command, arguments, URL and environment; environment and header values are never shown, only whether they are set. Looks in the active collection unless collection names another.",
+  "ControlTools.get_pending_update.cliUsage": "updates <collection>",
+  "ControlTools.get_pending_update.description": "Show what an update to a subscribed collection would change. Names the connectors its file adds, deletes and changes; apply_update lands it.",
+  "ControlTools.get_settings.cliUsage": "settings",
+  "ControlTools.get_settings.description": "List Connector Control's settings and their values. The keys are the ones set_setting takes.",
+  "ControlTools.get_status.cliUsage": "status",
+  "ControlTools.get_status.description": "What Claude is running, and whether it needs a restart. Returns the active collection and how many of its connectors are on, whether Claude Desktop is running on an older config, whether Connector Control asks before Claude's changes, and where the master list is.",
+  "ControlTools.helpOptions": "Options: --json  --version  --help",
+  "ControlTools.helpUsage": "Usage: connector-control <command> [options]",
+  "ControlTools.idHeader": "ID",
+  "ControlTools.importMessage.many": {
+    "format": "{0} connectors would be copied into “{1}”, switched off:"
+  },
+  "ControlTools.importMessage.one": {
+    "format": "{0} connector would be copied into “{1}”, switched off:"
+  },
+  "ControlTools.importNewMessage.many": {
+    "format": "{0} connectors would be copied into a new collection, “{1}”, switched off:"
+  },
+  "ControlTools.importNewMessage.one": {
+    "format": "{0} connector would be copied into a new collection, “{1}”, switched off:"
+  },
+  "ControlTools.importReplacingMessage.many": {
+    "format": "{0} connectors would be copied into “{1}”, switched off, but any that replaces one switched on stays on:"
+  },
+  "ControlTools.importReplacingMessage.one": {
+    "format": "{0} connector would be copied into “{1}”, replacing one that is switched on, so it stays on:"
+  },
+  "ControlTools.importTitle": {
+    "format": "{0} wants to import “{1}”"
+  },
+  "ControlTools.import_document.cliUsage": "import <file> [--into <collection> | --new <name>] [--on-clash replace|keep-both|skip]",
+  "ControlTools.import_document.description": "Copy the connectors in a collection file into a collection. They arrive switched off, with no link to the file afterwards. onClash says what to do with a name the collection already has: replace it, keep both, or skip it.",
+  "ControlTools.importedNotification.many": {
+    "format": "{0} copied {1} connectors into “{2}”."
+  },
+  "ControlTools.importedNotification.one": {
+    "format": "{0} copied {1} connector into “{2}”."
+  },
+  "ControlTools.importedReplacingText.many": {
+    "format": "Copied {0} connectors into “{1}”, switched off, but any that replaced one switched on stays on."
+  },
+  "ControlTools.importedReplacingText.one": {
+    "format": "Copied {0} connector into “{1}”; it replaced one that was switched on, so it stays on."
+  },
+  "ControlTools.importedText.many": {
+    "format": "Copied {0} connectors into “{1}”, switched off."
+  },
+  "ControlTools.importedText.one": {
+    "format": "Copied {0} connector into “{1}”, switched off."
+  },
+  "ControlTools.installHint": {
+    "format": "{0}: {1}"
+  },
+  "ControlTools.integerKind": "a whole number",
+  "ControlTools.integrationLabel": "Claude integration",
+  "ControlTools.integrationOffError": "Claude integration is turned off in Connector Control.",
+  "ControlTools.integrationOnConfirming": "on · confirmations on",
+  "ControlTools.integrationOnNotConfirming": "on · confirmations off",
+  "ControlTools.integrationSetText": {
+    "format": "Claude integration is {0}."
+  },
+  "ControlTools.intoOrNewCollectionError": "Give “into” or “newCollection”, not both.",
+  "ControlTools.keepCountError": "backups-to-keep takes a number from 5 to 100.",
+  "ControlTools.kindHeader": "KIND",
+  "ControlTools.listKind": "a list of names",
+  "ControlTools.list_backups.cliUsage": "backups",
+  "ControlTools.list_backups.description": "List the backups of Claude's config. Each id can be given to restore_backup.",
+  "ControlTools.list_collections.cliUsage": "collections",
+  "ControlTools.list_collections.description": "List collections. Each is a set of connectors and the active one is what Claude runs; a subscribed collection follows a file someone else publishes and is read-only.",
+  "ControlTools.list_connectors.cliUsage": "connectors [--collection <name>]",
+  "ControlTools.list_connectors.description": "List connectors and what each runs. Lists the active collection, the one Claude runs, unless collection names another. What each runs is a summary that never shows a secret.",
+  "ControlTools.localKind": "local",
+  "ControlTools.masterListLabel": "Master list",
+  "ControlTools.missingArgumentError": {
+    "format": "“{0}” is required."
+  },
+  "ControlTools.nameHeader": "NAME",
+  "ControlTools.needsNewerAppError": {
+    "format": "This needs Connector Control {0}; restart the app."
+  },
+  "ControlTools.needsValuesText": {
+    "format": "It needs a value for {0}: fill it in Connector Control."
+  },
+  "ControlTools.networkPathError": {
+    "win": "Only the command-line tool can read a file on a network share or through a device path. Copy it to this PC first."
+  },
+  "ControlTools.noBackupError": {
+    "format": "There’s no backup named “{0}”."
+  },
+  "ControlTools.noBackupsText": "No backups yet.",
+  "ControlTools.noConnectorError": {
+    "format": "There’s no connector named “{0}” in “{1}”."
+  },
+  "ControlTools.noQuestionError": "Connector Control couldn’t ask about this change, so nothing was done.",
+  "ControlTools.noUpdateError": {
+    "format": "“{0}” has no update waiting."
+  },
+  "ControlTools.notAFileError": {
+    "format": "“{0}” isn’t a file."
+  },
+  "ControlTools.notOneOfError": {
+    "format": "“{0}” must be one of {1}."
+  },
+  "ControlTools.notSubscribedError": {
+    "format": "“{0}” isn’t a subscribed collection."
+  },
+  "ControlTools.nothingToChangeError": "Give a new config, a new name, or both.",
+  "ControlTools.nothingToImportError": {
+    "format": "Nothing in “{0}” would come across."
+  },
+  "ControlTools.objectKind": "a JSON object",
+  "ControlTools.offWord": "off",
+  "ControlTools.onWord": "on",
+  "ControlTools.pendingUpdateText": {
+    "format": "“{0}” changed at its source: {1}."
+  },
+  "ControlTools.problemLabel": "Problem",
+  "ControlTools.publishedFileStaysText": "Its published file stays in its folder.",
+  "ControlTools.publishedKind": "published",
+  "ControlTools.queuedText": "Waiting for another change in Connector Control to finish.",
+  "ControlTools.refresh_subscription.cliUsage": "refresh <collection>",
+  "ControlTools.refresh_subscription.description": "Read a subscribed collection's file now. Says whether an update is waiting.",
+  "ControlTools.relaySummary": "The relay Claude Desktop runs; not for direct use",
+  "ControlTools.relayUsage": "mcp",
+  "ControlTools.rename_collection.cliUsage": "collection rename <old> <new>",
+  "ControlTools.rename_collection.description": "Rename a collection.",
+  "ControlTools.renamedCollectionText": {
+    "format": "Renamed the collection “{0}” to “{1}”."
+  },
+  "ControlTools.renamedNotification": {
+    "format": "{0} renamed “{1}” to “{2}”."
+  },
+  "ControlTools.renamedText": {
+    "format": "Renamed “{0}” to “{1}”."
+  },
+  "ControlTools.restartItselfTitle": "Claude wants to restart itself",
+  "ControlTools.restartMessage": "Claude Desktop will quit and reopen to pick up the change. The reply in progress stops; the conversation is kept.",
+  "ControlTools.restartTitle": {
+    "format": "{0} wants to restart Claude Desktop"
+  },
+  "ControlTools.restartToApplyText": "Restart Claude to apply the change.",
+  "ControlTools.restartToUseText": "Restart Claude to use it.",
+  "ControlTools.restart_claude.cliUsage": "restart-claude",
+  "ControlTools.restart_claude.description": "Quit and reopen Claude Desktop. The user is always asked first; the reply in progress stops and the conversation is kept.",
+  "ControlTools.restartingText": "Restarting Claude Desktop.",
+  "ControlTools.restoreActivatingText": {
+    "format": "Its connectors go back into “{0}”, which becomes the active collection:"
+  },
+  "ControlTools.restoreIntoText": {
+    "format": "Its connectors go back into “{0}”:"
+  },
+  "ControlTools.restoreTitle": {
+    "format": "{0} wants to restore “{1}”"
+  },
+  "ControlTools.restore_backup.cliUsage": "backups restore <id>",
+  "ControlTools.restore_backup.description": "Replace Claude's config with a backup. The current file is backed up first.",
+  "ControlTools.restoredNotification": {
+    "format": "{0} restored “{1}”."
+  },
+  "ControlTools.restoredText": {
+    "format": "Restored “{0}”."
+  },
+  "ControlTools.runsHeader": "RUNS",
+  "ControlTools.savedNotAppliedText": {
+    "format": "Saved, but Claude’s config wasn’t updated: {0}"
+  },
+  "ControlTools.set_connector_enabled.cliUsage": "enable <name> | disable <name>",
+  "ControlTools.set_connector_enabled.description": "Turn a connector on or off. Acts on the active collection, the one Claude runs, as Connector Control's own switches do; Claude picks the change up when it restarts.",
+  "ControlTools.set_setting.cliUsage": "settings set <key> <value>",
+  "ControlTools.set_setting.description": "Change a setting. Takes a key from get_settings and on or off, or a number from 5 to 100 for backups-to-keep. Only the user can change claude-integration, confirm-claude-changes, notify-external-changes and automatic-updates.",
+  "ControlTools.settingChangedText": {
+    "format": "{0} is now {1}."
+  },
+  "ControlTools.settingNotForClaudeError": {
+    "format": "Only you can change {0}, in Connector Control or with the command-line tool."
+  },
+  "ControlTools.settingsGroup": "Settings and backups",
+  "ControlTools.sharingGroup": "Sharing",
+  "ControlTools.statusGroup": "Status",
+  "ControlTools.statusTitle": {
+    "format": "Connector Control {0}"
+  },
+  "ControlTools.subscribe.cliUsage": "subscribe <file> [--name <name>]",
+  "ControlTools.subscribe.description": "Subscribe to a collection file someone publishes. It becomes a new, read-only collection that follows the file, and its connectors arrive switched off.",
+  "ControlTools.subscribeMessage.many": {
+    "format": "A new collection, “{0}”, would follow this file, read-only. Its {1} connectors arrive switched off:"
+  },
+  "ControlTools.subscribeMessage.one": {
+    "format": "A new collection, “{0}”, would follow this file, read-only. Its {1} connector arrives switched off:"
+  },
+  "ControlTools.subscribeTitle": {
+    "format": "{0} wants to subscribe to “{1}”"
+  },
+  "ControlTools.subscribedKind": "subscribed",
+  "ControlTools.subscribedNotification": {
+    "format": "{0} subscribed to “{1}” as “{2}”."
+  },
+  "ControlTools.subscribedText": {
+    "format": "Subscribed: “{0}” follows {1}, read-only."
+  },
+  "ControlTools.switchValueError": {
+    "format": "{0} takes on or off."
+  },
+  "ControlTools.switch_collection.cliUsage": "use <collection>",
+  "ControlTools.switch_collection.description": "Make a collection active. Claude runs its connectors after its next restart.",
+  "ControlTools.switchedNotification": {
+    "format": "{0} switched to “{1}”."
+  },
+  "ControlTools.switchedText": {
+    "format": "Switched to “{0}”."
+  },
+  "ControlTools.takesEffectFooter": "Takes effect when Claude restarts.",
+  "ControlTools.textKind": "text",
+  "ControlTools.titles.add_connector": "Add connector",
+  "ControlTools.titles.apply_update": "Apply update",
+  "ControlTools.titles.check_tools": "Check launchers",
+  "ControlTools.titles.create_collection": "Create collection",
+  "ControlTools.titles.delete_collection": "Delete collection",
+  "ControlTools.titles.delete_connectors": "Delete connectors",
+  "ControlTools.titles.duplicate_collection": "Duplicate collection",
+  "ControlTools.titles.get_connector": "Show connector",
+  "ControlTools.titles.get_pending_update": "Show pending update",
+  "ControlTools.titles.get_settings": "Show settings",
+  "ControlTools.titles.get_status": "Get status",
+  "ControlTools.titles.import_document": "Import collection",
+  "ControlTools.titles.list_backups": "List backups",
+  "ControlTools.titles.list_collections": "List collections",
+  "ControlTools.titles.list_connectors": "List connectors",
+  "ControlTools.titles.refresh_subscription": "Refresh subscription",
+  "ControlTools.titles.rename_collection": "Rename collection",
+  "ControlTools.titles.restart_claude": "Restart Claude",
+  "ControlTools.titles.restore_backup": "Restore backup",
+  "ControlTools.titles.set_connector_enabled": "Turn connector on or off",
+  "ControlTools.titles.set_setting": "Change setting",
+  "ControlTools.titles.subscribe": "Subscribe to collection",
+  "ControlTools.titles.switch_collection": "Switch collection",
+  "ControlTools.titles.update_connector": "Change connector",
+  "ControlTools.tooLongToShowError": "Connector Control can’t show this change in full, so it wasn’t made.",
+  "ControlTools.turnedOffNotification": {
+    "format": "{0} turned off “{1}”."
+  },
+  "ControlTools.turnedOffText": {
+    "format": "Turned off “{0}” in “{1}”."
+  },
+  "ControlTools.turnedOnNotification": {
+    "format": "{0} turned on “{1}”."
+  },
+  "ControlTools.turnedOnText": {
+    "format": "Turned on “{0}” in “{1}”."
+  },
+  "ControlTools.unchangedError": {
+    "format": "“{0}” already has that config."
+  },
+  "ControlTools.unknownToolError": {
+    "format": "There’s no tool named “{0}”."
+  },
+  "ControlTools.upToDateText": {
+    "format": "“{0}” is up to date."
+  },
+  "ControlTools.updateAvailableKind": "update available",
+  "ControlTools.update_connector.cliUsage": "edit <name> --json <config> | --file <path> [--rename <new>]",
+  "ControlTools.update_connector.description": "Change a connector's config, its name, or both. config replaces the whole config; write ${CC_NEEDS:NAME} for any secret the user has not given you. Subscribed collections are read-only.",
+  "ControlTools.waitingText": "Waiting for your answer in Connector Control.",
+  "ControlTools.wrongTypeError": {
+    "format": "“{0}” must be {1}."
+  },
   "CopyModel.copyButton": "Copy",
   "CopyModel.title": {
     "format": "Copy to “{0}”"
@@ -518,30 +1023,38 @@
     "format": "Update to {0}"
   },
   "SettingsModel.autoUpdateTitle": "Automatically download and install updates",
-  "SettingsModel.backupsCaption": "Claude’s config, the master list and collections.json are backed up automatically before every change.",
+  "SettingsModel.backupsCaption": "Claude’s config, the master list and collections.json.",
+  "SettingsModel.backupsFooter": "A backup is made automatically before every change.",
   "SettingsModel.backupsHeader": "Backups",
+  "SettingsModel.backupsTitle": "Backups of each file",
   "SettingsModel.checkForUpdatesTitle": "Check for Updates",
+  "SettingsModel.chooseButtonTitle": "Choose…",
   "SettingsModel.chooseTitle": "Choose",
   "SettingsModel.claudeAppHeader": "Claude App",
   "SettingsModel.claudeAppRejectedTitle": {
     "mac": "That app can’t be used as Claude Desktop",
     "win": "That program can’t be used as Claude Desktop"
   },
+  "SettingsModel.claudeIntegrationCaption": "Claude can list, switch and edit connectors. Restart Claude to apply.",
+  "SettingsModel.claudeIntegrationHeader": "Claude Integration",
+  "SettingsModel.claudeIntegrationTitle": "Let Claude manage Connector Control",
   "SettingsModel.claudeTab": "Claude",
+  "SettingsModel.commandLineToolHeader": "Command-Line Tool",
   "SettingsModel.configPathLabel": {
     "win": "Config file"
   },
+  "SettingsModel.confirmClaudeChangesOffCaption": "Claude can then change what it runs without asking here. Text Claude reads, such as a web page, could ask it to.",
+  "SettingsModel.confirmClaudeChangesOnCaption": "Ask before Claude adds, edits, deletes, imports or restores.",
+  "SettingsModel.confirmClaudeChangesTitle": "Confirm changes Claude makes",
   "SettingsModel.confirmQuitTitle": "Confirm before quitting",
   "SettingsModel.confirmRestartTitle": "Confirm before restarting Claude",
+  "SettingsModel.confirmationsHeader": "Confirmations",
   "SettingsModel.generalTab": "General",
   "SettingsModel.installKindLegacyText": {
     "win": "Legacy installer"
   },
   "SettingsModel.installKindMsixText": {
     "win": "MSIX package"
-  },
-  "SettingsModel.keepCountLabel": {
-    "format": "Keep {0} backups of each file"
   },
   "SettingsModel.launchAtLoginTitle": {
     "mac": "Launch at login",
@@ -561,15 +1074,24 @@
       "format": "Couldn't update startup entry: {0}"
     }
   },
+  "SettingsModel.masterListFooter": {
+    "mac": "Holds mcps.json and collections.json. A synced folder shares them across your Macs.",
+    "win": "Holds mcps.json and collections.json. A synced folder shares them across your PCs."
+  },
   "SettingsModel.masterListHeader": "Master List Location",
+  "SettingsModel.notificationsHeader": "Notifications",
+  "SettingsModel.notifyCaption": "When the master list, a subscribed document or Claude’s config changes outside the app, and when Claude’s config is rebuilt from your list.",
   "SettingsModel.notifyTitle": "Notify on external changes",
+  "SettingsModel.previewUpdatesCaption": "Previews update to later previews and the final release.",
+  "SettingsModel.restoreButtonTitle": "Restore…",
   "SettingsModel.revealInFinderTitle": {
     "mac": "Reveal in Finder",
     "win": "Show in Explorer"
   },
+  "SettingsModel.startupHeader": "Startup",
   "SettingsModel.storageTab": "Storage",
   "SettingsModel.toolsCaption": {
-    "mac": "Connectors that run through npx, node, uvx or uv need them installed where Claude Desktop can find them."
+    "mac": "Needed by connectors that run through them, where Claude can find them."
   },
   "SettingsModel.toolsHeader": {
     "mac": "Tools"
@@ -579,18 +1101,24 @@
   "SettingsModel.versionText": {
     "format": "Version {0}"
   },
+  "TextRun.cutMark": "…",
   "ToolFamily.nodeJS.installCommand": {
     "mac": "brew install node",
     "win": "winget install OpenJS.NodeJS.LTS"
   },
   "ToolFamily.nodeJS.linkTitle": "Install Node.js",
   "ToolFamily.nodeJS.linkURL": "https://nodejs.org/en/download",
+  "ToolFamily.nodeJS.toolNames": "node and npx",
   "ToolFamily.uv.installCommand": {
     "mac": "brew install uv",
     "win": "winget install astral-sh.uv"
   },
   "ToolFamily.uv.linkTitle": "Install uv",
   "ToolFamily.uv.linkURL": "https://docs.astral.sh/uv/getting-started/installation/",
+  "ToolFamily.uv.toolNames": "uv and uvx",
+  "ToolFooterLine.installText": {
+    "format": "{0}: {1} or run {2}."
+  },
   "ToolNote.checkingText": "Checking…",
   "ToolNote.foundText": "Found",
   "ToolNote.missingText": "npx wasn’t found, so Claude Desktop won’t be able to start this connector.",
@@ -600,7 +1128,7 @@
   "ToolNote.rowShellOnlyText": {
     "mac": "Needs npx, which Claude Desktop may not see. Edit to see how to fix it."
   },
-  "ToolNote.settingsCaption": "Connectors that run through npx, node, uvx or uv need them installed where Claude Desktop can find them.",
+  "ToolNote.settingsCaption": "Needed by connectors that run through them, where Claude can find them.",
   "ToolNote.settingsHeader": "Tools",
   "ToolNote.shellOnlyAdvice": {
     "mac": "Install it with Homebrew or the official installer, which put it where Claude Desktop looks; version managers such as nvm install elsewhere."
@@ -643,5 +1171,8 @@
   },
   "UpdateCoordinator.updateRefusedMessage": {
     "win": "The update was not installed."
+  },
+  "UserPath.notTextError": {
+    "win": "Your user PATH in the registry isn’t text, so it was left as it is."
   }
 }

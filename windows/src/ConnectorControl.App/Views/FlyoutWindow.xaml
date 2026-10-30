@@ -106,6 +106,32 @@
         </Grid>
       </Border>
 
+      <!-- The one-time offer: in the collection banner's slot and shape, tinted as news rather than a caution.
+           Platform idiom: the tint is the border here, as this flyout marks the collection banner's caution with
+           its border; the Mac tints both banners' backgrounds. -->
+      <Border x:Name="ClaudeOfferStrip" Margin="10" Padding="8" CornerRadius="6" BorderThickness="1"
+              BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"
+              Visibility="{Binding ShowsClaudeIntegrationOffer, Converter={StaticResource Vis}}">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="{x:Static state:FlyoutModel.OfferGlyph}" Foreground="{DynamicResource AccentFillColorDefaultBrush}"
+                     Margin="0,1,6,0" VerticalAlignment="Top" />
+          <StackPanel Grid.Column="1">
+            <TextBlock Text="{x:Static state:ClaudeIntegration.OfferTitle}" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock Text="{x:Static state:ClaudeIntegration.OfferBody}" Style="{StaticResource CaptionText}" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0">
+              <Button x:Name="ClaudeOfferNotNow" Style="{StaticResource LinkButton}" Content="{x:Static state:ClaudeIntegration.OfferNotNowButton}"
+                      Click="OnClaudeOfferNotNow" />
+              <Button x:Name="ClaudeOfferTurnOn" Style="{DynamicResource AccentButtonStyle}" Margin="8,0,0,0" Padding="10,4"
+                      Content="{x:Static state:ClaudeIntegration.OfferTurnOnButton}" Click="OnClaudeOfferTurnOn" />
+            </StackPanel>
+          </StackPanel>
+        </Grid>
+      </Border>
+
       <!-- Connector list: grows to 420 then scrolls -->
       <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto">
         <StackPanel>

@@ -30,13 +30,35 @@ public sealed class BackupManager
             return;
         }
         var baseName = Path.GetFileNameWithoutExtension(path);
-        var dest = Path.Combine(BackupsDir, $"{baseName}.original.json");
+        var dest = OriginalPath(baseName);
         if (File.Exists(dest))
         {
             return;
         }
         AtomicFile.Write(File.ReadAllBytes(path), dest);
     }
+
+    /// <summary>The <c>.original.json</c> snapshot's path for a series — what <see cref="EnsureOriginalSnapshot"/>
+    /// writes once and never prunes — when it exists on disk; null otherwise.</summary>
+    public string? OriginalSnapshotPath(string series)
+    {
+        var dest = OriginalPath(series);
+        return File.Exists(dest) ? dest : null;
+    }
+
+    /// <summary>Every backup the Restore sheet offers for a series: the timestamped ones newest first, then
+    /// the first-run original when there is one.</summary>
+    public IReadOnlyList<string> RestorableBackups(string series)
+    {
+        var found = new List<string>(Backups(series));
+        if (OriginalSnapshotPath(series) is { } original)
+        {
+            found.Add(original);
+        }
+        return found;
+    }
+
+    private string OriginalPath(string series) => Path.Combine(BackupsDir, $"{series}.original.json");
 
     /// <summary>
     /// Returns the existing newest backup instead of writing a duplicate when

@@ -7,7 +7,10 @@ namespace ConnectorControl.App;
 /// <summary>The WPF dispatcher as an <see cref="AppHost"/>.</summary>
 public static class UiThread
 {
-    public static AppHost Host() => new(Marshal, Delay, () => DateTime.UtcNow, Background);
+    /// <summary>The UI thread as an <see cref="AppHost"/>, naming the tool Claude's entry runs. A Windows app is
+    /// never transient: it runs from the fixed folder Velopack installs into, so the host leaves
+    /// <see cref="AppHost.ControlToolIsTransient"/> false.</summary>
+    public static AppHost Host(string? controlToolPath = null) => new(Marshal, Delay, () => DateTime.UtcNow, Background, controlToolPath);
 
     /// <summary>
     /// POSTS to the UI thread; never blocks. FileWatcher marshals from a timer thread and
@@ -27,6 +30,10 @@ public static class UiThread
             dispatcher.BeginInvoke(action);
         }
     }
+
+    /// <summary>Posts to the UI thread even from the UI thread itself, so the caller returns first: a
+    /// confirmation is shown on a turn of its own, after the call that asked for it has returned.</summary>
+    public static void Post(Action action) => Application.Current.Dispatcher.BeginInvoke(action);
 
     /// <summary>
     /// Runs <paramref name="work"/> on the thread pool, off the UI thread. A Task.Run work item,

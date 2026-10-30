@@ -50,13 +50,22 @@ public static class AuthenticodeVerifier
     /// <summary>
     /// The identity of <paramref name="exePath"/>'s signer once WinVerifyTrust has accepted the
     /// signature and its chain; otherwise a user-facing problem naming the file. Shared by the
-    /// Claude launch check and the update-package check.
+    /// Claude launch check and the update-package check; only the update check asks for
+    /// <paramref name="revocation"/>, and checks it only while that session still does. There a revoked certificate
+    /// refuses, and a revocation status that cannot be determined (<see cref="Revocation.Classify"/>) is told to the
+    /// session and the file judged again without revocation, exactly as before revocation was checked at all.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    public static SignerResult SignerSubject(string exePath)
+    public static SignerResult SignerSubject(string exePath, Revocation.Session? revocation = null)
     {
         var name = Path.GetFileName(exePath);
-        var status = VerifyTrust(exePath);
+        var checkRevocation = revocation is { Check: true };
+        var status = VerifyTrust(exePath, checkRevocation);
+        if (checkRevocation && Revocation.Classify(status) == Revocation.Outcome.Undetermined)
+        {
+            revocation!.Undetermined(name, status);
+            status = VerifyTrust(exePath, checkRevocation: false);
+        }
         if (status != 0)
         {
             return new SignerResult(null, $"{name} does not carry a valid code signature (0x{status:X8}).", status == TrustENoSignature);
@@ -79,6 +88,8 @@ public static class AuthenticodeVerifier
 
     private const uint WtdUiNone = 2;
     private const uint WtdRevokeNone = 0;
+    private const uint WtdRevokeWholeChain = 1;
+    private const uint WtdRevocationCheckChainExcludeRoot = 0x00000080;
     private const uint WtdChoiceFile = 1;
     private const uint WtdStateActionIgnore = 0;
     private const uint WtdRevocationCheckNone = 0x00000010;
@@ -117,9 +128,10 @@ public static class AuthenticodeVerifier
     [DllImport("wintrust.dll", EntryPoint = "WinVerifyTrust", ExactSpelling = true)]
     private static extern int WinVerifyTrust(IntPtr hwnd, in Guid actionId, IntPtr data);
 
-    /// <summary>0 when the file's Authenticode signature is valid and chains to a trusted root.</summary>
+    /// <summary>0 when the file's Authenticode signature is valid and chains to a trusted root, and, with
+    /// <paramref name="checkRevocation"/>, when no certificate in that chain below the root is revoked.</summary>
     [SupportedOSPlatform("windows")]
-    private static int VerifyTrust(string path)
+    private static int VerifyTrust(string path, bool checkRevocation)
     {
         var filePath = IntPtr.Zero;
         var fileInfo = IntPtr.Zero;
@@ -138,13 +150,18 @@ public static class AuthenticodeVerifier
             {
                 cbStruct = (uint)Marshal.SizeOf<WintrustData>(),
                 dwUIChoice = WtdUiNone,
-                fdwRevocationChecks = WtdRevokeNone,
+                fdwRevocationChecks = checkRevocation ? WtdRevokeWholeChain : WtdRevokeNone,
                 dwUnionChoice = WtdChoiceFile,
                 pFile = fileInfo,
                 dwStateAction = WtdStateActionIgnore,
-                // No revocation fetch: a restart click must not wait on the network, and a
-                // revoked Anthropic certificate is not the threat here (a stranger's exe is).
-                dwProvFlags = WtdRevocationCheckNone | WtdCacheOnlyUrlRetrieval,
+                // Claude's launch: no revocation fetch. A restart click must not wait on the network, and a
+                // revoked Anthropic certificate is not the threat there (a stranger's exe is). An update:
+                // revocation is checked along the chain below the root, fetching what it needs, not cache-only —
+                // a cache-only check would answer "could not determine" on any machine that has not seen the
+                // certificate lately. Revoked comes back as CERT_E_REVOKED and refuses; a revocation that could
+                // not be determined comes back as CERT_E_REVOCATION_FAILURE (or the chain's own OFFLINE / NO_CHECK
+                // codes), which SignerSubject turns into a second, revocation-off check, never a refusal.
+                dwProvFlags = checkRevocation ? WtdRevocationCheckChainExcludeRoot : WtdRevocationCheckNone | WtdCacheOnlyUrlRetrieval,
             };
             data = Marshal.AllocHGlobal(Marshal.SizeOf<WintrustData>());
             Marshal.StructureToPtr(trust, data, fDeleteOld: false);

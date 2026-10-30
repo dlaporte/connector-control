@@ -32,6 +32,13 @@ final class CollectionDocumentTests: XCTestCase {
         }
     }
 
+    /// A document that does not parse is refused in fixed words, alike on both platforms, quoting nothing from it.
+    func testADocumentThatDoesNotParseIsRefusedInFixedWords() {
+        XCTAssertThrowsError(try CollectionDocument.decode(Data("{\"apiKey\": hunter2}".utf8))) {
+            XCTAssertEqual($0 as? CollectionDocumentError, .malformed(CollectionDocument.notJSONError))
+        }
+    }
+
     func testRenderProducesThisPlatformsLaunchersWithMarkers() throws {
         let rendered = Self.sample.render()
         XCTAssertTrue(rendered.excluded.isEmpty)
@@ -485,6 +492,11 @@ final class CollectionDocumentTests: XCTestCase {
         XCTAssertEqual(warnings(header("Authorization", "Bearer ${A} extra")), ["headers.Authorization looks like a credential"],
                        "a reference beside more than a scheme word")
         XCTAssertEqual(warnings(header("X-Team", "${TEAM}")), [])
+        for scheme in ["SSWS", "Bot", "ApiKey"] {
+            XCTAssertEqual(warnings(header("Authorization", "\(scheme) ${T}")), ["headers.Authorization refers to a credential"], scheme)
+        }
+        XCTAssertEqual(warnings(header("Authorization", "${A}hunter")), ["headers.Authorization looks like a credential"],
+                       "text after a reference can be the secret")
         XCTAssertEqual(warnings(url("https://reader@db.example.com/mcp")), ["url.userinfo names a user"])
         XCTAssertEqual(warnings(url("https://reader:@db.example.com/mcp")), ["url.userinfo names a user"])
         XCTAssertEqual(warnings(url("https://reader:${DB_PASSWORD}@db.example.com/mcp")), ["url.userinfo refers to a credential"])
@@ -528,5 +540,14 @@ final class CollectionDocumentTests: XCTestCase {
         XCTAssertEqual(warnings("https://mcp.example.com/mcp?k=Zq8RkT2mWx7LpN4vHc9J"), ["url.query.k looks like a credential"],
                        "a random query value")
         XCTAssertEqual(warnings("https://mcp.example.com/v2/servers/gmail-tools/sse#section-2"), [])
+    }
+
+    func testAConnectorNamedLikeConnectorControlsOwnEntryNeverComesAcross() throws {
+        var doc = CollectionDocumentSamples.dataTeam
+        doc.connectors["connector-control"] = doc.connectors["github"]
+        let rendered = doc.render()
+        XCTAssertNil(rendered.connectors["connector-control"])
+        XCTAssertEqual(rendered.excluded["connector-control"], "connector-control is reserved for Connector Control itself.")
+        XCTAssertNotNil(rendered.connectors["github"])
     }
 }

@@ -186,7 +186,7 @@ public sealed class ClaudeProcess : IClaudeProcess
         try
         {
             var startInfo = aumid
-                ? new ProcessStartInfo("explorer.exe", "shell:AppsFolder\\" + target) { UseShellExecute = true }
+                ? new ProcessStartInfo(SystemPrograms.Explorer, "shell:AppsFolder\\" + target) { UseShellExecute = true }
                 : new ProcessStartInfo(target) { UseShellExecute = true };
             using var started = Process.Start(startInfo);
             return null;

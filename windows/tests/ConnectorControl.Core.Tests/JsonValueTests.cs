@@ -42,6 +42,23 @@ public class JsonValueTests
         Assert.Equal(JsonValue.Int(0), value["n"]);
     }
 
+    /// <summary>A number written with a fraction or an exponent that is a whole number reads as that integer
+    /// exactly, past where a double is exact; the 64-bit extremes read as doubles, as the Mac's JSONDecoder gives
+    /// them.</summary>
+    [Theory]
+    [InlineData("9007199254740993.0", 9007199254740993L, null)]
+    [InlineData("123456789012345678.0", 123456789012345678L, null)]
+    [InlineData("1234567890123456780e-1", 123456789012345678L, null)]
+    [InlineData("-9223372036854775807.0", -9223372036854775807L, null)]
+    [InlineData("-9223372036854775808.0", null, -9223372036854775808.0)]
+    [InlineData("9223372036854775807.0", null, 9223372036854775808.0)]
+    [InlineData("1e19", null, 1e19)]
+    public void WholeNumbersWithAFractionOrExponentReadExactly(string text, long? integer, double? number)
+    {
+        var expected = integer is { } i ? JsonValue.Int(i) : JsonValue.Double(number!.Value);
+        Assert.Equal(JsonValue.Array([expected]), JsonValue.Parse("[" + text + "]"));
+    }
+
     [Fact]
     public void IntegersBeyondInt64BecomeDoubles()
     {
@@ -97,6 +114,13 @@ public class JsonValueTests
     }
 
     [Fact]
+    public void AnEscapedLoneSurrogateThrowsJsonException()
+    {
+        Assert.Throws<JsonException>(() => JsonValue.Parse("\"\\ud800\""));
+        Assert.Throws<JsonException>(() => JsonValue.Parse("{\"\\udc00\":1}"));
+    }
+
+    [Fact]
     public void FirstDuplicateKeyWins()
     {
         Assert.Equal(JsonValue.Int(1), JsonValue.Parse("{\"k\": 1, \"k\": 2}")["k"]);
@@ -140,5 +164,31 @@ public class JsonValueTests
     {
         Assert.Throws<InvalidOperationException>(() => JsonValue.Int(1).StringValue);
         Assert.Throws<InvalidOperationException>(() => JsonValue.String("s").ArrayItems);
+    }
+
+    /// <summary>Arrays and objects nest at most 64 deep, as the Mac mirror allows, so a document reads
+    /// the same on both platforms; brackets inside a string do not count.</summary>
+    /// <summary>A comma before a closing bracket or brace is refused, as the Mac mirror refuses it; a comma or
+    /// bracket inside a string is only text.</summary>
+    [Fact]
+    public void ATrailingCommaIsRefused()
+    {
+        foreach (var text in new[] { "[1,]", """{"a":1,}""", "[1 , \n\t\r ]", "[[1,],2]", """{"a":{"b":[],},"c":1}""" })
+        {
+            Assert.ThrowsAny<JsonException>(() => JsonValue.Parse(text));
+        }
+        Assert.Equal(JsonValue.Array([JsonValue.String("a,]"), JsonValue.String(",}")]), JsonValue.Parse("""["a,]",",}"]"""));
+        Assert.Equal(JsonValue.Object(("a", JsonValue.String("x\",}"))), JsonValue.Parse("""{"a":"x\",}"}"""));
+        Assert.Equal(JsonValue.Array([JsonValue.Int(1), JsonValue.Int(2)]), JsonValue.Parse("[1, 2]"));
+    }
+
+    [Fact]
+    public void NestingDeeperThan64IsRefused()
+    {
+        static string Nested(int depth) => new string('[', depth) + new string(']', depth);
+        JsonValue.Parse(Nested(64));
+        Assert.ThrowsAny<JsonException>(() => JsonValue.Parse(Nested(65)));
+        Assert.ThrowsAny<JsonException>(() => JsonValue.Parse(Nested(70)));
+        JsonValue.Parse("[\"" + new string('[', 70) + "\"]");
     }
 }

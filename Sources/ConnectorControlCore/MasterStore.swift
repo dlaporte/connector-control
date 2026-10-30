@@ -54,6 +54,12 @@ public struct MasterStore: Equatable, Codable, Sendable {
     /// The collection a fresh store holds, and the one a store left with none makes.
     public static let defaultCollectionName = "Default"
 
+    /// The name Connector Control's own entry goes by in Claude's config. The store never holds a
+    /// connector of this name: every reader of Claude's config and of collection documents skips
+    /// it and every writer of names refuses it, so the entry is never ingested, synced or shared.
+    public static let reservedConnectorName = "connector-control"
+    public static let reservedConnectorNameError = "connector-control is reserved for Connector Control itself."
+
     public static let empty = MasterStore(
         activeCollection: defaultCollectionName,
         collections: [defaultCollectionName: Collection()])

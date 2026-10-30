@@ -1,0 +1,7 @@
+# The reserved name is refused before anyone is asked.
+#! answer allow
+> {"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"claude-ai","version":"0.1.0"}}}
+< {"id":0,"jsonrpc":"2.0","result":{"capabilities":{"tools":{}},"protocolVersion":"2025-11-25","serverInfo":{"name":"connector-control","version":"1.2.2"}}}
+> {"jsonrpc":"2.0","method":"notifications/initialized"}
+> {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"add_connector","arguments":{"name":"connector-control","config":{"command":"node"}}}}
+< {"id":1,"jsonrpc":"2.0","result":{"content":[{"text":"connector-control is reserved for Connector Control itself.","type":"text"}],"isError":true,"structuredContent":{"error":"connector-control is reserved for Connector Control itself."}}}
