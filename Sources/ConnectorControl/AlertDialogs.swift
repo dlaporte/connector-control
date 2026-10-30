@@ -29,6 +29,8 @@ final class AlertDialogs: Dialogs {
         alert.messageText = title
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
         field.stringValue = initial
+        // Named by the title, as the Windows dialog's Name box is, so VoiceOver says what it's for.
+        field.setAccessibilityLabel(title)
         alert.accessoryView = field
         alert.window.initialFirstResponder = field
         alert.addButton(withTitle: Self.okTitle)
