@@ -41,6 +41,12 @@ extension ControlTools {
 
     public static func duplicateSubscribedError(_ collection: String) -> String { "“\(collection)” is subscribed; copy it in Connector Control with Make Local Copy." }
 
+    /// add_connector, update_connector and delete_connectors on a subscribed collection: the
+    /// collection named, and the two ways round it, in the house style of the refusal above.
+    public static func subscribedReadOnlyError(_ collection: String) -> String {
+        "“\(collection)” is subscribed, so it’s read-only; add connectors to a local collection, or copy this one in Connector Control with Make Local Copy."
+    }
+
     public static func settingChangedText(_ key: String, _ value: String) -> String { "\(key) is now \(value)." }
 
     public static func integrationSetText(_ state: String) -> String { "Claude integration is \(state)." }

@@ -117,7 +117,7 @@ public sealed partial class ControlTools
         }
         if (state.IsSynced(collection))
         {
-            return new ControlStep.Refused(CollectionsModel.AddConnectorDisabledTooltip);
+            return new ControlStep.Refused(SubscribedReadOnlyError(shownCollection));
         }
         var name = (arguments.String("name") ?? "").TrimSpaces();
         var shownName = ControlText.EscapedName(name);
@@ -177,7 +177,7 @@ public sealed partial class ControlTools
         }
         if (state.IsSynced(collection))
         {
-            return new ControlStep.Refused(CollectionsModel.LockedGlyphTooltip);
+            return new ControlStep.Refused(SubscribedReadOnlyError(shownCollection));
         }
         var name = arguments.String("name") ?? "";
         var shownName = ControlText.EscapedName(name);
@@ -262,7 +262,7 @@ public sealed partial class ControlTools
         }
         if (state.IsSynced(collection))
         {
-            return new ControlStep.Refused(CollectionsModel.LockedGlyphTooltip);
+            return new ControlStep.Refused(SubscribedReadOnlyError(shownCollection));
         }
         var names = new List<string>();
         foreach (var name in arguments.Strings("names") ?? [])
