@@ -81,7 +81,9 @@ public struct BackupManager: Sendable {
         // copy of the file (or of a symlink to it). AtomicFile creates the
         // backups directory 0700 when it does not exist yet.
         try AtomicFile.write(current, to: dest, staging: stagingDir)
-        prune(series: series, listing: existing + [dest])
+        // A replaced last candidate is already listed, and counting it twice would prune one too many.
+        let listed = existing.contains { $0.lastPathComponent == dest.lastPathComponent }
+        prune(series: series, listing: listed ? existing : existing + [dest])
         return dest
     }
 

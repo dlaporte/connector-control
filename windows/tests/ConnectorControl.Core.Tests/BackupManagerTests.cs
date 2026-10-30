@@ -153,6 +153,23 @@ public class BackupManagerTests : IDisposable
         Assert.Equal(kept, limited.Backups(Series));
     }
 
+    /// <summary>Once every same-millisecond name is taken the write replaces the last one, which is
+    /// already in the listing: prune counts it once, so exactly keepCount backups stay.</summary>
+    [Fact]
+    public void AnExhaustedCollisionBoundPrunesNoBackupTooMany()
+    {
+        var full = new BackupManager(dir.File("backups"), keepCount: 100);
+        var now = At(1_752_600_000.123);
+        for (var i = 0; i <= 100; i++)
+        {
+            File.WriteAllText(source, $"v{i}");
+            full.BackUp(source, Series, now);
+        }
+        var kept = full.Backups(Series);
+        Assert.Equal(100, kept.Count);
+        Assert.Equal("v100", File.ReadAllText(kept[0]));   // the last write replaced the -100 backup
+    }
+
     /// <summary>The counter compares as a number: the tenth backup of a millisecond is newer than the second.</summary>
     [Fact]
     public void ASameMillisecondCounterComparesAsANumber()

@@ -163,6 +163,20 @@ final class BackupManagerTests: XCTestCase {
         XCTAssertEqual(try limited.backups(series: "claude_desktop_config"), kept)
     }
 
+    /// Once every same-millisecond name is taken the write replaces the last one, which is already
+    /// in the listing: prune counts it once, so exactly keepCount backups stay.
+    func testAnExhaustedCollisionBoundPrunesNoBackupTooMany() throws {
+        let full = BackupManager(backupsDir: dir.appendingPathComponent("backups"), keepCount: 100)
+        let now = Date(timeIntervalSince1970: 1_752_600_000.123)
+        for i in 0...100 {
+            try Data("v\(i)".utf8).write(to: source)
+            try full.backUp(fileAt: source, series: "claude_desktop_config", now: now)
+        }
+        let kept = try full.backups(series: "claude_desktop_config")
+        XCTAssertEqual(kept.count, 100)
+        XCTAssertEqual(try String(contentsOf: kept[0], encoding: .utf8), "v100", "the last write replaced the -100 backup")
+    }
+
     /// The counter compares as a number: the tenth backup of a millisecond is newer than the second.
     func testASameMillisecondCounterComparesAsANumber() throws {
         let roomy = BackupManager(backupsDir: dir.appendingPathComponent("backups"), keepCount: 20)
