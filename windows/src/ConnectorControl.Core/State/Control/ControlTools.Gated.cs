@@ -603,6 +603,35 @@ public sealed partial class ControlTools
         }
     }
 
+    /// <summary>A collection document <c>import_document</c> and <c>subscribe_document</c> were asked to read,
+    /// read: its full path, its file's name escaped for the app's quotes, the document, and the bytes that
+    /// stand for what the question cannot show, the document's masked values among them.</summary>
+    private sealed record DocumentArgument(string Full, string File, CollectionDocument Document, byte[] Bytes);
+
+    /// <summary>The document a non-empty <c>path</c> argument names, read for <paramref name="caller"/>, or why
+    /// it is not: the one way both import_document and subscribe_document reach a file, so a guard added here
+    /// holds for both. Platform idiom: the Mac mirror takes no caller, since a Mac path has no form
+    /// <see cref="PathRefusal"/> refuses.</summary>
+    private static (DocumentArgument? Read, string? Refusal) ReadDocumentArgument(string path, ControlCaller caller)
+    {
+        var (full, unusable) = DocumentPath(path);
+        if (full is null)
+        {
+            return (null, Shown(unusable ?? EditorModel.NotValidJson, Path.GetFileName(path)));
+        }
+        if ((PathRefusal(full, caller) ?? DocumentFileRefusal(full)) is { } refusal)
+        {
+            return (null, refusal);
+        }
+        var file = ControlText.EscapedName(Path.GetFileName(full));
+        var (document, bytes, failure) = AppState.ReadDocument(full);
+        if (document is null || bytes is null)
+        {
+            return (null, Shown(failure ?? EditorModel.NotValidJson, Path.GetFileName(full)));
+        }
+        return (new DocumentArgument(full, file, document, bytes), null);
+    }
+
     private ControlStep ImportDocument(ControlArguments arguments, ControlCaller caller)
     {
         var path = arguments.String("path") ?? "";
@@ -617,21 +646,12 @@ public sealed partial class ControlTools
         {
             return new ControlStep.Refused(IntoOrNewCollectionError);
         }
-        var (full, unusable) = DocumentPath(path);
-        if (full is null)
+        var (read, refusal) = ReadDocumentArgument(path, caller);
+        if (read is null)
         {
-            return new ControlStep.Refused(Shown(unusable ?? EditorModel.NotValidJson, Path.GetFileName(path)));
+            return new ControlStep.Refused(refusal ?? EditorModel.NotValidJson);
         }
-        if ((PathRefusal(full, caller) ?? DocumentFileRefusal(full)) is { } refusal)
-        {
-            return new ControlStep.Refused(refusal);
-        }
-        var file = ControlText.EscapedName(Path.GetFileName(full));
-        var (document, bytes, failure) = AppState.ReadDocument(full);
-        if (document is null || bytes is null)
-        {
-            return new ControlStep.Refused(Shown(failure ?? EditorModel.NotValidJson, Path.GetFileName(full)));
-        }
+        var (full, file, document, bytes) = read;
         var newCollection = arguments.String("newCollection") is { } requested ? MasterStore.CollectionName(requested) : null;
         string target;
         if (newCollection is not null)
@@ -720,23 +740,12 @@ public sealed partial class ControlTools
         {
             return new ControlStep.Refused(MissingArgumentError("path"));
         }
-        var (full, unusable) = DocumentPath(path);
-        if (full is null)
+        var (read, refusal) = ReadDocumentArgument(path, caller);
+        if (read is null)
         {
-            return new ControlStep.Refused(Shown(unusable ?? EditorModel.NotValidJson, Path.GetFileName(path)));
+            return new ControlStep.Refused(refusal ?? EditorModel.NotValidJson);
         }
-        // As import_document checks it.
-        if ((PathRefusal(full, caller) ?? DocumentFileRefusal(full)) is { } refusal)
-        {
-            return new ControlStep.Refused(refusal);
-        }
-        // Platform idiom: as import_document reads it.
-        var file = ControlText.EscapedName(Path.GetFileName(full));
-        var (document, bytes, failure) = AppState.ReadDocument(full);
-        if (document is null || bytes is null)
-        {
-            return new ControlStep.Refused(Shown(failure ?? EditorModel.NotValidJson, Path.GetFileName(full)));
-        }
+        var (full, file, document, bytes) = read;
         // AppState's own rules, asked here as well, so the refusal comes before the question.
         if (document.Origin is { } origin && state.CollectionsFile.Collections.Values.Any(entry => entry.Publish?.Origin == origin))
         {

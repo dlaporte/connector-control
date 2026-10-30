@@ -411,6 +411,39 @@ extension ControlTools {
         return status.st_size > Int64(McpSession.maxMessageBytes) ? documentTooLargeError(file) : nil
     }
 
+    /// A collection document `import_document` and `subscribe_document` were asked to read, read.
+    struct DocumentArgument {
+        let url: URL
+        /// The file's name, escaped for the app's quotes.
+        let file: String
+        let document: CollectionDocument
+        /// What the question cannot show, the document's masked values among them, these stand for.
+        let bytes: Data
+    }
+
+    /// The document a non-empty `path` argument names, read, or why it is not: the one way both
+    /// import_document and subscribe_document reach a file, so a guard added here holds for both.
+    static func readDocumentArgument(_ path: String) -> (read: DocumentArgument?, refusal: String?) {
+        // Platform idiom: a URL takes any text, and the read below refuses what names no file; the
+        // Windows mirror first refuses a path .NET cannot make full.
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        // Platform idiom: the Windows mirror first refuses, by its form, a path that reaches another computer
+        // or a device: the relay any that starts with \\ or \??\ once made full - opening one has Windows
+        // sign in to that host as the user, with nothing asked - and every caller a \\.\ path or a
+        // \\?\ or \??\ path to anything but a drive or a share. A Mac path has no such form, so this takes
+        // no caller. A path under /Volumes is a share the person mounted themselves; one under /net is
+        // mounted by autofs on first access, but as an NFS mount that sends none of the person's
+        // credentials, so neither signs in anywhere on their behalf. A device is refused below as not a
+        // regular file.
+        if let refusal = documentFileRefusal(url) { return (nil, refusal) }
+        let file = ControlText.escapedName(url.lastPathComponent)
+        let (read, bytes, failure) = AppState.readDocument(at: url)
+        guard let document = read, let bytes else {
+            return (nil, shown(failure ?? EditorModel.notValidJSON, leadingWith: url.lastPathComponent))
+        }
+        return (DocumentArgument(url: url, file: file, document: document, bytes: bytes), nil)
+    }
+
     func importDocument(_ arguments: ControlArguments, _ caller: ControlCaller) -> ControlStep {
         let path = arguments.string("path") ?? ""
         // An empty path names the working folder here and is no path at all on Windows: refused
@@ -420,22 +453,9 @@ extension ControlTools {
         guard arguments.string("into") == nil || arguments.string("newCollection") == nil else {
             return .refused(ControlTools.intoOrNewCollectionError)
         }
-        // Platform idiom: a URL takes any text, and the read below refuses what names no file; the
-        // Windows mirror first refuses a path .NET cannot make full.
-        let url = URL(fileURLWithPath: path).standardizedFileURL
-        // Platform idiom: the Windows mirror first refuses, by its form, a path that reaches another computer
-        // or a device: the relay any that starts with \\ or \??\ once made full - opening one has Windows
-        // sign in to that host as the user, with nothing asked - and every caller a \\.\ path or a
-        // \\?\ or \??\ path to anything but a drive or a share. A Mac path has no such form. A path under
-        // /Volumes is a share the person mounted themselves; one under /net is mounted by autofs on first
-        // access, but as an NFS mount that sends none of the person's credentials, so neither signs in
-        // anywhere on their behalf. A device is refused below as not a regular file.
-        if let refusal = ControlTools.documentFileRefusal(url) { return .refused(refusal) }
-        let file = ControlText.escapedName(url.lastPathComponent)
-        let (read, bytes, failure) = AppState.readDocument(at: url)
-        guard let document = read, let bytes else {
-            return .refused(ControlTools.shown(failure ?? EditorModel.notValidJSON, leadingWith: url.lastPathComponent))
-        }
+        let (read, refusal) = ControlTools.readDocumentArgument(path)
+        guard let read else { return .refused(refusal ?? EditorModel.notValidJSON) }
+        let (url, file, document, bytes) = (read.url, read.file, read.document, read.bytes)
         let newCollection = arguments.string("newCollection").map(MasterStore.collectionName)
         let target: String
         if let newCollection {
@@ -499,15 +519,9 @@ extension ControlTools {
         let path = arguments.string("path") ?? ""
         // As import_document refuses it.
         guard !path.isEmpty else { return .refused(ControlTools.missingArgumentError("path")) }
-        // Platform idiom: as import_document reads it.
-        let url = URL(fileURLWithPath: path).standardizedFileURL
-        // As import_document checks it.
-        if let refusal = ControlTools.documentFileRefusal(url) { return .refused(refusal) }
-        let file = ControlText.escapedName(url.lastPathComponent)
-        let (read, bytes, failure) = AppState.readDocument(at: url)
-        guard let document = read, let bytes else {
-            return .refused(ControlTools.shown(failure ?? EditorModel.notValidJSON, leadingWith: url.lastPathComponent))
-        }
+        let (read, refusal) = ControlTools.readDocumentArgument(path)
+        guard let read else { return .refused(refusal ?? EditorModel.notValidJSON) }
+        let (url, file, document, bytes) = (read.url, read.file, read.document, read.bytes)
         // AppState's own rules, asked here as well, so the refusal comes before the question.
         if let origin = document.origin, state.collectionsFile.collections.values.contains(where: { $0.publish?.origin == origin }) {
             return .refused(AppState.ownCollectionError)
