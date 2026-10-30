@@ -464,6 +464,15 @@ public class SettingsWindowTests
                 Assert.Equal(SettingsModel.ConfigPathLabel, AutomationProperties.GetHelpText(window.ChooseConfigButton));
                 Assert.Equal(SettingsModel.LaunchTargetLabel, AutomationProperties.GetHelpText(window.UseDefaultLaunchTargetButton));
                 Assert.Equal(SettingsModel.LaunchTargetLabel, AutomationProperties.GetHelpText(window.ChooseLaunchTargetButton));
+
+                // While a chosen program is verified, Choose… waits.
+                Assert.True(window.ChooseLaunchTargetButton.IsEnabled);
+                Assert.True(window.Model.BeginCheckingLaunchTarget());
+                WindowTestSupport.Layout(window, new Size(480, 560));
+                Assert.False(window.ChooseLaunchTargetButton.IsEnabled);
+                window.Model.EndCheckingLaunchTarget();
+                WindowTestSupport.Layout(window, new Size(480, 560));
+                Assert.True(window.ChooseLaunchTargetButton.IsEnabled);
             });
         });
     }

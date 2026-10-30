@@ -30,6 +30,19 @@ enum FilePanels {
         return panel.url?.path
     }
 
+    /// One application bundle, starting in /Applications: the Claude app Restart Claude opens.
+    static func chooseApplication() -> String? {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.applicationBundle]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.prompt = SettingsModel.chooseTitle
+        guard panel.runModal() == .OK else { return nil }
+        return panel.url?.path
+    }
+
     /// Where an exported collection document goes, offering `fileName` to start from.
     static func saveCollectionDocument(named fileName: String) -> String? {
         let panel = NSSavePanel()

@@ -288,6 +288,7 @@
                       <Button x:Name="UseDefaultLaunchTargetButton" Content="{x:Static state:SettingsModel.UseDefaultTitle}" IsEnabled="{Binding CanUseDefaultLaunchTarget}" Click="OnUseDefaultLaunchTarget"
                               AutomationProperties.HelpText="{x:Static state:SettingsModel.LaunchTargetLabel}" />
                       <Button x:Name="ChooseLaunchTargetButton" Content="{x:Static state:SettingsModel.ChooseButtonTitle}" Margin="6,0,0,0" Click="OnChooseLaunchTarget"
+                              IsEnabled="{Binding CanChooseLaunchTarget}"
                               AutomationProperties.HelpText="{x:Static state:SettingsModel.LaunchTargetLabel}" />
                     </StackPanel>
                   </Grid>

@@ -1,7 +1,6 @@
 import SwiftUI
 import AppKit
 import CoreImage
-import UniformTypeIdentifiers
 import ConnectorControlState
 
 /// Which tab Settings shows.
@@ -156,11 +155,12 @@ struct SettingsView: View {
                 SettingsRow {
                     PathLabel(path: model.claudeApp.path, name: model.claudeAppName)
                 } note: {
-                    SettingsNote(model.claudeAppParent)
+                    SettingsNote(model.claudeAppNote)
                 } control: {
                     Button(SettingsModel.useDefaultTitle) { model.useDefaultClaudeApp() }
                         .disabled(!model.canUseDefaultClaudeApp)
                     Button(SettingsModel.chooseButtonTitle) { chooseClaudeApp() }
+                        .disabled(!model.canChooseClaudeApp)
                 }
             }
 
@@ -288,23 +288,19 @@ struct SettingsView: View {
     }
 
     private func chooseClaudeApp() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = [.applicationBundle]
-        panel.directoryURL = URL(fileURLWithPath: "/Applications")
-        panel.prompt = SettingsModel.chooseTitle
-        if panel.runModal() == .OK, let url = panel.url {
+        if let path = FilePanels.chooseApplication(), model.beginCheckingClaudeApp() {
             // The path is trusted at every Restart Claude from now on, so a
             // bundle that is not Claude signed by Anthropic is refused here,
             // with the reason, rather than at the next restart click. The
-            // check reads the whole bundle; the model is updated when it is done.
+            // check reads the whole bundle, so the row says "Checking…" and
+            // Choose… waits; the model is updated when it is done.
+            let url = URL(fileURLWithPath: path)
             let model = self.model
             let dialogs = state.dialogs
             DispatchQueue.global().async {
                 let problem = ClaudeRestarter.verifyIsClaude(at: url)
                 DispatchQueue.main.async {
+                    model.endCheckingClaudeApp()
                     if let problem {
                         // Not inside this main-queue block: a modal entered here would hold back every
                         // other one, the control socket's lines among them, until it is answered.

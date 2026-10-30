@@ -40,6 +40,7 @@ has one.
 - Commands that ask for something before they act now end in “…”, as Choose… and Restore… in Settings already did: New Collection…, Rename…, Duplicate…, Make Local Copy…, Import…, Subscribe…, Start Publishing…, Publishing Settings…, Export…, Export All…, Choose Folder…, Locate <file>… and Review & Apply…. Commands that act at once, or only ask you to confirm, keep their plain names.
 - When Claude or the command-line tool tries to add, change or delete a connector in a subscribed collection, the refusal now names the collection and says what to do instead (add connectors to a local collection, or copy this one with Make Local Copy), rather than repeating a window tooltip.
 - Copy to now confirms a copy: the count under the collection’s name adds, for example, “Copied 2 connectors to Work” until you tick a row, do something else or choose another collection. Before, the ticks just cleared and nothing said where the copies went.
+- After you pick a Claude app in Settings ▸ Claude (on Windows, its launch target), the row now reads “Checking…” and Choose… is dimmed while its signature is verified, which can take a few seconds. Before, nothing changed on screen until the check finished, and a second click started a second check.
 
 ### Release pipeline
 

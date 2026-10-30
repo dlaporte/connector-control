@@ -253,7 +253,27 @@ public final class SettingsModel: ObservableObject {
 
     public var claudeAppParent: String { SettingsModel.shownParent(claudeApp.path) }
 
+    /// The row's note: the app's folder, or "Checking…" while a chosen app's signature is read.
+    public var claudeAppNote: String { isCheckingClaudeApp ? ToolNote.checkingText : claudeAppParent }
+
     public var canUseDefaultClaudeApp: Bool { claudeApp.path != AppState.defaultClaudeAppPath }
+
+    /// Whether a chosen app is being verified as Claude. The check reads the whole bundle, which
+    /// takes seconds on a cold disk, so the row says so and Choose… waits rather than letting a
+    /// second click start a second check beside the first.
+    @Published public private(set) var isCheckingClaudeApp = false
+
+    public var canChooseClaudeApp: Bool { !isCheckingClaudeApp }
+
+    /// Starts a check, or answers false when one is already running and this choice is dropped.
+    public func beginCheckingClaudeApp() -> Bool {
+        guard !isCheckingClaudeApp else { return false }
+        isCheckingClaudeApp = true
+        return true
+    }
+
+    /// Ends the check, whatever it found: the view then refuses the app or calls `chooseClaudeApp`.
+    public func endCheckingClaudeApp() { isCheckingClaudeApp = false }
 
     public func chooseClaudeApp(_ app: URL) {
         objectWillChange.send()

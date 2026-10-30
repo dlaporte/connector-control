@@ -293,6 +293,36 @@ public class SettingsModelTests
         Assert.Equal("Not found", rig.Model.LaunchTargetText);
     }
 
+    /// <summary>
+    /// While a chosen program is verified, the row's caption says "Checking…" and Choose… waits; a
+    /// second check cannot start beside the first, and ending it puts the target back, the path
+    /// unchanged until the window calls ChooseLaunchTarget.
+    /// </summary>
+    [Fact]
+    public void CheckingAChosenLaunchTargetShowsCheckingAndHoldsChoose()
+    {
+        using var rig = new Rig();
+        var raised = new List<string?>();
+        rig.Model.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        Assert.Equal("Claude_pzs8sxrjxfjjc!Claude", rig.Model.LaunchTargetText);
+        Assert.True(rig.Model.CanChooseLaunchTarget);
+
+        Assert.True(rig.Model.BeginCheckingLaunchTarget());
+        Assert.True(rig.Model.IsCheckingLaunchTarget);
+        Assert.Equal(ToolNote.CheckingText, rig.Model.LaunchTargetText);
+        Assert.False(rig.Model.CanChooseLaunchTarget);
+        Assert.Contains(nameof(SettingsModel.LaunchTargetText), raised);
+        Assert.Contains(nameof(SettingsModel.CanChooseLaunchTarget), raised);
+        Assert.False(rig.Model.BeginCheckingLaunchTarget());   // one check at a time
+
+        raised.Clear();
+        rig.Model.EndCheckingLaunchTarget();
+        Assert.Equal("Claude_pzs8sxrjxfjjc!Claude", rig.Model.LaunchTargetText);
+        Assert.True(rig.Model.CanChooseLaunchTarget);
+        Assert.Contains(nameof(SettingsModel.CanChooseLaunchTarget), raised);
+        Assert.Null(rig.H.Settings.ClaudeLaunchTarget);   // the check alone chooses nothing
+    }
+
     [Fact]
     public void ClaudeConfigPathChooseAndUseDefaultRepointAppState()
     {

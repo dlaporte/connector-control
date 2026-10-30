@@ -218,6 +218,30 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertFalse(rig.model.canUseDefaultClaudeApp, "Use Default stays disabled when the stored path IS the default")
     }
 
+    /// While a chosen app is verified, the row's note says "Checking…" and Choose… waits; a second
+    /// check cannot start beside the first, and ending it puts the folder back, the path unchanged
+    /// until the view calls `chooseClaudeApp`.
+    func testCheckingAChosenAppShowsCheckingAndHoldsChoose() {
+        let rig = Rig()
+        defer { rig.dispose() }
+        var repaints = 0
+        let subscription = rig.model.objectWillChange.sink { _ in repaints += 1 }
+        defer { subscription.cancel() }
+        XCTAssertEqual(rig.model.claudeAppNote, "/Applications")
+        XCTAssertTrue(rig.model.canChooseClaudeApp)
+
+        XCTAssertTrue(rig.model.beginCheckingClaudeApp())
+        XCTAssertEqual(rig.model.claudeAppNote, ToolNote.checkingText)
+        XCTAssertFalse(rig.model.canChooseClaudeApp)
+        XCTAssertGreaterThan(repaints, 0, "the row repaints")
+        XCTAssertFalse(rig.model.beginCheckingClaudeApp(), "one check at a time")
+
+        rig.model.endCheckingClaudeApp()
+        XCTAssertEqual(rig.model.claudeAppNote, "/Applications")
+        XCTAssertTrue(rig.model.canChooseClaudeApp)
+        XCTAssertNil(rig.h.settings.claudeAppPath, "the check alone chooses nothing")
+    }
+
     /// The two numeric bounds: not strings, so StringCatalogTests can't cover them.
     func testKeepCountBoundsAreSessionLocalAndStable() {
         XCTAssertEqual(SettingsModel.minKeepCount, 5)

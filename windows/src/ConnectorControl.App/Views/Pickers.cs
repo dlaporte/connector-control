@@ -26,6 +26,13 @@ internal static class Pickers
         return Show(picker, owner) ? picker.FolderName : null;
     }
 
+    /// <summary>One program: the Claude executable Restart Claude launches.</summary>
+    public static string? Program(Window owner)
+    {
+        var picker = new OpenFileDialog { Title = SettingsModel.ChooseTitle, Filter = "Programs (*.exe)|*.exe|All files (*.*)|*.*" };
+        return Show(picker, owner) ? picker.FileName : null;
+    }
+
     /// <summary>Where an exported collection document goes, offering <paramref name="fileName"/> to start from.</summary>
     public static string? SaveCollection(Window owner, string fileName)
     {

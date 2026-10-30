@@ -978,7 +978,9 @@ the master list and collections.json live in, with **Use Default** and
 machines), and **Backups**: how many of each file to keep (20 unless you
 change it, from 5 to 100), and the backups folder with **Reveal in Finder** (**Show in Explorer** on Windows) and
 **Restore…**. **Claude** has **Claude App**, the app to restart (on Windows,
-how Claude is installed, its config file and its launch target), the
+how Claude is installed, its config file and its launch target; a chosen app
+or launch target is checked to be Claude, signed by Anthropic, and the row
+reads "Checking…" until it is), the
 **Claude Integration** group's two switches, the **Command-Line Tool** group
 (see Claude integration and command line), and **Tools**: one line per
 launcher with its version, "Found" when it gives none, or "Not found" (on a

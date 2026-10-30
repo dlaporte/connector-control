@@ -96,6 +96,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     private readonly ICommandLineTool? commandLineTool;
     private bool launchAtStartup;
     private string? loginItemNote;
+    private bool isCheckingLaunchTarget;
     /// <summary>
     /// Windows only: the Mac has no install to detect. Null until the install is first read, and again after
     /// each <see cref="Refresh"/>: detecting walks every package registered for the user, too slow for the UI
@@ -400,10 +401,46 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         RaiseAll();
     }
 
+    /// <summary>The row's caption: the launch target, or "Checking…" while a chosen program's signature is read.</summary>
     public string LaunchTargetText =>
-        settings.ClaudeLaunchTarget is { Length: > 0 } overridden ? overridden : InstallInfo.LaunchTarget ?? ToolNote.NotFoundText;
+        isCheckingLaunchTarget ? ToolNote.CheckingText
+        : settings.ClaudeLaunchTarget is { Length: > 0 } overridden ? overridden : InstallInfo.LaunchTarget ?? ToolNote.NotFoundText;
 
     public bool CanUseDefaultLaunchTarget => !string.IsNullOrEmpty(settings.ClaudeLaunchTarget);
+
+    /// <summary>
+    /// Whether a chosen program is being verified as Claude. WinVerifyTrust reads the whole file,
+    /// which can take seconds on a slow or network path, so the row says so and Choose… waits
+    /// rather than letting a second click start a second check beside the first.
+    /// </summary>
+    public bool IsCheckingLaunchTarget
+    {
+        get => isCheckingLaunchTarget;
+        private set
+        {
+            if (Set(ref isCheckingLaunchTarget, value))
+            {
+                Raise(nameof(CanChooseLaunchTarget));
+                Raise(nameof(LaunchTargetText));
+            }
+        }
+    }
+
+    public bool CanChooseLaunchTarget => !isCheckingLaunchTarget;
+
+    /// <summary>Starts a check, or answers false when one is already running and this choice is dropped.</summary>
+    public bool BeginCheckingLaunchTarget()
+    {
+        if (isCheckingLaunchTarget)
+        {
+            return false;
+        }
+        IsCheckingLaunchTarget = true;
+        return true;
+    }
+
+    /// <summary>Ends the check, whatever it found: the window then refuses the program or calls <see cref="ChooseLaunchTarget"/>.</summary>
+    public void EndCheckingLaunchTarget() => IsCheckingLaunchTarget = false;
 
     public void ChooseLaunchTarget(string exe)
     {

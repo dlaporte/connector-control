@@ -131,22 +131,30 @@ public partial class SettingsWindow : Window
 
     private async void OnChooseLaunchTarget(object sender, RoutedEventArgs e)
     {
-        var picker = new OpenFileDialog { Title = SettingsModel.ChooseTitle, Filter = "Programs (*.exe)|*.exe|All files (*.*)|*.*" };
-        if (picker.ShowDialog(this) == true)
+        if (Pickers.Program(this) is not { } path || !Model.BeginCheckingLaunchTarget())
         {
-            // The path is trusted at every Restart Claude from now on, so a file that is not
-            // Claude signed by Anthropic is refused here, with the reason, rather than at the
-            // next restart click. WinVerifyTrust reads the whole file and can stall on a slow or
-            // network path, so it runs off the UI thread rather than freezing the window.
-            var path = picker.FileName;
-            var problem = await Task.Run(() => AuthenticodeVerifier.VerifyClaude(path));
-            if (problem is not null)
-            {
-                ConfirmDialog.Show(this, SettingsModel.LaunchTargetRejectedTitle, problem, "OK", null, destructive: false);
-                return;
-            }
-            Model.ChooseLaunchTarget(path);
+            return;
         }
+        // The path is trusted at every Restart Claude from now on, so a file that is not
+        // Claude signed by Anthropic is refused here, with the reason, rather than at the
+        // next restart click. WinVerifyTrust reads the whole file and can stall on a slow or
+        // network path, so it runs off the UI thread rather than freezing the window, and the
+        // row says "Checking…" while Choose… waits.
+        string? problem;
+        try
+        {
+            problem = await Task.Run(() => AuthenticodeVerifier.VerifyClaude(path));
+        }
+        finally
+        {
+            Model.EndCheckingLaunchTarget();
+        }
+        if (problem is not null)
+        {
+            ConfirmDialog.Show(this, SettingsModel.LaunchTargetRejectedTitle, problem, "OK", null, destructive: false);
+            return;
+        }
+        Model.ChooseLaunchTarget(path);
     }
 
     private void OnUseDefaultLaunchTarget(object sender, RoutedEventArgs e) => Model.UseDefaultLaunchTarget();
