@@ -736,4 +736,75 @@ public class FileWatcherTests : IDisposable
         Assert.True(check.Join(Wait.Eventually));
         Assert.Equal(0, counter.Count);
     }
+
+    /// <summary>A probe whose file times are set by the test, and which can hold one read back after
+    /// taking its reading, as a slow path would: that check commits a time older than one a later
+    /// check has already committed.</summary>
+    private sealed class LaggingProbe : IPathProbe
+    {
+        private readonly RealPathProbe real = new();
+        private readonly ManualResetEventSlim release = new(false);
+        private readonly ThreadLocal<DateTime> taken = new();
+        private int lagNext;
+        public ManualResetEventSlim Lagging { get; } = new(false);
+        public DateTime LastWrite { get; set; } = DateTime.UnixEpoch;
+
+        public void LagNext() => Volatile.Write(ref lagNext, 1);
+
+        public void Release() => release.Set();
+
+        public bool FileExists(string path)
+        {
+            taken.Value = LastWrite;
+            if (Interlocked.Exchange(ref lagNext, 0) == 1)
+            {
+                Lagging.Set();
+                release.Wait();
+            }
+            return true;
+        }
+
+        public bool DirectoryExists(string path) => real.DirectoryExists(path);
+
+        public IEnumerable<string> EnumerateDirectories(string path) => real.EnumerateDirectories(path);
+
+        public DateTime? LastWriteTimeUtc(string path) => taken.Value;
+
+        public DateTime CreationTimeUtc(string path) => real.CreationTimeUtc(path);
+    }
+
+    /// <summary>
+    /// Two debounce checks overlap when the timer fires again behind a stalled one. The older one's
+    /// reading, taken before a write the newer one saw, is discarded: committed, it would put the
+    /// last-seen time back and report the same change twice. C#-only, as the gate is.
+    /// </summary>
+    [Fact]
+    public void AnOlderOverlappingCheckDoesNotOverwriteANewerOne()
+    {
+        File.WriteAllText(path, "one");
+        var counter = new Counter();
+        var timers = new ManualTimers();
+        var probe = new LaggingProbe { LastWrite = DateTime.UnixEpoch.AddHours(1) };
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, probe: probe, time: timers);
+        watcher.Start();
+
+        watcher.HandleError(rebuild: false);   // a lost buffer: schedules a re-check
+        probe.LagNext();
+        var older = new Thread(() => timers.FireAll()) { IsBackground = true };
+        older.Start();
+        Assert.True(probe.Lagging.Wait(Wait.Eventually, TestContext.Current.CancellationToken), "the older check has its reading");
+
+        probe.LastWrite = DateTime.UnixEpoch.AddHours(2);
+        watcher.HandleError(rebuild: false);
+        Assert.Equal(1, timers.FireAll());
+        Assert.Equal(1, counter.Count);   // the newer check saw the write
+
+        probe.Release();
+        Assert.True(older.Join(Wait.Eventually));
+        Assert.Equal(1, counter.Count);   // the older reading was discarded, not reported as a change
+
+        watcher.HandleError(rebuild: false);
+        timers.FireAll();
+        Assert.Equal(1, counter.Count);   // and the last-seen time is still the newer one
+    }
 }
