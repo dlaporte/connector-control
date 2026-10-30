@@ -117,7 +117,7 @@ public class SettingsStoreTests : IDisposable
         var s = new SettingsStore(Path);
         s.MasterStoreDir = "x";
         s.MasterStoreDir = null;
-        Assert.DoesNotContain("masterStoreDir", File.ReadAllText(Path));
+        Assert.DoesNotContain(SettingsKey.MasterStoreDir, File.ReadAllText(Path));
         Assert.Null(new SettingsStore(Path).MasterStoreDir);
     }
 
