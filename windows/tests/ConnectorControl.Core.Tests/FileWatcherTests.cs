@@ -674,4 +674,66 @@ public class FileWatcherTests : IDisposable
         Assert.False(watcher.IsArmed);
         Assert.Equal(0, counter.Count);
     }
+
+    /// <summary>A probe that blocks in <see cref="FileExists"/> once told to, until released: a
+    /// stalled UNC or cloud path, from the watcher's side.</summary>
+    private sealed class StallingProbe : IPathProbe
+    {
+        private readonly RealPathProbe real = new();
+        private readonly ManualResetEventSlim release = new(false);
+        private volatile bool stall;
+        public ManualResetEventSlim Stalled { get; } = new(false);
+
+        public void Stall() => stall = true;
+
+        public void Release() => release.Set();
+
+        public bool FileExists(string path)
+        {
+            if (stall)
+            {
+                Stalled.Set();
+                release.Wait();
+            }
+            return real.FileExists(path);
+        }
+
+        public bool DirectoryExists(string path) => real.DirectoryExists(path);
+
+        public IEnumerable<string> EnumerateDirectories(string path) => real.EnumerateDirectories(path);
+
+        public DateTime? LastWriteTimeUtc(string path) => real.LastWriteTimeUtc(path);
+
+        public DateTime CreationTimeUtc(string path) => real.CreationTimeUtc(path);
+    }
+
+    /// <summary>
+    /// The debounce check reads the file's times outside the gate, as IsArmed does, so a stalled path
+    /// holds up that check alone: an event's Schedule() and the reload's IsArmed, which take the gate,
+    /// still answer. C#-only: the Mac's watcher has no gate shared with its event handler.
+    /// </summary>
+    [Fact]
+    public void AStalledDebounceCheckDoesNotHoldTheGate()
+    {
+        File.WriteAllText(path, "one");
+        var counter = new Counter();
+        var timers = new ManualTimers();
+        var probe = new StallingProbe();
+        using var watcher = new FileWatcher(path, a => a(), counter.Hit, probe: probe, time: timers);
+        watcher.Start();
+        watcher.HandleError(rebuild: false);   // a lost buffer: schedules a re-check
+        Assert.True(timers.Pending);
+
+        probe.Stall();
+        var check = new Thread(() => timers.FireAll()) { IsBackground = true };
+        check.Start();
+        Assert.True(probe.Stalled.Wait(Wait.Eventually, TestContext.Current.CancellationToken), "the check is waiting on the disk");
+        var asked = new Thread(() => _ = watcher.ArmCount) { IsBackground = true };
+        asked.Start();
+        var answered = asked.Join(TimeSpan.FromSeconds(5));
+        probe.Release();
+        Assert.True(answered, "the gate is free while the check waits on the disk");
+        Assert.True(check.Join(Wait.Eventually));
+        Assert.Equal(0, counter.Count);
+    }
 }

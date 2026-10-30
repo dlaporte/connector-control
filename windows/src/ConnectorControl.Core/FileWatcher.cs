@@ -49,6 +49,11 @@ public sealed class FileWatcher : IDisposable
     /// IsArmed says no, and the next Start() swaps and re-checks exactly as for a replacement.
     /// That bounds these rebuilds by the reload rate without a timer.</summary>
     private bool rebuildOwed;
+    /// <summary>Debounce checks started and the latest whose reading was committed. The checks probe
+    /// outside the gate, so two can overlap when the timer fires again behind a stalled one; the
+    /// older reading must not overwrite the newer.</summary>
+    private long checksStarted;
+    private long checkCommitted;
 
     public FileWatcher(string path, Action<Action> marshal, Action onChange, TimeSpan? debounce = null, IPathProbe? probe = null, TimeSpan? rebuildCooldown = null, TimeProvider? time = null)
     {
@@ -89,7 +94,11 @@ public sealed class FileWatcher : IDisposable
             // The probe reads the folder's creation time, which can block for as long as a
             // stalled UNC or cloud path takes to answer. Under the gate that would also block
             // the FileSystemWatcher's own callbacks, which take it: every reload asks each
-            // watcher this question, so it must not be able to stall one.
+            // watcher this question, so it must not be able to stall one. The debounce check
+            // probes outside the gate too. Start() and Rebuild() do not: the watcher they build
+            // raises events from the moment it exists, and only the gate holds those back until
+            // it is installed - built outside it, an event in between would find nothing armed
+            // and a write would be lost. Both run only to arm, re-arm or recover, never per event.
             return !DirectoryWasReplaced(armed);
         }
     }
@@ -465,18 +474,32 @@ public sealed class FileWatcher : IDisposable
 
     private void CheckForChange()
     {
-        bool changed;
         int observed;
+        long check;
         lock (gate)
         {
             if (watcher is null)
             {
                 return;
             }
-            var current = ModificationTime();
+            observed = generation;
+            check = ++checksStarted;
+        }
+        // Probed outside the gate, as IsArmed probes: the file's times can take as long as a
+        // stalled UNC or cloud path takes to answer, and every event's Schedule() waits on the gate.
+        var current = ModificationTime();
+        bool changed;
+        lock (gate)
+        {
+            // A Stop() in the meantime wins, and so does a later check already committed: any write
+            // this reading saw and that one missed raised an event of its own, which checks again.
+            if (watcher is null || generation != observed || check < checkCommitted)
+            {
+                return;
+            }
+            checkCommitted = check;
             changed = current != lastModified;
             lastModified = current;
-            observed = generation;
         }
         if (!changed)
         {
