@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
+using System.Windows.Automation.Provider;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
@@ -171,8 +173,9 @@ public class DialogTests
                 Click(dialog.InstallButton);
                 Assert.Equal("Cancel", dialog.LaterButton.Content);
 
-                Click(dialog.LaterButton);
-                Assert.True(given.IsCancellationRequested);
+                // Pressed as Narrator or a click would: through the button's own OnClick, which a disabled button refuses.
+                Press(dialog.LaterButton);
+                Assert.True(PumpUntil(() => given.IsCancellationRequested, TimeSpan.FromSeconds(10)), "Cancel cancels the install's token");
                 Assert.True(PumpUntil(() => dialog.InstallButton.IsEnabled, TimeSpan.FromSeconds(10)), "the dialog leaves its busy state");
                 Assert.True(dialog.IsVisible, "a cancelled install leaves the dialog up");
                 Assert.False(dialog.Result);
@@ -199,6 +202,10 @@ public class DialogTests
     }
 
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+
+    /// <summary>Presses <paramref name="button"/> through its automation peer, which runs ButtonBase.OnClick (posted to the dispatcher).</summary>
+    private static void Press(Button button) =>
+        ((IInvokeProvider)new ButtonAutomationPeer(button).GetPattern(PatternInterface.Invoke)!).Invoke();
 
     /// <summary>Runs the dispatcher a frame at a time until <paramref name="condition"/> holds: where the dialog's awaits resume.</summary>
     private static bool PumpUntil(Func<bool> condition, TimeSpan timeout)
