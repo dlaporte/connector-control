@@ -278,11 +278,13 @@ public static class ControlMasking
 
     /// <summary>An argument as one word, with a shell default for a secret masked first
     /// (<see cref="DefaultsMasked"/>): a URL through <see cref="Url"/>, a value that is wholly a reference as
-    /// written, a header named for a secret or that signs in through <see cref="Header"/> (<c>X-Api-Key: …</c>
-    /// after a flag of any name), <c>name=value</c> with the value masked when the name is a secret's
-    /// (<c>--api-key=…</c>, Docker's <c>-e API_KEY=…</c>) or a pair flag's (<c>--user=admin:…</c>) - read before a
-    /// URL in the value, so the URL's rules never pass the value's start through - <c>user:password@host</c>
-    /// with no scheme as a URL's user info, and "•••" for anything that reads as a credential or a
+    /// written, a header through <see cref="Header"/> (<c>X-Api-Key: …</c> after a flag of any name) when a whole
+    /// word of its name is a secret's (<see cref="HeaderNamesASecret"/>) and its value is not a scope word or
+    /// a path (<c>token:read</c>, Docker's <c>-v secrets:/run/secrets</c>), <c>name=value</c> with the value masked
+    /// when the name is a secret's (<c>--api-key=…</c>, Docker's <c>-e API_KEY=…</c>) or a pair flag's
+    /// (<c>--user=admin:…</c>) - read before a URL in the value, so the URL's rules never pass the value's
+    /// start through - curl's <c>-uadmin:…</c> glued, <c>user:password@host</c> with no scheme and no
+    /// whitespace as a URL's user info, and "•••" for anything that reads as a credential or a
     /// random token - a "name" that does is part of the token, so the whole word is masked.</summary>
     internal static string Word(string arg)
     {
@@ -295,7 +297,7 @@ public static class ControlMasking
         {
             return text;
         }
-        if (Cut(text, ":") is { } named && IsHeaderName(named.Before) && SignsIn(named.Before))
+        if (Cut(text, ":") is { } named && IsHeaderName(named.Before) && HeaderNamesASecret(named.Before) && !IsPlainValue(named.After))
         {
             return Header(text);
         }
@@ -311,8 +313,13 @@ public static class ControlMasking
             }
             return piece.Before + "=" + Argument(piece.After);
         }
+        if (text.StartsWith("-u", StringComparison.Ordinal) && Pair(text[2..]) is { } glued)
+        {
+            return "-u" + glued;
+        }
         if (CutLast(text, '@') is { } at && Cut(at.Before, ":") is { } user && IsUserName(user.Before)
-            && user.After.Length > 0 && !user.After.Any(c => char.IsWhiteSpace(c) || c is '/' or '\\'))
+            && user.After.Length > 0 && !user.After.Any(c => char.IsWhiteSpace(c) || c is '/' or '\\')
+            && !at.After.Any(char.IsWhiteSpace))
         {
             return UserInfo(at.Before) + "@" + Location(at.After);
         }
@@ -335,20 +342,67 @@ public static class ControlMasking
     internal static bool SignsIn(string name) =>
         CredentialHeuristics.NamesASecret(name) || SignInHeaders.Contains(name.ToLowerInvariant());
 
+    /// <summary>The words of a header's name that name a secret or sign in.</summary>
+    internal static readonly IReadOnlySet<string> SecretHeaderWords = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "token", "key", "apikey", "secret", "password", "passwd", "pass", "pwd", "pw", "auth", "authorization",
+        "credential", "credentials", "bearer", "cookie",
+    };
+
+    /// <summary>Whether a whole word of the ASCII name <paramref name="name"/> - split at <c>-</c>, <c>_</c>, <c>.</c> and where a lower-case
+    /// letter meets an upper-case one - names a secret or signs in: <c>X-Api-Key</c>, <c>apiKey</c>,
+    /// <c>Authorization</c>, <c>Cookie</c>, but not <c>keycloak</c>, <c>auth0</c> or <c>ssh-keys</c>.</summary>
+    internal static bool HeaderNamesASecret(string name)
+    {
+        var words = new List<string>();
+        var word = new StringBuilder();
+        var lowerBefore = false;
+        foreach (var c in name)
+        {
+            if (c is '-' or '_' or '.')
+            {
+                words.Add(word.ToString());
+                word.Clear();
+                lowerBefore = false;
+                continue;
+            }
+            var upper = char.IsAsciiLetterUpper(c);
+            if (upper && lowerBefore)
+            {
+                words.Add(word.ToString());
+                word.Clear();
+            }
+            word.Append(upper ? (char)(c + 32) : c);
+            lowerBefore = char.IsAsciiLetterLower(c);
+        }
+        words.Add(word.ToString());
+        return words.Any(SecretHeaderWords.Contains);
+    }
+
+    /// <summary>Values after a <c>name:</c> that are an access scope, not a secret (<c>token:read</c>).</summary>
+    internal static readonly string[] ScopeWords = ["read", "write", "admin", "readonly", "read-only", "rw", "ro", "all", "none"];
+
+    /// <summary>Whether a header-shaped word's value is a scope word or a path, which read as written.</summary>
+    internal static bool IsPlainValue(string value)
+    {
+        var trimmed = value.TrimSpaces();
+        return trimmed.StartsWith('/') || ScopeWords.Contains(trimmed.ToLowerInvariant());
+    }
+
     /// <summary>curl's flags whose value is <c>user:password</c>.</summary>
-    internal static readonly string[] PairFlags = ["-u", "--user"];
+    internal static readonly string[] PairFlags = ["-u", "--user", "--proxy-user"];
 
     /// <summary>A pair flag's <c>user:password</c> as a URL's user info shows it; null for a value with no ":", a
-    /// reference (<c>${CC_NEEDS:creds}</c>), or a uid:gid pair of digits (Docker's <c>--user 1000:1000</c>),
-    /// which read as any argument does.</summary>
+    /// URL, which reads as one, a reference (<c>${CC_NEEDS:creds}</c>), or a user and group as Docker's
+    /// <c>--user</c> takes them - a uid (<c>1000:…</c>) or a group named as the user (<c>node:node</c>) - which read
+    /// as any argument does.</summary>
     internal static string? Pair(string text)
     {
-        if (RefersElsewhere(text) || Cut(text, ":") is not { } piece)
+        if (RefersElsewhere(text) || IsUrl(text) || Cut(text, ":") is not { } piece)
         {
             return null;
         }
-        static bool Digits(string part) => part.Length > 0 && part.All(char.IsAsciiDigit);
-        if (Digits(piece.Before) && Digits(piece.After))
+        if ((piece.Before.Length > 0 && piece.Before.All(char.IsAsciiDigit)) || Same(piece.Before, piece.After))
         {
             return null;
         }
@@ -465,7 +519,8 @@ public static class ControlMasking
         return Same(shown, CompactText(value)) ? arg : shown;
     }
 
-    /// <summary>Whether <paramref name="text"/> gives a value under a key named for a secret: a name of ASCII letters, digits,
+    /// <summary>Whether <paramref name="text"/> gives a value under a key named for a secret, or under <c>env</c> or <c>headers</c>
+    /// (<see cref="NamesASecret"/>): a name of ASCII letters, digits,
     /// <c>_</c>, <c>-</c>, <c>$</c> and <c>.</c>, in quotes or not, right before a <c>:</c> or <c>=</c> (<c>apiKey: …</c>, <c>"token": …</c>,
     /// <c>password=…</c>). A <c>:</c> after a bracket or another <c>:</c> (<c>[::1]</c>, <c>[Net.X]::Y</c>) has no name.</summary>
     internal static bool KeyedSecret(string text)
@@ -490,7 +545,7 @@ public static class ControlMasking
             {
                 start -= 1;
             }
-            if (start < end && CredentialHeuristics.NamesASecret(text[start..end]))
+            if (start < end && NamesASecret(text[start..end]))
             {
                 return true;
             }

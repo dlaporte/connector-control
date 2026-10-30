@@ -972,6 +972,22 @@ public class ControlMaskingTests
         {
             Assert.Equal(text, ControlMasking.Argument(text));
         }
+        // Only a whole word of the name counts, and a scope word or a path is not a header's value.
+        string[][] plain =
+        [
+            ["-v", "secrets:/run/secrets"], ["-v", "ssh-keys:/root/.ssh:ro"], ["--opt", "keycloak:8080"], ["--opt", "keydb:6379"],
+            ["--opt", "auth0:domain"], ["--opt", "author:x"], ["--opt", "keyword:x"], ["--scopes", "token:read"],
+            ["--scopes", "tokens:read users:write"],
+        ];
+        foreach (var args in plain)
+        {
+            Assert.Equal(args, ControlMasking.Arguments(args));
+        }
+        foreach (var (text, shown) in new[] { ("apiKey:hunter2", "apiKey: •••"), ("Authorization: hunter2", "Authorization: •••"),
+                     ("password:hunter2", "password: •••"), ("X-Auth-Token: hunter2", "X-Auth-Token: •••") })
+        {
+            Assert.Equal(["--opt", shown], ControlMasking.Arguments(["--opt", text]));
+        }
         AssertHidden(["hunter2"], Local("npx", ["s", "--http-header", "X-Api-Key: hunter2", "x-api-key: hunter2"]));
         AssertHidden(["hunter2"], Local("sh", ["-c", "npx s --http-header 'Cookie: sid=hunter2'"]));
     }
@@ -986,11 +1002,21 @@ public class ControlMaskingTests
         Assert.Equal("--user=admin:•••", ControlMasking.Argument("--user=admin:hunter2"));
         Assert.Equal("curl -u admin:••• https://x", ControlMasking.Argument("curl -u admin:hunter2 https://x"));
         Assert.Equal(["--dsn", "admin:•••@db/x"], ControlMasking.Arguments(["--dsn", "admin:hunter2@db/x"]));
-        string[][] plain = [["-u", "1000:1000"], ["-u", "admin"], ["--user", "admin:${PW}"], ["-u", "${CC_NEEDS:creds}"], ["--user=${CC_NEEDS:creds}"], ["git@github.com:org/repo.git"], ["a@b.example"]];
+        string[][] plain =
+        [
+            ["-u", "1000:1000"], ["-u", "admin"], ["--user", "admin:${PW}"], ["-u", "${CC_NEEDS:creds}"], ["--user=${CC_NEEDS:creds}"], ["git@github.com:org/repo.git"], ["a@b.example"],
+            ["--user", "node:node"], ["--user", "1000:node"], ["--user", "www-data:www-data"],
+        ];
         foreach (var args in plain)
         {
             Assert.Equal(args, ControlMasking.Arguments(args));
         }
+        Assert.Equal(["-u", "admin:•••"], ControlMasking.Arguments(["-u", "admin:123456"]));
+        Assert.Equal(["-u", "https://u:•••@h"], ControlMasking.Arguments(["-u", "https://u:hunter2@h"]));
+        Assert.Equal(["-uadmin:•••", "--proxy-user", "admin:•••"], ControlMasking.Arguments(["-uadmin:hunter2", "--proxy-user", "admin:hunter2"]));
+        Assert.Equal(["-c", "admin:•••@db --token •••"], ControlMasking.Arguments(["-c", "admin:hunter2@db --token mysecretvalue"]));
+        Assert.Equal("--db=admin:•••@db --token •••", ControlMasking.Argument("--db=admin:hunter2@db --token mysecretvalue"));
+        AssertHidden(["hunter2", "mysecretvalue"], Local("sh", ["-c", "curl -uadmin:hunter2 https://x; admin:hunter2@db --token mysecretvalue"]));
         AssertHidden(["hunter2"], Local("curl", ["-u", "admin:hunter2", "--user", "root:hunter2", "--dsn", "admin:hunter2@db/x"]));
         AssertHidden(["hunter2"], Local("sh", ["-c", "curl -u admin:hunter2 https://x"]));
     }
@@ -1004,6 +1030,8 @@ public class ControlMaskingTests
         Assert.Equal("•••", ControlMasking.Argument("{\"apiKey\": \"hunter2\""));
         Assert.Equal("•••", ControlMasking.Argument("{password=hunter2}"));
         Assert.Equal("•••", ControlMasking.Argument("[{'token': 'hunter2'}]"));
+        Assert.Equal("•••", ControlMasking.Argument("{env: {DB_URL: 'hunter2'}}"));
+        Assert.Equal("•••", ControlMasking.Argument("{Headers: {X: 'hunter2'}}"));
         Assert.Equal("{region: 'us', port: 8080}", ControlMasking.Argument("{region: 'us', port: 8080}"));
         AssertHidden(["hunter2"], Local("npx", ["-y", "@smithery/cli", "run", "x", "--config", "{apiKey: 'hunter2'}"]));
         AssertHidden(["hunter2"], Bare("npx -y @smithery/cli run x --config \"{apiKey: 'hunter2'}\""));

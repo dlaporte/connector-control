@@ -242,17 +242,21 @@ public enum ControlMasking {
 
     /// An argument as one word, with a shell default for a secret masked first
     /// (`defaultsMasked(_:)`): a URL through `url(_:)`, a value that is wholly a reference as
-    /// written, a header named for a secret or that signs in through `header(_:)` (`X-Api-Key: …`
-    /// after a flag of any name), `name=value` with the value masked when the name is a secret's
-    /// (`--api-key=…`, Docker's `-e API_KEY=…`) or a pair flag's (`--user=admin:…`) - read before a
-    /// URL in the value, so the URL's rules never pass the value's start through - `user:password@host`
-    /// with no scheme as a URL's user info, and "•••" for anything that reads as a credential or a
+    /// written, a header through `header(_:)` (`X-Api-Key: …` after a flag of any name) when a whole
+    /// word of its name is a secret's (`headerNamesASecret(_:)`) and its value is not a scope word or
+    /// a path (`token:read`, Docker's `-v secrets:/run/secrets`), `name=value` with the value masked
+    /// when the name is a secret's (`--api-key=…`, Docker's `-e API_KEY=…`) or a pair flag's
+    /// (`--user=admin:…`) - read before a URL in the value, so the URL's rules never pass the value's
+    /// start through - curl's `-uadmin:…` glued, `user:password@host` with no scheme and no
+    /// whitespace as a URL's user info, and "•••" for anything that reads as a credential or a
     /// random token - a "name" that does is part of the token, so the whole word is masked.
     static func word(_ arg: String) -> String {
         let text = defaultsMasked(arg)
         if isURL(text) { return url(text) }
         if refersElsewhere(text) { return text }
-        if let piece = cut(text, at: ":"), isHeaderName(piece.before), signsIn(piece.before) { return header(text) }
+        if let piece = cut(text, at: ":"), isHeaderName(piece.before), headerNamesASecret(piece.before), !isPlainValue(piece.after) {
+            return header(text)
+        }
         if let piece = cut(text, at: "="), !looksSecret(piece.before) {
             if CredentialHeuristics.namesASecret(piece.before), !refersElsewhere(piece.after) {
                 return piece.before + "=" + mask
@@ -260,8 +264,11 @@ public enum ControlMasking {
             if pairFlags.contains(piece.before), let shown = pair(piece.after) { return piece.before + "=" + shown }
             return piece.before + "=" + argument(piece.after)
         }
+        let scalars = Array(text.unicodeScalars)
+        if scalars.starts(with: "-u".unicodeScalars), let shown = pair(string(scalars[2...])) { return "-u" + shown }
         if let at = cutLast(text, at: "@"), let piece = cut(at.before, at: ":"), isUserName(piece.before),
-           !piece.after.isEmpty, !piece.after.unicodeScalars.contains(where: { $0.properties.isWhitespace || $0 == "/" || $0 == "\\" }) {
+           !piece.after.isEmpty, !piece.after.unicodeScalars.contains(where: { $0.properties.isWhitespace || $0 == "/" || $0 == "\\" }),
+           !at.after.unicodeScalars.contains(where: { $0.properties.isWhitespace }) {
             return userInfo(at.before) + "@" + location(at.after)
         }
         return looksSecret(text) ? mask : text
@@ -288,16 +295,59 @@ public enum ControlMasking {
             || signInHeaders.contains(where: { CredentialHeuristics.loweredUnits(name).elementsEqual($0.utf16) })
     }
 
+    /// The words of a header's name that name a secret or sign in.
+    static let secretHeaderWords: Set<String> = [
+        "token", "key", "apikey", "secret", "password", "passwd", "pass", "pwd", "pw", "auth", "authorization",
+        "credential", "credentials", "bearer", "cookie",
+    ]
+
+    /// Whether a whole word of the ASCII name `name` - split at `-`, `_`, `.` and where a lower-case
+    /// letter meets an upper-case one - names a secret or signs in: `X-Api-Key`, `apiKey`,
+    /// `Authorization`, `Cookie`, but not `keycloak`, `auth0` or `ssh-keys`.
+    static func headerNamesASecret(_ name: String) -> Bool {
+        var words: [String] = []
+        var word = String.UnicodeScalarView()
+        var lowerBefore = false
+        for scalar in name.unicodeScalars {
+            if scalar == "-" || scalar == "_" || scalar == "." {
+                words.append(String(word))
+                word = String.UnicodeScalarView()
+                lowerBefore = false
+                continue
+            }
+            let upper = ("A"..."Z").contains(scalar)
+            if upper, lowerBefore {
+                words.append(String(word))
+                word = String.UnicodeScalarView()
+            }
+            word.append(upper ? Unicode.Scalar(scalar.value + 32)! : scalar)
+            lowerBefore = ("a"..."z").contains(scalar)
+        }
+        words.append(String(word))
+        return words.contains { secretHeaderWords.contains($0) }
+    }
+
+    /// Values after a `name:` that are an access scope, not a secret (`token:read`).
+    static let scopeWords = ["read", "write", "admin", "readonly", "read-only", "rw", "ro", "all", "none"]
+
+    /// Whether a header-shaped word's value is a scope word or a path, which read as written.
+    static func isPlainValue(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespaces)
+        return trimmed.unicodeScalars.first == "/"
+            || scopeWords.contains { CredentialHeuristics.loweredUnits(trimmed).elementsEqual($0.utf16) }
+    }
+
     /// curl's flags whose value is `user:password`.
-    static let pairFlags = ["-u", "--user"]
+    static let pairFlags = ["-u", "--user", "--proxy-user"]
 
     /// A pair flag's `user:password` as a URL's user info shows it; nil for a value with no ":", a
-    /// reference (`${CC_NEEDS:creds}`), or a uid:gid pair of digits (Docker's `--user 1000:1000`),
-    /// which read as any argument does.
+    /// URL, which reads as one, a reference (`${CC_NEEDS:creds}`), or a user and group as Docker's
+    /// `--user` takes them - a uid (`1000:…`) or a group named as the user (`node:node`) - which read
+    /// as any argument does.
     static func pair(_ text: String) -> String? {
-        guard !refersElsewhere(text), let piece = cut(text, at: ":") else { return nil }
-        let digits: (String) -> Bool = { !$0.isEmpty && $0.unicodeScalars.allSatisfy { ("0"..."9").contains($0) } }
-        if digits(piece.before), digits(piece.after) { return nil }
+        guard !refersElsewhere(text), !isURL(text), let piece = cut(text, at: ":") else { return nil }
+        if !piece.before.isEmpty, piece.before.unicodeScalars.allSatisfy({ ("0"..."9").contains($0) }) { return nil }
+        if piece.before.hasSameScalars(as: piece.after) { return nil }
         return userInfo(text)
     }
 
@@ -367,7 +417,8 @@ public enum ControlMasking {
         }
     }
 
-    /// Whether `text` gives a value under a key named for a secret: a name of ASCII letters, digits,
+    /// Whether `text` gives a value under a key named for a secret, or under `env` or `headers`
+    /// (`namesASecret(_:)`): a name of ASCII letters, digits,
     /// `_`, `-`, `$` and `.`, in quotes or not, right before a `:` or `=` (`apiKey: …`, `"token": …`,
     /// `password=…`). A `:` after a bracket or another `:` (`[::1]`, `[Net.X]::Y`) has no name.
     static func keyedSecret(_ text: String) -> Bool {
@@ -378,7 +429,7 @@ public enum ControlMasking {
             if end > 0, scalars[end - 1] == "\"" || scalars[end - 1] == "'" { end -= 1 }
             var start = end
             while start > 0, isASCIIWordCharacter(scalars[start - 1]) || ["-", "$", "."].contains(scalars[start - 1]) { start -= 1 }
-            if start < end, CredentialHeuristics.namesASecret(string(scalars[start..<end])) { return true }
+            if start < end, namesASecret(string(scalars[start..<end])) { return true }
         }
         return false
     }
