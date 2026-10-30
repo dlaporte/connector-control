@@ -292,6 +292,7 @@ public class StringCatalogTests
         ["UpdateRefusals.notValidlySigned"] = ["X"],
         ["UpdateRefusals.olderVersion"] = ["X", "Y"],
         ["UpdateRefusals.previewForRelease"] = ["X", "Y"],
+        ["UpdateRefusals.previewForUnknownVersion"] = ["X"],
         ["UpdateRefusals.renamedEntry"] = ["X"],
         ["UpdateRefusals.signedByAnother"] = ["X", "Y"],
         ["UpdateRefusals.signedByUntrusted"] = ["X", "Y"],
@@ -1039,6 +1040,7 @@ public class StringCatalogTests
         actual["UpdateRefusals.notValidlySigned"] = UpdateRefusals.NotValidlySigned("X");
         actual["UpdateRefusals.olderVersion"] = UpdateRefusals.OlderVersion("X", "Y");
         actual["UpdateRefusals.previewForRelease"] = UpdateRefusals.PreviewForRelease("X", "Y");
+        actual["UpdateRefusals.previewForUnknownVersion"] = UpdateRefusals.PreviewForUnknownVersion("X");
         actual["UpdateRefusals.renamedEntry"] = UpdateRefusals.RenamedEntry("X");
         actual["UpdateRefusals.signedByAnother"] = UpdateRefusals.SignedByAnother("X", "Y");
         actual["UpdateRefusals.signedByUntrusted"] = UpdateRefusals.SignedByUntrusted("X", "Y");

@@ -269,10 +269,18 @@ public static class UpdateVerifier
             return UpdateRefusals.OlderVersion(embedded, runningVersion);
         }
         // A release install never takes a preview, whatever the feed offers: the stable feed's filter is not the only
-        // thing keeping one out. A preview install still takes its release.
-        if (IsPrerelease(embedded) && ControlVersion.Semantic(runningVersion) is { } running && !IsPrerelease(running))
+        // thing keeping one out. A preview install still takes its release. Only a known preview install takes a
+        // preview: an installed version that cannot be read refuses one.
+        if (IsPrerelease(embedded))
         {
-            return UpdateRefusals.PreviewForRelease(embedded, runningVersion);
+            if (ControlVersion.Semantic(runningVersion) is not { } running)
+            {
+                return UpdateRefusals.PreviewForUnknownVersion(embedded);
+            }
+            if (!IsPrerelease(running))
+            {
+                return UpdateRefusals.PreviewForRelease(embedded, runningVersion);
+            }
         }
         return null;
     }

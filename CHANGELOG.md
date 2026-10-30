@@ -33,6 +33,7 @@ has one.
 - The Settings tabs now show their icons - a gear for General, a drive for Storage, and Claude’s own icon, or a generic app icon where Claude’s can’t be read - instead of an empty space before each name. Claude’s icon is now sharp at 150% and 200% scaling.
 - The Publish and Export dialogs now fit on a short screen: when there isn’t room, the preview gets shorter so the Publish, Export and Cancel buttons stay visible.
 - Start Publishing into a folder that already holds a folder with the collection’s document name (such as `work.json`) now says that name is taken, as the Mac does, instead of failing with a file-system error.
+- A Connector Control release now also refuses a preview update when it can’t read its own installed version. Before, that check was skipped, and only the update feed kept previews away from release installs.
 
 ### Both platforms
 
