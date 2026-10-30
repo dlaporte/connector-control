@@ -26,9 +26,9 @@ bullet once the section is about to ship.
   Windows uninstaller does both for you.
 - A preview install updates itself to each later preview and then to the final release, as on
   Windows; see Release pipeline for the one step to take by hand.
-- Claude's config, or a backup of it, is read as Claude Desktop and Windows read it: one with a
-  trailing comma, saved as UTF-16 or UTF-32, or nested more than 64 levels deep is reported as
-  not valid JSON. Before, the Mac read it as if it were valid.
+- Claude's config, or a backup of it, is read as the Windows app reads it: one with a trailing
+  comma, saved as UTF-16 or UTF-32, or nested more than 64 levels deep is reported as not valid
+  JSON. Before, the Mac read it as if it were valid.
 
 ### Windows
 
@@ -136,6 +136,8 @@ bullet once the section is about to ship.
 - A preview's update dialog shows only that preview's changes; its release page adds how to
   install it, how to go back and the commits it holds.
 - make-dmg.sh retries `hdiutil` when it reports the disk image "Resource busy".
+- Stapling a notarized app or disk image is retried up to five times when Apple's ticket service
+  fails, rather than failing the build.
 - Every PowerShell script is parsed in CI, so one that doesn't parse fails there rather than on a
   Windows runner.
 - The Windows install smoke test checks the command-line tool, the relay and the uninstall hook,

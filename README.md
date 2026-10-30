@@ -1257,6 +1257,13 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
 - On a Mac, turn off **Let Claude manage Connector Control** and **Remove**
   the command-line tool before deleting the app (see Uninstalling); the
   Windows uninstaller does both for you.
+- On a Mac, Claude's entry names the tool inside the app where it was
+  opened. If you move the app while it runs, quit it and open it again from
+  its new place, so the entry follows it.
+- Before going back to Connector Control 1.4, turn off **Let Claude manage
+  Connector Control**. 1.4 doesn't know the entry is the app's own and would
+  add it to your master list as a connector, where every machine sharing the
+  list would then show the name clash.
 
 ## License
 
