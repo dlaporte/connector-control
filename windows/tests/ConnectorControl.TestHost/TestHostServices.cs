@@ -7,13 +7,35 @@ namespace ConnectorControl.TestHost;
 /// <summary>
 /// Mirror: Sources/ConnectorControlTestHost/TestHostServices.swift
 ///
-/// The platform seams of a host with no platform: no Claude, no notifications but a line on stderr, no
-/// dialogs, no launchers found, no login item, no Claude install and no updates.
+/// The platform seams of a host with no platform: settings in memory, no Claude, no notifications but a
+/// line on stderr, no dialogs, no launchers found, no login item, no Claude install and no updates.
 /// </summary>
 internal static class TestHostServices
 {
     public const string SeedConfig = """{"mcpServers":{"fetch":{"command":"uvx","args":["mcp-server-fetch"]},"time":{"command":"uvx","args":["mcp-server-time"]}}}""";
     public const string NoClaude = "The test host has no Claude Desktop to restart.";
+}
+
+/// <summary>Held in memory, as the Mac host's are, so every run starts from the same settings: nothing a
+/// set_setting changed in one run carries into the next.</summary>
+internal sealed class TestHostSettings : ISettings
+{
+    public string? MasterStoreDir { get; set; }
+    public string? ClaudeConfigPath { get; set; }
+    public string? ClaudeLaunchTarget { get; set; }
+    public int BackupKeepCount { get; set; } = BackupManager.DefaultKeepCount;
+    public bool NotifyExternalChanges { get; set; }
+    public bool ConfirmBeforeRestart { get; set; } = true;
+    public bool ConfirmBeforeQuit { get; set; } = true;
+    public bool ClaudeIntegrationEnabled { get; set; } = true;
+    public bool ConfirmClaudeChanges { get; set; } = true;
+    public bool ClaudeIntegrationOfferAnswered { get; set; } = true;
+    public DateTime? LastApplyDate { get; set; }
+    public int SweepVersion { get; set; } = PermissionsSweep.CurrentVersion;
+    public bool AutoUpdate { get; set; }
+    public bool TrayTipShown { get; set; }
+    public string? DeclinedUpdateVersion { get; set; }
+    public string? LastSaveError => null;
 }
 
 internal sealed class TestHostClaude : IClaudeProcess

@@ -42,14 +42,7 @@ internal static class Program
         var host = new AppHost(loop.Post, loop.After, () => DateTime.UtcNow, action => Task.Run(action), Path.Combine(sandbox, "connector-control.exe"));
         loop.Post(() =>
         {
-            var settings = new SettingsStore(Path.Combine(sandbox, "settings.json"))
-            {
-                ClaudeIntegrationEnabled = true,
-                ConfirmClaudeChanges = true,
-                ClaudeIntegrationOfferAnswered = true,
-                NotifyExternalChanges = false,
-                SweepVersion = PermissionsSweep.CurrentVersion,
-            };
+            var settings = new TestHostSettings();
             var notifier = new TestHostNotifier();
             var dialogs = new TestHostDialogs();
             var state = new AppState(settings, new TestHostClaude(), notifier, dialogs, paths, host, new TestHostToolProbe());
