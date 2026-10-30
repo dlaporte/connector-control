@@ -10,6 +10,8 @@ namespace ConnectorControl.Core;
 /// </summary>
 public sealed class BackupManager
 {
+    /// <summary>Same-millisecond backups tried before giving up and overwriting the last one.</summary>
+    private const int CollisionBound = 100;
     /// <summary>The keep count ConfigService and SettingsStore fall back to.</summary>
     public const int DefaultKeepCount = 20;
 
@@ -74,22 +76,26 @@ public sealed class BackupManager
         {
             return null;
         }
-        var newest = Backups(series).FirstOrDefault();
-        if (newest is not null && SameContent(newest, path))
+        var existing = Backups(series);
+        // Read once: the bytes compared against the newest backup are the bytes written, so a
+        // file that changes mid-backup cannot land a copy the dedup check never saw.
+        var current = File.ReadAllBytes(path);
+        if (existing.Count > 0 && SameContent(existing[0], current))
         {
-            return newest;
+            return existing[0];
         }
         var stamp = BackupTimestamp.From(now ?? DateTime.UtcNow);
         var dest = Path.Combine(BackupsDir, $"{series}.{stamp}.json");
         int counter = 2;
-        while (File.Exists(dest) && counter <= 100)
+        while (File.Exists(dest) && counter <= CollisionBound)
         {
             dest = Path.Combine(BackupsDir, $"{series}.{stamp}-{counter}.json");
             counter++;
         }
-        // Bound exhausted: the write replaces the last candidate rather than throwing.
-        AtomicFile.Write(File.ReadAllBytes(path), dest);
-        Prune(series);
+        // Bound exhausted (CollisionBound same-millisecond backups already exist): the write
+        // replaces the last candidate rather than throwing.
+        AtomicFile.Write(current, dest);
+        Prune(existing.Contains(dest, StringComparer.Ordinal) ? existing : [.. existing, dest]);
         return dest;
     }
 
@@ -157,9 +163,14 @@ public sealed class BackupManager
         return (@base[..(z + 1)], counter);
     }
 
-    private void Prune(string series)
+    /// <summary>
+    /// <paramref name="listing"/> is the caller's own pre-write directory read plus the file it just
+    /// wrote, sorted here the same way <see cref="Backups"/> sorts, so pruning does not re-list a
+    /// directory <see cref="BackUp"/> already just listed.
+    /// </summary>
+    private void Prune(IEnumerable<string> listing)
     {
-        foreach (var stale in Backups(series).Skip(KeepCount))
+        foreach (var stale in listing.Order(Comparer<string>.Create(NewestFirst)).Skip(KeepCount))
         {
             // Best effort: a backup that briefly refuses deletion (locked by a scanner, say) is
             // pruned next time; a rotation must never fail the write it is cleaning up after.
@@ -167,11 +178,13 @@ public sealed class BackupManager
         }
     }
 
-    private static bool SameContent(string a, string b)
+    /// <summary>Whether the backup at <paramref name="backup"/> holds exactly <paramref name="current"/>; one
+    /// that cannot be read counts as different, so the backup is taken.</summary>
+    private static bool SameContent(string backup, byte[] current)
     {
         try
         {
-            return File.ReadAllBytes(a).AsSpan().SequenceEqual(File.ReadAllBytes(b));
+            return File.ReadAllBytes(backup).AsSpan().SequenceEqual(current);
         }
         catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
         {
