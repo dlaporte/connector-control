@@ -705,7 +705,7 @@ Usage: connector-control <command> [options]
 Status
   status                             What Claude is running, and whether it needs a restart
   doctor                             Whether npx, node, uvx and uv are installed where Claude can find them
-Connectors (the active collection unless --collection names another)
+Connectors (in the active collection; connectors --collection <name> lists another)
   connectors [--collection <name>]   List connectors and what each runs
   show <name> [--reveal]             Show one connector, with its secrets masked
   enable <name> | disable <name>     Turn a connector on or off
@@ -996,7 +996,8 @@ under its box.
 **General** has **Startup** (launch at login, or at startup on Windows),
 **Confirmations** (before restarting Claude, before quitting),
 **Notifications** (outside changes to Claude's config, the master list or a
-subscribed document; the notifications about Claude's own changes post
+subscribed document, and Claude's config being rebuilt from your list; the
+notifications about Claude's own changes post
 either way) and **Updates** (install automatically, and the version with
 **Check for Updates**; a preview says "Previews update to later previews and
 the final release."). **Storage** has **Master List Location**, the folder
@@ -1235,9 +1236,6 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
 - A change that differs only in how an accented character is encoded
   (composed or decomposed) is written to Claude's config on Windows but not
   on a Mac.
-- After `connector-control settings set`, a Settings window that is already
-  open may show the old value on the General and Storage tabs until you open
-  it again. The Claude tab follows at once.
 - The command-line tool and the relay never start the app while
   `CONNECTOR_CONTROL_STORE_DIR` or `CONNECTOR_CONTROL_CLAUDE_CONFIG` is set,
   since those overrides are for development and tests.
