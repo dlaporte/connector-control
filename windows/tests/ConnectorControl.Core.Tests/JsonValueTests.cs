@@ -191,4 +191,20 @@ public class JsonValueTests
         Assert.ThrowsAny<JsonException>(() => JsonValue.Parse(Nested(70)));
         JsonValue.Parse("[\"" + new string('[', 70) + "\"]");
     }
+
+    /// <summary>Text is compared ordinally, as the Mac compares it scalar by scalar: é as one character and
+    /// as e and a combining accent are different values, in a string and in a key alike, and a set
+    /// holds both.</summary>
+    [Fact]
+    public void TextComposedAnotherWayIsAnotherValue()
+    {
+        const string composed = "caf\u00E9", decomposed = "cafe\u0301";
+        Assert.NotEqual(JsonValue.String(composed), JsonValue.String(decomposed));
+        Assert.NotEqual(JsonValue.Array([JsonValue.String(composed)]), JsonValue.Array([JsonValue.String(decomposed)]));
+        Assert.NotEqual(JsonValue.Object((composed, JsonValue.Int(1))), JsonValue.Object((decomposed, JsonValue.Int(1))));
+        Assert.Equal(2, new HashSet<JsonValue> { JsonValue.String(composed), JsonValue.String(decomposed) }.Count);
+        Assert.Equal(JsonValue.Object((composed, JsonValue.Array([JsonValue.String(decomposed)]))),
+                     JsonValue.Object((composed, JsonValue.Array([JsonValue.String(decomposed)]))));
+        Assert.NotEqual(JsonValue.Int(1), JsonValue.Double(1));
+    }
 }

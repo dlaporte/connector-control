@@ -1220,9 +1220,6 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
 - Import, subscribe and restore apply exactly what the question showed: the
   file is read once, at most 1 MB for a collection document and 16 MB for a
   backup.
-- A change that differs only in how an accented character is encoded
-  (composed or decomposed) is written to Claude's config on Windows but not
-  on a Mac.
 - The command-line tool and the relay never start the app while
   `CONNECTOR_CONTROL_STORE_DIR` or `CONNECTOR_CONTROL_CLAUDE_CONFIG` is set,
   since those overrides are for development and tests.

@@ -259,7 +259,9 @@ public final class AppState: ObservableObject {
 
     // MARK: - Derived
 
-    var isDirty: Bool { expandedServers != appliedServers }
+    /// Compared scalar by scalar (`JSONValue.identical`), as the Windows mirror compares ordinally: a
+    /// change only in how a character is composed is written to Claude's config like any other.
+    var isDirty: Bool { !JSONValue.identical(expandedServers, appliedServers) }
 
     /// The enabled connectors as Claude must see them, with `${COLLECTION_DIR}` resolved against
     /// the active collection's folder on this machine (`collectionDirectory(of:)`), plus Connector
@@ -607,7 +609,7 @@ public final class AppState: ObservableObject {
             loadCollections(sidecar.file, hash: sidecar.hash)
             var claudeConfigChangedExternally = false
             if let servers = result.claudeServers {
-                claudeConfigChangedExternally = wasLoaded && servers != previousApplied
+                claudeConfigChangedExternally = wasLoaded && !JSONValue.identical(servers, previousApplied)
                 appliedServers = servers
                 hasLoadedOnce = true
             }
@@ -643,7 +645,7 @@ public final class AppState: ObservableObject {
             // regenerating write satisfies the watcher-triggered follow-up reload.
             var regenerated = false
             var regenerationFailed = false
-            if let servers = result.claudeServers, servers != expandedServers {
+            if let servers = result.claudeServers, !JSONValue.identical(servers, expandedServers) {
                 let alreadyFailing = applyRetryNeeded
                 performApply()
                 regenerated = !applyRetryNeeded

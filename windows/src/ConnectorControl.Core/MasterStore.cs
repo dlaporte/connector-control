@@ -59,7 +59,7 @@ public sealed class MasterStore : IEquatable<MasterStore>
     /// Collections[ActiveCollection] exists.
     /// </summary>
     public Dictionary<string, McpEntry> Mcps =>
-        Collections.TryGetValue(ActiveCollection, out var collection) ? collection.Mcps : new Dictionary<string, McpEntry>(StringComparer.Ordinal);
+        Collections.TryGetValue(ActiveCollection, out var collection) ? collection.Mcps : new Collection().Mcps;
 
     /// <summary>Claude's <c>mcpServers</c> section rendered from this store: the enabled subset's configs.</summary>
     public IReadOnlyDictionary<string, JsonValue> EnabledServers =>

@@ -369,6 +369,22 @@ public class McpSessionTests
         Assert.Equal("""{"id":3,"jsonrpc":"2.0","result":{}}""", sent[^1]);
     }
 
+    /// <summary>Ids are compared ordinally, as the Mac compares them: an id composed another way is another
+    /// request, run and answered, and cancelling one leaves the other answered.</summary>
+    [Fact]
+    public void AnIdComposedAnotherWayIsAnotherRequest()
+    {
+        Initialize();
+        session.Receive("""{"jsonrpc":"2.0","id":"caf\u00e9","method":"tools/call","params":{"name":"echo"}}""");
+        session.Receive("""{"jsonrpc":"2.0","id":"cafe\u0301","method":"tools/call","params":{"name":"echo"}}""");
+        Assert.Equal(2, host.Calls.Count);
+        session.Receive("""{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":"cafe\u0301"}}""");
+        host.Calls[0].Completion(JsonValue.Object());
+        host.Calls[1].Completion(JsonValue.Object());
+        Assert.Equal(2, sent.Count);
+        Assert.Equal("{\"id\":\"caf\u00E9\",\"jsonrpc\":\"2.0\",\"result\":{}}", sent[^1]);
+    }
+
     [Fact]
     public void ASecondInitializeIsRefusedAndKeepsTheFirstName()
     {

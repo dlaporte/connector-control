@@ -99,11 +99,6 @@ public sealed partial class ControlTools
         return null;
     }
 
-    // Platform idiom: JsonValue already compares text ordinally, as the Mac mirror compares it scalar by
-    // scalar; Swift's == would hold canonically equivalent text equal and refuse a change as no change.
-    /// <summary>Whether two configs are the same, value for value.</summary>
-    internal static bool Identical(JsonValue one, JsonValue other) => one == other;
-
     /// <summary>The collection a connector tool works in: the one named, else the active one.</summary>
     internal string TargetCollection(ControlArguments arguments) => arguments.String("collection") ?? state.ActiveCollection;
 
@@ -197,7 +192,7 @@ public sealed partial class ControlTools
         {
             return new ControlStep.Refused(AppState.NameEmptyError);
         }
-        var renamed = newName != name;
+        var renamed = !Collection.NameComparer.Equals(newName, name);
         if (renamed && newName == ClaudeIntegration.EntryName)
         {
             return new ControlStep.Refused(ClaudeIntegration.ReservedNameError);
@@ -213,7 +208,7 @@ public sealed partial class ControlTools
         var after = config ?? current.Config;
         // "Unchanged" compares the configs themselves, not the rendered lines: every difference is a
         // change, whether or not a line can show it.
-        var reconfigured = !Identical(after, current.Config);
+        var reconfigured = after != current.Config;
         if (!renamed && !reconfigured)
         {
             return new ControlStep.Refused(UnchangedError(shownName));

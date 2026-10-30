@@ -118,10 +118,9 @@ extension ControlTools {
         // A write that never touches Claude's config (a window's setting) must not report a retry
         // an earlier, unrelated write left pending.
         let reachesClaude = touchesClaude && (collection == nil || collection == state.activeCollection)
-        // Platform idiom: compared scalar by scalar, as the Windows mirror compares ordinally; Swift's
-        // == holds canonically equivalent text equal, and would miss a change only in how a
-        // character is composed.
-        let applied = !ControlTools.identical(.object(state.appliedServers), .object(mark))
+        // Compared scalar by scalar (`JSONValue.identical`), keys too, so a change only in how a
+        // character is composed counts.
+        let applied = !JSONValue.identical(state.appliedServers, mark)
         var then: String?
         if reachesClaude, state.applyRetryNeeded {
             text.append(ControlTools.savedNotAppliedText(state.lastError ?? ""))

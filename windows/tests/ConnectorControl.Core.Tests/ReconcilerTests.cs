@@ -42,6 +42,29 @@ public class ReconcilerTests
 
     // store is the source of truth - the file never edits known entries
 
+    /// <summary>An entry the store no longer holds, changed in Claude's file only in how a character is
+    /// composed, is an edit made outside the app, as it is on the Mac: taken in, not left for removal.</summary>
+    [Fact]
+    public void AnEditOnlyInHowACharacterIsComposedIsExternal()
+    {
+        var composed = JsonValue.Object(("command", JsonValue.String("caf\u00E9")));
+        var decomposed = JsonValue.Object(("command", JsonValue.String("cafe\u0301")));
+        var outcome = Reconciler.Reconcile(MasterStore.Empty(), Servers(("gone", decomposed)), Servers(("gone", composed)));
+        Assert.Equal(decomposed, outcome.Store.Mcps["gone"].Config);
+        Assert.True(outcome.StoreChanged);
+    }
+
+    /// <summary>A name in Claude's file spelled another way, é decomposed where the store composes it, is the
+    /// store's own connector, as on the Mac: nothing is taken in.</summary>
+    [Fact]
+    public void ANameSpelledAnotherWayIsTheStoresConnector()
+    {
+        var outcome = Reconciler.Reconcile(Store(("caf\u00E9", new McpEntry(true, ConfigA))), Servers(("cafe\u0301", ConfigB)));
+        Assert.Single(outcome.Store.Mcps);
+        Assert.Equal(ConfigA, outcome.Store.Mcps["caf\u00E9"].Config);
+        Assert.False(outcome.StoreChanged);
+    }
+
     [Fact]
     public void ExternalEditDoesNotChangeStore()
     {

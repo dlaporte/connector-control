@@ -126,6 +126,19 @@ final class ControlToolsGatedTests: XCTestCase {
         let result = try XCTUnwrap(rig.call("update_connector", ["name": .string("scoutbook"), "config": decomposed]))
         XCTAssertEqual(result.text, ControlTools.changedText("scoutbook", "Default"))
         XCTAssertEqual(rig.confirmer.requests.count, 1)
+        XCTAssertEqual(try rig.h.claudeServers()["scoutbook"], decomposed)
+    }
+
+    /// A name composed another way is the same name, as Claude's config counts it: adding under it
+    /// is refused as a duplicate, and renaming a connector to it changes nothing.
+    func testANameComposedAnotherWayIsTheSameName() throws {
+        let rig = rig(); defer { rig.dispose() }
+        XCTAssertNil(rig.state.upsert(name: "caf\u{E9}", entry: MCPEntry(config: composed), renamedFrom: nil))
+        let added = try XCTUnwrap(rig.call("add_connector", ["name": .string("cafe\u{301}"), "config": decomposed]))
+        XCTAssertEqual(added.text, AppState.duplicateNameError("cafe\u{301}"))
+        let renamed = try XCTUnwrap(rig.call("update_connector", ["name": .string("caf\u{E9}"), "newName": .string("cafe\u{301}")]))
+        XCTAssertEqual(renamed.text, ControlTools.unchangedError("caf\u{E9}"))
+        XCTAssertTrue(rig.confirmer.requests.isEmpty)
     }
 
     func testChangingIsRefusedBeforeAnyoneIsAsked() throws {

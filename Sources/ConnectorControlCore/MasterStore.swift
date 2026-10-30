@@ -17,6 +17,10 @@ public struct MCPEntry: Equatable, Hashable, Codable, Sendable {
 }
 
 /// A full, independent snapshot of connectors: its own configs + enabled flags.
+///
+/// Names are dictionary keys, so two spellings Unicode counts as the same text, such as an é composed
+/// and decomposed, are one connector's name, as Claude's config counts them; the Windows mirror's
+/// `Collection.NameComparer` does the same. A config's own text is compared scalar by scalar.
 public struct Collection: Equatable, Codable, Sendable {
     public var mcps: [String: MCPEntry]
     public init(mcps: [String: MCPEntry] = [:]) { self.mcps = mcps }

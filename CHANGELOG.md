@@ -24,6 +24,7 @@ has one.
 - The JSON editor now supports undo (Cmd-Z) and no longer autocorrects or spell-checks what you type, so commands, arguments and header names stay as written.
 - When you stop publishing a collection and choose Delete for its published file, only that file is deleted. Before, if a folder had been put in the shared folder under that file’s name, it deleted that folder and everything in it.
 - The menu bar icon now has a name for VoiceOver - “Connector Control”, or “Connector Control: Apply Failed - Retry” when an apply is waiting to be retried - and VoiceOver no longer reads the “▾” after the collection name in the popover.
+- A change to a connector that differs only in how an accented letter is written (é as one character, or as e followed by a combining accent) is now written to Claude’s config, as it is on Windows. Before, the Mac counted the two as the same and left Claude’s config as it was.
 
 ### Windows
 
@@ -37,6 +38,7 @@ has one.
 - When an update is refused and the updater it brought can’t be removed (for example, because a virus scanner is holding it), the message now says so, and says whether Connector Control will put its own updater back the next time it starts or whether you need to reinstall. Before, it gave only the reason for the refusal.
 - The first update check after launch now waits for Connector Control to finish restoring an updater left behind by an earlier, interrupted update. Before, the two could overlap, and the check could fail for no real reason.
 - While the update dialog reads “Downloading…”, its Later button now reads Cancel: it stops the download and takes the dialog back to Install and Relaunch or Later. Before, the dialog couldn’t be dismissed until the download finished or failed. A download or relaunch that fails after Install and Relaunch now says “Couldn’t install the update.” rather than “Couldn’t check for updates.”
+- Two connectors in a collection can no longer have names that differ only in how an accented letter is written (é as one character, or as e followed by a combining accent): the second is refused as a name already in use, as on the Mac, and Claude’s config naming a connector in the other spelling is read as that connector. Before, Windows kept both, and Claude’s config then named one connector twice, which Connector Control refused to read back.
 
 ### Both platforms
 

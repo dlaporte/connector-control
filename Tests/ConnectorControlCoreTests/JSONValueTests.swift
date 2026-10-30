@@ -152,4 +152,19 @@ final class JSONValueTests: XCTestCase {
         XCTAssertThrowsError(try JSONValue.parse(nested(70)))
         XCTAssertNoThrow(try JSONValue.parse(Data(("[\"" + String(repeating: "[", count: 70) + "\"]").utf8)))
     }
+
+    /// Text is compared scalar by scalar, as Windows compares it ordinally: é as one character and
+    /// as e and a combining accent are different values, in a string and in a key alike, and a set
+    /// holds both.
+    func testTextComposedAnotherWayIsAnotherValue() {
+        let composed = "caf\u{E9}", decomposed = "cafe\u{301}"
+        XCTAssertNotEqual(JSONValue.string(composed), .string(decomposed))
+        XCTAssertNotEqual(JSONValue.array([.string(composed)]), .array([.string(decomposed)]))
+        XCTAssertNotEqual(JSONValue.object([composed: .int(1)]), .object([decomposed: .int(1)]))
+        XCTAssertFalse(JSONValue.identical(["a": .string(composed)], ["a": .string(decomposed)]))
+        XCTAssertEqual(Set([JSONValue.string(composed), .string(decomposed)]).count, 2)
+        XCTAssertEqual(JSONValue.object([composed: .array([.string(decomposed)])]),
+                       .object([composed: .array([.string(decomposed)])]))
+        XCTAssertNotEqual(JSONValue.int(1), .double(1))
+    }
 }

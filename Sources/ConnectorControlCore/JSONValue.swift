@@ -1,6 +1,6 @@
 import Foundation
 
-public enum JSONValue: Equatable, Hashable, Sendable {
+public enum JSONValue: Hashable, Sendable {
     case null
     case bool(Bool)
     case int(Int)
@@ -8,6 +8,39 @@ public enum JSONValue: Equatable, Hashable, Sendable {
     case string(String)
     case array([JSONValue])
     case object([String: JSONValue])
+}
+
+extension JSONValue: Equatable {
+    // Platform idiom: text is compared scalar by scalar, as the Windows mirror compares it ordinally.
+    // Swift's own == holds canonically equivalent text equal (é as one character, and as e and a
+    // combining accent), which would leave a change to how a character is composed unwritten to
+    // Claude's config: the bytes differ, so the config does. Object keys are compared the same way.
+    /// Whether two values are the same, value for value and scalar for scalar.
+    public static func == (one: JSONValue, other: JSONValue) -> Bool {
+        switch (one, other) {
+        case (.null, .null): return true
+        case (.bool(let a), .bool(let b)): return a == b
+        case (.int(let a), .int(let b)): return a == b
+        case (.double(let a), .double(let b)): return a == b
+        case (.string(let a), .string(let b)): return a.hasSameScalars(as: b)
+        case (.array(let a), .array(let b)): return a.count == b.count && zip(a, b).allSatisfy { $0 == $1 }
+        case (.object(let a), .object(let b)): return identical(a, b)
+        default: return false
+        }
+    }
+
+    /// Two objects with the same keys, spelled scalar for scalar alike, and the same value under each.
+    public static func identical(_ one: [String: JSONValue], _ other: [String: JSONValue]) -> Bool {
+        guard one.count == other.count else { return false }
+        let keys = one.keys.sorted { $0.ordinallyPrecedes($1) }
+        let otherKeys = other.keys.sorted { $0.ordinallyPrecedes($1) }
+        return zip(keys, otherKeys).allSatisfy { key, otherKey in
+            key.hasSameScalars(as: otherKey) && one[key]! == other[otherKey]!
+        }
+    }
+
+    // The synthesized hash stands: values equal scalar for scalar are canonically equal too, and so
+    // hash alike, which is all Hashable asks.
 }
 
 extension JSONValue: Codable {

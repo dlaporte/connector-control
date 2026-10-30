@@ -110,6 +110,56 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(try h.storeOnDisk().mcps["scoutbook"])
     }
 
+    /// A change only in how a character is composed is a change, and Apply writes it, as it does on
+    /// Windows: é as one character and as e and a combining accent are different bytes in Claude's config.
+    func testAChangeOnlyInHowACharacterIsComposedIsApplied() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let composed = AppStateHarness.remote("https://caf\u{E9}.example/mcp")
+        let decomposed = AppStateHarness.remote("https://cafe\u{301}.example/mcp")
+        XCTAssertNil(state.upsert(name: "scoutbook", entry: MCPEntry(config: composed), renamedFrom: "scoutbook"))
+        state.applyInteractively()
+        XCTAssertEqual(try h.claudeServers()["scoutbook"], composed)
+        XCTAssertNil(state.upsert(name: "scoutbook", entry: MCPEntry(config: decomposed), renamedFrom: "scoutbook"))
+        XCTAssertTrue(state.isDirty)
+        state.applyInteractively()
+        XCTAssertEqual(try h.claudeServers()["scoutbook"], decomposed)
+        XCTAssertFalse(state.isDirty)
+    }
+
+    /// Two spellings of a name, é composed and decomposed, are one connector's name, as Claude's
+    /// config counts them (it refuses a file naming a connector in both): a second connector may not
+    /// take the other spelling, and saving under it keeps the name as first written.
+    func testANameComposedAnotherWayIsTheSameName() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let composed = "caf\u{E9}", decomposed = "cafe\u{301}"
+        let entry = MCPEntry(config: AppStateHarness.remote("https://new.example/mcp"))
+        XCTAssertNil(state.upsert(name: composed, entry: entry, renamedFrom: nil))
+        XCTAssertEqual(state.upsert(name: decomposed, entry: entry, renamedFrom: nil), AppState.duplicateNameError(decomposed))
+        XCTAssertEqual(state.upsert(name: decomposed, entry: entry, renamedFrom: "scoutbook"), AppState.duplicateNameError(decomposed))
+        XCTAssertNil(state.upsert(name: decomposed, entry: entry, renamedFrom: composed))
+        state.applyInteractively()
+        XCTAssertEqual(state.sortedNames.filter { $0.hasPrefix("caf") }.map { $0.unicodeScalars.count }, [4])
+        XCTAssertEqual(try h.claudeServers().keys.filter { $0.hasPrefix("caf") }.map { $0.unicodeScalars.count }, [4])
+    }
+
+    /// Claude's file naming a connector in another spelling of its name holds that connector, not a
+    /// new one, and is rewritten in the store's spelling, as on Windows.
+    func testAFileThatRespellsANameIsRegenerated() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let config = AppStateHarness.remote("https://new.example/mcp")
+        XCTAssertNil(state.upsert(name: "caf\u{E9}", entry: MCPEntry(config: config), renamedFrom: nil))
+        state.applyInteractively()
+        try h.writeClaudeServers(try state.sortedNames.filter { !$0.hasPrefix("caf") }.map { ($0, try XCTUnwrap(state.store.mcps[$0]).config) }
+                                 + [("cafe\u{301}", config)])
+        state.reload()
+        XCTAssertEqual(state.sortedNames.map { $0.unicodeScalars.count }, [7, 4, 9, 11])
+        XCTAssertEqual(try h.claudeServers().keys.filter { $0.hasPrefix("caf") }.map { $0.unicodeScalars.count }, [4])
+        XCTAssertFalse(state.isDirty)
+    }
+
     func testDeletePersistsButDoesNotApply() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

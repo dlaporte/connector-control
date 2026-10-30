@@ -284,6 +284,20 @@ final class McpSessionTests: XCTestCase {
         XCTAssertEqual(sent.last, #"{"id":3,"jsonrpc":"2.0","result":{}}"#)
     }
 
+    /// Ids are compared scalar by scalar, as Windows compares them: an id composed another way is
+    /// another request, run and answered, and cancelling one leaves the other answered.
+    func testAnIdComposedAnotherWayIsAnotherRequest() {
+        initialize()
+        session.receive(#"{"jsonrpc":"2.0","id":"caf\u00e9","method":"tools/call","params":{"name":"echo"}}"#)
+        session.receive(#"{"jsonrpc":"2.0","id":"cafe\u0301","method":"tools/call","params":{"name":"echo"}}"#)
+        XCTAssertEqual(host.calls.count, 2)
+        session.receive(#"{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":"cafe\u0301"}}"#)
+        host.calls[0].completion(.object([:]))
+        host.calls[1].completion(.object([:]))
+        XCTAssertEqual(sent.count, 2)
+        XCTAssertEqual(sent.last, "{\"id\":\"caf\u{E9}\",\"jsonrpc\":\"2.0\",\"result\":{}}")
+    }
+
     func testASecondInitializeIsRefusedAndKeepsTheFirstName() {
         initialize()
         session.receive(#"{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"someone-else"}}}"#)

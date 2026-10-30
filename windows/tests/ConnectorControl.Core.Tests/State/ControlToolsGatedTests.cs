@@ -160,6 +160,21 @@ public class ControlToolsGatedTests
         var result = rig.Call("update_connector", Args(("name", Text("scoutbook")), ("config", Decomposed)));
         Assert.Equal(ControlTools.ChangedText("scoutbook", "Default"), result?.Text);
         Assert.Single(rig.Confirmer.Requests);
+        Assert.Equal(Decomposed, rig.H.ClaudeServers()["scoutbook"]);
+    }
+
+    /// <summary>A name composed another way is the same name, as Claude's config counts it: adding under it
+    /// is refused as a duplicate, and renaming a connector to it changes nothing.</summary>
+    [Fact]
+    public void ANameComposedAnotherWayIsTheSameName()
+    {
+        using var rig = Rig();
+        Assert.Null(rig.State.Upsert("caf\u00E9", new McpEntry(Composed), null));
+        var added = rig.Call("add_connector", Args(("name", Text("cafe\u0301")), ("config", Decomposed)));
+        Assert.Equal(AppState.DuplicateNameError("cafe\u0301"), added?.Text);
+        var renamed = rig.Call("update_connector", Args(("name", Text("caf\u00E9")), ("newName", Text("cafe\u0301"))));
+        Assert.Equal(ControlTools.UnchangedError("caf\u00E9"), renamed?.Text);
+        Assert.Empty(rig.Confirmer.Requests);
     }
 
     [Fact]

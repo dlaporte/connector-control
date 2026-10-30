@@ -740,7 +740,7 @@ public sealed class AppState : ObservableObject, IDisposable
             // Capture "before" state for the notification rules below, BEFORE any state is overwritten.
             var wasLoaded = hasLoadedOnce;
             var previousApplied = AppliedServers;
-            var previousStoreMcps = new Dictionary<string, McpEntry>(Store.Mcps, StringComparer.Ordinal);
+            var previousStoreMcps = new Dictionary<string, McpEntry>(Store.Mcps, Collection.NameComparer);
 
             // The store file vanished mid-session (deleted store dir, sync eviction). The in-memory
             // store is the source of truth - persist it back rather than loading an empty store and
@@ -1184,7 +1184,10 @@ public sealed class AppState : ObservableObject, IDisposable
         // Connector Control's own entry goes by this name in Claude's config. A connector already
         // holding it, from before the name was reserved, may still be saved in place, so the clash
         // can be resolved by renaming or deleting it; nothing new may take the name.
-        if (trimmed == ClaudeIntegration.EntryName && trimmed != renamedFrom)
+        // A name is compared as Swift's dictionary keys compare it (Collection.NameComparer): a
+        // respelling of the connector's own name is no rename, and of another's is that name.
+        var renaming = renamedFrom is null || !Collection.NameComparer.Equals(trimmed, renamedFrom);
+        if (trimmed == ClaudeIntegration.EntryName && renaming)
         {
             return ClaudeIntegration.ReservedNameError;
         }
@@ -1192,23 +1195,23 @@ public sealed class AppState : ObservableObject, IDisposable
         // collection up front would leave an empty one behind. Swift's optional chain does the
         // same by construction.
         var existing = Store.Collections.GetValueOrDefault(target)?.Mcps;
-        if (trimmed != renamedFrom && existing is not null && existing.ContainsKey(trimmed))
+        if (renaming && existing is not null && existing.ContainsKey(trimmed))
         {
             return DuplicateNameError(trimmed);
         }
-        if (renamedFrom is { } old && old != trimmed)
+        if (renamedFrom is { } old && renaming)
         {
             existing?.Remove(old);
         }
         // A rename changes nothing the author reviewed for publishing: the review follows it.
-        if (renamedFrom is { } moved && moved != trimmed && CollectionsCache.Published.GetValueOrDefault(target) is { } binding)
+        if (renamedFrom is { } moved && renaming && CollectionsCache.Published.GetValueOrDefault(target) is { } binding)
         {
             SetPublishBinding(target, binding.MovingReview(moved, trimmed));
         }
         McpsIn(target)[trimmed] = entry;
         EditPublishIntent(target, intent =>
         {
-            if (renamedFrom is { } previous && previous != trimmed)
+            if (renamedFrom is { } previous && renaming)
             {
                 intent = intent.MovingConnector(previous, trimmed);
             }

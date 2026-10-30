@@ -74,27 +74,6 @@ extension ControlTools {
         return nil
     }
 
-    // Platform idiom: text is compared scalar by scalar, as the Windows mirror compares it ordinally;
-    // Swift's == holds canonically equivalent text equal, which would refuse a change as no change.
-    /// Whether two configs are the same, value for value.
-    static func identical(_ one: JSONValue, _ other: JSONValue) -> Bool {
-        switch (one, other) {
-        case (.string(let a), .string(let b)):
-            return a.hasSameScalars(as: b)
-        case (.array(let a), .array(let b)):
-            return a.count == b.count && zip(a, b).allSatisfy { identical($0, $1) }
-        case (.object(let a), .object(let b)):
-            let keys = a.keys.sorted { $0.ordinallyPrecedes($1) }
-            let otherKeys = b.keys.sorted { $0.ordinallyPrecedes($1) }
-            return keys.count == otherKeys.count && zip(keys, otherKeys).allSatisfy { key, otherKey in
-                guard key.hasSameScalars(as: otherKey), let value = a[key], let otherValue = b[otherKey] else { return false }
-                return identical(value, otherValue)
-            }
-        default:
-            return one == other
-        }
-    }
-
     /// The collection a connector tool works in: the one named, else the active one.
     func targetCollection(_ arguments: ControlArguments) -> String {
         arguments.string("collection") ?? state.activeCollection
@@ -158,7 +137,7 @@ extension ControlTools {
         let after = config ?? current.config
         // "Unchanged" compares the configs themselves, not the rendered lines: every difference is a
         // change, whether or not a line can show it.
-        let reconfigured = !ControlTools.identical(after, current.config)
+        let reconfigured = after != current.config
         guard renamed || reconfigured else { return .refused(ControlTools.unchangedError(shownName)) }
         let changes = ControlMasking.changeLines(from: current.config, to: after, exposure: .dialog)
         let active = collection == state.activeCollection
