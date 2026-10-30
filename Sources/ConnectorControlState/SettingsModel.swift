@@ -5,6 +5,8 @@ import ConnectorControlCore
 /// SettingsView state: three tabs, every toggle, path, and button.
 /// Pass-through settings are computed properties that write the seam and send
 /// objectWillChange (the C# Raise()).
+///
+/// Mirror: windows/src/ConnectorControl.Core/State/SettingsModel.cs
 @MainActor
 public final class SettingsModel: ObservableObject {
     public static let generalTab = "General"

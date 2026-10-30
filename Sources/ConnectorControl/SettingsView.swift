@@ -192,10 +192,7 @@ struct SettingsView: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         if let message = model.commandLineToolMessage {
-                            Text(message)
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                                .fixedSize(horizontal: false, vertical: true)
+                            FailureLine(message)
                         }
                     } control: {
                         Button(model.commandLineToolButton) { model.commandLineToolAction() }

@@ -12,6 +12,8 @@ import ConnectorControlCore
 /// an optional parse or lookup that may legitimately find nothing returns
 /// `nil`; a sheet-style confirmation flow reports success as `Bool` and
 /// publishes its own error separately.
+///
+/// Mirror: windows/src/ConnectorControl.Core/State/AppState.cs
 @MainActor
 public final class AppState: ObservableObject {
     // MARK: - Strings

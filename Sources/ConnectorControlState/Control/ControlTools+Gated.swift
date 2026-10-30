@@ -417,7 +417,7 @@ extension ControlTools {
         /// The file's name, escaped for the app's quotes.
         let file: String
         let document: CollectionDocument
-        /// What the question cannot show, the document's masked values among them, these stand for.
+        /// The bytes that stand for what the question cannot show, the document's masked values among them.
         let bytes: Data
     }
 
