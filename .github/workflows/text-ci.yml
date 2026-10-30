@@ -1,0 +1,28 @@
+# Checks that hold for every file in the repo, so it runs on every push with no path filter.
+# Today that is one rule: hyphens, never em-dashes (scripts/tests/no-em-dash.sh).
+name: Text CI
+
+on:
+  push:
+    branches: ['**']
+
+permissions:
+  contents: read
+
+# A newer push to the same branch supersedes a run still going.
+concurrency:
+  group: text-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  text:
+    name: No em-dashes
+    # ubuntu-24.04 is pinned deliberately, as in the other workflows.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: No em-dashes
+        shell: bash
+        run: scripts/tests/no-em-dash.sh
