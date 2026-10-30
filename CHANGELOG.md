@@ -14,6 +14,16 @@ removing the sub-heading. The release build drops any sub-heading that
 never got a bullet from the notes it ships, and fails if no sub-heading
 has one.
 
+## v1.5.2
+
+### macOS
+
+### Windows
+
+### Both platforms
+
+### Release pipeline
+
 ## v1.5.1
 
 ### macOS
