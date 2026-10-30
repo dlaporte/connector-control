@@ -437,7 +437,7 @@ public class StringCatalogTests
         actual["CollectionsModel.publishedPill"] = CollectionsModel.PublishedPill;
         actual["CollectionsModel.readOnlyNote"] = CollectionsModel.ReadOnlyNote;
         actual["CollectionsModel.refreshButton"] = CollectionsModel.RefreshButton;
-        actual["CollectionsModel.remoteType"] = CollectionsModel.RemoteType;
+        actual["ConnectorTarget.remoteType"] = ConnectorTarget.RemoteType;
         actual["CollectionsModel.deleteCheckedButton"] = CollectionsModel.DeleteCheckedButton;
         actual["CollectionsModel.deleteCheckedInformative"] = CollectionsModel.DeleteCheckedInformative;
         actual["CollectionsModel.deleteCheckedMessage.many"] = CollectionsModel.DeleteCheckedMessage(["X", "Y", "Z"]);

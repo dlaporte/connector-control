@@ -78,7 +78,7 @@ final class ControlToolsReadTests: XCTestCase {
         XCTAssertEqual(result.text, [
             "     NAME          RUNS",
             "on   aws-mcp       aws-mcp.us-east-1.api.aws",
-            "on   github        \(CollectionsModel.target(of: github.config))",
+            "on   github        \(ConnectorTarget.target(of: github.config))",
             "on   scoutbook     scoutbook.example.com",
             "on   service-now   snow.example.com",
         ].joined(separator: "\n"))

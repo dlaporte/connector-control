@@ -91,7 +91,7 @@ public class ControlToolsReadTests
         Assert.Equal(string.Join("\n",
             "     NAME          RUNS",
             "on   aws-mcp       aws-mcp.us-east-1.api.aws",
-            $"on   github        {CollectionsModel.TargetOf(Github.Config)}",
+            $"on   github        {ConnectorTarget.TargetOf(Github.Config)}",
             "on   scoutbook     scoutbook.example.com",
             "on   service-now   snow.example.com"), result.Text);
         Assert.DoesNotContain("ghp_", result.Text, StringComparison.Ordinal);

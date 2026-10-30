@@ -222,7 +222,7 @@ public sealed partial class ControlTools
         foreach (var name in held.Mcps.Keys.Order(StringComparer.Ordinal))
         {
             var entry = held.Mcps[name];
-            var runs = CollectionsModel.TargetOf(entry.Config);
+            var runs = ConnectorTarget.TargetOf(entry.Config);
             rows.Add([entry.Enabled ? OnWord : OffWord, ControlText.EscapedName(name), runs]);
             items.Add(JsonValue.Object(
                 ("name", JsonValue.String(name)),

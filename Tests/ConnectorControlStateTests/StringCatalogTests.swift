@@ -427,7 +427,7 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionsModel.publishedPill"] = CollectionsModel.publishedPill
         actual["CollectionsModel.readOnlyNote"] = CollectionsModel.readOnlyNote
         actual["CollectionsModel.refreshButton"] = CollectionsModel.refreshButton
-        actual["CollectionsModel.remoteType"] = CollectionsModel.remoteType
+        actual["ConnectorTarget.remoteType"] = ConnectorTarget.remoteType
         actual["CollectionsModel.deleteCheckedButton"] = CollectionsModel.deleteCheckedButton
         actual["CollectionsModel.deleteCheckedInformative"] = CollectionsModel.deleteCheckedInformative
         actual["CollectionsModel.deleteCheckedMessage.many"] = CollectionsModel.deleteCheckedMessage(["X", "Y", "Z"])

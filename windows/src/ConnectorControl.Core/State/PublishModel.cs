@@ -975,7 +975,7 @@ public sealed class PublishModel : ObservableObject
     /// </summary>
     private static bool LooksLikeAPath(string argument) =>
         !Placeholder.ContainsMarker(argument)
-        && (CollectionsModel.IsExplicitPath(argument) || argument is "." or ".."
+        && (ConnectorTarget.IsExplicitPath(argument) || argument is "." or ".."
             || argument.StartsWith(".\\", StringComparison.Ordinal) || argument.StartsWith("..\\", StringComparison.Ordinal));
 
     /// <summary>A connector's recorded marks by the text each was made on, in NFC; where two share a text, the first in pointer order speaks for both.</summary>

@@ -700,7 +700,7 @@ public final class PublishModel: ObservableObject {
     private static func looksLikeAPath(_ argument: String) -> Bool {
         if Placeholder.containsMarker(argument) { return false }
         // By Unicode scalar, as the Windows mirror compares by UTF-16 unit.
-        return CollectionsModel.isExplicitPath(argument) || argument == "." || argument == ".."
+        return ConnectorTarget.isExplicitPath(argument) || argument == "." || argument == ".."
             || [".\\", "..\\"].contains { argument.unicodeScalars.starts(with: $0.unicodeScalars) }
     }
 

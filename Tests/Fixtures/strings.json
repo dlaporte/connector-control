@@ -219,7 +219,6 @@
   "CollectionsModel.publishedPill": "Published",
   "CollectionsModel.readOnlyNote": "read-only",
   "CollectionsModel.refreshButton": "Refresh",
-  "CollectionsModel.remoteType": "remote",
   "CollectionsModel.renameAction": "Rename…",
   "CollectionsModel.selectedCount": {
     "format": "{0} selected"
@@ -280,6 +279,7 @@
   "ConfigService.malformedClaudeConfigNote": "Claude’s config file is not valid JSON. Your MCP list is safe; use Backups ▸ Restore to repair the file.",
   "ConfirmationDialog.allowButton": "Allow",
   "ConfirmationDialog.dontAllowButton": "Don’t Allow",
+  "ConnectorTarget.remoteType": "remote",
   "ControlCaller.callingItselfText": {
     "format": "An app calling itself “{0}”"
   },

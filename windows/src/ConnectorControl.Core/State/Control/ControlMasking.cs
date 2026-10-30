@@ -346,7 +346,7 @@ public static class ControlMasking
         {
             return null;
         }
-        var words = CollectionsModel.ShellWords(arg);
+        var words = ConnectorTarget.ShellWords(arg);
         var shown = Arguments(words, Exposure.Masked);
         return words.Zip(shown).All(pair => Same(pair.First, pair.Second)) ? null : ControlText.Words(shown);
     }
@@ -896,7 +896,7 @@ public static class ControlMasking
     {
         var fields = new List<Field>
         {
-            new(TypeLabel, [(Raw(JsonValue.Null), CollectionsModel.RemoteType)]),
+            new(TypeLabel, [(Raw(JsonValue.Null), ConnectorTarget.RemoteType)]),
             new(UrlLabel, [(Raw(JsonValue.String(address)), Single(Url(address, exposure != Exposure.Masked), exposure))]),
         };
         var shown = new HashSet<string>(StringComparer.Ordinal) { "url" };

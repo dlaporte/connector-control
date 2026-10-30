@@ -15,7 +15,7 @@ import Foundation
 /// the command-line tool's `show --reveal` (never Claude's), revealed; the line renderers take an
 /// `Exposure`, which adds the confirmation dialog's, where an environment value shows unless its
 /// variable is named for a secret and names no program to run.
-/// Main-actor only: it reads `EditorModel.needsValue` and `CollectionsModel.remoteType`, which are.
+/// Main-actor only: it reads `EditorModel.needsValue`, which is.
 @MainActor
 public enum ControlMasking {
     /// How much a line renderer shows. `masked`: what Claude and the command-line tool see.
@@ -282,7 +282,7 @@ public enum ControlMasking {
     /// whitespace, or none of whose words changed.
     static func shellLine(_ arg: String) -> String? {
         guard arg.unicodeScalars.contains(where: { $0.properties.isWhitespace }) else { return nil }
-        let words = CollectionsModel.shellWords(arg)
+        let words = ConnectorTarget.shellWords(arg)
         let shown = arguments(words, exposure: .masked)
         return zip(words, shown).allSatisfy({ same($0, $1) }) ? nil : ControlText.words(shown)
     }
@@ -679,7 +679,7 @@ public enum ControlMasking {
     /// A connector reached by URL alone: its URL and headers.
     static func urlView(_ object: [String: JSONValue], _ address: String,
                         _ exposure: Exposure) -> (fields: [Field], shown: Set<String>) {
-        var fields = [Field(label: typeLabel, values: [(raw(.null), CollectionsModel.remoteType)]),
+        var fields = [Field(label: typeLabel, values: [(raw(.null), ConnectorTarget.remoteType)]),
                       Field(label: urlLabel, values: [(raw(.string(address)), single(url(address, reveal: exposure != .masked), exposure))])]
         var shown: Set<String> = ["url"]
         if case .object(let headers)? = object["headers"], !headers.isEmpty {
