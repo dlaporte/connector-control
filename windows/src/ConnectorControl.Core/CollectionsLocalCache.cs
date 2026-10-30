@@ -391,7 +391,7 @@ public sealed record CollectionsLocalCache
 
         /// <summary>
         /// Paths the author let travel as written in this collection's document, pressing Release
-        /// and then Publish in the sheet after reading the preview, although this machine keeps them
+        /// and then Publish in the dialog after reading the preview, although this machine keeps them
         /// back elsewhere: on another collection's list, or as a folder it binds.
         /// </summary>
         public IReadOnlySet<string> ReleasedValues
@@ -419,7 +419,7 @@ public sealed record CollectionsLocalCache
         public string? Origin { get; init; }
 
         /// <summary>
-        /// The connectors the author has reviewed for publishing, by name: what the sheet's Publish
+        /// The connectors the author has reviewed for publishing, by name: what the dialog's Publish
         /// showed them in the preview. A publish that happens on its own writes nothing about a
         /// connector outside this list, and holds for review instead. Null in a binding written
         /// before the list was kept, which the first publish after fills in from the document

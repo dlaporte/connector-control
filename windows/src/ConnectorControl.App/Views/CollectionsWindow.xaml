@@ -105,9 +105,11 @@
     <!-- A connector row: a button the width of the list, with no chrome until the pointer is over
          it, when it takes the Fluent list item's hover fill; the Mac row takes its own light
          fill. The arrow stays the arrow, as a list row's does. Its focus visual is the theme's,
-         which WPF draws only once the keyboard is in use; the Mac draws its focus ring whenever
+         set here because a style with no BasedOn does not take the Fluent Button style's setter;
+         WPF draws it only once the keyboard is in use, and the Mac draws its focus ring whenever
          the row has focus, which is each platform's own rule. -->
     <Style x:Key="ConnectorRow" TargetType="Button">
+      <Setter Property="FocusVisualStyle" Value="{DynamicResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Padding" Value="0" />

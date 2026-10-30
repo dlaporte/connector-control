@@ -3,7 +3,11 @@ using ConnectorControl.Core.Services;
 
 namespace ConnectorControl.Core.State;
 
-/// <summary>SettingsView state: three tabs, every toggle, path, and button.</summary>
+/// <summary>
+/// SettingsView state: three tabs, every toggle, path, and button.
+///
+/// Mirror: Sources/ConnectorControlState/SettingsModel.swift
+/// </summary>
 public sealed class SettingsModel : ObservableObject, IDisposable
 {
     public const string GeneralTab = "General";
@@ -387,6 +391,8 @@ public sealed class SettingsModel : ObservableObject, IDisposable
 
     public string ClaudeConfigPath => state.Service.Paths.ClaudeConfigPath;
 
+    // Platform idiom: Windows only, as AppState.RepointClaudeConfig is: Claude's config can sit in
+    // an MSIX package's virtualized AppData or in the real AppData, and the Mac has one path.
     public bool CanUseDefaultClaudeConfig => !string.IsNullOrEmpty(settings.ClaudeConfigPath);
 
     public void ChooseClaudeConfig(string path)

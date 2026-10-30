@@ -8,6 +8,8 @@ namespace ConnectorControl.Core.State;
 /// arrives from another thread comes through <see cref="AppHost.Marshal"/>.
 /// Init sequence: resolve the service, one-time ACL sweep, route the toast
 /// Restart action, reload, arm watchers.
+///
+/// Mirror: Sources/ConnectorControlState/AppState.swift
 /// </summary>
 public sealed class AppState : ObservableObject, IDisposable
 {
@@ -600,6 +602,9 @@ public sealed class AppState : ObservableObject, IDisposable
         Reload(ReloadTrigger.QuietStoreAdoption);
     }
 
+    // Platform idiom: the Mac reads Claude's config at the one path Claude uses there. On Windows
+    // the file can sit in an MSIX package's virtualized AppData as well as in the real AppData
+    // (AppPaths picks the newer), so Settings lets the user point at the right one.
     /// <summary>
     /// Settings ▸ Claude ▸ config path. A different Claude file is a fresh start against that file:
     /// first-launch import semantics (null baseline), no notifications, the store still wins any divergence.

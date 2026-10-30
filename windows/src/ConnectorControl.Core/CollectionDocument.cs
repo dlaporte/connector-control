@@ -250,7 +250,7 @@ public static class KeptValue
 }
 
 /// <summary>
-/// What the author ticked in the Publish sheet: which env values travel as values rather than as
+/// What the author ticked in the Publish dialog: which env values travel as values rather than as
 /// stripped hints, which arguments become markers, and the hint text for each.
 /// </summary>
 public sealed class PublishIntent : IEquatable<PublishIntent>
@@ -1051,7 +1051,7 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     /// for a local connector that also holds a placed mark's text somewhere unmarked that travels -
     /// another argument, the command, a shared environment value or a field the form has no widget
     /// for - since a duplicate of a marked path is that path. With <paramref name="refusingCopies"/>
-    /// false the copy travels as written instead: the Publish sheet reads such a document for what
+    /// false the copy travels as written instead: the Publish dialog reads such a document for what
     /// else it keeps back, and lists the copies itself (<see cref="CopiesOfMarkedPaths"/>).
     /// </summary>
     public static CollectionDocument Export(string name, string? author, string? origin, string exported,
@@ -1144,7 +1144,7 @@ public sealed class CollectionDocument : IEquatable<CollectionDocument>
     /// <summary>
     /// Every copy of a marked path that would travel as written, connector by connector in ordinal
     /// order: another argument, the command, a shared environment value or a field the form has no
-    /// widget for holding a placed mark's text. The exporter refuses the first; the Publish sheet
+    /// widget for holding a placed mark's text. The exporter refuses the first; the Publish dialog
     /// lists them all.
     /// </summary>
     public static IReadOnlyList<KeptValueFinding> CopiesOfMarkedPaths(IEnumerable<KeyValuePair<string, JsonValue>> connectors,

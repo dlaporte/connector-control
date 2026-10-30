@@ -770,9 +770,9 @@ public sealed partial class ControlTools
         return new ControlStep.Ready(request, Fingerprint: ContentHash.Sha256(bytes), Perform: () =>
         {
             var mark = state.AppliedServers;
-            if (state.Subscribe(document, bytes, full, arguments.String("name")) is { } refusal)
+            if (state.Subscribe(document, bytes, full, arguments.String("name")) is { } failure)
             {
-                return new ControlOutcome(ControlResult.Refusal(Shown(refusal, Path.GetFileName(full), [name])), null);
+                return new ControlOutcome(ControlResult.Refusal(Shown(failure, Path.GetFileName(full), [name])), null);
             }
             return Done([SubscribedText(shownName, file), ArrivedOffText(count)],
                 [("collection", JsonValue.String(name)), ("count", JsonValue.Int(count))],
