@@ -1636,6 +1636,17 @@ public class CollectionsModelTests
         Assert.True(model.CopyChecked("Spare", new Dictionary<string, ImportChoice> { ["alpha"] = ImportChoice.Skip }));
         Assert.Null(model.CopyConfirmation);   // a skipped clash is not counted
 
+        // Some clashes answered Skip: only what landed is counted. beta is new to Spare, alpha clashes.
+        model.SetChecked("alpha", true);
+        model.SetChecked("beta", true);
+        Assert.True(model.CopyChecked("Spare", new Dictionary<string, ImportChoice> { ["alpha"] = ImportChoice.Skip }));
+        Assert.Equal("Copied 1 connector to “Spare”", model.CopyConfirmation);   // the skipped clash is not counted
+        // Spare now holds both: replace one clash, skip the other, and the replaced one is counted.
+        model.SetChecked("alpha", true);
+        model.SetChecked("beta", true);
+        Assert.True(model.CopyChecked("Spare", new Dictionary<string, ImportChoice> { ["alpha"] = ImportChoice.Replace, ["beta"] = ImportChoice.Skip }));
+        Assert.Equal("Copied 1 connector to “Spare”", model.CopyConfirmation);   // a Replace lands, a Skip does not
+
         // A copy that does not land confirms nothing.
         model.SetChecked("alpha", true);
         h.Dialogs.NextPromptAnswer = "Spare";

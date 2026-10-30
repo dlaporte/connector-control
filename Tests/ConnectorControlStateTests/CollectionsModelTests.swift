@@ -1400,6 +1400,17 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertTrue(model.copyChecked(into: "Spare", choices: ["alpha": .skip]))
         XCTAssertNil(model.copyConfirmation, "a skipped clash is not counted")
 
+        // Some clashes answered Skip: only what landed is counted. beta is new to Spare, alpha clashes.
+        model.setChecked("alpha", true)
+        model.setChecked("beta", true)
+        XCTAssertTrue(model.copyChecked(into: "Spare", choices: ["alpha": .skip]))
+        XCTAssertEqual(model.copyConfirmation, "Copied 1 connector to \u{201C}Spare\u{201D}", "the skipped clash is not counted")
+        // Spare now holds both: replace one clash, skip the other, and the replaced one is counted.
+        model.setChecked("alpha", true)
+        model.setChecked("beta", true)
+        XCTAssertTrue(model.copyChecked(into: "Spare", choices: ["alpha": .replace, "beta": .skip]))
+        XCTAssertEqual(model.copyConfirmation, "Copied 1 connector to \u{201C}Spare\u{201D}", "a Replace lands, a Skip does not")
+
         // A copy that does not land confirms nothing.
         model.setChecked("alpha", true)
         h.dialogs.nextPromptAnswer = "Spare"

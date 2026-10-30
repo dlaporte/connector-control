@@ -172,12 +172,13 @@ public final class CollectionsModel: ObservableObject {
 
     /// What the last action AppState refused reported, cleared by the next one that succeeds, is
     /// cancelled, declined at its confirmation, or finds nothing to do. Every verb writes it, which
-    /// is what makes it the place a copy's confirmation is cleared by the next action.
+    /// is what makes it the place a copy's confirmation is cleared by the next verb run from the window
+    /// (opening Import, Export or the editor is not one).
     @Published public private(set) var lastError: String? {
         didSet { copyConfirmation = nil }
     }
 
-    /// The last copy's `copiedNote`, shown on the count line until the next action, the next tick
+    /// The last copy's `copiedNote`, shown on the count line until the next verb (see `lastError`), the next tick
     /// or another collection is chosen. Set after the copy's own `report`, which clears it.
     @Published public private(set) var copyConfirmation: String?
 

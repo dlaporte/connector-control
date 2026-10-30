@@ -195,8 +195,9 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>
     /// What the last action AppState refused reported, cleared by the next one that succeeds, is
     /// cancelled, declined at its confirmation, or finds nothing to do. Every verb writes it, which
-    /// is what makes it the place a copy's confirmation is cleared by the next action — on every
-    /// write, not only a change: most verbs write null over null.
+    /// is what makes it the place a copy's confirmation is cleared by the next verb run from the
+    /// window (opening Import, Export or the editor is not one) - on every write, not only a
+    /// change: most verbs write null over null.
     /// </summary>
     public string? LastError
     {
@@ -209,7 +210,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// The last copy's <see cref="CopiedNote"/>, shown on the count line until the next action, the
+    /// The last copy's <see cref="CopiedNote"/>, shown on the count line until the next verb (see <see cref="LastError"/>), the
     /// next tick or another collection is chosen. Set after the copy's own Report, which clears it.
     /// </summary>
     public string? CopyConfirmation
