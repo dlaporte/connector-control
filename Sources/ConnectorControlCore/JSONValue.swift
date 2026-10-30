@@ -121,6 +121,19 @@ public extension JSONValue {
         return false
     }
 
+    /// Whether the Windows reader, UTF-8 only, refuses `data` where Foundation's readers take it: UTF-16
+    /// or UTF-32, nesting past `maxNestingDepth`, or a trailing comma (`hasTrailingComma`). Claude's config
+    /// and the master list are both refused for it, so each reads alike on both platforms. A UTF-8
+    /// byte-order mark is read on both.
+    static func isRefusedByTheWindowsReader(_ data: Data) -> Bool {
+        // Either one's byte-order mark, or a zero byte among the first four, which UTF-8 JSON never has,
+        // marks UTF-16 or UTF-32; checked first, before the scans below would read their bytes as UTF-8.
+        let head = [UInt8](data.prefix(4))
+        if head.starts(with: [0xFE, 0xFF]) || head.starts(with: [0xFF, 0xFE]) || head.contains(0) { return true }
+        let text = String(decoding: data, as: UTF8.self)
+        return !nests(atMost: maxNestingDepth, text) || hasTrailingComma(text)
+    }
+
     /// Strict parse, refusing arrays and objects nested deeper than `maxNestingDepth` and a
     /// trailing comma (`hasTrailingComma`).
     static func parse(_ data: Data) throws -> JSONValue {

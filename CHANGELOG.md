@@ -26,6 +26,7 @@ has one.
 - The menu bar icon now has a name for VoiceOver - “Connector Control”, or “Connector Control: Apply Failed - Retry” when an apply is waiting to be retried - and VoiceOver no longer reads the “▾” after the collection name in the popover.
 - A change to a connector that differs only in how an accented letter is written (é as one character, or as e followed by a combining accent) is now written to Claude’s config, as it is on Windows. Before, the Mac counted the two as the same and left Claude’s config as it was.
 - Settings ▸ Claude ▸ Command-Line Tool ▸ Install now refuses while Connector Control is in a folder that can be changed without an administrator, such as `~/Applications` or Downloads, and asks you to move it to Applications. The link it makes in /usr/local/bin is on every account’s PATH, so before, another account running `connector-control` could run a tool you were able to change.
+- A master list file (mcps.json) with a trailing comma, nested more than 64 levels deep, or saved as UTF-16 or UTF-32 is now treated as unreadable, as on Windows: it’s kept aside and replaced, as any unreadable master list is. Before, the Mac read such a file while Windows, which can share it through a synced Master List Location, could not. Claude’s own config was already read this way.
 
 ### Windows
 

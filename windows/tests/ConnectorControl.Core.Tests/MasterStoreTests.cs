@@ -129,6 +129,50 @@ public class MasterStoreTests : IDisposable
         Assert.Equal(store, MasterStoreIO.Read(Url));
     }
 
+    /// <summary>A master list holding one connector whose config opens <c>depth - 6</c> arrays, so the file nests to <c>depth</c>.</summary>
+    private static string StoreText(int depth, string comma = "")
+    {
+        var arrays = new string('[', depth - 6) + new string(']', depth - 6);
+        return """{"version":2,"activeProfile":"Default","profiles":{"Default":{"mcps":{"a":"""
+            + """{"enabled":true,"lastEditView":"form","config":{"k":""" + arrays + "}" + comma + "}}}}}";
+    }
+
+    /// <summary>The master list is read as Claude's config is, and as the Mac reads both: nesting past 64, a
+    /// trailing comma, and UTF-16 or UTF-32 are refused, so the file is unreadable alike on both, and the watcher's
+    /// peek refuses what the load does. A UTF-8 byte-order mark is read.</summary>
+    [Fact]
+    public void TheMasterListIsReadAsClaudesConfigIs()
+    {
+        var refused = new (string What, byte[] Data)[]
+        {
+            ("65 deep", Encoding.UTF8.GetBytes(StoreText(65))),
+            ("a trailing comma", Encoding.UTF8.GetBytes(StoreText(7, ","))),
+            ("UTF-16", [.. Encoding.Unicode.GetPreamble(), .. Encoding.Unicode.GetBytes(StoreText(7))]),
+            ("UTF-16 without a mark", Encoding.Unicode.GetBytes(StoreText(7))),
+            ("UTF-32", [.. Encoding.UTF32.GetPreamble(), .. Encoding.UTF32.GetBytes(StoreText(7))]),
+        };
+        foreach (var (what, data) in refused)
+        {
+            File.WriteAllBytes(Url, data);
+            Assert.True(MasterStoreIO.Read(Url) is null, what);
+            Assert.True(MasterStoreIO.Load(Url).CorruptFilePath is not null, what);
+        }
+        var read = new (string What, byte[] Data)[]
+        {
+            ("64 deep", Encoding.UTF8.GetBytes(StoreText(64))),
+            ("a comma in a string", Encoding.UTF8.GetBytes(StoreText(7).Replace("\"k\"", "\",}\"", StringComparison.Ordinal))),
+            ("a byte-order mark", [0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(StoreText(7))]),
+        };
+        foreach (var (what, data) in read)
+        {
+            File.WriteAllBytes(Url, data);
+            Assert.True(MasterStoreIO.Read(Url) is not null, what);
+            var loaded = MasterStoreIO.Load(Url);
+            Assert.True(loaded.CorruptFilePath is null, what);
+            Assert.True(loaded.Store.Mcps.ContainsKey("a"), what);
+        }
+    }
+
     [Fact]
     public void UnknownActiveCollectionFallsBackToExistingCollection()
     {

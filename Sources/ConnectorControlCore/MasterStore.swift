@@ -180,7 +180,7 @@ public enum MasterStoreIO {
             let data = try Data(contentsOf: url)
             // A decoded-but-inconsistent activeCollection (hand-edited or corrupted file) is
             // self-healed by the decoder itself - see `init(version:activeCollection:collections:)`.
-            return (try JSONDecoder().decode(MasterStore.self, from: data), nil)
+            return (try decode(data), nil)
         } catch {
             let stamp = BackupTimestamp.string(from: now)
             let aside = url.deletingLastPathComponent()
@@ -205,6 +205,16 @@ public enum MasterStoreIO {
     /// or a sync tool's mid-write partial) before deciding to adopt it.
     public static func read(from url: URL) -> MasterStore? {
         guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(MasterStore.self, from: data)
+        return try? decode(data)
+    }
+
+    /// Platform idiom: JSONDecoder also reads UTF-16 and UTF-32, nesting past 64 and a trailing comma,
+    /// which the Windows reader refuses; refused here alike, as Claude's config is, so a master list
+    /// shared between the two is readable on both or on neither.
+    private static func decode(_ data: Data) throws -> MasterStore {
+        guard !JSONValue.isRefusedByTheWindowsReader(data) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "not JSON the Windows reader reads"))
+        }
+        return try JSONDecoder().decode(MasterStore.self, from: data)
     }
 }
