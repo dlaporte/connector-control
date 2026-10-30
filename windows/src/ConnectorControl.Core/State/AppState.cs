@@ -936,6 +936,21 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Saves the store, then applies it when <paramref name="touching"/> is the active collection:
+    /// Claude only runs the active collection, so only a change to that one reaches its config.
+    /// Shared by the verbs that can change what a collection runs, so none of them saves without
+    /// the second half.
+    /// </summary>
+    private void PersistAndApply(string touching)
+    {
+        PersistStore();
+        if (touching == ActiveCollection)
+        {
+            ApplyIfChanged();
+        }
+    }
+
+    /// <summary>
     /// What Claude's file was last written from, for the launch ingest: the collection and the
     /// connector names that apply wrote. In memory once the collections files are loaded, and read
     /// from this machine's cache before then - at launch the store loads first.
@@ -1971,14 +1986,10 @@ public sealed class AppState : ObservableObject, IDisposable
         sourceRetryScheduled.Remove(collection);
         SetSourceError(collection, null);
         // PersistStore re-derives what the newly bound document would change.
-        PersistStore();
         // ${COLLECTION_DIR} resolves against the folder just bound, so what Claude runs changes
         // the moment the file is found - with no second click. The dirty check keeps a locate
         // that resolves to nothing new from rewriting Claude's config for the sake of it.
-        if (collection == ActiveCollection)
-        {
-            ApplyIfChanged();
-        }
+        PersistAndApply(collection);
         RaiseAll();
         return null;
     }
@@ -2017,12 +2028,8 @@ public sealed class AppState : ObservableObject, IDisposable
         // the store it is about to write, and clearing afterwards would throw that answer away.
         SetPending(collection, null);
         notifiedSourceHashes[collection] = source.Hash;
-        PersistStore();
         // Claude only runs the active collection, so only that one reaches its config.
-        if (collection == ActiveCollection)
-        {
-            ApplyIfChanged();
-        }
+        PersistAndApply(collection);
         RaiseAll();
         return null;
     }
@@ -2055,14 +2062,10 @@ public sealed class AppState : ObservableObject, IDisposable
         SetSidecarEntry(collection, null);
         SetBinding(collection, null);
         ForgetSource(collection);
-        PersistStore();
         // The expansion above changed what the collection holds; if it is the live one, that is
         // a change to what Claude runs. Baking in the same folder the token already resolved to
         // normally leaves the two identical, and the dirty check spares the write.
-        if (collection == ActiveCollection)
-        {
-            ApplyIfChanged();
-        }
+        PersistAndApply(collection);
         RaiseAll();
     }
 
@@ -2394,13 +2397,9 @@ public sealed class AppState : ObservableObject, IDisposable
             return null;
         }
         SetSidecarEntry(collection, entry with { Provenance = provenance });
-        PersistStore();
         // Everything imported arrives off, so only a Replace over a connector that was already on
         // can change what Claude runs - and the dirty check spares the write when it doesn't.
-        if (collection == ActiveCollection)
-        {
-            ApplyIfChanged();
-        }
+        PersistAndApply(collection);
         RaiseAll();
         return null;
     }
@@ -2463,13 +2462,9 @@ public sealed class AppState : ObservableObject, IDisposable
             return null;
         }
         SetSidecarEntry(target, entry with { Provenance = provenance });
-        PersistStore();
         // Every copy arrives off, so only a Replace over a connector that was already on can
         // change what Claude runs - and the dirty check spares the write when it doesn't.
-        if (target == ActiveCollection)
-        {
-            ApplyIfChanged();
-        }
+        PersistAndApply(target);
         RaiseAll();
         return null;
     }
@@ -2713,14 +2708,10 @@ public sealed class AppState : ObservableObject, IDisposable
                 ? null : new CollectionsLocalCache.KeptRecord(departedFolders: departed, origin: origin));
         }
         // PersistStore ends in PublishIfChanged, which is what writes the document.
-        PersistStore();
         // ${COLLECTION_DIR} stands for the folder just chosen from now on, so what Claude runs
         // changes the moment publishing starts. The dirty check spares the write when nothing in
         // the collection uses the token.
-        if (collection == ActiveCollection)
-        {
-            ApplyIfChanged();
-        }
+        PersistAndApply(collection);
         RaiseAll();
         return PublishFailure(collection);
     }
@@ -2827,13 +2818,9 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             PublishError = null;
         }
-        PersistStore();
         // ${COLLECTION_DIR} has no folder here any more: Claude gets the token as written, and the
         // row's caution says why.
-        if (collection == ActiveCollection)
-        {
-            ApplyIfChanged();
-        }
+        PersistAndApply(collection);
         // After the save, so a failure here reaches the banner rather than being overwritten by it.
         if (deleteFile && folder is not null)
         {
