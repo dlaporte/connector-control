@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # notarize.sh stops an upload that gets no submission ID in time and tries again, three tries in
-# all; it fails, with Apple's log, on a verdict other than Accepted, and staples only an accepted
-# submission. It runs notarize.sh with a fake xcrun and notarytool first on PATH, so nothing reaches
+# all; it fails on a verdict other than Accepted (with Apple's log, unless Apple is still
+# processing), and staples only an accepted submission. It runs notarize.sh with a fake xcrun and notarytool first on PATH, so nothing reaches
 # Apple and nothing is signed or stapled.
 set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
@@ -59,3 +59,4 @@ check "two stalled uploads are stopped and retried, then stapled" "$(run 2 0 Acc
 check "a failed upload is retried" "$(run 0 1 Accepted)" "0 2 0 1"
 check "every upload stalls: three tries, then it fails" "$(run 3 0 Accepted)" "1 3 0 0"
 check "rejected: no retry, Apple's log printed, nothing stapled" "$(run 0 0 Invalid)" "1 1 1 0"
+check "still processing after the wait: fails without the log, nothing stapled" "$(run 0 0 'In Progress')" "1 1 0 0"

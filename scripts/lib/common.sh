@@ -29,16 +29,16 @@ windows_release_assets() { # <version> <rid>
     printf '%s\n' "ConnectorControl-$2-Setup.exe" "ConnectorControl-$1-$2-full.nupkg" "releases.$2.json"
 }
 
-# Splits the files' names into the globals `present` (already among <published>, one name per line)
-# and `missing`. A set is uploaded all or nothing: when only some are published this prints the
-# delete-asset commands to run first and returns 1, since a published asset is never replaced (a
-# re-run has rebuilt its file, and a different binary under the same name and version is exactly
-# what an update system must never see). <what> names the set in that message ("given", "win-x64").
+# Sets the global `missing` to the files' names not yet among <published> (one name per line). A
+# set is uploaded all or nothing: when only some are published this prints the delete-asset
+# commands to run first and returns 1, since a published asset is never replaced (a re-run has
+# rebuilt its file, and a different binary under the same name and version is exactly what an
+# update system must never see). <what> names the set in that message ("given", "win-x64").
 partition_assets() { # <tag> <what> <published> <file>...
     local tag=$1 what=$2 published=$3 f
+    local -a present=()
     shift 3
-    # shellcheck disable=SC2034 # read by the caller
-    present=(); missing=()
+    missing=()
     for f in "$@"; do
         if grep -qxF "$(basename "$f")" <<< "$published"; then present+=("$(basename "$f")"); else missing+=("$(basename "$f")"); fi
     done

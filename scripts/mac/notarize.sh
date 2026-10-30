@@ -106,6 +106,10 @@ for attempt in 1 2 3; do
   [ -z "$RESULT" ] || break
   if [ "$attempt" -lt 3 ]; then sleep "$RETRY_SECONDS"; fi
 done
+if [ "$RESULT" = "In Progress" ]; then
+  echo "::error::Apple was still processing $TARGET after $((WAIT_SECONDS / 60)) minutes (submission $SUBMISSION). Apple carries on regardless: re-run the job."
+  exit 1
+fi
 if [ "$RESULT" != Accepted ]; then
   echo "::error::Notarization of $TARGET is '${RESULT:-unknown}', not Accepted (submission $SUBMISSION)"
   bounded 120 "$WORK/log.json" "$NOTARYTOOL" log "$SUBMISSION" "${AUTH[@]}" || true
