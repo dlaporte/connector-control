@@ -1207,8 +1207,10 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
   the shell splits it at the space (`--config {apiKey: x}`), a value after
   `--` (`--password Basic -- x`), and a second word after a scheme word and
   its value (`--auth Token abc def` shows `def`). After `-u`, `--user` or
-  `--proxy-user`, a `name:group` pair reads as `name:•••` unless the user is
-  a number or the group is named as the user (`1000:1000`, `node:node`).
+  `--proxy-user`, a `name:group` pair reads as `name:•••` unless it is a
+  user ID with a group ID or group name (`1000:1000`, `1000:node`), or the
+  group is named as the user (`node:node`). A name such as `auth0:` reads as
+  a header named `auth`, so its value is hidden.
 - A restore asks with the names of the connectors it would put back. A
   backup someone else planted in your backups folder could carry commands
   the question doesn't show; doing that needs write access to your own
