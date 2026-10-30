@@ -20,6 +20,12 @@ public static class ClaudePublisher
     public const string ChooseClaude = "Choose the real Claude Desktop under Settings ▸ Claude.";
 
     /// <summary>
+    /// What Restart Claude says when Claude is still running after the wait for it to quit. In Core,
+    /// beside the Mac's <c>ClaudeSignature.didNotQuitMessage</c>, so the string catalog reads it.
+    /// </summary>
+    public const string DidNotQuitMessage = "Claude didn\u2019t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again.";
+
+    /// <summary>
     /// Null when <paramref name="subject"/> - the signer's distinguished name as X509Certificate.Subject
     /// renders it - names Anthropic as the organization; otherwise the user-facing reason
     /// <paramref name="fileName"/> must not be launched.

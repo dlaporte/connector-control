@@ -13,7 +13,6 @@ namespace ConnectorControl.App.Services;
 public sealed class ClaudeProcess : IClaudeProcess
 {
     public const string MainWindowTitle = "Claude";
-    public const string DidNotQuitMessage = "Claude didn’t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again.";
     public const string NotInstalledMessage = "Claude Desktop was not found on this PC.";
     /// <summary>
     /// The reason a settings.json AUMID is refused. Phrased for the user who typed it: the fix is the
@@ -151,7 +150,7 @@ public sealed class ClaudeProcess : IClaudeProcess
             var quit = await Task.Run(() => QuitAndWait(info, cancellationToken), cancellationToken).ConfigureAwait(false);
             if (!quit)
             {
-                return DidNotQuitMessage;
+                return ClaudePublisher.DidNotQuitMessage;
             }
         }
         return Launch(target, aumid);

@@ -383,8 +383,7 @@ public class StringCatalogTests
 
         actual["ClaudeProcess.notAClaudePackageError"] = "X is not a Claude Desktop package. " + ClaudePublisher.ChooseClaude;
         actual["ClaudeProcess.notInstalledMessage"] = "Claude Desktop was not found on this PC.";
-        actual["ClaudeRestarter.didNotQuitMessage"] =
-            "Claude didn’t quit (it may be showing a dialog). Quit it manually, then click Restart Claude again.";
+        actual["ClaudeRestarter.didNotQuitMessage"] = ClaudePublisher.DidNotQuitMessage;
         actual["ClaudeSignature.notFoundMessage"] = "Claude Desktop was not found at X.";
         // "Y" alone is not a parseable distinguished name, so SubjectProblem takes the
         // no-organization branch and echoes it back verbatim as the signer subject.
