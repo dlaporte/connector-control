@@ -155,7 +155,10 @@
                                  Visibility="{Binding HasUpdatesCaption, Converter={StaticResource Vis}}" />
                     </StackPanel>
                     <StackPanel Style="{StaticResource RowControls}">
-                      <Button Content="{x:Static state:SettingsModel.CheckForUpdatesTitle}" IsEnabled="{Binding UpdatesEnabled}" Click="OnCheckForUpdates" />
+                      <!-- Reads Checking… and cannot be clicked while a check runs, scheduled or asked for; the width holds
+                           while the label changes. -->
+                      <Button x:Name="CheckForUpdatesButton" Content="{Binding CheckForUpdatesButtonTitle}" MinWidth="130"
+                              IsEnabled="{Binding CanCheckForUpdates}" Click="OnCheckForUpdates" />
                     </StackPanel>
                   </Grid>
                 </Border>

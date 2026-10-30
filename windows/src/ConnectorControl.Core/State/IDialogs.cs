@@ -20,8 +20,12 @@ public interface IDialogs
     /// <summary>One-button informational dialog.</summary>
     void Inform(string message, string? informativeText);
 
-    /// <summary>Update-available dialog; true for "Install and Relaunch", false for "Later".</summary>
-    bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown);
+    /// <summary>
+    /// Update-available dialog; true for "Install and Relaunch", false for "Later". Install and Relaunch
+    /// keeps the dialog up, busy and reading "Downloading…", while it awaits <paramref name="install"/>,
+    /// which downloads the package and relaunches into it and never throws; the answer comes once it ends.
+    /// </summary>
+    bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown, Func<Task> install);
 
     /// <summary>The confirmation of a change Claude asks for, modal: Don’t Allow is the default, which Return
     /// and Escape answer, and so does closing the window. True only for Allow.</summary>

@@ -908,6 +908,7 @@ public class StringCatalogTests
         actual["SettingsModel.backupsHeader"] = SettingsModel.BackupsHeader;
         actual["SettingsModel.backupsTitle"] = SettingsModel.BackupsTitle;
         actual["SettingsModel.checkForUpdatesTitle"] = SettingsModel.CheckForUpdatesTitle;
+        actual["SettingsModel.checkingTitle"] = SettingsModel.CheckingTitle;
         actual["SettingsModel.chooseButtonTitle"] = SettingsModel.ChooseButtonTitle;
         actual["SettingsModel.chooseTitle"] = SettingsModel.ChooseTitle;
         actual["SettingsModel.claudeAppHeader"] = SettingsModel.ClaudeAppHeader;
@@ -970,6 +971,7 @@ public class StringCatalogTests
         actual["UpdateCoordinator.availableDetail"] = UpdateCoordinator.AvailableDetail("X", "Y");
         actual["UpdateCoordinator.availableHeadline"] = UpdateCoordinator.AvailableHeadline;
         actual["UpdateCoordinator.checkFailedMessage"] = UpdateCoordinator.CheckFailedMessage;
+        actual["UpdateCoordinator.downloadingTitle"] = UpdateCoordinator.DownloadingTitle;
         actual["UpdateCoordinator.installButton"] = UpdateCoordinator.InstallButton;
         actual["UpdateCoordinator.laterButton"] = UpdateCoordinator.LaterButton;
         actual["UpdateCoordinator.readyToastBody"] = UpdateCoordinator.ReadyToastBody;

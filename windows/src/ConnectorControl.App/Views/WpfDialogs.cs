@@ -42,8 +42,8 @@ public sealed class WpfDialogs : IDialogs
     public void Inform(string message, string? informativeText) =>
         ConfirmDialog.Show(ResolveOwner(), message, informativeText, "OK", null, destructive: false);
 
-    public bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown) =>
-        UpdateDialog.Show(ResolveOwner(), newVersion, currentVersion, notesMarkdown);
+    public bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown, Func<Task> install) =>
+        UpdateDialog.Show(ResolveOwner(), newVersion, currentVersion, notesMarkdown, install);
 
     public bool ConfirmChange(ConfirmationDialog dialog) => ConfirmDialog.ShowChange(ResolveOwner(), dialog);
 

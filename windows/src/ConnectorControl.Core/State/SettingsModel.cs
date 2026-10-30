@@ -20,6 +20,8 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public const string UpdatesHeader = "Updates";
     public const string AutoUpdateTitle = "Automatically download and install updates";
     public const string CheckForUpdatesTitle = "Check for Updates";
+    /// <summary>Check for Updates while a check runs. Windows only: Sparkle shows the Mac's progress.</summary>
+    public const string CheckingTitle = "Checking…";
     public const string PreviewUpdatesCaption = "Previews update to later previews and the final release.";
     public const string MasterListHeader = "Master List Location";
     public const string MasterListFooter = "Holds mcps.json and collections.json. A synced folder shares them across your PCs.";
@@ -113,6 +115,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         {
             commandLineTool.Changed += RaiseCommandLineTool;
         }
+        updates.CheckingChanged += RaiseChecking;
     }
 
     /// <summary>Called whenever the window opens: autostart is read fresh, and the install the next time it is
@@ -287,6 +290,21 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public bool HasUpdatesCaption => UpdatesCaption is not null;
 
     public Task CheckForUpdatesAsync() => updates.CheckAsync(interactive: true);
+
+    /// <summary>A check is running, scheduled or asked for. Windows only: Sparkle shows the Mac's.</summary>
+    public bool IsCheckingForUpdates => updates.IsChecking;
+
+    /// <summary>Check for Updates cannot be clicked again while a check runs, rather than silently joining it.</summary>
+    public bool CanCheckForUpdates => UpdatesEnabled && !updates.IsChecking;
+
+    public string CheckForUpdatesButtonTitle => updates.IsChecking ? CheckingTitle : CheckForUpdatesTitle;
+
+    private void RaiseChecking()
+    {
+        Raise(nameof(IsCheckingForUpdates));
+        Raise(nameof(CanCheckForUpdates));
+        Raise(nameof(CheckForUpdatesButtonTitle));
+    }
 
     // MARK: Storage
 
@@ -542,6 +560,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public void Dispose()
     {
         state.PropertyChanged -= OnStateChanged;
+        updates.CheckingChanged -= RaiseChecking;
         if (commandLineTool is not null)
         {
             commandLineTool.Changed -= RaiseCommandLineTool;

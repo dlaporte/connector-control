@@ -88,13 +88,22 @@ public class DialogTests
     {
         WpfApp.Invoke(() =>
         {
-            var dialog = new UpdateDialog("1.3.0", "1.2.2", "## Fixes\n- one\n- two");
+            var dialog = new UpdateDialog("1.3.0", "1.2.2", "## Fixes\n- one\n- two", () => Task.CompletedTask);
             Assert.Equal(UpdateCoordinator.AvailableHeadline, dialog.Headline.Text);
             Assert.Equal("Connector Control 1.3.0 is now available — you have 1.2.2. Would you like to install it now?", dialog.Detail.Text);
             Assert.NotNull(dialog.Notes.Document);
             Assert.True(dialog.Notes.Document.Blocks.Count >= 2);   // a heading and a list
             Assert.Equal("Install and Relaunch", dialog.InstallButton.Content);
             Assert.Equal("Later", dialog.LaterButton.Content);
+
+            // Install and Relaunch's busy state: both buttons off, Install and Relaunch reading Downloading….
+            dialog.SetBusy(true);
+            Assert.Equal(UpdateCoordinator.DownloadingTitle, dialog.InstallButton.Content);
+            Assert.False(dialog.InstallButton.IsEnabled);
+            Assert.False(dialog.LaterButton.IsEnabled);
+            dialog.SetBusy(false);
+            Assert.Equal("Install and Relaunch", dialog.InstallButton.Content);
+            Assert.True(dialog.LaterButton.IsEnabled);
         });
     }
 
@@ -109,7 +118,7 @@ public class DialogTests
             const string notes = "Fixes.\n\n![beacon](https://example.invalid/b.png) ![share](file://host.invalid/share/x.png)\n\n"
                 + "[![nested](file://host.invalid/share/y.png)](https://example.invalid/)\n\n<img src=\"file://host.invalid/share/z.png\">\n\n"
                 + "![referenced][r]\n\n[r]: file://host.invalid/share/r.png\n";
-            var dialog = new UpdateDialog("1.3.0", "1.2.2", notes);
+            var dialog = new UpdateDialog("1.3.0", "1.2.2", notes, () => Task.CompletedTask);
             var everything = LogicalDescendants(dialog.Notes.Document).ToList();
             Assert.DoesNotContain(everything, element => element is InlineUIContainer or BlockUIContainer or Image or Button);
             var text = new TextRange(dialog.Notes.Document.ContentStart, dialog.Notes.Document.ContentEnd).Text;

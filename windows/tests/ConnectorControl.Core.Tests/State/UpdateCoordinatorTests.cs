@@ -119,6 +119,70 @@ public class UpdateCoordinatorTests
         Assert.Empty(notifier.Sent);
     }
 
+    /// <summary>
+    /// Install and Relaunch keeps the dialog up while the package downloads: the download runs inside the
+    /// offer, as the dialog's busy state, and so does ApplyAndRestart, so the dialog is never gone before
+    /// the app relaunches. Windows only: Sparkle shows the Mac's progress.
+    /// </summary>
+    [Fact]
+    public async Task InstallDownloadsAndRestartsWhileTheDialogIsStillUp()
+    {
+        updater.Next = Update();
+        dialogs.NextOffer = true;
+        var duringOffer = (Downloads: -1, Restarts: -1);
+        dialogs.AfterInstall = () => duringOffer = (updater.Downloads, updater.AppliedAndRestarted);
+        using var coordinator = Coordinator();
+        Assert.Equal(UpdateOutcome.Installing, await coordinator.CheckAsync(interactive: true));
+        Assert.Equal((1, 1), duringOffer);
+        Assert.Equal(1, updater.AppliedAndRestarted);
+        Assert.Empty(dialogs.Informs);
+    }
+
+    /// <summary>A failed download closes the busy dialog, then says why with the failure dialogs it always used.</summary>
+    [Fact]
+    public async Task AFailedDownloadClosesTheDialogAndThenSaysWhy()
+    {
+        updater.Next = Update();
+        dialogs.NextOffer = true;
+        updater.DownloadFailure = new UpdateVerificationException("not signed by this app's publisher");
+        using var coordinator = Coordinator();
+        Assert.Equal(UpdateOutcome.Failed, await coordinator.CheckAsync(interactive: true));
+        Assert.Equal(new FakeDialogs.InformCall("The update was not installed.", "not signed by this app's publisher"), Assert.Single(dialogs.Informs));
+        Assert.Equal(0, updater.AppliedAndRestarted);
+
+        updater.DownloadFailure = new HttpRequestException("connection reset");
+        Assert.Equal(UpdateOutcome.Failed, await coordinator.CheckAsync(interactive: true));
+        Assert.Equal(new FakeDialogs.InformCall("Couldn’t check for updates.", "connection reset"), dialogs.Informs[1]);
+        Assert.Equal(0, updater.AppliedAndRestarted);
+    }
+
+    /// <summary>
+    /// A check is in flight from the moment it starts until its slot is cleared on the UI thread, and says so each time
+    /// that changes, so Check for Updates can read Checking… and refuse a second click rather than silently join.
+    /// </summary>
+    [Fact]
+    public async Task IsCheckingFollowsTheInFlightCheck()
+    {
+        settings.AutoUpdate = true;
+        var ui = new MarshalQueue();
+        var host = new AppHost(ui.Post, delays.Add, () => DateTime.UtcNow, a => a());
+        updater.Next = Update();
+        using var coordinator = new UpdateCoordinator(updater, settings, notifier, dialogs, host);
+        var changes = new List<bool>();
+        coordinator.CheckingChanged += () => changes.Add(coordinator.IsChecking);
+        Assert.False(coordinator.IsChecking);
+
+        var check = coordinator.CheckAsync(interactive: false);
+        Assert.True(coordinator.IsChecking);
+        Assert.Equal(1, ui.PumpOne());   // the staging block: still checking
+        Assert.True(coordinator.IsChecking);
+        await ui.WhenPostedAsync().WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken);
+        ui.Pump();   // the clear
+        Assert.False(coordinator.IsChecking);
+        Assert.Equal([true, false], changes);
+        Assert.Equal(UpdateOutcome.StagedForQuit, await check.WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken));
+    }
+
     [Fact]
     public async Task LaterDefersWithoutDownloading()
     {

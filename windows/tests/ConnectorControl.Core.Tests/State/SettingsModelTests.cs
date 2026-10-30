@@ -135,6 +135,42 @@ public class SettingsModelTests
         Assert.Equal("You're up to date.", rig.H.Dialogs.Informs[0].Message);
     }
 
+    /// <summary>While a check runs, Check for Updates reads Checking… and cannot be clicked, and says so as it changes.
+    /// Windows only: Sparkle shows the Mac's progress.</summary>
+    [Fact]
+    public async Task CheckForUpdatesReadsCheckingAndIsDisabledWhileACheckRuns()
+    {
+        using var rig = new Rig();
+        rig.Updater.CheckGate = new TaskCompletionSource<bool>();
+        var raised = new List<string?>();
+        rig.Model.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        Assert.True(rig.Model.CanCheckForUpdates);
+        Assert.Equal(SettingsModel.CheckForUpdatesTitle, rig.Model.CheckForUpdatesButtonTitle);
+
+        var check = rig.Model.CheckForUpdatesAsync();
+        Assert.True(rig.Model.IsCheckingForUpdates);
+        Assert.False(rig.Model.CanCheckForUpdates);
+        Assert.Equal("Checking…", rig.Model.CheckForUpdatesButtonTitle);
+        Assert.Contains(nameof(SettingsModel.CanCheckForUpdates), raised);
+        Assert.Contains(nameof(SettingsModel.CheckForUpdatesButtonTitle), raised);
+
+        raised.Clear();
+        rig.Updater.CheckGate.SetResult(true);
+        await check.WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken);
+        Assert.False(rig.Model.IsCheckingForUpdates);
+        Assert.True(rig.Model.CanCheckForUpdates);
+        Assert.Equal(SettingsModel.CheckForUpdatesTitle, rig.Model.CheckForUpdatesButtonTitle);
+        Assert.Contains(nameof(SettingsModel.CanCheckForUpdates), raised);
+    }
+
+    [Fact]
+    public void CheckForUpdatesStaysDisabledWhereThereIsNoUpdater()
+    {
+        using var rig = new Rig();
+        rig.Updater.IsAvailable = false;
+        Assert.False(rig.Model.CanCheckForUpdates);
+    }
+
     [Fact]
     public void BackupKeepCountClampsAndRebuildsTheService()
     {

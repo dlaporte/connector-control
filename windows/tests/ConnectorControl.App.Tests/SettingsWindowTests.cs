@@ -426,6 +426,31 @@ public class SettingsWindowTests
         });
     }
 
+    /// <summary>Check for Updates reads Checking… and cannot be clicked while a check runs. Windows only: Sparkle shows the Mac's.</summary>
+    [Fact]
+    public void CheckForUpdatesReadsCheckingWhileACheckRuns()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var updater = new FakeUpdater { CheckGate = new TaskCompletionSource<bool>() };
+        var services = new PlatformServices(h.Settings, new FakeClaudeInstall(), h.Claude, h.Notifier, new FakeAutostart(), updater);
+        using var updates = new UpdateCoordinator(updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            var window = new SettingsWindow(state, services, updates);
+            Laid(window, () =>
+            {
+                Assert.Equal(SettingsModel.CheckForUpdatesTitle, window.CheckForUpdatesButton.Content);
+                Assert.True(window.CheckForUpdatesButton.IsEnabled);
+                _ = window.Model.CheckForUpdatesAsync();
+                WindowTestSupport.Layout(window, new Size(480, 560));
+                Assert.Equal(SettingsModel.CheckingTitle, window.CheckForUpdatesButton.Content);
+                Assert.False(window.CheckForUpdatesButton.IsEnabled);
+            });
+        });
+        updater.CheckGate.SetResult(true);
+    }
+
     /// <summary>A footer line is one sentence: the family's tools, the link's title as a hyperlink, "or run", and the
     /// command in its own run, set apart as every command is.</summary>
     [Fact]

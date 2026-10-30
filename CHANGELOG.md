@@ -26,6 +26,7 @@ has one.
 ### Windows
 
 - Pressing Escape to close the editor’s Authentication drop-down now closes just the drop-down; before, it closed the whole editor and lost your unsaved changes. Escape in the flyout’s collection menu likewise closes only the menu. With nothing open, Escape still cancels the editor and dismisses the flyout.
+- Check for Updates now reads “Checking…” and can’t be clicked while a check runs, instead of looking as if nothing happened. After Install and Relaunch, the update dialog stays open reading “Downloading…” until Connector Control relaunches, so the app no longer just vanishes; if the download fails, the dialog closes and says why.
 
 ### Both platforms
 

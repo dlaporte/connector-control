@@ -49,12 +49,22 @@ public sealed class FakeDialogs : IDialogs
 
     public void Inform(string message, string? informativeText) => Informs.Add(new InformCall(message, informativeText));
 
-    public bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown)
+    /// <summary>Run once Install and Relaunch's work has finished, before the dialog answers: what is true while it is still up.</summary>
+    public Action? AfterInstall { get; set; }
+
+    public bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown, Func<Task> install)
     {
         Offers.Add(new OfferCall(newVersion, currentVersion, notesMarkdown));
         if (OfferFailure is not null)
         {
             throw OfferFailure;
+        }
+        if (NextOffer)
+        {
+            // The dialog awaits this with its message loop running; here a blocking wait stands in, which is safe
+            // because FakeUpdater finishes (or throws) synchronously and the rigs that accept an offer marshal inline.
+            install().GetAwaiter().GetResult();
+            AfterInstall?.Invoke();
         }
         return NextOffer;
     }

@@ -1036,6 +1036,9 @@
   "SettingsModel.backupsHeader": "Backups",
   "SettingsModel.backupsTitle": "Backups of each file",
   "SettingsModel.checkForUpdatesTitle": "Check for Updates",
+  "SettingsModel.checkingTitle": {
+    "win": "Checking…"
+  },
   "SettingsModel.chooseButtonTitle": "Choose…",
   "SettingsModel.chooseTitle": "Choose",
   "SettingsModel.claudeAppHeader": "Claude App",
@@ -1159,6 +1162,9 @@
   },
   "UpdateCoordinator.checkFailedMessage": {
     "win": "Couldn’t check for updates."
+  },
+  "UpdateCoordinator.downloadingTitle": {
+    "win": "Downloading…"
   },
   "UpdateCoordinator.installButton": {
     "win": "Install and Relaunch"

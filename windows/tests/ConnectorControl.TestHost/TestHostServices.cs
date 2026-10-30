@@ -46,7 +46,7 @@ internal sealed class TestHostDialogs : IDialogs
     {
     }
 
-    public bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown) => false;
+    public bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown, Func<Task> install) => false;
 
     public bool ConfirmChange(ConfirmationDialog dialog) => false;
 }
