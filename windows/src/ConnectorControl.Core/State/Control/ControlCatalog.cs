@@ -120,7 +120,7 @@ public sealed partial class ControlTools
         Tool("get_settings", ControlGateClass.Read, usage: "settings", group: SettingsGroup,
              description: "List Connector Control's settings and their values. The keys are the ones set_setting takes."),
         Tool("set_setting", ControlGateClass.Direct, idempotent: true, usage: "settings set <key> <value>", group: SettingsGroup,
-             description: "Change a setting. Takes a key from get_settings and on or off, or a number from 5 to 100 for backups-to-keep. Only the user can change claude-integration and confirm-claude-changes.",
+             description: "Change a setting. Takes a key from get_settings and on or off, or a number from 5 to 100 for backups-to-keep. Only the user can change claude-integration, confirm-claude-changes, notify-external-changes and automatic-updates.",
              properties: [("key", Choice(ControlSettingKey.All, "Which setting.")),
                           ("value", Text("on or off; for backups-to-keep, a number from 5 to 100."))],
              required: ["key", "value"]),

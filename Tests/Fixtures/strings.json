@@ -636,7 +636,7 @@
   "ControlTools.set_connector_enabled.cliUsage": "enable <name> | disable <name>",
   "ControlTools.set_connector_enabled.description": "Turn a connector on or off. Acts on the active collection, the one Claude runs, as Connector Control's own switches do; Claude picks the change up when it restarts.",
   "ControlTools.set_setting.cliUsage": "settings set <key> <value>",
-  "ControlTools.set_setting.description": "Change a setting. Takes a key from get_settings and on or off, or a number from 5 to 100 for backups-to-keep. Only the user can change claude-integration and confirm-claude-changes.",
+  "ControlTools.set_setting.description": "Change a setting. Takes a key from get_settings and on or off, or a number from 5 to 100 for backups-to-keep. Only the user can change claude-integration, confirm-claude-changes, notify-external-changes and automatic-updates.",
   "ControlTools.settingChangedText": {
     "format": "{0} is now {1}."
   },

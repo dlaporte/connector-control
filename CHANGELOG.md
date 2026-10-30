@@ -73,6 +73,9 @@ bullet once the section is about to ship.
   Allow the default; it always asks before Claude restarts itself. Turning a connector on or off and
   switching collections don't ask: a notification says what changed, as one does for every change
   Claude makes while confirmations are off.
+- Only you can change the Claude integration, the confirmation, the notice of changes synced in
+  from another machine, and automatic updates, in Settings or with the command-line tool; Claude
+  can change the other settings.
 - The connector-control command-line tool ships inside the app on both platforms, for scripts and
   MDM; `connector-control help` lists its commands. Settings ▸ Claude ▸ Command-Line Tool puts it in
   your PATH: on a Mac a link in /usr/local/bin, with an administrator prompt when that folder isn't

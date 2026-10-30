@@ -168,7 +168,7 @@ final class ControlToolsDirectTests: XCTestCase {
         XCTAssertFalse(rig.h.settings.confirmBeforeQuit)
         XCTAssertEqual(rig.call("set_setting", ["key": .string("launch-at-login"), "value": .string("ON")])?.isError, false)
         XCTAssertTrue(rig.autostart.enabled)
-        XCTAssertEqual(rig.call("set_setting", ["key": .string("automatic-updates"), "value": .string("true")])?.isError, false)
+        XCTAssertEqual(rig.call("set_setting", ["key": .string("automatic-updates"), "value": .string("true")], as: .cli)?.isError, false)
         XCTAssertTrue(rig.settingsModel.autoUpdate)
         XCTAssertEqual(rig.call("set_setting", ["key": .string("backups-to-keep"), "value": .string("30")])?.text,
                        ControlTools.settingChangedText("backups-to-keep", "30"))
@@ -189,12 +189,22 @@ final class ControlToolsDirectTests: XCTestCase {
 
     func testOnlyTheUserChangesWhatClaudeIsAllowedToDo() throws {
         let rig = ControlRig(); defer { rig.dispose() }
+        let notifyBefore = rig.h.settings.notifyExternalChanges, updatesBefore = rig.settingsModel.autoUpdate
         for key in [ControlSettingKey.claudeIntegration, ControlSettingKey.confirmClaudeChanges] {
             XCTAssertEqual(rig.call("set_setting", ["key": .string(key), "value": .string("off")]),
                            .refusal(ControlTools.settingNotForClaudeError(key)))
         }
+        // Claude may not silence the notice of synced-in changes or stop updates, either way.
+        for key in [ControlSettingKey.notifyExternalChanges, ControlSettingKey.automaticUpdates] {
+            for value in ["on", "off"] {
+                XCTAssertEqual(rig.call("set_setting", ["key": .string(key), "value": .string(value)]),
+                               .refusal(ControlTools.settingNotForClaudeError(key)))
+            }
+        }
         XCTAssertTrue(rig.h.settings.claudeIntegrationEnabled)
         XCTAssertTrue(rig.h.settings.confirmClaudeChanges)
+        XCTAssertEqual(rig.h.settings.notifyExternalChanges, notifyBefore)
+        XCTAssertEqual(rig.settingsModel.autoUpdate, updatesBefore)
         XCTAssertEqual(rig.call("set_setting", ["key": .string("confirm-claude-changes"), "value": .string("off")], as: .cli)?.isError, false)
         XCTAssertFalse(rig.h.settings.confirmClaudeChanges)
         XCTAssertEqual(rig.call("set_setting", ["key": .string("claude-integration"), "value": .string("off")], as: .cli)?.text,

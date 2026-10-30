@@ -566,7 +566,8 @@ commands:
 Claude can't publish a collection or stop publishing one, Stop Syncing, or
 Make Local Copy; those stay in the Collections window. It can't change
 `claude-integration` or `confirm-claude-changes`, the two settings that
-decide what it may do. And it never sees a secret: for an environment
+decide what it may do, or `notify-external-changes` and
+`automatic-updates`, which keep you told about changes and updates. And it never sees a secret: for an environment
 variable or a header it sees whether a value is set, never the value, and an
 argument that reads as a secret — a value after a flag named like a secret,
 a `NAME=value` word whose name is a secret's, a URL's password or a query value, even inside a
@@ -626,6 +627,12 @@ The confirmation covers Claude asking Connector Control. A change made
 directly in a file Connector Control watches — the master list, a subscribed
 collection's document — is not Claude asking, and arrives under the usual
 rules for outside changes (see How it works and Syncing across machines).
+
+The question is asked only on the machine where Claude made the change,
+and the switch is set on each machine. When your master list is in a synced
+folder, a change Claude makes there — adding a connector, turning one off,
+switching collections — reaches every machine sharing that folder, and
+arrives on the others as an outside change.
 
 ### The command line
 
@@ -717,9 +724,9 @@ Options: --json  --version  --help
 `launch-at-login`, `confirm-restart`, `confirm-quit`,
 `notify-external-changes`, `automatic-updates`, `claude-integration` and
 `confirm-claude-changes` take `on` or `off`, and `backups-to-keep` a number
-from 5 to 100. Claude can change any of them but two without asking; only
-you can change `claude-integration` and `confirm-claude-changes`, in Settings
-or here.
+from 5 to 100. Claude can change the others without asking; only you can
+change `claude-integration`, `confirm-claude-changes`,
+`notify-external-changes` and `automatic-updates`, in Settings or here.
 
 `show <name> --reveal` shows a connector with its secrets as written. Only
 the command line can reveal; Claude always sees them masked.

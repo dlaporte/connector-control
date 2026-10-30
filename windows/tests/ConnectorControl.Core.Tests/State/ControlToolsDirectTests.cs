@@ -210,7 +210,7 @@ public class ControlToolsDirectTests
         Assert.False(rig.H.Settings.ConfirmBeforeQuit);
         Assert.False(rig.Call("set_setting", Args(("key", Text("launch-at-login")), ("value", Text("ON"))))?.IsError);
         Assert.True(rig.Autostart.Enabled);
-        Assert.False(rig.Call("set_setting", Args(("key", Text("automatic-updates")), ("value", Text("true"))))?.IsError);
+        Assert.False(rig.Call("set_setting", Args(("key", Text("automatic-updates")), ("value", Text("true"))), new ControlCaller.Cli())?.IsError);
         Assert.True(rig.H.Settings.AutoUpdate);
         Assert.Equal(ControlTools.SettingChangedText("backups-to-keep", "30"),
             rig.Call("set_setting", Args(("key", Text("backups-to-keep")), ("value", Text("30"))))?.Text);
@@ -236,13 +236,25 @@ public class ControlToolsDirectTests
     public void OnlyTheUserChangesWhatClaudeIsAllowedToDo()
     {
         using var rig = new ControlRig();
+        bool notifyBefore = rig.H.Settings.NotifyExternalChanges, updatesBefore = rig.H.Settings.AutoUpdate;
         foreach (var key in new[] { ControlSettingKey.ClaudeIntegration, ControlSettingKey.ConfirmClaudeChanges })
         {
             Assert.Equal(ControlResult.Refusal(ControlTools.SettingNotForClaudeError(key)),
                 rig.Call("set_setting", Args(("key", Text(key)), ("value", Text("off")))));
         }
+        // Claude may not silence the notice of synced-in changes or stop updates, either way.
+        foreach (var key in new[] { ControlSettingKey.NotifyExternalChanges, ControlSettingKey.AutomaticUpdates })
+        {
+            foreach (var value in new[] { "on", "off" })
+            {
+                Assert.Equal(ControlResult.Refusal(ControlTools.SettingNotForClaudeError(key)),
+                    rig.Call("set_setting", Args(("key", Text(key)), ("value", Text(value)))));
+            }
+        }
         Assert.True(rig.H.Settings.ClaudeIntegrationEnabled);
         Assert.True(rig.H.Settings.ConfirmClaudeChanges);
+        Assert.Equal(notifyBefore, rig.H.Settings.NotifyExternalChanges);
+        Assert.Equal(updatesBefore, rig.H.Settings.AutoUpdate);
         var cli = new ControlCaller.Cli();
         Assert.False(rig.Call("set_setting", Args(("key", Text("confirm-claude-changes")), ("value", Text("off"))), cli)?.IsError);
         Assert.False(rig.H.Settings.ConfirmClaudeChanges);

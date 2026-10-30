@@ -262,6 +262,9 @@ public enum ControlSettingKey {
                              automaticUpdates, backupsToKeep, claudeIntegration, confirmClaudeChanges]
 
     /// Only the user changes these, in Settings or with the command-line tool: Claude may not
-    /// widen what it is allowed to do.
-    public static func isUserOnly(_ key: String) -> Bool { key == claudeIntegration || key == confirmClaudeChanges }
+    /// widen what it is allowed to do, silence the notice of changes synced in from another
+    /// machine, or stop the app updating.
+    public static func isUserOnly(_ key: String) -> Bool {
+        key == claudeIntegration || key == confirmClaudeChanges || key == notifyExternalChanges || key == automaticUpdates
+    }
 }

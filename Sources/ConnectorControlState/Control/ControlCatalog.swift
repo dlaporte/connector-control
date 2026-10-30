@@ -114,7 +114,7 @@ extension ControlTools {
         tool("get_settings", .read, usage: "settings", group: settingsGroup,
              description: "List Connector Control's settings and their values. The keys are the ones set_setting takes."),
         tool("set_setting", .direct, idempotent: true, usage: "settings set <key> <value>", group: settingsGroup,
-             description: "Change a setting. Takes a key from get_settings and on or off, or a number from 5 to 100 for backups-to-keep. Only the user can change claude-integration and confirm-claude-changes.",
+             description: "Change a setting. Takes a key from get_settings and on or off, or a number from 5 to 100 for backups-to-keep. Only the user can change claude-integration, confirm-claude-changes, notify-external-changes and automatic-updates.",
              properties: ["key": choice(ControlSettingKey.all, "Which setting."),
                           "value": text("on or off; for backups-to-keep, a number from 5 to 100.")],
              required: ["key", "value"]),

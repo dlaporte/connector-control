@@ -243,6 +243,8 @@ public static class ControlSettingKey
                                                         AutomaticUpdates, BackupsToKeep, ClaudeIntegration, ConfirmClaudeChanges];
 
     /// <summary>Only the user changes these, in Settings or with the command-line tool: Claude may not
-    /// widen what it is allowed to do.</summary>
-    public static bool IsUserOnly(string key) => key == ClaudeIntegration || key == ConfirmClaudeChanges;
+    /// widen what it is allowed to do, silence the notice of changes synced in from another
+    /// machine, or stop the app updating.</summary>
+    public static bool IsUserOnly(string key) =>
+        key == ClaudeIntegration || key == ConfirmClaudeChanges || key == NotifyExternalChanges || key == AutomaticUpdates;
 }
