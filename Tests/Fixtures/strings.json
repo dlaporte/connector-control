@@ -1323,6 +1323,11 @@
       "format": "The update package entry \"{0}\" declares {1} bytes but holds {2}; the update was not installed."
     }
   },
+  "UpdateRefusals.stubNotAProgram": {
+    "win": {
+      "format": "The update package contains \"{0}\", a launcher that is not a program; the update was not installed."
+    }
+  },
   "UpdateRefusals.unknownInstalledVersion": {
     "win": {
       "format": "ConnectorControl.exe inside the update is version {0}, but the installed version could not be read; the update was not installed."

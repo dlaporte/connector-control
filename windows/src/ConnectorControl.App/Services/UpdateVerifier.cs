@@ -55,7 +55,11 @@ public static class UpdateVerifier
         // The launcher vpk pack adds as "<pack title>_ExecutionStub.exe" ("Connector Control_ExecutionStub.exe": a space,
         // so the prefix above misses it). Every apply puts it at the install root, where it starts Update.exe. vpk signs
         // it with this app's certificate, as v1.5.0's package shows.
-        || fileName.EndsWith("_ExecutionStub.exe", StringComparison.OrdinalIgnoreCase);
+        || IsExecutionStub(fileName);
+
+    /// <summary>Whether <paramref name="fileName"/> names a launcher stub, which Velopack extracts to the install root,
+    /// dropping the suffix, at every apply.</summary>
+    private static bool IsExecutionStub(string fileName) => fileName.EndsWith("_ExecutionStub.exe", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>What the running app's signature says about who may sign an update; read once per download.
     /// <see cref="Subject"/> is its certificate's full subject DN, null when its signature could not be validated.</summary>
@@ -115,6 +119,12 @@ public static class UpdateVerifier
                 var magicLength = ReadMagic(content, magic);
                 if (!IsMZ(magic.AsSpan(0, magicLength)))
                 {
+                    // Velopack writes a launcher stub over the install-root file of its name at apply, whatever it
+                    // holds: one that is not a program would break the root Update.exe or the launcher, unchecked.
+                    if (IsExecutionStub(name))
+                    {
+                        return UpdateRefusals.StubNotAProgram(entry.FullName);
+                    }
                     var counted = magicLength + CountBytes(content, buffer);
                     if (counted != entry.Length)
                     {

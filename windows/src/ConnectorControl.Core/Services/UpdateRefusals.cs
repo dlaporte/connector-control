@@ -39,6 +39,10 @@ public static class UpdateRefusals
     public static string SizeMismatch(string entryName, long declared, long actual) =>
         $"The update package entry \"{entryName}\" declares {declared} bytes but holds {actual}{NotInstalledSuffix}";
 
+    /// <summary>A launcher stub entry that is not a program: Velopack would still write it over the install root's file.</summary>
+    public static string StubNotAProgram(string entryName) =>
+        $"The update package contains \"{entryName}\", a launcher that is not a program{NotInstalledSuffix}";
+
     public static string NotValidlySigned(string file) => $"{file} is not validly signed{NotInstalledSuffix}";
 
     public static string SignedByAnother(string file, string subject) =>

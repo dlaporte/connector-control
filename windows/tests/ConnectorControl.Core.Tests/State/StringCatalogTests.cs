@@ -296,6 +296,7 @@ public class StringCatalogTests
         ["UpdateRefusals.signedByAnother"] = ["X", "Y"],
         ["UpdateRefusals.signedByUntrusted"] = ["X", "Y"],
         ["UpdateRefusals.sizeMismatch"] = ["X", "3", "7"],
+        ["UpdateRefusals.stubNotAProgram"] = ["X"],
         ["UpdateRefusals.unknownInstalledVersion"] = ["X"],
         ["UpdateRefusals.unreadable"] = ["X"],
         ["UpdateRefusals.versionMismatch"] = ["X", "Y"],
@@ -1045,6 +1046,7 @@ public class StringCatalogTests
         actual["UpdateRefusals.signedByAnother"] = UpdateRefusals.SignedByAnother("X", "Y");
         actual["UpdateRefusals.signedByUntrusted"] = UpdateRefusals.SignedByUntrusted("X", "Y");
         actual["UpdateRefusals.sizeMismatch"] = UpdateRefusals.SizeMismatch("X", 3, 7);
+        actual["UpdateRefusals.stubNotAProgram"] = UpdateRefusals.StubNotAProgram("X");
         actual["UpdateRefusals.unknownInstalledVersion"] = UpdateRefusals.UnknownInstalledVersion("X");
         actual["UpdateRefusals.unreadable"] = UpdateRefusals.Unreadable("X");
         actual["UpdateRefusals.updaterKeptSentence"] = UpdateRefusals.UpdaterKeptSentence;

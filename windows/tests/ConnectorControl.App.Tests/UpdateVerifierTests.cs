@@ -158,6 +158,16 @@ public class UpdateVerifierTests : IDisposable
         Assert.Contains("more than once", problem);
     }
 
+    [Theory]
+    [InlineData("lib/app/Update_ExecutionStub.exe")]              // would be written over the root Update.exe at apply
+    [InlineData("lib/app/Connector Control_ExecutionStub.exe")]
+    public void ALauncherStubThatIsNotAProgramIsRefused(string entry)
+    {
+        RequireSignedFramework();
+        Assert.Equal(UpdateRefusals.StubNotAProgram(entry),
+            UpdateVerifier.Verify(PackageWithBytes(entry, "not a program"u8.ToArray()), updateExePath: null, Identity, Older, FrameworkVersion));
+    }
+
     [Fact]
     public void NonExecutableEntriesAreUnpackedAndLeftAlone()
     {
