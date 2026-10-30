@@ -91,10 +91,12 @@ public struct BackupManager: Sendable {
     public func backups(series: String) throws -> [URL] {
         let fm = FileManager.default
         guard fm.fileExists(atPath: backupsDir.path) else { return [] }
-        return try fm.contentsOfDirectory(at: backupsDir, includingPropertiesForKeys: nil)
+        // Regular files only, as Windows lists files: a folder named like a backup is never pruned.
+        return try fm.contentsOfDirectory(at: backupsDir, includingPropertiesForKeys: [.isRegularFileKey])
             .filter {
                 $0.lastPathComponent.hasPrefix("\(series).")
                     && !$0.lastPathComponent.contains(".original.")
+                    && (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
             }
             .sorted(by: BackupManager.newestFirst)
     }

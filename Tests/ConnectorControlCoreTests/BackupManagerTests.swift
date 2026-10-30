@@ -89,6 +89,22 @@ final class BackupManagerTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: kept[2], encoding: .utf8), "v2")
     }
 
+    /// Only files are backups: a folder named like the oldest one is neither listed nor pruned, nor is
+    /// anything inside it, as on Windows.
+    func testAFolderNamedLikeABackupIsNeitherListedNorPruned() throws {
+        let folder = dir.appendingPathComponent("backups/claude_desktop_config.\(BackupTimestamp.string(from: Date(timeIntervalSince1970: 1_752_500_000))).json")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data("keep".utf8).write(to: folder.appendingPathComponent("inside.txt"))
+        for i in 0..<4 {
+            try Data("v\(i)".utf8).write(to: source)
+            try manager.backUp(fileAt: source, series: "claude_desktop_config",
+                               now: Date(timeIntervalSince1970: Double(1_752_600_000 + i)))
+        }
+        let kept = try manager.backups(series: "claude_desktop_config")
+        XCTAssertEqual(try kept.map { try String(contentsOf: $0, encoding: .utf8) }, ["v3", "v2", "v1"])
+        XCTAssertEqual(try String(contentsOf: folder.appendingPathComponent("inside.txt"), encoding: .utf8), "keep")
+    }
+
     /// A stale backup pruning cannot delete (locked, read-only, whatever the
     /// cause) must not fail the save that triggered the prune; it is simply
     /// left behind for the next rotation to retry.

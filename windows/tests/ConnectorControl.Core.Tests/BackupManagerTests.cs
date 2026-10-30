@@ -77,6 +77,23 @@ public class BackupManagerTests : IDisposable
         Assert.Equal("v2", File.ReadAllText(kept[2]));
     }
 
+    /// <summary>Only files are backups: a folder named like the oldest one is neither listed nor pruned, nor is
+    /// anything inside it, as on the Mac.</summary>
+    [Fact]
+    public void AFolderNamedLikeABackupIsNeitherListedNorPruned()
+    {
+        var folder = Path.Combine(dir.File("backups"), $"{Series}.{BackupTimestamp.From(At(1_752_500_000))}.json");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "inside.txt"), "keep");
+        for (int i = 0; i < 4; i++)
+        {
+            File.WriteAllText(source, $"v{i}");
+            manager.BackUp(source, Series, At(1_752_600_000 + i));
+        }
+        Assert.Equal(["v3", "v2", "v1"], manager.Backups(Series).Select(File.ReadAllText));
+        Assert.Equal("keep", File.ReadAllText(Path.Combine(folder, "inside.txt")));
+    }
+
     /// <summary>Pruning is best effort: a stale backup that refuses deletion must not fail the write it trails.</summary>
     [Fact]
     public void RotationSkipsAStaleBackupThatCannotBeDeleted()
