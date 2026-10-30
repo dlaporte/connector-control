@@ -1021,6 +1021,7 @@ public class StringCatalogTests
         actual["UpdateCoordinator.dialogTitle"] = UpdateCoordinator.DialogTitle;
         actual["UpdateCoordinator.downloadingTitle"] = UpdateCoordinator.DownloadingTitle;
         actual["UpdateCoordinator.installButton"] = UpdateCoordinator.InstallButton;
+        actual["UpdateCoordinator.installFailedMessage"] = UpdateCoordinator.InstallFailedMessage;
         actual["UpdateCoordinator.laterButton"] = UpdateCoordinator.LaterButton;
         actual["UpdateCoordinator.readyToastBody"] = UpdateCoordinator.ReadyToastBody;
         actual["UpdateCoordinator.updateRefusedMessage"] = UpdateCoordinator.UpdateRefusedMessage;

@@ -22,6 +22,8 @@ public sealed class UpdateCoordinator : IDisposable
     public const string ReadyToastBody = "An update to Connector Control is ready and will install when you quit.";
     public const string UpToDateMessage = "You're up to date.";
     public const string CheckFailedMessage = "Couldn’t check for updates.";
+    /// <summary>A download or relaunch the user asked for with Install and Relaunch failed.</summary>
+    public const string InstallFailedMessage = "Couldn’t install the update.";
     public const string UpdateRefusedMessage = "The update was not installed.";
     public const string AvailableHeadline = "A new version of Connector Control is available!";
     public const string InstallButton = "Install and Relaunch";
@@ -247,24 +249,33 @@ public sealed class UpdateCoordinator : IDisposable
         // MarshalAsync, not Marshal-then-read-a-captured-local: AppHost.Marshal only POSTS,
         // so the answer is not there when it returns. Install and Relaunch's work runs inside the
         // offer, so the dialog stays up, busy, until the app relaunches; a failure ends it, and is
-        // reported once the dialog has closed.
+        // reported once the dialog has closed. Cancel, while it runs, returns the dialog to its offer
+        // with nothing to report; the next Install and Relaunch starts afresh.
         Exception? installFailure = null;
-        async Task InstallAsync()
+        async Task InstallAsync(CancellationToken cancellationToken)
         {
+            installFailure = null;
             try
             {
                 // The dialog calls this on the UI thread, and the updater checks signatures before its first
-                // await, so the download starts on the pool, as it did before the dialog waited for it.
-                await Task.Run(() => updater.DownloadAsync(update)).ConfigureAwait(false);
+                // await, so the download starts on the pool, as it did before the dialog waited for it. The
+                // token goes to the download only: given to Task.Run, a Cancel already pressed would skip it.
+                await Task.Run(() => updater.DownloadAsync(update, cancellationToken)).ConfigureAwait(false);
                 // ApplyAndRestart does not return: Velopack's ApplyUpdatesAndRestart exits the
                 // process from inside the call, so App.OnExit never runs. Everything this app owns
                 // is already durable at this point (settings persist per setter; watchers need no
                 // teardown), which is why there is nothing to flush here.
                 await host.MarshalAsync(() =>
                 {
+                    // A Cancel that came once the download had finished still stops the relaunch.
+                    cancellationToken.ThrowIfCancellationRequested();
                     updater.ApplyAndRestart(update);
                     return true;
                 }).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The user's Cancel: nothing failed, and the dialog is back at its offer.
             }
             catch (Exception ex)
             {
@@ -306,9 +317,9 @@ public sealed class UpdateCoordinator : IDisposable
                 host.Marshal(() => dialogs.Inform(UpdateRefusedMessage, refused.Message));
                 return UpdateOutcome.Failed;
             default:
-                // The user asked for this and is waiting; CheckFailedMessage is the one failure
-                // string the spec gives us, and the exception text says what actually broke.
-                host.Marshal(() => dialogs.Inform(CheckFailedMessage, installFailure.Message));
+                // The user asked for this and is waiting: the download or the relaunch failed, and the
+                // exception text says what actually broke.
+                host.Marshal(() => dialogs.Inform(InstallFailedMessage, installFailure.Message));
                 return UpdateOutcome.Failed;
         }
     }

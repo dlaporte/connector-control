@@ -32,9 +32,20 @@ public sealed class FakeUpdater : IUpdater
         return Next;
     }
 
+    /// <summary>The token each download was given, in order.</summary>
+    public List<CancellationToken> DownloadTokens { get; } = [];
+
+    /// <summary>Like Velopack's, a download given a cancelled token stops; this one before it starts.</summary>
+    public bool HonoursCancellation { get; set; } = true;
+
     public Task DownloadAsync(UpdateCheck update, CancellationToken cancellationToken = default)
     {
         Downloads++;
+        DownloadTokens.Add(cancellationToken);
+        if (HonoursCancellation)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+        }
         if (DownloadFailure is not null)
         {
             throw DownloadFailure;

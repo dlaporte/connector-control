@@ -36,6 +36,7 @@ has one.
 - A Connector Control release now also refuses a preview update when it can’t read its own installed version. Before, that check was skipped, and only the update feed kept previews away from release installs.
 - When an update is refused and the updater it brought can’t be removed (for example, because a virus scanner is holding it), the message now says so, and says whether Connector Control will put its own updater back the next time it starts or whether you need to reinstall. Before, it gave only the reason for the refusal.
 - The first update check after launch now waits for Connector Control to finish restoring an updater left behind by an earlier, interrupted update. Before, the two could overlap, and the check could fail for no real reason.
+- While the update dialog reads “Downloading…”, its Later button now reads Cancel: it stops the download and takes the dialog back to Install and Relaunch or Later. Before, the dialog couldn’t be dismissed until the download finished or failed. A download or relaunch that fails after Install and Relaunch now says “Couldn’t install the update.” rather than “Couldn’t check for updates.”
 
 ### Both platforms
 

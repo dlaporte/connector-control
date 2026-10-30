@@ -152,8 +152,41 @@ public class UpdateCoordinatorTests
 
         updater.DownloadFailure = new HttpRequestException("connection reset");
         Assert.Equal(UpdateOutcome.Failed, await coordinator.CheckAsync(interactive: true));
-        Assert.Equal(new FakeDialogs.InformCall("Couldn’t check for updates.", "connection reset"), dialogs.Informs[1]);
+        Assert.Equal(new FakeDialogs.InformCall("Couldn’t install the update.", "connection reset"), dialogs.Informs[1]);
         Assert.Equal(0, updater.AppliedAndRestarted);
+    }
+
+    /// <summary>Cancel while Downloading…: the download is given the dialog's token, nothing is reported, nothing
+    /// relaunches, and the dialog is back at its offer, answered here with Later.</summary>
+    [Theory]
+    [InlineData(true)]    // the download stops, as Velopack's does
+    [InlineData(false)]   // the download had already finished: the relaunch is still not started
+    public async Task CancelWhileDownloadingReturnsToTheOfferWithNothingToReport(bool downloadStops)
+    {
+        updater.Next = Update();
+        updater.HonoursCancellation = downloadStops;
+        dialogs.CancelledInstalls = 1;
+        dialogs.NextOffer = false;
+        using var coordinator = Coordinator();
+        Assert.Equal(UpdateOutcome.Deferred, await coordinator.CheckAsync(interactive: true));
+        Assert.Equal(1, updater.Downloads);
+        Assert.True(Assert.Single(updater.DownloadTokens).IsCancellationRequested);
+        Assert.Equal(0, updater.AppliedAndRestarted);
+        Assert.Empty(dialogs.Informs);
+    }
+
+    /// <summary>Install and Relaunch pressed again after a Cancel starts afresh: the cancelled attempt leaves nothing behind.</summary>
+    [Fact]
+    public async Task InstallAfterACancelStillInstalls()
+    {
+        updater.Next = Update();
+        dialogs.CancelledInstalls = 1;
+        dialogs.NextOffer = true;
+        using var coordinator = Coordinator();
+        Assert.Equal(UpdateOutcome.Installing, await coordinator.CheckAsync(interactive: true));
+        Assert.Equal(2, updater.Downloads);
+        Assert.Equal(1, updater.AppliedAndRestarted);
+        Assert.Empty(dialogs.Informs);
     }
 
     /// <summary>

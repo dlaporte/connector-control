@@ -52,18 +52,30 @@ public sealed class FakeDialogs : IDialogs
     /// <summary>Run once Install and Relaunch's work has finished, before the dialog answers: what is true while it is still up.</summary>
     public Action? AfterInstall { get; set; }
 
-    public bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown, Func<Task> install)
+    /// <summary>How many times Install and Relaunch is pressed, then Cancel while it reads Downloading…, before
+    /// NextOffer answers the dialog: each runs the install with a token already cancelled.</summary>
+    public int CancelledInstalls { get; set; }
+
+    public bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown, Func<CancellationToken, Task> install)
     {
         Offers.Add(new OfferCall(newVersion, currentVersion, notesMarkdown));
         if (OfferFailure is not null)
         {
             throw OfferFailure;
         }
+        // The dialog awaits the install with its message loop running; here a blocking wait stands in, which is safe
+        // because FakeUpdater finishes (or throws) synchronously and the rigs that accept an offer marshal inline.
+        // A rig with a queued (MarshalQueue) host would deadlock here: the install's marshalled relaunch waits for a
+        // pump only this blocked thread could run.
+        for (var i = 0; i < CancelledInstalls; i++)
+        {
+            using var cancelled = new CancellationTokenSource();
+            cancelled.Cancel();
+            install(cancelled.Token).GetAwaiter().GetResult();
+        }
         if (NextOffer)
         {
-            // The dialog awaits this with its message loop running; here a blocking wait stands in, which is safe
-            // because FakeUpdater finishes (or throws) synchronously and the rigs that accept an offer marshal inline.
-            install().GetAwaiter().GetResult();
+            install(CancellationToken.None).GetAwaiter().GetResult();
             AfterInstall?.Invoke();
         }
         return NextOffer;

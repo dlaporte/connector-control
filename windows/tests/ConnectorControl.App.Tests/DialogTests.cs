@@ -1,9 +1,11 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Threading;
 using ConnectorControl.App.Services;
 using ConnectorControl.App.Tests.TestSupport;
 using ConnectorControl.App.Views;
@@ -92,7 +94,7 @@ public class DialogTests
     {
         WpfApp.Invoke(() =>
         {
-            var dialog = new UpdateDialog("1.3.0", "1.2.2", "## Fixes\n- one\n- two", () => Task.CompletedTask);
+            var dialog = new UpdateDialog("1.3.0", "1.2.2", "## Fixes\n- one\n- two", _ => Task.CompletedTask);
             Assert.Equal("Software Update", dialog.Title);
             Assert.Equal(UpdateCoordinator.AvailableHeadline, dialog.Headline.Text);
             Assert.Equal("Connector Control 1.3.0 is now available - you have 1.2.2. Would you like to install it now?", dialog.Detail.Text);
@@ -101,15 +103,118 @@ public class DialogTests
             Assert.Equal("Install and Relaunch", dialog.InstallButton.Content);
             Assert.Equal("Later", dialog.LaterButton.Content);
 
-            // Install and Relaunch's busy state: both buttons off, Install and Relaunch reading Downloading….
+            // Install and Relaunch's busy state: Install and Relaunch off and reading Downloading…, Later reading Cancel.
             dialog.SetBusy(true);
             Assert.Equal(UpdateCoordinator.DownloadingTitle, dialog.InstallButton.Content);
             Assert.False(dialog.InstallButton.IsEnabled);
-            Assert.False(dialog.LaterButton.IsEnabled);
+            Assert.Equal("Cancel", dialog.LaterButton.Content);
+            Assert.True(dialog.LaterButton.IsEnabled);
             dialog.SetBusy(false);
             Assert.Equal("Install and Relaunch", dialog.InstallButton.Content);
+            Assert.Equal("Later", dialog.LaterButton.Content);
             Assert.True(dialog.LaterButton.IsEnabled);
         });
+    }
+
+    /// <summary>Install and Relaunch keeps the dialog up, busy, until the install ends, and a close meanwhile (the title
+    /// bar's, or Alt+F4) is refused: closed, it would answer Later while the download ran on. Then it closes, answering
+    /// Install and Relaunch.</summary>
+    [Fact]
+    public void InstallKeepsTheDialogUpUntilItEndsAndACloseMeanwhileIsRefused()
+    {
+        WpfApp.Invoke(() =>
+        {
+            var finish = new TaskCompletionSource();
+            var dialog = new UpdateDialog("1.3.0", "1.2.2", null, _ => finish.Task);
+            dialog.Show();
+            try
+            {
+                Click(dialog.InstallButton);
+                Assert.Equal(UpdateCoordinator.DownloadingTitle, dialog.InstallButton.Content);
+                Assert.False(dialog.InstallButton.IsEnabled);
+
+                dialog.Close();
+                Assert.True(dialog.IsVisible, "a close while the install runs is refused");
+
+                finish.SetResult();
+                Assert.True(PumpUntil(() => !dialog.IsVisible, TimeSpan.FromSeconds(10)), "the dialog closes once the install ends");
+                Assert.True(dialog.Result);
+            }
+            finally
+            {
+                finish.TrySetResult();
+                PumpUntil(() => !dialog.IsVisible, TimeSpan.FromSeconds(5));
+            }
+        });
+    }
+
+    /// <summary>Cancel, which Later reads while busy, cancels the token the install was given; once the install has
+    /// stopped the dialog is back at its offer, still up, where Later then answers it.</summary>
+    [Fact]
+    public void CancelWhileDownloadingStopsTheInstallAndReturnsToTheOffer()
+    {
+        WpfApp.Invoke(() =>
+        {
+            CancellationToken given = default;
+            var dialog = new UpdateDialog("1.3.0", "1.2.2", null, async token =>
+            {
+                given = token;
+                var stopped = new TaskCompletionSource();
+                using (token.Register(() => stopped.TrySetResult()))
+                {
+                    await stopped.Task;
+                }
+            });
+            dialog.Show();
+            try
+            {
+                Click(dialog.InstallButton);
+                Assert.Equal("Cancel", dialog.LaterButton.Content);
+
+                Click(dialog.LaterButton);
+                Assert.True(given.IsCancellationRequested);
+                Assert.True(PumpUntil(() => dialog.InstallButton.IsEnabled, TimeSpan.FromSeconds(10)), "the dialog leaves its busy state");
+                Assert.True(dialog.IsVisible, "a cancelled install leaves the dialog up");
+                Assert.False(dialog.Result);
+                Assert.Equal("Install and Relaunch", dialog.InstallButton.Content);
+                Assert.Equal("Later", dialog.LaterButton.Content);
+
+                Click(dialog.LaterButton);
+                Assert.False(dialog.IsVisible);
+                Assert.False(dialog.Result);
+            }
+            finally
+            {
+                if (dialog.IsVisible)
+                {
+                    if (!dialog.InstallButton.IsEnabled)
+                    {
+                        Click(dialog.LaterButton);
+                        PumpUntil(() => dialog.InstallButton.IsEnabled, TimeSpan.FromSeconds(5));
+                    }
+                    dialog.Close();
+                }
+            }
+        });
+    }
+
+    private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+
+    /// <summary>Runs the dispatcher a frame at a time until <paramref name="condition"/> holds: where the dialog's awaits resume.</summary>
+    private static bool PumpUntil(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (!condition())
+        {
+            if (DateTime.UtcNow >= deadline)
+            {
+                return false;
+            }
+            var frame = new DispatcherFrame();
+            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => frame.Continue = false));
+            Dispatcher.PushFrame(frame);
+        }
+        return true;
     }
 
     [Fact]
@@ -123,7 +228,7 @@ public class DialogTests
             const string notes = "Fixes.\n\n![beacon](https://example.invalid/b.png) ![share](file://host.invalid/share/x.png)\n\n"
                 + "[![nested](file://host.invalid/share/y.png)](https://example.invalid/)\n\n<img src=\"file://host.invalid/share/z.png\">\n\n"
                 + "![referenced][r]\n\n[r]: file://host.invalid/share/r.png\n";
-            var dialog = new UpdateDialog("1.3.0", "1.2.2", notes, () => Task.CompletedTask);
+            var dialog = new UpdateDialog("1.3.0", "1.2.2", notes, _ => Task.CompletedTask);
             var everything = LogicalDescendants(dialog.Notes.Document).ToList();
             Assert.DoesNotContain(everything, element => element is InlineUIContainer or BlockUIContainer or Image or Button);
             var text = new TextRange(dialog.Notes.Document.ContentStart, dialog.Notes.Document.ContentEnd).Text;

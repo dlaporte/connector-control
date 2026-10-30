@@ -31,8 +31,10 @@ public interface IDialogs
     /// Update-available dialog; true for "Install and Relaunch", false for "Later". Install and Relaunch
     /// keeps the dialog up, busy and reading "Downloading…", while it awaits <paramref name="install"/>,
     /// which downloads the package and relaunches into it and never throws; the answer comes once it ends.
+    /// Meanwhile Later reads Cancel, which cancels the token <paramref name="install"/> was given: the dialog
+    /// then returns to its offer, to be answered again.
     /// </summary>
-    bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown, Func<Task> install);
+    bool OfferUpdate(string newVersion, string currentVersion, string? notesMarkdown, Func<CancellationToken, Task> install);
 
     /// <summary>The confirmation of a change Claude asks for, modal: Don’t Allow is the default, which Return
     /// and Escape answer, and so does closing the window. True only for Allow.</summary>

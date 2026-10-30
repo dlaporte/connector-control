@@ -1240,6 +1240,9 @@
   "UpdateCoordinator.installButton": {
     "win": "Install and Relaunch"
   },
+  "UpdateCoordinator.installFailedMessage": {
+    "win": "Couldn’t install the update."
+  },
   "UpdateCoordinator.laterButton": {
     "win": "Later"
   },

@@ -10,19 +10,22 @@ namespace ConnectorControl.App.Views;
 
 /// <summary>
 /// The new version, the release notes rendered from Markdown, Install and Relaunch / Later. Install and Relaunch
-/// keeps the dialog up, busy, reading Downloading…, until the app relaunches or the download fails.
+/// keeps the dialog up, busy, reading Downloading…, until the app relaunches or the download fails; meanwhile Later
+/// reads Cancel, which stops the download and returns the dialog to its offer.
 /// </summary>
 public partial class UpdateDialog : DialogWindow
 {
-    private readonly Func<Task> install;
+    private readonly Func<CancellationToken, Task> install;
     private bool busy;
+    /// <summary>The running install's Cancel; null when none runs.</summary>
+    private CancellationTokenSource? download;
 
-    public UpdateDialog(string newVersion, string currentVersion, string? notesMarkdown, Func<Task> install)
+    public UpdateDialog(string newVersion, string currentVersion, string? notesMarkdown, Func<CancellationToken, Task> install)
     {
         InitializeComponent();
         this.install = install;
         // While the package downloads the dialog cannot be closed: closed, it would answer Later while the
-        // download ran on and the app then relaunched anyway.
+        // download ran on and the app then relaunched anyway. Cancel (Escape) stops the download instead.
         Closing += (_, e) => e.Cancel = busy;
         Title = UpdateCoordinator.DialogTitle;
         Headline.Text = UpdateCoordinator.AvailableHeadline;
@@ -71,36 +74,56 @@ public partial class UpdateDialog : DialogWindow
     /// <summary>True for Install and Relaunch.</summary>
     public bool Result { get; private set; }
 
-    public static bool Show(Window? owner, string newVersion, string currentVersion, string? notesMarkdown, Func<Task> install)
+    public static bool Show(Window? owner, string newVersion, string currentVersion, string? notesMarkdown, Func<CancellationToken, Task> install)
     {
         var dialog = new UpdateDialog(newVersion, currentVersion, notesMarkdown, install);
         return Present(dialog, owner, () => dialog.Result);
     }
 
-    /// <summary>Busy while <c>install</c> runs: both buttons off, Install and Relaunch reading Downloading…. The modal loop
-    /// keeps pumping meanwhile, which is where the relaunch is posted. <c>install</c> never throws (IDialogs.OfferUpdate).</summary>
+    /// <summary>Busy while <c>install</c> runs: Install and Relaunch off and reading Downloading…, Later reading Cancel. The
+    /// modal loop keeps pumping meanwhile, which is where the relaunch is posted. <c>install</c> never throws
+    /// (IDialogs.OfferUpdate). Cancelled, the dialog stays, back at its offer; otherwise it closes.</summary>
     private async void OnInstall(object sender, RoutedEventArgs e)
     {
+        using var cancel = new CancellationTokenSource();
+        download = cancel;
         Result = true;
         SetBusy(true);
         try
         {
-            await install();
+            await install(cancel.Token);
         }
         finally
         {
+            download = null;
             SetBusy(false);
-            Close();
         }
+        if (cancel.IsCancellationRequested)
+        {
+            Result = false;
+            return;
+        }
+        Close();
     }
 
     internal void SetBusy(bool on)
     {
         busy = on;
         InstallButton.IsEnabled = !on;
-        LaterButton.IsEnabled = !on;
+        LaterButton.IsEnabled = true;
         InstallButton.Content = on ? UpdateCoordinator.DownloadingTitle : UpdateCoordinator.InstallButton;
+        LaterButton.Content = on ? Dialogs.CancelTitle : UpdateCoordinator.LaterButton;
     }
 
-    private void OnLater(object sender, RoutedEventArgs e) => Close();
+    /// <summary>Later; while busy, Cancel: the download is told to stop, and the button dims until it has.</summary>
+    private void OnLater(object sender, RoutedEventArgs e)
+    {
+        if (download is { } running)
+        {
+            LaterButton.IsEnabled = false;
+            running.Cancel();
+            return;
+        }
+        Close();
+    }
 }
