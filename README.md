@@ -659,12 +659,13 @@ running and couldn’t be started."; where it may not start the app, it says
 PATH it would get if you opened it yourself, not on your terminal's, so
 `doctor` can find a different npx or uvx than your terminal does.
 
-Run it as yourself. Under `sudo`, or in an elevated terminal on Windows, it
-can't reach your app and starts nothing: "Run connector-control without
-administrator rights: Connector Control runs as you, and an elevated copy
-can’t reach it." On Windows with the built-in Administrator account, or with
-UAC turned off, every terminal is elevated: open Connector Control first, and
-the tool reaches it.
+Run it as yourself. Under `sudo`, or in a terminal opened with Run as
+administrator on Windows, it can't reach your app and starts nothing: "Run
+connector-control without administrator rights: Connector Control runs as
+you, and an elevated copy can’t reach it." On Windows with the built-in
+Administrator account, or with UAC turned off, everything you run has
+administrator rights, the app included, so the tool reaches it and starts it
+as usual.
 
 The command line is you: it is never asked, never announced, and works
 whether the integration is on or off. Results go to standard output and a
@@ -1233,9 +1234,6 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
   command-line tool can’t reach Connector Control, and a question about a
   change Claude asks for appears in the sign-in whose app serves it. Quit
   Connector Control in the sign-in you aren't using.
-- On Windows with the built-in Administrator account or UAC turned off, the
-  tool can't start the app, which would run elevated: open Connector Control
-  first.
 - Windows updates check the publisher's certificate for revocation. If the
   revocation check can't be done, the update still installs, and crash.log
   says so.

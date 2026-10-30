@@ -70,15 +70,19 @@ public class ControlEndpointTests
         Assert.Equal([("Path", @"C:\Windows")], ControlEndpoint.AppEnvironment(caller, @"C:\Windows", ""));
     }
 
-    /// <summary>A token whose owner is not its user is elevated: an administrator's elevated token is owned by
-    /// BUILTIN\Administrators. One Windows cannot name counts as elevated, so the tool starts nothing.</summary>
+    /// <summary>Only the elevated half of a split token is elevated: an administrator's "Run as administrator"
+    /// with UAC on. A token that was never split - UAC off, the built-in Administrator account, a standard user -
+    /// and the filtered half an administrator runs with by default may start the app. A type Windows does not
+    /// give, or none at all, counts as elevated, so the tool starts nothing.</summary>
     [Fact]
-    public void ATokenOwnedByAnyoneButItsUserIsElevated()
+    public void OnlyTheElevatedHalfOfASplitTokenIsElevated()
     {
-        Assert.False(ControlEndpoint.IsElevated(Sid, Sid));
-        Assert.True(ControlEndpoint.IsElevated("S-1-5-32-544", Sid));
-        Assert.True(ControlEndpoint.IsElevated(null, Sid));
-        Assert.True(ControlEndpoint.IsElevated(Sid, null));
+        Assert.True(ControlEndpoint.IsElevated(ControlEndpoint.TokenElevationTypeFull));
+        Assert.False(ControlEndpoint.IsElevated(ControlEndpoint.TokenElevationTypeDefault));
+        Assert.False(ControlEndpoint.IsElevated(ControlEndpoint.TokenElevationTypeLimited));
+        Assert.True(ControlEndpoint.IsElevated(null));
+        Assert.True(ControlEndpoint.IsElevated(0));
+        Assert.True(ControlEndpoint.IsElevated(4));
     }
 
     /// <summary>The pipe's rule for who it serves, apart from any pipe: a client on this computer only, which

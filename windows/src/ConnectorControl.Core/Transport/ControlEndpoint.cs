@@ -1,7 +1,9 @@
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security.Principal;
 using System.Text;
 using ConnectorControl.Core.State;
+using Microsoft.Win32.SafeHandles;
 
 namespace ConnectorControl.Core.Transport;
 
@@ -87,21 +89,36 @@ public static class ControlEndpoint
         return block.Append('\0').ToString();
     }
 
-    /// <summary>Whether a token runs elevated: its owner - who owns what it creates, the pipe among them - is not
-    /// its user, as for an administrator's elevated token, owned by BUILTIN\Administrators. Its pipe check admits
-    /// only a pipe of the same owner, so it cannot reach the person's app, and an app it started would serve a
-    /// pipe out of reach of everything the person runs as themselves. An owner or user Windows cannot name
-    /// counts as elevated: the tool then starts nothing.</summary>
-    public static bool IsElevated(string? ownerSid, string? userSid) =>
-        ownerSid is null || userSid is null || !string.Equals(ownerSid, userSid, StringComparison.OrdinalIgnoreCase);
+    /// <summary>The types <c>GetTokenInformation</c> gives for TokenElevationType: a token that was never split
+    /// (UAC off, the built-in Administrator account, a standard user), the elevated half of a split one, and its
+    /// filtered half, which an administrator runs with by default.</summary>
+    public const int TokenElevationTypeDefault = 1;
+    public const int TokenElevationTypeFull = 2;
+    public const int TokenElevationTypeLimited = 3;
 
-    /// <summary>Whether this process runs elevated, as <see cref="IsElevated(string?, string?)"/> reads it.</summary>
+    /// <summary>Whether a token runs elevated: it is the elevated half of a split token, what "Run as administrator"
+    /// gives with UAC on. Such a token's pipe check admits only a pipe of the same owner, so it cannot reach the
+    /// person's app, and an app it started would serve a pipe out of reach of everything the person runs as
+    /// themselves. A token that was never split is how everything the person runs starts - with UAC off, or as the
+    /// built-in Administrator account - so an app it starts serves them all. A type Windows does not give, or none
+    /// at all, counts as elevated: the tool then starts nothing.</summary>
+    public static bool IsElevated(int? elevationType) =>
+        elevationType is not (TokenElevationTypeDefault or TokenElevationTypeLimited);
+
+    /// <summary>Whether this process runs elevated, as <see cref="IsElevated(int?)"/> reads its token's elevation type.</summary>
     [SupportedOSPlatform("windows")]
     public static bool IsElevated()
     {
         using var identity = WindowsIdentity.GetCurrent();
-        return IsElevated(identity.Owner?.Value, identity.User?.Value);
+        return IsElevated(GetTokenInformation(identity.AccessToken, TokenElevationTypeClass, out var type, sizeof(int), out _) ? type : null);
     }
+
+    /// <summary>TOKEN_INFORMATION_CLASS's TokenElevationType.</summary>
+    private const int TokenElevationTypeClass = 18;
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetTokenInformation(SafeAccessTokenHandle token, int informationClass, out int information, int length, out int returnedLength);
 
     /// <summary>Where the app records its own executable, beside the copy of the tool it keeps.</summary>
     public const string AppPathFileName = "app-path.txt";
