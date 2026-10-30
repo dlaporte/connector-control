@@ -71,8 +71,10 @@
                              Visibility="{Binding IsChecked, ElementName=ShareTick, Converter={StaticResource Vis}}"
                              VerticalAlignment="Center" Margin="0,0,10,0" />
                   <CheckBox x:Name="ShareTick" Grid.Column="3" Content="{x:Static state:PublishModel.ShareValueLabel}" FontSize="12"
-                            IsChecked="{Binding Share, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            IsChecked="{Binding Share, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,10,0"
+                            AutomationProperties.Name="{Binding ShareLabel}" />
                   <TextBox x:Name="HintBox" Grid.Column="4" Text="{Binding Hint, UpdateSourceTrigger=PropertyChanged}" FontSize="12"
+                           AutomationProperties.Name="{Binding HintLabel}"
                            Style="{StaticResource Watermarked}" Tag="{x:Static state:PublishModel.HintPlaceholder}" />
                 </Grid>
                 <DataTemplate.Triggers>
@@ -107,7 +109,7 @@
                     <!-- The tick carries no visible label: the row it sits on says what marking it
                          replaces. Narrator gets the sentence the label would have been. -->
                     <CheckBox x:Name="MarkTick" IsChecked="{Binding Marked, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,8,0"
-                              AutomationProperties.Name="{x:Static state:PublishModel.MarkPathLabel}" />
+                              AutomationProperties.Name="{Binding MarkLabel}" />
                     <TextBlock Grid.Column="1" Text="{Binding Connector}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="2" Text="{Binding Pointer}" Style="{StaticResource CaptionText}" FontFamily="{StaticResource MonoFont}" VerticalAlignment="Center" Margin="8,0" />
                     <TextBlock Grid.Column="3" Text="{Binding Value}" FontFamily="{StaticResource MonoFont}" FontSize="12"
@@ -118,6 +120,7 @@
                     <TextBox x:Name="PathNameBox" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="150" FontSize="12"
                              Style="{StaticResource Watermarked}" Tag="{x:Static state:PublishModel.PathNamePlaceholder}" />
                     <TextBox x:Name="PathHintBox" Text="{Binding Hint, UpdateSourceTrigger=PropertyChanged}" Width="210" FontSize="12" Margin="8,0,0,0"
+                             AutomationProperties.Name="{Binding HintLabel}"
                              Style="{StaticResource Watermarked}" Tag="{x:Static state:PublishModel.HintPlaceholder}" />
                   </StackPanel>
                 </StackPanel>

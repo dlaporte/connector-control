@@ -79,6 +79,13 @@ public sealed class EditorModel : ObservableObject, IDisposable
     /// </summary>
     public static string ArgumentLabel(int index) => "Argument " + ArgumentNumber(index);
     public const string EnvironmentHeader = "Environment Variables";
+
+    // A screen reader's names for an environment row's three controls, from the row's index, for
+    // the reason ArgumentLabel is: nothing visible says which row a bare "Name" belongs to, and
+    // the variable's own name is the author's to retype under the reader's cursor.
+    public static string VariableNameLabel(int index) => $"Variable {index + 1} name";
+    public static string VariableValueLabel(int index) => $"Variable {index + 1} value";
+    public static string DeleteVariableRowLabel(int index) => $"Delete variable {index + 1}";
     public const string ValueLabel = "Value";
     public const string TokenLabel = "Token";
     public const string HeaderNameLabel = "Header name";
@@ -930,6 +937,13 @@ public sealed class EditorModel : ObservableObject, IDisposable
             foreach (var arg in Args)
             {
                 arg.RaisePosition();
+            }
+        }
+        else if (ReferenceEquals(sender, EnvRows))
+        {
+            foreach (var env in EnvRows)
+            {
+                env.RaisePosition();
             }
         }
     }

@@ -959,4 +959,19 @@ public class PublishModelTests
         // Exporting a subset takes nothing out of the collection.
         Assert.Equal(held, state.Store.Collections[collection].Mcps.Keys.Order(StringComparer.Ordinal));
     }
+
+    /// <summary>
+    /// Each row's controls are named by the connector and variable or path they act on, so a screen
+    /// reader can tell repeated rows apart.
+    /// </summary>
+    [Fact]
+    public void RowControlsAreNamedByTheirConnectorAndSubject()
+    {
+        Assert.Equal("Share value of TOKEN in github", PublishModel.ShareValueRowLabel("github", "TOKEN"));
+        Assert.Equal("Hint for TOKEN in github", PublishModel.HintRowLabel("github", "TOKEN"));
+        Assert.Equal("Mark /Users/me/x in fs as a path this machine supplies", PublishModel.MarkPathRowLabel("fs", "/Users/me/x"));
+        var env = new PublishModel.EnvRow("github", "TOKEN", "v", false, "");
+        Assert.Equal("Share value of TOKEN in github", env.ShareLabel);
+        Assert.Equal("Hint for TOKEN in github", env.HintLabel);
+    }
 }

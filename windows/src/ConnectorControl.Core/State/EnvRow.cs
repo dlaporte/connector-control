@@ -66,6 +66,23 @@ public sealed class EnvRow : ObservableObject
     /// <summary><see cref="EditorModel.PublishedHint(EnvRow)"/>: what a published collection sends in the value's place.</summary>
     public string? PublishedHint => editor?.PublishedHint(this);
 
+    /// <summary><see cref="EditorModel.VariableNameLabel"/> for where the row sits now: its name box's spoken name.</summary>
+    public string NameLabel => editor?.EnvRows.IndexOf(this) is { } index and >= 0 ? EditorModel.VariableNameLabel(index) : string.Empty;
+
+    /// <summary><see cref="EditorModel.VariableValueLabel"/> for where the row sits now: its value box's spoken name.</summary>
+    public string ValueLabel => editor?.EnvRows.IndexOf(this) is { } index and >= 0 ? EditorModel.VariableValueLabel(index) : string.Empty;
+
+    /// <summary><see cref="EditorModel.DeleteVariableRowLabel"/> for where the row sits now: its delete button's spoken name.</summary>
+    public string DeleteLabel => editor?.EnvRows.IndexOf(this) is { } index and >= 0 ? EditorModel.DeleteVariableRowLabel(index) : string.Empty;
+
+    /// <summary>A row joined, left or moved, so every row's position may have changed.</summary>
+    internal void RaisePosition()
+    {
+        Raise(nameof(NameLabel));
+        Raise(nameof(ValueLabel));
+        Raise(nameof(DeleteLabel));
+    }
+
     /// <summary>The editor whose rules this row answers with, set as the row joins its list.</summary>
     internal void Attach(EditorModel owner)
     {

@@ -23,6 +23,11 @@ public sealed class PublishModel : ObservableObject
     public const string ChooseFolderButton = "Choose Folder";
     /// <summary>What a screen reader says for the bare tick beside a path row, which has no visible label.</summary>
     public const string MarkPathLabel = "Mark as a path this machine supplies";
+    // A screen reader's names for a row's controls: the visible row says which connector and
+    // variable it is by position alone, and the tick's own words are a bare "share value".
+    public static string ShareValueRowLabel(string connector, string name) => $"Share value of {name} in {connector}";
+    public static string HintRowLabel(string connector, string subject) => $"Hint for {subject} in {connector}";
+    public static string MarkPathRowLabel(string connector, string value) => $"Mark {value} in {connector} as a path this machine supplies";
     /// <summary>The button beside an unresolved mark's note: drop the mark and let the path travel as the preview shows it.</summary>
     public const string ForgetMarkButton = "Forget Mark";
     /// <summary>The button beside a kept path's note: let that path travel as written in this collection's document, which the preview above shows.</summary>
@@ -123,6 +128,12 @@ public sealed class PublishModel : ObservableObject
 
         public bool Share { get => share; set => Set(ref share, value); }
 
+        /// <summary><see cref="ShareValueRowLabel"/> for this row: the tick's spoken name.</summary>
+        public string ShareLabel => ShareValueRowLabel(Connector, Name);
+
+        /// <summary><see cref="HintRowLabel"/> for this row: the hint box's spoken name.</summary>
+        public string HintLabel => HintRowLabel(Connector, Name);
+
         public string Hint { get => hint; set => Set(ref hint, value); }
     }
 
@@ -144,6 +155,12 @@ public sealed class PublishModel : ObservableObject
         public string Value { get; } = value;
 
         public bool Marked { get => marked; set => Set(ref marked, value); }
+
+        /// <summary><see cref="MarkPathRowLabel"/> for this row: the tick's spoken name.</summary>
+        public string MarkLabel => MarkPathRowLabel(Connector, Value);
+
+        /// <summary><see cref="HintRowLabel"/> for this row, named by where its path sits: the hint box's spoken name.</summary>
+        public string HintLabel => HintRowLabel(Connector, Pointer.ToString());
 
         public string Name { get => name; set => Set(ref name, value); }
 

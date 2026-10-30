@@ -790,6 +790,9 @@
   "EditorModel.commandPrompt": "npx",
   "EditorModel.deleteArgumentLabel": "Delete argument",
   "EditorModel.deleteVariableLabel": "Delete variable",
+  "EditorModel.deleteVariableRowLabel": {
+    "format": "Delete variable {0}"
+  },
   "EditorModel.deletedOutsideDetail": "Saving will add it back.",
   "EditorModel.deletedOutsideMessage": {
     "format": "“{0}” was deleted outside this editor."
@@ -853,6 +856,12 @@
   "EditorModel.typeLabel": "Type",
   "EditorModel.urlHint": "Enter a valid http(s) URL, e.g. https://example.com/mcp",
   "EditorModel.valueLabel": "Value",
+  "EditorModel.variableNameLabel": {
+    "format": "Variable {0} name"
+  },
+  "EditorModel.variableValueLabel": {
+    "format": "Variable {0} value"
+  },
   "EditorModel.viewPickerLabel": {
     "mac": "View"
   },
@@ -938,6 +947,9 @@
     "format": "Locate {0}"
   },
   "PopoverModel.manageTitle": "Manage Collections",
+  "PopoverModel.menuBarRetryLabel": {
+    "mac": "Connector Control: Apply Failed — Retry"
+  },
   "PopoverModel.pendingMenuMark": " · update available",
   "PopoverModel.quitTooltip": "Quit Connector Control",
   "PopoverModel.restartTitle": "Restart Required",
@@ -968,10 +980,16 @@
   },
   "PublishModel.forgetMarkButton": "Forget Mark",
   "PublishModel.hintPlaceholder": "hint for recipients",
+  "PublishModel.hintRowLabel": {
+    "format": "Hint for {1} in {0}"
+  },
   "PublishModel.keptPathNote": {
     "format": "“{0}” carries a path this machine keeps back, in {1}. Tick it where it sits, or release it."
   },
   "PublishModel.markPathLabel": "Mark as a path this machine supplies",
+  "PublishModel.markPathRowLabel": {
+    "format": "Mark {1} in {0} as a path this machine supplies"
+  },
   "PublishModel.noFolderError": "Choose a folder to publish to.",
   "PublishModel.otherFolderNote": {
     "format": "“{0}” carries, in {1}, the folder this machine keeps “{2}” in. Tick it where it sits, or release it."
@@ -993,6 +1011,9 @@
   },
   "PublishModel.releaseValueButton": "Release",
   "PublishModel.shareValueLabel": "share value",
+  "PublishModel.shareValueRowLabel": {
+    "format": "Share value of {1} in {0}"
+  },
   "PublishModel.title": {
     "format": "Publish “{0}”"
   },

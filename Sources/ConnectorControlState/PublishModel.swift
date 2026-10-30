@@ -24,6 +24,11 @@ public final class PublishModel: ObservableObject {
     public static let chooseFolderButton = "Choose Folder"
     /// What a screen reader says for the bare tick beside a path row, which has no visible label.
     public static let markPathLabel = "Mark as a path this machine supplies"
+    // A screen reader's names for a row's controls: the visible row says which connector and
+    // variable it is by position alone, and the tick's own words are a bare "share value".
+    public static func shareValueRowLabel(_ connector: String, _ name: String) -> String { "Share value of \(name) in \(connector)" }
+    public static func hintRowLabel(_ connector: String, _ subject: String) -> String { "Hint for \(subject) in \(connector)" }
+    public static func markPathRowLabel(_ connector: String, _ value: String) -> String { "Mark \(value) in \(connector) as a path this machine supplies" }
     /// The button beside an unresolved mark's note: drop the mark and let the path travel as the
     /// preview shows it.
     public static let forgetMarkButton = "Forget Mark"

@@ -218,10 +218,13 @@ final class StringCatalogTests: XCTestCase {
         // Called with the row's index, 2: the text counts from one.
         "EditorModel.argumentLabel": ["3"],
         "EditorModel.argumentNumber": ["3"],
+        "EditorModel.deleteVariableRowLabel": ["3"],
         "EditorModel.changedOutsideMessage": ["X"],
         "EditorModel.deletedOutsideMessage": ["X"],
         "EditorModel.duplicateEnvError": ["X"],
         "EditorModel.importedNote": ["X", "Y"],
+        "EditorModel.variableNameLabel": ["3"],
+        "EditorModel.variableValueLabel": ["3"],
         "EditorModel.lockedFieldsNote": ["X"],
         "EditorModel.propagateLabel": ["X", "Y"],
         "EditorModel.propagateLabelMany": ["X", "Y"],
@@ -244,6 +247,9 @@ final class StringCatalogTests: XCTestCase {
         "PublishModel.exportTitle": ["X"],
         "PublishModel.folderLine": ["X"],
         "PublishModel.footerLine": ["X", "Y"],
+        "PublishModel.hintRowLabel": ["X", "Y"],
+        "PublishModel.markPathRowLabel": ["X", "Y"],
+        "PublishModel.shareValueRowLabel": ["X", "Y"],
         "PublishModel.keptPathNote": ["X", "Y"],
         "PublishModel.otherFolderNote": ["X", "Y", "Z"],
         "PublishModel.publishFolderEditNote": ["X", "Y"],
@@ -679,6 +685,9 @@ final class StringCatalogTests: XCTestCase {
         actual["EditorModel.additionalTitle"] = EditorModel.additionalTitle(count: 3, keys: ["a", "b"])
         actual["EditorModel.argumentLabel"] = EditorModel.argumentLabel(2)
         actual["EditorModel.argumentNumber"] = EditorModel.argumentNumber(2)
+        actual["EditorModel.deleteVariableRowLabel"] = EditorModel.deleteVariableRowLabel(2)
+        actual["EditorModel.variableNameLabel"] = EditorModel.variableNameLabel(2)
+        actual["EditorModel.variableValueLabel"] = EditorModel.variableValueLabel(2)
         actual["EditorModel.argumentPrompt"] = EditorModel.argumentPrompt
         actual["EditorModel.argumentsHeader"] = EditorModel.argumentsHeader
         actual["EditorModel.authenticationHeader"] = EditorModel.authenticationHeader
@@ -802,6 +811,7 @@ final class StringCatalogTests: XCTestCase {
         actual["PopoverModel.quitTooltip"] = PopoverModel.quitTooltip
         actual["PopoverModel.restartTitle"] = PopoverModel.restartTitle
         actual["PopoverModel.retryTitle"] = PopoverModel.retryTitle
+        actual["PopoverModel.menuBarRetryLabel"] = PopoverModel.menuBarRetryLabel
         actual["PopoverModel.reviewAndApplyButton"] = PopoverModel.reviewAndApplyButton
         actual["PopoverModel.settingsTooltip"] = PopoverModel.settingsTooltip
         actual["PopoverModel.sourceTooltipFormat"] = PopoverModel.sourceTooltipFormat("X")
@@ -818,6 +828,9 @@ final class StringCatalogTests: XCTestCase {
         actual["PublishModel.footerLine"] = PublishModel.footerLine("X", "Y")
         actual["PublishModel.forgetMarkButton"] = PublishModel.forgetMarkButton
         actual["PublishModel.hintPlaceholder"] = PublishModel.hintPlaceholder
+        actual["PublishModel.hintRowLabel"] = PublishModel.hintRowLabel("X", "Y")
+        actual["PublishModel.markPathRowLabel"] = PublishModel.markPathRowLabel("X", "Y")
+        actual["PublishModel.shareValueRowLabel"] = PublishModel.shareValueRowLabel("X", "Y")
         actual["PublishModel.markPathLabel"] = PublishModel.markPathLabel
         actual["PublishModel.noFolderError"] = PublishModel.noFolderError
         actual["PublishModel.pathNamePlaceholder"] = PublishModel.pathNamePlaceholder

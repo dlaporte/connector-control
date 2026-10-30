@@ -180,6 +180,7 @@ struct PublishSheetView: View {
                 Toggle(PublishModel.shareValueLabel, isOn: $row.share)
                     .toggleStyle(.checkbox)
                     .font(.caption)
+                    .accessibilityLabel(PublishModel.shareValueRowLabel(row.connector, row.name))
                 // One slot, two states: a stripped value travels as its name and a hint, so the
                 // hint field is here; a shared one travels as itself, so the value is, and the
                 // tick is a decision made with the bytes it would send in view. The width is
@@ -196,6 +197,7 @@ struct PublishSheetView: View {
                         TextField(PublishModel.hintPlaceholder, text: $row.hint)
                             .textFieldStyle(.roundedBorder)
                             .font(.caption)
+                            .accessibilityLabel(PublishModel.hintRowLabel(row.connector, row.name))
                     }
                 }
                 .frame(width: 200)
@@ -213,7 +215,7 @@ struct PublishSheetView: View {
                     Toggle("", isOn: $row.marked)
                         .toggleStyle(.checkbox)
                         .labelsHidden()
-                        .accessibilityLabel(PublishModel.markPathLabel)
+                        .accessibilityLabel(PublishModel.markPathRowLabel(row.connector, row.value))
                     Text(row.connector)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -236,6 +238,7 @@ struct PublishSheetView: View {
                             .textFieldStyle(.roundedBorder)
                             .font(.caption)
                             .frame(width: 200)
+                            .accessibilityLabel(PublishModel.hintRowLabel(row.connector, row.pointer.description))
                     }
                     .padding(.leading, 20)
                 }

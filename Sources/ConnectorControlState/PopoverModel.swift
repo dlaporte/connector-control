@@ -12,6 +12,9 @@ public final class PopoverModel: ObservableObject {
     public static let settingsTooltip = "Settings"
     public static let quitTooltip = "Quit Connector Control"
     public static let retryTitle = "Apply Failed — Retry"
+    /// The menu bar item's spoken name while an apply awaits retry: the symbol alone reads as an
+    /// unnamed warning triangle. Mac only; the tray icon's tooltip is the product name.
+    public static let menuBarRetryLabel = "\(title): \(retryTitle)"
     public static let restartTitle = "Restart Required"
     public static let reviewAndApplyButton = "Review & Apply"
     public static let chooseFolderButton = "Choose Folder"

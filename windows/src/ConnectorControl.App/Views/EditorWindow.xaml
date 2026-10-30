@@ -98,11 +98,11 @@
     </Style>
     <DataTemplate x:Key="MaskedValue">
       <PasswordBox views:PasswordBoxHelper.BoundPassword="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                   AutomationProperties.Name="{x:Static state:EditorModel.ValueLabel}" />
+                   AutomationProperties.Name="{Binding ValueLabel}" />
     </DataTemplate>
     <DataTemplate x:Key="RevealedValue">
       <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}"
-               AutomationProperties.Name="{x:Static state:EditorModel.ValueLabel}" />
+               AutomationProperties.Name="{Binding ValueLabel}" />
     </DataTemplate>
     <Style x:Key="JsonBox" TargetType="TextBox">
       <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
@@ -425,7 +425,7 @@
                              and the row itself are the author's even here: only a value the
                              document asked this machine for is live. -->
                         <TextBox x:Name="EnvName" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}" VerticalAlignment="Top"
-                                 AutomationProperties.Name="{x:Static state:EditorModel.NameLabel}"
+                                 AutomationProperties.Name="{Binding NameLabel}"
                                  IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}" />
                         <StackPanel Grid.Column="2">
                           <Border x:Name="EnvMark" Style="{StaticResource RowMark}">
@@ -435,7 +435,7 @@
                                    sight-only; the box carries the author's hint for anyone reading
                                    the form aloud. -->
                               <TextBox x:Name="EnvPlaceholder" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource MonoFont}"
-                                       AutomationProperties.Name="{x:Static state:EditorModel.ValueLabel}"
+                                       AutomationProperties.Name="{Binding ValueLabel}"
                                        Style="{StaticResource Watermarked}" Tag="{x:Static state:EditorModel.NeedsValue}"
                                        AutomationProperties.HelpText="{Binding Hint}"
                                        Visibility="{Binding Asks, Converter={StaticResource Vis}}" />
@@ -488,7 +488,7 @@
                             </Button.Style>
                           </Button>
                           <Button x:Name="DeleteEnvButton" Style="{StaticResource IconButton}" Content="&#xE711;" Click="OnDeleteEnv"
-                                  ToolTip="{x:Static state:EditorModel.DeleteVariableLabel}" AutomationProperties.Name="{x:Static state:EditorModel.DeleteVariableLabel}"
+                                  ToolTip="{x:Static state:EditorModel.DeleteVariableLabel}" AutomationProperties.Name="{Binding DeleteLabel}"
                                   IsEnabled="{Binding DataContext.IsReadOnly, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Not}}" />
                         </StackPanel>
                       </Grid>

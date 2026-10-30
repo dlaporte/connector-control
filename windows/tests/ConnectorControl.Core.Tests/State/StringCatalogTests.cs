@@ -223,6 +223,12 @@ public class StringCatalogTests
         ["EditorModel.additionalTitle"] = ["3", "a, b"],
         // Called with the row's index, 2: the text counts from one.
         ["EditorModel.argumentLabel"] = ["3"],
+        ["EditorModel.deleteVariableRowLabel"] = ["3"],
+        ["EditorModel.variableNameLabel"] = ["3"],
+        ["EditorModel.variableValueLabel"] = ["3"],
+        ["PublishModel.hintRowLabel"] = ["X", "Y"],
+        ["PublishModel.markPathRowLabel"] = ["X", "Y"],
+        ["PublishModel.shareValueRowLabel"] = ["X", "Y"],
         ["EditorModel.argumentNumber"] = ["3"],
         ["EditorModel.changedOutsideMessage"] = ["X"],
         ["EditorModel.cmdUnsafeError"] = ["X"],
@@ -705,6 +711,9 @@ public class StringCatalogTests
         actual["EditorModel.addVariableTitle"] = EditorModel.AddVariableTitle;
         actual["EditorModel.additionalTitle"] = EditorModel.AdditionalTitleFor(3, ["a", "b"]);
         actual["EditorModel.argumentLabel"] = EditorModel.ArgumentLabel(2);
+        actual["EditorModel.deleteVariableRowLabel"] = EditorModel.DeleteVariableRowLabel(2);
+        actual["EditorModel.variableNameLabel"] = EditorModel.VariableNameLabel(2);
+        actual["EditorModel.variableValueLabel"] = EditorModel.VariableValueLabel(2);
         actual["EditorModel.argumentNumber"] = EditorModel.ArgumentNumber(2);
         actual["EditorModel.argumentPrompt"] = EditorModel.ArgumentPrompt;
         actual["EditorModel.argumentsHeader"] = EditorModel.ArgumentsHeader;
@@ -851,6 +860,9 @@ public class StringCatalogTests
         actual["PublishModel.footerLine"] = PublishModel.FooterLine("X", "Y");
         actual["PublishModel.forgetMarkButton"] = PublishModel.ForgetMarkButton;
         actual["PublishModel.hintPlaceholder"] = PublishModel.HintPlaceholder;
+        actual["PublishModel.hintRowLabel"] = PublishModel.HintRowLabel("X", "Y");
+        actual["PublishModel.markPathRowLabel"] = PublishModel.MarkPathRowLabel("X", "Y");
+        actual["PublishModel.shareValueRowLabel"] = PublishModel.ShareValueRowLabel("X", "Y");
         actual["PublishModel.markPathLabel"] = PublishModel.MarkPathLabel;
         actual["PublishModel.noFolderError"] = PublishModel.NoFolderError;
         actual["PublishModel.pathNamePlaceholder"] = PublishModel.PathNamePlaceholder;

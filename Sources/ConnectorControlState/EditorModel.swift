@@ -65,6 +65,13 @@ public final class EditorModel: ObservableObject {
     /// it, which the field carries no other label for.
     public static func argumentLabel(_ index: Int) -> String { "Argument \(index + 1)" }
     public static let environmentHeader = "Environment Variables"
+
+    // A screen reader's names for an environment row's three controls, from the row's index, for
+    // the reason `argumentLabel` is: nothing visible says which row a bare "Name" belongs to, and
+    // the variable's own name is the author's to retype under the reader's cursor.
+    public static func variableNameLabel(_ index: Int) -> String { "Variable \(index + 1) name" }
+    public static func variableValueLabel(_ index: Int) -> String { "Variable \(index + 1) value" }
+    public static func deleteVariableRowLabel(_ index: Int) -> String { "Delete variable \(index + 1)" }
     public static let valueLabel = "Value"
     public static let tokenLabel = "Token"
     public static let headerNameLabel = "Header name"

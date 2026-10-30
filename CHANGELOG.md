@@ -22,6 +22,7 @@ has one.
 
 - Restart Claude no longer says Claude “didn’t quit” when it actually did; Connector Control now reopens it.
 - The JSON editor now supports undo (Cmd-Z) and no longer autocorrects or spell-checks what you type, so commands, arguments and header names stay as written.
+- The menu bar icon now has a name for VoiceOver — “Connector Control”, or “Connector Control: Apply Failed — Retry” when an apply is waiting to be retried — and VoiceOver no longer reads the “▾” after the collection name in the popover.
 
 ### Windows
 
@@ -33,6 +34,7 @@ has one.
 
 ### Both platforms
 
+- Screen readers now name each row in the Publish sheet and the editor’s environment list: the share and path ticks and the hint boxes say which connector and variable they belong to, and each environment row’s name, value and delete button carry the row’s number, instead of every row sounding the same.
 - The Publish sheet no longer offers plain words such as `usr` or `tmp` as machine-specific paths. Which arguments it offers now depends only on how they’re written (a full path, `.` or `..`, or one that starts with `~`, `./` or `../`), not on how Connector Control happened to be started.
 - Saving a connector with “Also apply this change to …” ticked now writes your connector list and takes a backup once, instead of once per collection. The in-between states no longer use up backup slots and push older history out.
 

@@ -90,6 +90,7 @@ struct PopoverView: View {
                 }
                 if model.activeHasPendingUpdate { PendingDot() }
                 Text(PopoverView.disclosureMark)
+                    .accessibilityHidden(true)
             }
             .font(.caption2.weight(.semibold))
             .foregroundStyle(.secondary)

@@ -760,4 +760,12 @@ final class PublishModelTests: XCTestCase {
         XCTAssertEqual(state.store.collections[collection]?.mcps.keys.sorted(), held,
                        "exporting a subset takes nothing out of the collection")
     }
+
+    /// Each row's controls are named by the connector and variable or path they act on, so a screen
+    /// reader can tell repeated rows apart.
+    func testRowControlsAreNamedByTheirConnectorAndSubject() {
+        XCTAssertEqual(PublishModel.shareValueRowLabel("github", "TOKEN"), "Share value of TOKEN in github")
+        XCTAssertEqual(PublishModel.hintRowLabel("github", "TOKEN"), "Hint for TOKEN in github")
+        XCTAssertEqual(PublishModel.markPathRowLabel("fs", "/Users/me/x"), "Mark /Users/me/x in fs as a path this machine supplies")
+    }
 }
