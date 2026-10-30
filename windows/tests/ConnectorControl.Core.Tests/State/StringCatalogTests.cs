@@ -264,6 +264,7 @@ public class StringCatalogTests
         ["RemotePattern.cmdUnsafeReason"] = ["Server URL"],
         ["RestoreModel.confirmMessage"] = ["X"],
         ["ReviewModel.title"] = ["X"],
+        ["SettingsModel.keepCountHelpText"] = ["3"],
         ["SettingsModel.loginItemFailureNote"] = ["X"],
         ["SettingsModel.versionText"] = ["X"],
         ["ToolFooterLine.installText"] = ["X", "Y", "Z"],
@@ -925,15 +926,18 @@ public class StringCatalogTests
         actual["SettingsModel.confirmRestartTitle"] = SettingsModel.ConfirmRestartTitle;
         actual["SettingsModel.confirmationsHeader"] = SettingsModel.ConfirmationsHeader;
         actual["SettingsModel.configPathLabel"] = SettingsModel.ConfigPathLabel;
+        actual["SettingsModel.fewerBackupsLabel"] = SettingsModel.FewerBackupsLabel;
         actual["SettingsModel.generalTab"] = SettingsModel.GeneralTab;
         // Inline literals inside InstallKindText's switch expression — not named constants.
         actual["SettingsModel.installKindLegacyText"] = "Legacy installer";
         actual["SettingsModel.installKindMsixText"] = "MSIX package";
+        actual["SettingsModel.keepCountHelpText"] = SettingsModel.KeepCountHelpText(3);
         actual["SettingsModel.launchAtLoginTitle"] = SettingsModel.LaunchAtStartupTitle;
         actual["SettingsModel.launchTargetLabel"] = SettingsModel.LaunchTargetLabel;
         actual["SettingsModel.loginItemFailureNote"] = SettingsModel.StartupEntryFailureNote("X");
         actual["SettingsModel.masterListFooter"] = SettingsModel.MasterListFooter;
         actual["SettingsModel.masterListHeader"] = SettingsModel.MasterListHeader;
+        actual["SettingsModel.moreBackupsLabel"] = SettingsModel.MoreBackupsLabel;
         actual["SettingsModel.notificationsHeader"] = SettingsModel.NotificationsHeader;
         actual["SettingsModel.notifyCaption"] = SettingsModel.NotifyCaption;
         actual["SettingsModel.notifyTitle"] = SettingsModel.NotifyTitle;

@@ -187,6 +187,8 @@ public class FlyoutWindowTests
             Layout(window);
             Assert.Equal(Visibility.Visible, window.FooterPanel.Visibility);
             Assert.Equal("Apply Failed — Retry", window.FooterTitle.Text);
+            // A button built from a glyph and a title has no name of its own: it speaks the title.
+            Assert.Equal("Apply Failed — Retry", AutomationProperties.GetName(window.FooterButton));
             Assert.Equal(Visibility.Visible, window.ErrorBanner.Visibility);
         });
     }
@@ -265,6 +267,7 @@ public class FlyoutWindowTests
         WpfApp.Invoke(() => Showing(h, state, (window, model, _) =>
         {
             Assert.Equal("Default", window.CollectionChipName.Text);
+            Assert.Equal("Default", AutomationProperties.GetName(window.CollectionChip));
             Assert.Equal(Visibility.Collapsed, window.CollectionChipChain.Visibility);
             Assert.Equal(Visibility.Collapsed, window.CollectionChipDot.Visibility);
 
@@ -279,6 +282,9 @@ public class FlyoutWindowTests
             Assert.NotNull(source);
             Assert.Equal(FlyoutModel.SourceTooltipFormat(source), window.CollectionChipChain.ToolTip);
             Assert.Equal(FlyoutModel.SourceTooltipFormat(source), AutomationProperties.GetName(window.CollectionChipChain));
+            // The chip itself speaks its collection, with where the document is as help text.
+            Assert.Equal("Data team", AutomationProperties.GetName(window.CollectionChip));
+            Assert.Equal(FlyoutModel.SourceTooltipFormat(source), AutomationProperties.GetHelpText(window.CollectionChip));
             Assert.Equal(Visibility.Collapsed, window.CollectionChipDot.Visibility);   // nothing waiting yet
 
             state.SwitchCollection("Default");
@@ -371,6 +377,7 @@ public class FlyoutWindowTests
             Assert.Equal(Visibility.Collapsed, window.CollectionBannerSecondary.Visibility);
             Assert.Equal(Visibility.Visible, window.CollectionChipDot.Visibility);
             Assert.Equal(FlyoutModel.PendingSpokenLabel, AutomationProperties.GetName(window.CollectionChipDot));
+            Assert.Equal("Data team" + FlyoutModel.PendingMenuMark, AutomationProperties.GetName(window.CollectionChip));
 
             // So does the menu: a dot that speaks, and a row whose name carries the same words.
             var row = window.BuildCollectionMenu().Items.OfType<MenuItem>().First();

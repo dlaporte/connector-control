@@ -171,6 +171,31 @@ public class SettingsModelTests
         Assert.False(rig.Model.CanCheckForUpdates);
     }
 
+    /// <summary>The −/+ buttons dim at the bounds and tell Narrator the count. Windows only: the Mac Stepper does both itself.</summary>
+    [Fact]
+    public void TheKeepCountButtonsDimAtTheBoundsAndSayTheCount()
+    {
+        using var rig = new Rig();
+        var raised = new List<string?>();
+        rig.Model.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        Assert.True(rig.Model.CanDecrementKeepCount);
+        Assert.True(rig.Model.CanIncrementKeepCount);
+        Assert.Equal("Keeps 20 backups of each file.", rig.Model.BackupKeepCountHelpText);
+        rig.Model.BackupKeepCount = SettingsModel.MinKeepCount;
+        Assert.False(rig.Model.CanDecrementKeepCount);
+        Assert.True(rig.Model.CanIncrementKeepCount);
+        Assert.Contains(nameof(SettingsModel.CanDecrementKeepCount), raised);
+        Assert.Contains(nameof(SettingsModel.BackupKeepCountHelpText), raised);
+        raised.Clear();
+        rig.Model.DecrementKeepCount();   // a click at the bound changes nothing, and still says so
+        Assert.Equal(SettingsModel.MinKeepCount, rig.Model.BackupKeepCount);
+        Assert.Contains(nameof(SettingsModel.CanDecrementKeepCount), raised);
+        rig.Model.BackupKeepCount = SettingsModel.MaxKeepCount;
+        Assert.True(rig.Model.CanDecrementKeepCount);
+        Assert.False(rig.Model.CanIncrementKeepCount);
+        Assert.Equal("Keeps 100 backups of each file.", rig.Model.BackupKeepCountHelpText);
+    }
+
     [Fact]
     public void BackupKeepCountClampsAndRebuildsTheService()
     {

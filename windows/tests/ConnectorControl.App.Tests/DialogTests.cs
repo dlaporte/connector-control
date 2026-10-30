@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Documents;
@@ -80,6 +81,9 @@ public class DialogTests
             Assert.Equal("Rename Collection", dialog.Title);
             Assert.Equal("Default", dialog.NameBox.Text);
             Assert.Null(dialog.Result);
+            // The field is named by the prompt's title, its label.
+            WindowTestSupport.Layout(dialog, new Size(320, 200));   // the ElementName binding resolves with the first binding pass
+            Assert.Same(dialog.TitleText, AutomationProperties.GetLabeledBy(dialog.NameBox));
         });
     }
 

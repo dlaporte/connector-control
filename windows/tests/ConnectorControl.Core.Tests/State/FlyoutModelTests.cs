@@ -370,11 +370,14 @@ public class FlyoutModelTests
             ["Default"] = new CollectionDiff(["jira"], [], []),
         };
         Assert.False(flyout.ActiveHasPendingUpdate);
+        Assert.Equal("Data team", flyout.ChipSpokenName);
         state.PendingUpdates = new Dictionary<string, CollectionDiff>(StringComparer.Ordinal)
         {
             ["Data team"] = new CollectionDiff(["jira"], [], []),
         };
         Assert.True(flyout.ActiveHasPendingUpdate);
+        // Windows only: the chip's spoken name carries the dot in words, as the menu's titles do.
+        Assert.Equal("Data team" + FlyoutModel.PendingMenuMark, flyout.ChipSpokenName);
     }
 
     [Fact]

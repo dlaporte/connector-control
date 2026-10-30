@@ -43,7 +43,10 @@
             <TextBlock x:Name="SubtitleText" Text="{Binding Subtitle}" Style="{StaticResource CaptionText}" FontSize="11" />
             <!-- The active collection and what is true of it: the chain when its connectors are
                  a document's, the amber dot when that document has news waiting. -->
-            <Button x:Name="CollectionChip" Style="{StaticResource LinkButton}" FontSize="11" FontWeight="SemiBold" Padding="0,1,0,0" Click="OnCollectionChip">
+            <!-- Built from elements, so the button has no name of its own: it speaks the collection, the dot in
+                 words, and where its document is as help text. -->
+            <Button x:Name="CollectionChip" Style="{StaticResource LinkButton}" FontSize="11" FontWeight="SemiBold" Padding="0,1,0,0" Click="OnCollectionChip"
+                    AutomationProperties.Name="{Binding ChipSpokenName}" AutomationProperties.HelpText="{Binding SourceTooltip}">
               <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="CollectionChipName" Text="{Binding ActiveCollection}" VerticalAlignment="Center" />
                 <TextBlock x:Name="CollectionChipChain" Style="{StaticResource ChainMark}"
@@ -183,7 +186,9 @@
       <!-- Footer -->
       <StackPanel x:Name="FooterPanel" Visibility="{Binding ShowFooter, Converter={StaticResource Vis}}">
         <Separator Margin="0" />
-        <Button HorizontalAlignment="Right" Margin="10" Style="{StaticResource FooterButton}" Click="OnFooter">
+        <!-- A glyph and a title built from elements give the button no name of its own, so it speaks the title. -->
+        <Button x:Name="FooterButton" HorizontalAlignment="Right" Margin="10" Style="{StaticResource FooterButton}" Click="OnFooter"
+                AutomationProperties.Name="{Binding FooterTitle}">
           <StackPanel Orientation="Horizontal">
             <TextBlock Text="{Binding FooterGlyph}" FontFamily="{StaticResource IconFont}" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center" />
             <TextBlock x:Name="FooterTitle" Text="{Binding FooterTitle}" FontSize="12" VerticalAlignment="Center" />

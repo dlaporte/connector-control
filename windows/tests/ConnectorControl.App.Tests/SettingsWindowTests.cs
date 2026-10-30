@@ -426,6 +426,44 @@ public class SettingsWindowTests
         });
     }
 
+    /// <summary>The −/+ buttons say what they do and the count, and dim at the bounds; each Use Default/Choose… pair says
+    /// its row. Windows only: the Mac Stepper and rows do both themselves.</summary>
+    [Fact]
+    public void TheStorageAndClaudeRowButtonsAreNamedForNarrator()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var services = h.Services();
+        using var updates = new UpdateCoordinator(services.Updater, h.Settings, h.Notifier, h.Dialogs, AppHost.Inline());
+        WpfApp.Invoke(() =>
+        {
+            var window = new SettingsWindow(state, services, updates);
+            Laid(window, () =>
+            {
+                Assert.Equal(SettingsModel.FewerBackupsLabel, AutomationProperties.GetName(window.FewerBackupsButton));
+                Assert.Equal(SettingsModel.MoreBackupsLabel, AutomationProperties.GetName(window.MoreBackupsButton));
+                Assert.Equal(SettingsModel.KeepCountHelpText(20), AutomationProperties.GetHelpText(window.MoreBackupsButton));
+                Assert.True(window.FewerBackupsButton.IsEnabled);
+                window.Model.BackupKeepCount = SettingsModel.MinKeepCount;
+                WindowTestSupport.Layout(window, new Size(480, 560));
+                Assert.False(window.FewerBackupsButton.IsEnabled);
+                Assert.True(window.MoreBackupsButton.IsEnabled);
+                Assert.Equal(SettingsModel.KeepCountHelpText(SettingsModel.MinKeepCount), AutomationProperties.GetHelpText(window.FewerBackupsButton));
+                window.Model.BackupKeepCount = SettingsModel.MaxKeepCount;
+                WindowTestSupport.Layout(window, new Size(480, 560));
+                Assert.True(window.FewerBackupsButton.IsEnabled);
+                Assert.False(window.MoreBackupsButton.IsEnabled);
+
+                Assert.Equal(SettingsModel.MasterListHeader, AutomationProperties.GetHelpText(window.UseDefaultStoreButton));
+                Assert.Equal(SettingsModel.MasterListHeader, AutomationProperties.GetHelpText(window.ChooseStoreButton));
+                Assert.Equal(SettingsModel.ConfigPathLabel, AutomationProperties.GetHelpText(window.UseDefaultConfigButton));
+                Assert.Equal(SettingsModel.ConfigPathLabel, AutomationProperties.GetHelpText(window.ChooseConfigButton));
+                Assert.Equal(SettingsModel.LaunchTargetLabel, AutomationProperties.GetHelpText(window.UseDefaultLaunchTargetButton));
+                Assert.Equal(SettingsModel.LaunchTargetLabel, AutomationProperties.GetHelpText(window.ChooseLaunchTargetButton));
+            });
+        });
+    }
+
     /// <summary>Check for Updates reads Checking… and cannot be clicked while a check runs. Windows only: Sparkle shows the Mac's.</summary>
     [Fact]
     public void CheckForUpdatesReadsCheckingWhileACheckRuns()

@@ -1060,12 +1060,20 @@
   "SettingsModel.confirmQuitTitle": "Confirm before quitting",
   "SettingsModel.confirmRestartTitle": "Confirm before restarting Claude",
   "SettingsModel.confirmationsHeader": "Confirmations",
+  "SettingsModel.fewerBackupsLabel": {
+    "win": "Fewer backups"
+  },
   "SettingsModel.generalTab": "General",
   "SettingsModel.installKindLegacyText": {
     "win": "Legacy installer"
   },
   "SettingsModel.installKindMsixText": {
     "win": "MSIX package"
+  },
+  "SettingsModel.keepCountHelpText": {
+    "win": {
+      "format": "Keeps {0} backups of each file."
+    }
   },
   "SettingsModel.launchAtLoginTitle": {
     "mac": "Launch at login",
@@ -1090,6 +1098,9 @@
     "win": "Holds mcps.json and collections.json. A synced folder shares them across your PCs."
   },
   "SettingsModel.masterListHeader": "Master List Location",
+  "SettingsModel.moreBackupsLabel": {
+    "win": "More backups"
+  },
   "SettingsModel.notificationsHeader": "Notifications",
   "SettingsModel.notifyCaption": "When the master list, a subscribed document or Claude’s config changes outside the app, and when Claude’s config is rebuilt from your list.",
   "SettingsModel.notifyTitle": "Notify on external changes",

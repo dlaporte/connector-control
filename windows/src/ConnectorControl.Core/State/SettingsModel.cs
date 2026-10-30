@@ -34,6 +34,12 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     public const string BackupsTitle = "Backups of each file";
     public const string BackupsCaption = "Claude’s config, the master list and collections.json.";
     public const string BackupsFooter = "A backup is made automatically before every change.";
+    // Platform idiom: the Mac's Stepper is one control that VoiceOver names with the row's title; Windows draws two
+    // buttons, each named for what it does.
+    /// <summary>The − button's spoken name.</summary>
+    public const string FewerBackupsLabel = "Fewer backups";
+    /// <summary>The + button's spoken name.</summary>
+    public const string MoreBackupsLabel = "More backups";
     public const string ShowInExplorerTitle = "Show in Explorer";
     /// <summary>The Settings button that opens the restore sheet; the sheet's own button is RestoreModel.RestoreTitle.</summary>
     public const string RestoreButtonTitle = "Restore…";
@@ -334,16 +340,30 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         set
         {
             var clamped = Math.Clamp(value, MinKeepCount, MaxKeepCount);
-            if (clamped == settings.BackupKeepCount)
+            if (clamped != settings.BackupKeepCount)
             {
-                Raise();   // the stepper's own binding snaps back to the clamped value
-                return;
+                settings.BackupKeepCount = clamped;
+                state.RefreshServiceSettings();
             }
-            settings.BackupKeepCount = clamped;
-            state.RefreshServiceSettings();
+            // Raised even when nothing changed: the stepper's own binding snaps back to the clamped value.
             Raise();
+            Raise(nameof(CanDecrementKeepCount));
+            Raise(nameof(CanIncrementKeepCount));
+            Raise(nameof(BackupKeepCountHelpText));
         }
     }
+
+    // Platform idiom: the Mac Stepper dims its arrows at its bounds itself; Windows' two buttons bind these.
+    /// <summary>The − button, dimmed at the least count kept.</summary>
+    public bool CanDecrementKeepCount => settings.BackupKeepCount > MinKeepCount;
+
+    /// <summary>The + button, dimmed at the most count kept.</summary>
+    public bool CanIncrementKeepCount => settings.BackupKeepCount < MaxKeepCount;
+
+    /// <summary>What the −/+ buttons tell Narrator after their names: the count now, as the Mac Stepper's value.</summary>
+    public string BackupKeepCountHelpText => KeepCountHelpText(settings.BackupKeepCount);
+
+    public static string KeepCountHelpText(int count) => $"Keeps {count} backups of each file.";
 
     public void IncrementKeepCount() => BackupKeepCount = settings.BackupKeepCount + 1;
 

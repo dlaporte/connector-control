@@ -47,10 +47,10 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public const string PendingSpokenLabel = CollectionsModel.UpdateAvailableStatus;
     /// <summary>
     /// What a Mac menu row says in place of the amber dot: its Menu row draws one title and one
-    /// image, and the image is the chain, so a pending update has to be words. It is here for
-    /// parity only. The flyout draws a real dot per row and speaks <see cref="PendingSpokenLabel"/>
-    /// for it, so a Windows view that also used <see cref="MenuTitle"/> would mark each pending
-    /// row twice.
+    /// image, and the image is the chain, so a pending update has to be words. The flyout draws a
+    /// real dot per row and speaks <see cref="PendingSpokenLabel"/> for it, so a Windows view that
+    /// also drew <see cref="MenuTitle"/> would mark each pending row twice; Windows uses the words
+    /// only where they are spoken, as names (<see cref="ChipSpokenName"/>, the menu items).
     /// </summary>
     public const string PendingMenuMark = " · " + PendingSpokenLabel;
     /// <summary>Shown in the error banner when nothing worse is: the store's folder refused the owner-only permission.</summary>
@@ -120,6 +120,11 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     /// source. Another collection's pending update is the menu's dot, not the chip's.
     /// </summary>
     public bool ActiveHasPendingUpdate => state.PendingUpdates.ContainsKey(state.ActiveCollection);
+
+    // Platform idiom: a WPF button whose content is built from elements has no name of its own, so the chip is given
+    // one string to speak; the Mac's VoiceOver reads the chip's parts.
+    /// <summary>The chip's spoken name: the active collection, and its amber dot in words, as the menu's titles say it.</summary>
+    public string ChipSpokenName => ActiveHasPendingUpdate ? ActiveCollection + PendingMenuMark : ActiveCollection;
 
     /// <summary>
     /// The chain's tooltip: where the active collection's document sits on this machine, or the

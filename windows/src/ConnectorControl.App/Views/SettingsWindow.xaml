@@ -187,8 +187,11 @@
                     <TextBlock x:Name="StoreDirParent" Text="{Binding StoreDirParent}" Style="{StaticResource CaptionText}" />
                   </StackPanel>
                   <StackPanel Style="{StaticResource RowControls}">
-                    <Button Content="{x:Static state:SettingsModel.UseDefaultTitle}" IsEnabled="{Binding CanUseDefaultStore}" Click="OnUseDefaultStore" />
-                    <Button Content="{x:Static state:SettingsModel.ChooseButtonTitle}" Margin="6,0,0,0" Click="OnChooseStoreDir" />
+                    <!-- Each row's buttons share their names with every other row's, so each says its row as help text. -->
+                    <Button x:Name="UseDefaultStoreButton" Content="{x:Static state:SettingsModel.UseDefaultTitle}" IsEnabled="{Binding CanUseDefaultStore}" Click="OnUseDefaultStore"
+                            AutomationProperties.HelpText="{x:Static state:SettingsModel.MasterListHeader}" />
+                    <Button x:Name="ChooseStoreButton" Content="{x:Static state:SettingsModel.ChooseButtonTitle}" Margin="6,0,0,0" Click="OnChooseStoreDir"
+                            AutomationProperties.HelpText="{x:Static state:SettingsModel.MasterListHeader}" />
                   </StackPanel>
                 </Grid>
               </Border>
@@ -208,8 +211,13 @@
                     </StackPanel>
                     <StackPanel Style="{StaticResource RowControls}">
                       <TextBlock x:Name="KeepCount" Text="{Binding BackupKeepCount}" MinWidth="24" TextAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0" />
-                      <Button Content="−" MinWidth="32" Click="OnDecrementKeepCount" />
-                      <Button Content="+" MinWidth="32" Margin="4,0,0,0" Click="OnIncrementKeepCount" />
+                      <!-- A glyph is no name: each button says what it does, then the count, and dims at its bound. -->
+                      <Button x:Name="FewerBackupsButton" Content="−" MinWidth="32" Click="OnDecrementKeepCount" IsEnabled="{Binding CanDecrementKeepCount}"
+                              AutomationProperties.Name="{x:Static state:SettingsModel.FewerBackupsLabel}"
+                              AutomationProperties.HelpText="{Binding BackupKeepCountHelpText}" />
+                      <Button x:Name="MoreBackupsButton" Content="+" MinWidth="32" Margin="4,0,0,0" Click="OnIncrementKeepCount" IsEnabled="{Binding CanIncrementKeepCount}"
+                              AutomationProperties.Name="{x:Static state:SettingsModel.MoreBackupsLabel}"
+                              AutomationProperties.HelpText="{Binding BackupKeepCountHelpText}" />
                     </StackPanel>
                   </Grid>
                 </Border>
@@ -261,8 +269,10 @@
                       <TextBlock Text="{Binding ClaudeConfigPath}" Style="{StaticResource CaptionText}" />
                     </StackPanel>
                     <StackPanel Style="{StaticResource RowControls}">
-                      <Button Content="{x:Static state:SettingsModel.UseDefaultTitle}" IsEnabled="{Binding CanUseDefaultClaudeConfig}" Click="OnUseDefaultClaudeConfig" />
-                      <Button Content="{x:Static state:SettingsModel.ChooseButtonTitle}" Margin="6,0,0,0" Click="OnChooseClaudeConfig" />
+                      <Button x:Name="UseDefaultConfigButton" Content="{x:Static state:SettingsModel.UseDefaultTitle}" IsEnabled="{Binding CanUseDefaultClaudeConfig}" Click="OnUseDefaultClaudeConfig"
+                              AutomationProperties.HelpText="{x:Static state:SettingsModel.ConfigPathLabel}" />
+                      <Button x:Name="ChooseConfigButton" Content="{x:Static state:SettingsModel.ChooseButtonTitle}" Margin="6,0,0,0" Click="OnChooseClaudeConfig"
+                              AutomationProperties.HelpText="{x:Static state:SettingsModel.ConfigPathLabel}" />
                     </StackPanel>
                   </Grid>
                 </Border>
@@ -274,8 +284,10 @@
                       <TextBlock Text="{Binding LaunchTargetText}" Style="{StaticResource CaptionText}" />
                     </StackPanel>
                     <StackPanel Style="{StaticResource RowControls}">
-                      <Button Content="{x:Static state:SettingsModel.UseDefaultTitle}" IsEnabled="{Binding CanUseDefaultLaunchTarget}" Click="OnUseDefaultLaunchTarget" />
-                      <Button Content="{x:Static state:SettingsModel.ChooseButtonTitle}" Margin="6,0,0,0" Click="OnChooseLaunchTarget" />
+                      <Button x:Name="UseDefaultLaunchTargetButton" Content="{x:Static state:SettingsModel.UseDefaultTitle}" IsEnabled="{Binding CanUseDefaultLaunchTarget}" Click="OnUseDefaultLaunchTarget"
+                              AutomationProperties.HelpText="{x:Static state:SettingsModel.LaunchTargetLabel}" />
+                      <Button x:Name="ChooseLaunchTargetButton" Content="{x:Static state:SettingsModel.ChooseButtonTitle}" Margin="6,0,0,0" Click="OnChooseLaunchTarget"
+                              AutomationProperties.HelpText="{x:Static state:SettingsModel.LaunchTargetLabel}" />
                     </StackPanel>
                   </Grid>
                 </Border>
