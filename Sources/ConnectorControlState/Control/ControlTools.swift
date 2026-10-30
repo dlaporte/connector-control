@@ -35,7 +35,7 @@ public final class ControlTools {
     public static let listKind = "a list of names"
     public static let objectKind = "a JSON object"
     public static let helpUsage = "Usage: connector-control <command> [options]"
-    public static let relayUsage = "mcp"
+    public static let relayUsage = ClaudeIntegration.relayArgument
     public static let relaySummary = "The relay Claude Desktop runs; not for direct use"
     public static let helpOptions = "Options: --json  --version  --help"
     /// The width of the usage field in `help`: two spaces of indent, then the usage padded to this, then the

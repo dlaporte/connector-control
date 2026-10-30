@@ -36,7 +36,7 @@ public sealed partial class ControlTools
     public const string ListKind = "a list of names";
     public const string ObjectKind = "a JSON object";
     public const string HelpUsage = "Usage: connector-control <command> [options]";
-    public const string RelayUsage = "mcp";
+    public const string RelayUsage = ClaudeIntegration.RelayArgument;
     public const string RelaySummary = "The relay Claude Desktop runs; not for direct use";
     public const string HelpOptions = "Options: --json  --version  --help";
     /// <summary>The width of the usage field in <c>help</c>: two spaces of indent, then the usage padded to this, then the
