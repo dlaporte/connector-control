@@ -60,7 +60,7 @@ public enum FormMapper {
         }
 
         model.additional = object.filter { !formKeys.contains($0.key) }
-        return FormAnalysis(model: model, lost: lost.sorted())
+        return FormAnalysis(model: model, lost: lost.sorted { $0.ordinallyPrecedes($1) })
     }
 
     public static func serialize(_ model: FormModel) -> JSONValue {
