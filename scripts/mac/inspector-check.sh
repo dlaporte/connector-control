@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Drives `connector-control mcp` with the official MCP Inspector against the headless test host — the
-# real control layer over a sandbox — so the MCP subset this repo writes for itself is checked by the
+# Drives `connector-control mcp` with the official MCP Inspector against the headless test host - the
+# real control layer over a sandbox - so the MCP subset this repo writes for itself is checked by the
 # reference client. Nothing outside a mktemp folder is touched: the test host builds every path from
 # it, and CONNECTOR_CONTROL_STORE_DIR, passed to the relay with -e, both points the relay at the test
 # host's socket and keeps it from ever starting the real app.

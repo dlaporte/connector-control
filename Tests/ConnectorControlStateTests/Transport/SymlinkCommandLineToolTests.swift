@@ -220,7 +220,7 @@ final class SymlinkCommandLineToolTests: XCTestCase {
         XCTAssertEqual(SymlinkCommandLineTool.removeScript, ["on run argv", "do shell script \(SymlinkCommandLineTool.removeShell)"
             + " with prompt (item 3 of argv) with administrator privileges", "end run"])
         let fileManager = FileManager.default
-        // Whatever umask the shell inherits — an administrator's may be 000 — the folder it makes is 0755, never
+        // Whatever umask the shell inherits - an administrator's may be 000 - the folder it makes is 0755, never
         // one anybody can write on everyone's PATH.
         XCTAssertEqual(try run(SymlinkCommandLineTool.installShell, [tool, link, bin.path, prompt], umask: "000").0, 0)
         XCTAssertEqual(try fileManager.attributesOfItem(atPath: bin.path)[.posixPermissions] as? Int, 0o755)

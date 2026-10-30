@@ -4,7 +4,7 @@ namespace ConnectorControl.Core;
 /// Mirror: Sources/ConnectorControlCore/McpLineFramer.swift
 ///
 /// One message as the transport read it: a line's bytes without their newline, or word that a line
-/// ran past the limit — whose bytes were dropped as they came, so a client cannot make the reader
+/// ran past the limit - whose bytes were dropped as they came, so a client cannot make the reader
 /// hold more than the limit. The Mac mirror's enum carries the bytes; here each frame is a record,
 /// and a <see cref="Line"/> compares its array by reference, as arrays do, so tests compare
 /// <c>Bytes</c> with <c>SequenceEqual</c>.

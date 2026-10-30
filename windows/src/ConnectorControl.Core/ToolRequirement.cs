@@ -3,7 +3,7 @@ namespace ConnectorControl.Core;
 /// <summary>
 /// Which of the four tools a connector's command needs: the first token by
 /// basename, case-insensitive, <c>.cmd</c>/<c>.exe</c> stripped, one <c>cmd /c</c> unwrapped.
-/// A command written as a path (<c>C:\Program Files\nodejs\npx.cmd</c>) is left alone — the
+/// A command written as a path (<c>C:\Program Files\nodejs\npx.cmd</c>) is left alone - the
 /// user chose it deliberately and PATH lookup does not apply.
 /// </summary>
 public static class ToolRequirement
@@ -26,7 +26,7 @@ public static class ToolRequirement
         CommandLine.TryRead(config, out var command, out var args) ? RequiredTool(command, args) : null;
 
     /// <summary>
-    /// Every tool the given configs need, deduplicated and in <see cref="ToolInfo.All"/> order —
+    /// Every tool the given configs need, deduplicated and in <see cref="ToolInfo.All"/> order -
     /// what the flyout must have probed before it can decide which rows carry a warning.
     /// </summary>
     public static IReadOnlyList<Tool> RequiredTools(IEnumerable<JsonValue> configs)

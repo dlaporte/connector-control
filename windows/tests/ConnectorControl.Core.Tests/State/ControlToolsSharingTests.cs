@@ -358,13 +358,13 @@ public class ControlToolsSharingTests
     }
 
     // The Mac mirror also refuses a FIFO, which would hold the read until something writes to it; a
-    // Windows file system has none — a pipe here is a \\.\ path, or a \\?\ or \??\ one to neither a
-    // drive nor a share, refused by its form below — so there is no such test here.
+    // Windows file system has none - a pipe here is a \\.\ path, or a \\?\ or \??\ one to neither a
+    // drive nor a share, refused by its form below - so there is no such test here.
 
     /// <summary>Platform idiom, as the <c>cmd /c</c> launcher's rule is: a path that reaches another computer
     /// or a device is refused by its form, before anything touches it. The relay is refused any full path
-    /// that starts with <c>\\</c> or <c>\??\</c> — opening a UNC or WebDAV path has Windows sign in to that host
-    /// as the user, with nothing asked — while the command-line tool keeps its team shares; a <c>\\.\</c> path,
+    /// that starts with <c>\\</c> or <c>\??\</c> - opening a UNC or WebDAV path has Windows sign in to that host
+    /// as the user, with nothing asked - while the command-line tool keeps its team shares; a <c>\\.\</c> path,
     /// a <c>\\?\</c> or <c>\??\</c> path to anything but a drive or a share, and a device or a pipe in any of
     /// them, is refused to everyone, since the rule cannot tell where it leads. Pure, so it runs on any
     /// platform.</summary>

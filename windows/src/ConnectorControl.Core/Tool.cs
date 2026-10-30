@@ -1,7 +1,7 @@
 namespace ConnectorControl.Core;
 
 /// <summary>
-/// The four launchers a connector's command can name — what <c>npx mcp-remote</c> and most
+/// The four launchers a connector's command can name - what <c>npx mcp-remote</c> and most
 /// local servers run through. When one is missing from the PATH Claude Desktop uses, Claude
 /// shows only "server disconnected". Declaration order is
 /// the Settings order.

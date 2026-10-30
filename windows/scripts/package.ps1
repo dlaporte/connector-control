@@ -14,12 +14,12 @@
     The channel name IS the runtime identifier: an installed app asks GitHub for
     releases.win-x64.json or releases.win-arm64.json and nothing else. Never a delta package:
     VelopackUpdater sets MaximumDeltasBeforeFallback = 0, so an installed client would never apply
-    one anyway — producing one here would just be extra upload weight nobody downloads.
+    one anyway - producing one here would just be extra upload weight nobody downloads.
 
     vpk itself runs with its working directory set to windows/, whatever directory this script was
     invoked from (windows-build.yml runs it from the repo root): `dotnet` resolves a local tool's
-    manifest by walking up from the CURRENT directory, and windows/.config/dotnet-tools.json — the
-    manifest pinning vpk — is not an ancestor of the repo root. Every other path this script uses
+    manifest by walking up from the CURRENT directory, and windows/.config/dotnet-tools.json - the
+    manifest pinning vpk - is not an ancestor of the repo root. Every other path this script uses
     is already absolute by the time vpk runs, so that directory change affects nothing else.
 
 .PARAMETER Version
@@ -57,7 +57,7 @@ param(
 # needs a different invocation.
 $vpkExe = 'dotnet'
 # Typed: PowerShell unrolls a one-element array into a plain string in some contexts, and a
-# string plus an array is string concatenation, not an argument list — that bit us once.
+# string plus an array is string concatenation, not an argument list - that bit us once.
 [string[]] $vpkPrefixArgs = @('vpk')
 
 Set-StrictMode -Version Latest
@@ -82,7 +82,7 @@ function Invoke-Native {
     if ($LASTEXITCODE -ne 0) { throw "$Label failed with exit code $LASTEXITCODE" }
 }
 
-if (-not (Test-Path $icon)) { throw "Missing $icon — run: swift scripts/generate-icon.swift windows/assets/ConnectorControl.ico (on the Mac)" }
+if (-not (Test-Path $icon)) { throw "Missing $icon - run: swift scripts/generate-icon.swift windows/assets/ConnectorControl.ico (on the Mac)" }
 
 Write-Host "== Publish $Runtime, version $Version"
 if (Test-Path $publishDir) { Remove-Item -Recurse -Force $publishDir }

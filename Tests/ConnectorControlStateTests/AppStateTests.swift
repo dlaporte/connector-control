@@ -302,7 +302,7 @@ final class AppStateTests: XCTestCase {
     }
 
     /// A stored empty string (e.g. a setting cleared by hand) counts as absent,
-    /// same as nil — the default location, not a literal empty path.
+    /// same as nil - the default location, not a literal empty path.
     func testAnEmptyStoredStoreDirIsTheDefault() {
         let h = AppStateHarness()
         defer { h.dispose() }
@@ -365,10 +365,10 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(Notifications.restartAction, "restartClaude")
         XCTAssertEqual(
             AppState.connectorListChangedBody(ServerDelta(added: ["evil"], removed: ["fs"]), restartRequired: true),
-            "The connector list changed outside Connector Control — Claude's config now adds evil; deletes fs. Restart Claude to pick it up.")
+            "The connector list changed outside Connector Control - Claude's config now adds evil; deletes fs. Restart Claude to pick it up.")
         XCTAssertEqual(
             AppState.connectorListChangedBody(ServerDelta(changed: ["aws-mcp"]), restartRequired: false),
-            "The connector list changed outside Connector Control — Claude's config now changes aws-mcp. Claude will use it the next time it starts.")
+            "The connector list changed outside Connector Control - Claude's config now changes aws-mcp. Claude will use it the next time it starts.")
         XCTAssertEqual(AppState.restartRecheckDelay, 3)
     }
 }

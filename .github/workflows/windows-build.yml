@@ -1,5 +1,5 @@
-# The Windows half of every build in this repo, in one place: restore/build/test, and — for a
-# release or a preview — the Velopack packaging and the install smoke test. release.yml,
+# The Windows half of every build in this repo, in one place: restore/build/test, and - for a
+# release or a preview - the Velopack packaging and the install smoke test. release.yml,
 # preview.yml and windows-ci.yml all call this, so the three cannot drift apart again
 # (they had: one verify step without `set -o pipefail`, one smoke job without the arm64
 # signature check, two spellings of the same signing decision).
@@ -11,7 +11,7 @@
 #   require-signing  signing is mandatory: the package job writes the Azure Artifact Signing
 #                    metadata and passes -AzureTrustedSignFile, and the smoke job demands a
 #                    valid Authenticode signature on both RIDs. This is an explicit decision by
-#                    the caller — never inferred from whether a secret happens to be set. The
+#                    the caller - never inferred from whether a secret happens to be set. The
 #                    gate job below is what proves the six AZURE_* secrets exist, and it fails
 #                    the run before the signed packaging jobs start; the unsigned test job runs
 #                    in parallel.
@@ -47,7 +47,7 @@ on:
         type: boolean
     # The Azure Artifact Signing secrets, read only by the gate and package jobs. Optional at the
     # declaration so windows-ci.yml (package: false) can keep passing none; a caller that
-    # packages with require-signing: true is proven by the gate job below to hold all six — the
+    # packages with require-signing: true is proven by the gate job below to hold all six - the
     # gate runs before the signed packaging jobs; the unsigned test job runs in parallel.
     secrets:
       AZURE_TENANT_ID:
@@ -90,7 +90,7 @@ jobs:
           for name in AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET \
                       AZURE_SIGNING_ENDPOINT AZURE_SIGNING_ACCOUNT AZURE_SIGNING_PROFILE; do
             if [ -z "${!name}" ]; then
-              echo "::error::$name is missing. A signed build never runs without all six AZURE_* secrets — add it under Settings ▸ Secrets and variables ▸ Actions, then re-run."
+              echo "::error::$name is missing. A signed build never runs without all six AZURE_* secrets - add it under Settings ▸ Secrets and variables ▸ Actions, then re-run."
               missing=1
             fi
           done
@@ -148,7 +148,7 @@ jobs:
         with:
           node-version: '22'
 
-      # The tool as it ships — single-file, self-contained, compressed and trimmed — so the Inspector
+      # The tool as it ships - single-file, self-contained, compressed and trimmed - so the Inspector
       # check below also proves the trimmed exe works, on every push and not only when packaging. The
       # flags are windows/scripts/package.ps1's for the tool: change them in both places.
       - name: Publish the command-line tool as it ships
@@ -283,7 +283,7 @@ jobs:
           path: artifacts-arm64
 
       # With require-signing, -ExpectSigned demands that Setup.exe and the installed exe carry a
-      # valid Authenticode signature, or this job — and therefore the release — fails.
+      # valid Authenticode signature, or this job - and therefore the release - fails.
       - name: Silent install, launch, first-run checks
         shell: pwsh
         env:

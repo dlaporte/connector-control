@@ -9,8 +9,8 @@ namespace ConnectorControl.Core.State;
 /// are set, and nor is a value under a key named for a secret; an argument that reads as a
 /// credential, the value after a flag named for a secret, a <c>NAME=value</c> word's value when the
 /// name is a secret's, a header's value, a URL's password and query and fragment values, and a
-/// URL's user name or path segment that reads as a credential, read "•••". Placeholders —
-/// <c>${CC_NEEDS:…}</c> and <c>${COLLECTION_DIR}</c> — name what is missing rather than what is secret, and
+/// URL's user name or path segment that reads as a credential, read "•••". Placeholders -
+/// <c>${CC_NEEDS:…}</c> and <c>${COLLECTION_DIR}</c> - name what is missing rather than what is secret, and
 /// show as written when they are the whole value. Every rule is plain string work, with no URL
 /// parser, so both platforms mask the same text the same way. Structured output is masked or, for
 /// the command-line tool's <c>show --reveal</c> (never Claude's), revealed; the line renderers take an
@@ -23,7 +23,7 @@ namespace ConnectorControl.Core.State;
 public static class ControlMasking
 {
     /// <summary>How much a line renderer shows. <c>Masked</c>: what Claude and the command-line tool see.
-    /// <c>Dialog</c>: the confirmation dialogs, whose text never goes back to Claude — the command,
+    /// <c>Dialog</c>: the confirmation dialogs, whose text never goes back to Claude - the command,
     /// arguments, URL and environment values in full, with a variable named for a secret (unless it
     /// names a program to run), header values, the OAuth client secret and every value under a key
     /// named for a secret still masked.
@@ -62,8 +62,8 @@ public static class ControlMasking
 
     // MARK: Values
 
-    /// <summary>A value that is wholly a reference — a placeholder, <c>${COLLECTION_DIR}</c>, or a <c>${NAME}</c> /
-    /// <c>$NAME</c> — takes its secret from elsewhere and holds none itself. One with a placeholder
+    /// <summary>A value that is wholly a reference - a placeholder, <c>${COLLECTION_DIR}</c>, or a <c>${NAME}</c> /
+    /// <c>$NAME</c> - takes its secret from elsewhere and holds none itself. One with a placeholder
     /// inside other text can still hold a secret beside it, so it is masked like any other.</summary>
     internal static bool RefersElsewhere(string value) =>
         CredentialHeuristics.IsReference(value);
@@ -278,9 +278,9 @@ public static class ControlMasking
 
     /// <summary>An argument as one word: a URL through <see cref="Url"/>, a value that is wholly a reference as
     /// written, <c>name=value</c> with the value masked when the name is a secret's (<c>--api-key=…</c>,
-    /// Docker's <c>-e API_KEY=…</c>) — read before a URL in the value, so the URL's rules never pass
-    /// the value's start through — and "•••" for anything that reads as a credential or a random
-    /// token — a "name" that does is part of the token, so the whole word is masked.</summary>
+    /// Docker's <c>-e API_KEY=…</c>) - read before a URL in the value, so the URL's rules never pass
+    /// the value's start through - and "•••" for anything that reads as a credential or a random
+    /// token - a "name" that does is part of the token, so the whole word is masked.</summary>
     internal static string Word(string arg)
     {
         if (IsUrl(arg))
@@ -302,7 +302,7 @@ public static class ControlMasking
         return LooksSecret(arg) ? Mask : arg;
     }
 
-    /// <summary>An argument that is a JSON object or array — Smithery's <c>--config '{"apiKey":"…"}'</c> — with
+    /// <summary>An argument that is a JSON object or array - Smithery's <c>--config '{"apiKey":"…"}'</c> - with
     /// each leaf masked by its key, as a config's are, on one line; as written when nothing in it
     /// changed. JSON nested deeper than <see cref="JsonValue.Parse(string)"/> reads is "•••", since what it holds cannot
     /// be read. Null for anything else. Before the shell line, which would split JSON at its spaces.</summary>
@@ -334,8 +334,8 @@ public static class ControlMasking
         return Same(shown, CompactText(value)) ? arg : shown;
     }
 
-    /// <summary>An argument holding whitespace — a shell line for <c>sh -c</c> or <c>cmd /c</c>, or a whole command
-    /// line written as the command — masked as <see cref="Arguments(IReadOnlyList{string}, bool)"/> masks the words a shell would pass,
+    /// <summary>An argument holding whitespace - a shell line for <c>sh -c</c> or <c>cmd /c</c>, or a whole command
+    /// line written as the command - masked as <see cref="Arguments(IReadOnlyList{string}, bool)"/> masks the words a shell would pass,
     /// so a flag named for a secret among them hides the word after it as it would in <c>args</c>. The
     /// split drops the line's quotes, so a line is rejoined, with each word quoted as the dialog
     /// quotes an argument, only when one of its words changed. Null for an argument with no
@@ -410,7 +410,7 @@ public static class ControlMasking
     }
 
     /// <summary>Whether the word after <paramref name="word"/> is a secret: after a flag <see cref="HidesNext"/> accepts, and, when
-    /// masked, after a flag with <c>=</c> whose glued value leaves the secret to the next word — nothing
+    /// masked, after a flag with <c>=</c> whose glued value leaves the secret to the next word - nothing
     /// or only a scheme word after a flag named for a secret (<c>--token=</c> <c>x</c>, <c>--token=Bearer</c> <c>x</c>),
     /// or after a header flag a header named for a secret or that signs in, with nothing or only a
     /// scheme word after its ":" (<c>--header=Authorization:</c> <c>Bearer</c> <c>x</c>, <c>--header=Authorization:
@@ -529,8 +529,8 @@ public static class ControlMasking
         return values;
     }
 
-    /// <summary>A header's name when <paramref name="word"/> gives no value with it — the whole word with no ":", or what is
-    /// before a ":" with nothing after it — and whether a scheme word follows its ":" instead
+    /// <summary>A header's name when <paramref name="word"/> gives no value with it - the whole word with no ":", or what is
+    /// before a ":" with nothing after it - and whether a scheme word follows its ":" instead
     /// (<c>Authorization:Bearer</c>). Null for a word with a value.</summary>
     internal static (string Name, bool Scheme)? HeaderName(string word)
     {
@@ -940,8 +940,8 @@ public static class ControlMasking
 
     /// <summary>Environment variables or headers by name, each value as <see cref="SecretText"/> shows it; one that is
     /// not a string is set, and shows as JSON only when revealed. The dialog shows a value of
-    /// <paramref name="shownInDialog"/> values — the environment's, since a variable can change what runs
-    /// (<c>NODE_OPTIONS</c>, <c>PATH</c>, <c>LD_PRELOAD</c>) — as written, a string quoted as an argument is and
+    /// <paramref name="shownInDialog"/> values - the environment's, since a variable can change what runs
+    /// (<c>NODE_OPTIONS</c>, <c>PATH</c>, <c>LD_PRELOAD</c>) - as written, a string quoted as an argument is and
     /// anything else as JSON, unless its variable is named for a secret and names no program to
     /// run; a header's stays masked.</summary>
     private static Field SecretField(string label, IReadOnlyDictionary<string, JsonValue> values, Exposure exposure,

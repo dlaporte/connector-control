@@ -49,7 +49,7 @@ final class ToolProbeTests: XCTestCase {
         XCTAssertNil(ToolProbe.parseVersion("", tool: .node))
         XCTAssertNil(ToolProbe.parseVersion("\n  \n", tool: .npx))
         XCTAssertEqual(ToolProbe.parseVersion("v\u{0663}23", tool: .node), "v\u{0663}23",
-                       "a leading v is dropped only before an ASCII digit — an Arabic-Indic ٣ is Character.isNumber but not isASCII")
+                       "a leading v is dropped only before an ASCII digit - an Arabic-Indic ٣ is Character.isNumber but not isASCII")
     }
 
     func testResolveNeedsAnExecutableRegularFile() throws {

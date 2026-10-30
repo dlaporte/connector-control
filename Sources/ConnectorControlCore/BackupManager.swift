@@ -25,14 +25,14 @@ public struct BackupManager: Sendable {
         let dest = originalPath(series: series)
         guard !fm.fileExists(atPath: dest.path) else { return }
         // Written like every other private file (created 0600, atomically), not
-        // copied: copyItem would inherit the source's mode — Claude's config is
-        // usually 0644 — and, for a symlinked config, copy the link itself
+        // copied: copyItem would inherit the source's mode - Claude's config is
+        // usually 0644 - and, for a symlinked config, copy the link itself
         // rather than the bytes it points at.
         try AtomicFile.write(try Data(contentsOf: url), to: dest, staging: stagingDir)
     }
 
-    /// The `.original.json` snapshot's URL for a series — what `ensureOriginalSnapshot`
-    /// writes once and never prunes — when it exists on disk; nil otherwise.
+    /// The `.original.json` snapshot's URL for a series - what `ensureOriginalSnapshot`
+    /// writes once and never prunes - when it exists on disk; nil otherwise.
     public func originalSnapshotURL(series: String) -> URL? {
         let dest = originalPath(series: series)
         return FileManager.default.fileExists(atPath: dest.path) ? dest : nil
@@ -126,7 +126,7 @@ public struct BackupManager: Sendable {
     }
 
     /// `listing` is the caller's own pre-write directory read plus the file it just
-    /// wrote — sorted the same way `backups(series:)` would — so pruning does not
+    /// wrote - sorted the same way `backups(series:)` would - so pruning does not
     /// re-list a directory `backUp` already just listed.
     private func prune(series: String, listing: [URL]) {
         let all = listing.sorted(by: BackupManager.newestFirst)

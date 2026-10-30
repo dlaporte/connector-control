@@ -12,7 +12,7 @@ namespace ConnectorControl.App.Views;
 /// <summary>
 /// The Claude tab icon is Claude's own icon, extracted from the
 /// resolved exe and desaturated (the Mac uses the template tray glyph). Best
-/// effort — null means "use the generic glyph".
+/// effort - null means "use the generic glyph".
 /// </summary>
 public static class ClaudeIconLoader
 {

@@ -18,7 +18,7 @@
 # 1.5.0-preview.10, 10500 for 1.5.0), compared numerically component by component. The newest
 # published build is the highest sparkle:version among the appcast.xml assets of every non-draft
 # preview-<n> and vX.Y.Z release, read through the API. A source older than that is left out with
-# a notice — a re-run of an old preview, or a stable release of an older line, must never move
+# a notice - a re-run of an old preview, or a stable release of an older line, must never move
 # preview installs backwards. A served feed announcing a build newer than every published release
 # did not come from this pipeline (a hand upload, or an appcast planted to wedge preview delivery
 # behind a build that never comes): that fails the job rather than passing with a notice. An equal
@@ -40,7 +40,7 @@
 # Its tag is created on master as it stands then and never moves: the commit means nothing (the
 # release exists for its one asset), and a commit on the default branch, unlike a preview's
 # commit on some branch, is one the tag never keeps alive on its own. An existing preview-feed
-# that is not a prerelease is a fault this refuses to write to — and, since a full release could
+# that is not a prerelease is a fault this refuses to write to - and, since a full release could
 # have become releases/latest and served this feed to every stable install, it is turned back
 # into a prerelease at once before failing. Deleting the release only makes preview installs'
 # checks fail until the next preview or release recreates it.
@@ -84,7 +84,7 @@ build_of() {
 }
 
 # -1, 0 or 1 as build $1 is older than, equal to or newer than build $2: dot-separated numbers
-# compared numerically, a missing component counting as 0 — a string compare would put 10499.10
+# compared numerically, a missing component counting as 0 - a string compare would put 10499.10
 # below 10499.9.
 compare_builds() {
   local IFS=. i x y

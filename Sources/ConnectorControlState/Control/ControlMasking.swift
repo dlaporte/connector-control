@@ -8,8 +8,8 @@ import Foundation
 /// are set, and nor is a value under a key named for a secret; an argument that reads as a
 /// credential, the value after a flag named for a secret, a `NAME=value` word's value when the
 /// name is a secret's, a header's value, a URL's password and query and fragment values, and a
-/// URL's user name or path segment that reads as a credential, read "•••". Placeholders —
-/// `${CC_NEEDS:…}` and `${COLLECTION_DIR}` — name what is missing rather than what is secret, and
+/// URL's user name or path segment that reads as a credential, read "•••". Placeholders -
+/// `${CC_NEEDS:…}` and `${COLLECTION_DIR}` - name what is missing rather than what is secret, and
 /// show as written when they are the whole value. Every rule is plain string work, with no URL
 /// parser, so both platforms mask the same text the same way. Structured output is masked or, for
 /// the command-line tool's `show --reveal` (never Claude's), revealed; the line renderers take an
@@ -19,7 +19,7 @@ import Foundation
 @MainActor
 public enum ControlMasking {
     /// How much a line renderer shows. `masked`: what Claude and the command-line tool see.
-    /// `dialog`: the confirmation dialogs, whose text never goes back to Claude — the command,
+    /// `dialog`: the confirmation dialogs, whose text never goes back to Claude - the command,
     /// arguments, URL and environment values in full, with a variable named for a secret (unless it
     /// names a program to run), header values, the OAuth client secret and every value under a key
     /// named for a secret still masked.
@@ -60,8 +60,8 @@ public enum ControlMasking {
 
     // MARK: Values
 
-    /// A value that is wholly a reference — a placeholder, `${COLLECTION_DIR}`, or a `${NAME}` /
-    /// `$NAME` — takes its secret from elsewhere and holds none itself. One with a placeholder
+    /// A value that is wholly a reference - a placeholder, `${COLLECTION_DIR}`, or a `${NAME}` /
+    /// `$NAME` - takes its secret from elsewhere and holds none itself. One with a placeholder
     /// inside other text can still hold a secret beside it, so it is masked like any other.
     static func refersElsewhere(_ value: String) -> Bool {
         CredentialHeuristics.isReference(value)
@@ -242,9 +242,9 @@ public enum ControlMasking {
 
     /// An argument as one word: a URL through `url(_:)`, a value that is wholly a reference as
     /// written, `name=value` with the value masked when the name is a secret's (`--api-key=…`,
-    /// Docker's `-e API_KEY=…`) — read before a URL in the value, so the URL's rules never pass
-    /// the value's start through — and "•••" for anything that reads as a credential or a random
-    /// token — a "name" that does is part of the token, so the whole word is masked.
+    /// Docker's `-e API_KEY=…`) - read before a URL in the value, so the URL's rules never pass
+    /// the value's start through - and "•••" for anything that reads as a credential or a random
+    /// token - a "name" that does is part of the token, so the whole word is masked.
     static func word(_ arg: String) -> String {
         if isURL(arg) { return url(arg) }
         if refersElsewhere(arg) { return arg }
@@ -257,7 +257,7 @@ public enum ControlMasking {
         return looksSecret(arg) ? mask : arg
     }
 
-    /// An argument that is a JSON object or array — Smithery's `--config '{"apiKey":"…"}'` — with
+    /// An argument that is a JSON object or array - Smithery's `--config '{"apiKey":"…"}'` - with
     /// each leaf masked by its key, as a config's are, on one line; as written when nothing in it
     /// changed. JSON nested deeper than `JSONValue.parse` reads is "•••", since what it holds cannot
     /// be read. Nil for anything else. Before the shell line, which would split JSON at its spaces.
@@ -274,8 +274,8 @@ public enum ControlMasking {
         }
     }
 
-    /// An argument holding whitespace — a shell line for `sh -c` or `cmd /c`, or a whole command
-    /// line written as the command — masked as `arguments(_:)` masks the words a shell would pass,
+    /// An argument holding whitespace - a shell line for `sh -c` or `cmd /c`, or a whole command
+    /// line written as the command - masked as `arguments(_:)` masks the words a shell would pass,
     /// so a flag named for a secret among them hides the word after it as it would in `args`. The
     /// split drops the line's quotes, so a line is rejoined, with each word quoted as the dialog
     /// quotes an argument, only when one of its words changed. Nil for an argument with no
@@ -327,7 +327,7 @@ public enum ControlMasking {
     }
 
     /// Whether the word after `word` is a secret: after a flag `hidesNext(_:_:)` accepts, and, when
-    /// masked, after a flag with `=` whose glued value leaves the secret to the next word — nothing
+    /// masked, after a flag with `=` whose glued value leaves the secret to the next word - nothing
     /// or only a scheme word after a flag named for a secret (`--token=` `x`, `--token=Bearer` `x`),
     /// or after a header flag a header named for a secret or that signs in, with nothing or only a
     /// scheme word after its ":" (`--header=Authorization:` `Bearer` `x`, `--header=Authorization:
@@ -399,8 +399,8 @@ public enum ControlMasking {
         return values
     }
 
-    /// A header's name when `word` gives no value with it — the whole word with no ":", or what is
-    /// before a ":" with nothing after it — and whether a scheme word follows its ":" instead
+    /// A header's name when `word` gives no value with it - the whole word with no ":", or what is
+    /// before a ":" with nothing after it - and whether a scheme word follows its ":" instead
     /// (`Authorization:Bearer`). Nil for a word with a value.
     static func headerName(_ word: String) -> (name: String, scheme: Bool)? {
         guard let piece = cut(word, at: ":") else { return (word, false) }
@@ -711,8 +711,8 @@ public enum ControlMasking {
 
     /// Environment variables or headers by name, each value as `secretText` shows it; one that is
     /// not a string is set, and shows as JSON only when revealed. The dialog shows a value of
-    /// `shownInDialog` values — the environment's, since a variable can change what runs
-    /// (`NODE_OPTIONS`, `PATH`, `LD_PRELOAD`) — as written, a string quoted as an argument is and
+    /// `shownInDialog` values - the environment's, since a variable can change what runs
+    /// (`NODE_OPTIONS`, `PATH`, `LD_PRELOAD`) - as written, a string quoted as an argument is and
     /// anything else as JSON, unless its variable is named for a secret and names no program to
     /// run; a header's stays masked.
     static func secretField(_ label: String, _ values: [String: JSONValue], _ exposure: Exposure,

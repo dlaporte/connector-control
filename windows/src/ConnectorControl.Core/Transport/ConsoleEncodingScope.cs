@@ -3,7 +3,7 @@ using System.Text;
 namespace ConnectorControl.Core.Transport;
 
 /// <summary>
-/// Windows only: the Mac has no counterpart — its terminals take UTF-8 as they are.
+/// Windows only: the Mac has no counterpart - its terminals take UTF-8 as they are.
 ///
 /// The console's output encoding set to UTF-8 and put back, once, by whichever comes first of the tool
 /// finishing, Ctrl-C and an error: the restore is idempotent and may be called from the thread that handles

@@ -257,7 +257,7 @@ public class ClaudeIntegrationCleanupTests : IDisposable
         Assert.Empty(reported);
     }
 
-    /// <summary>A record that cannot be deleted — held open on Windows, its folder read-only elsewhere — is reported,
+    /// <summary>A record that cannot be deleted - held open on Windows, its folder read-only elsewhere - is reported,
     /// and the configs are still tidied.</summary>
     [Fact]
     public void ARecordThatCannotBeDeletedIsReportedAndTheConfigsStillGo()

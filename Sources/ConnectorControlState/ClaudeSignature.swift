@@ -18,7 +18,7 @@ public enum ClaudeSignature {
     public static let bundleID = "com.anthropic.claudefordesktop"
     /// Anthropic PBC's Developer ID team, as on every shipped Claude.app.
     public static let teamIdentifier = "Q6L2SF6YDW"
-    /// Claude Desktop, signed by Anthropic — under either a Developer ID or an
+    /// Claude Desktop, signed by Anthropic - under either a Developer ID or an
     /// App Store certificate chained to Apple. The path this app launches is a
     /// plain string in UserDefaults, so before it quits Claude and starts
     /// whatever sits at that path, the bundle has to prove it is Claude.

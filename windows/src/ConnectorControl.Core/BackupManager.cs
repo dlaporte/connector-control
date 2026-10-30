@@ -5,8 +5,8 @@ namespace ConnectorControl.Core;
 /// <summary>
 /// Backups hold the same secrets as the file they copy, and the backups tree is always the app's own
 /// (never the synced folder), so every copy goes through <see cref="AtomicFile.Write"/>: the file is
-/// owner-only from its create call, and any directory that has to be created — the default store dir
-/// included, when this is the first write of a fresh install — is private too, like the Mac's 0700.
+/// owner-only from its create call, and any directory that has to be created - the default store dir
+/// included, when this is the first write of a fresh install - is private too, like the Mac's 0700.
 /// </summary>
 public sealed class BackupManager
 {
@@ -38,8 +38,8 @@ public sealed class BackupManager
         AtomicFile.Write(File.ReadAllBytes(path), dest);
     }
 
-    /// <summary>The <c>.original.json</c> snapshot's path for a series — what <see cref="EnsureOriginalSnapshot"/>
-    /// writes once and never prunes — when it exists on disk; null otherwise.</summary>
+    /// <summary>The <c>.original.json</c> snapshot's path for a series - what <see cref="EnsureOriginalSnapshot"/>
+    /// writes once and never prunes - when it exists on disk; null otherwise.</summary>
     public string? OriginalSnapshotPath(string series)
     {
         var dest = OriginalPath(series);

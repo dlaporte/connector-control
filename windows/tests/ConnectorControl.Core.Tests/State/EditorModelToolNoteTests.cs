@@ -81,9 +81,9 @@ public class EditorModelToolNoteTests
         editor.Command = "python";
         Assert.Null(editor.RequiredTool);
         rig.H.Drain();
-        Assert.Equal(2, rig.H.Tools.Probed.Count);   // node once, uvx once — the non-tools cost nothing
+        Assert.Equal(2, rig.H.Tools.Probed.Count);   // node once, uvx once - the non-tools cost nothing
         editor.Command = "uvx";
-        // Back to a tool that is cached: probed again anyway — it may have been installed meanwhile.
+        // Back to a tool that is cached: probed again anyway - it may have been installed meanwhile.
         rig.H.Drain();
         Assert.Equal(3, rig.H.Tools.Probed.Count);
         Assert.True(editor.HasToolNote);

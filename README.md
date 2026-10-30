@@ -1,7 +1,7 @@
 # Connector Control
 
 Native menu bar (macOS) and system tray (Windows) apps for managing the
-custom MCP connectors in Claude Desktop's configuration — with automatic
+custom MCP connectors in Claude Desktop's configuration - with automatic
 backups of every change they make.
 
 Claude Desktop reads its MCP servers from claude_desktop_config.json
@@ -12,54 +12,54 @@ been known to overwrite or wipe
 [#56296](https://github.com/anthropics/claude-code/issues/56296),
 [#37286](https://github.com/anthropics/claude-code/issues/37286)). Connector
 Control keeps its own **master list** as the source of truth, treats Claude's
-config as generated output, and backs up each file it manages — Claude's
-config, the master list and collections.json — before writing to it, so a
+config as generated output, and backs up each file it manages - Claude's
+config, the master list and collections.json - before writing to it, so a
 wiped or mangled config is always one click from restored.
 
 ## Features
 
-- **One-click enable/disable** — toggle any connector from the menu bar or
+- **One-click enable/disable** - toggle any connector from the menu bar or
   tray; changes apply to Claude's config immediately, and a **Restart
   Required** button appears until Claude is running the new config (derived
   from Claude's actual process launch time, so it clears no matter how Claude
   restarts).
-- **Full editor** — form view for the common cases (remote `mcp-remote`
+- **Full editor** - form view for the common cases (remote `mcp-remote`
   servers get a simple Name + URL form; local servers get command/args/env
   editors with secret masking, the arguments numbered from 1 as messages count
   them), plus a raw JSON view with live validation and
   paste-a-README-snippet support. The two views stay in sync, and switching
   never silently loses fields the form can't represent.
-- **Self-healing** — the app watches Claude's config; if connectors vanish
+- **Self-healing** - the app watches Claude's config; if connectors vanish
   from it (Claude update, cloud sync, crash), it writes them back from the
   master list on its own, raises **Restart Required** while Claude runs, and
   posts a notification even when the app's window is closed (unless
   **Notify on external changes** is off in Settings).
-- **Automatic backups** — timestamped copies of Claude's config, the master
+- **Automatic backups** - timestamped copies of Claude's config, the master
   list and collections.json, each taken before that file is written
   (configurable retention, plus a permanent first-run snapshot), with in-app
   restore.
-- **Syncable** — point the master list at a folder synced by git, iCloud, or
+- **Syncable** - point the master list at a folder synced by git, iCloud, or
   Dropbox and share one connector catalog across machines; backups always
   stay machine-local so they never pollute the synced folder.
-- **Missing-tool warnings** — in the popover or flyout, a connector that
+- **Missing-tool warnings** - in the popover or flyout, a connector that
   starts through npx, node, uvx or uv shows a caution glyph when that tool
   isn't installed where Claude Desktop can find it; the editor and Settings ▸ Claude ▸ Tools say
   what to install, with a download link and the brew or winget command.
-- **[Claude integration and command line](#claude-integration-and-command-line)**
-  — once you turn it on, Claude can list, switch and edit your connectors,
+- **[Claude integration and command line](#claude-integration-and-command-line)** -
+  once you turn it on, Claude can list, switch and edit your connectors,
   and asks you before it adds, edits or deletes a connector; a
   `connector-control` command-line tool does the same for you, your scripts
   and MDM.
-- **Careful with secrets** — connector env vars can hold API tokens, so the
+- **Careful with secrets** - connector env vars can hold API tokens, so the
   master list and all backups are written owner-only (mode 600 on macOS, an
   owner-only ACL on Windows).
 
 ### Collections
 
-Collections are full, independent connector snapshots — each has its own
+Collections are full, independent connector snapshots - each has its own
 complete list of connectors and enabled flags. The popover (Mac) or flyout
-(Windows) runs the active one. A chip in its header — `<collection name> ▾`
-— shows which collection that is and opens a menu of every collection, a
+(Windows) runs the active one. A chip in its header - `<collection name> ▾` -
+shows which collection that is and opens a menu of every collection, a
 check on the active one, then **Manage Collections**. Choosing a collection
 switches to it, which applies immediately, same as any other change, and
 raises **Restart Required** just like a toggle would. The switches below the
@@ -77,7 +77,7 @@ be deleted, so there is always somewhere to add a connector.
 **Subscribed** collections are read-only mirrors of a collection document
 somebody else publishes. You fill in the values the author left for you and
 switch connectors on and off; nothing else can be edited, and nothing can be
-added — the Collections window's **+** above the connector list is dimmed
+added - the Collections window's **+** above the connector list is dimmed
 with the tooltip "Additions go in a local collection." A chain glyph follows
 the collection's name on the chip and in the Collections window's sidebar,
 with "Synced from <file>" in its tooltip (the source file's path once this
@@ -94,14 +94,14 @@ the chip or in the sidebar; the Collections window's header marks them
 **Published**. Where the document goes is a fact about one machine, so only
 the machine that publishes it says so: the Collections window's ⋯ menu offers
 Show Published File, and the editor has a line at the top: "Published to
-<folder> — saving updates the file your team reads. Secrets stay here."
+<folder> - saving updates the file your team reads. Secrets stay here."
 
 **Manage Collections** opens the Collections window. When the active
 collection has no connectors, the popover or flyout says "No connectors in
 “<collection>”." with a **Manage Collections** button beneath it, which
 opens the window on that collection. Every control in it
-sits on the thing it acts on. What this README calls a sheet — Import,
-Copy, Publish, Export, Review — opens as a dialog on Windows. Escape cancels
+sits on the thing it acts on. What this README calls a sheet - Import,
+Copy, Publish, Export, Review - opens as a dialog on Windows. Escape cancels
 any of these, and the connector editor, as its **Cancel** button does.
 
 - **The sidebar** lists the collections under the heading **Collections**.
@@ -119,11 +119,11 @@ any of these, and the connector editor, as its **Cancel** button does.
   the active collection makes the first local collection by name that has
   connectors active, or, when none has, the first remaining collection by
   name; the confirmation names it.
-- **The header** carries the selected collection's name, its pills — a green
+- **The header** carries the selected collection's name, its pills - a green
   **Active** on the collection Claude is running, then **Published** or
-  **Subscribed**, never both — and a **⋯** (tooltip "More") holding
+  **Subscribed**, never both - and a **⋯** (tooltip "More") holding
   everything done to the collection itself. Under the name, the header
-  counts the collection's connectors — "5 connectors". On a subscribed
+  counts the collection's connectors - "5 connectors". On a subscribed
   collection whose source couldn't be read, the reason follows the count: "5
   connectors · data-team.json couldn’t be read: …". The menu lists only what
   applies: **Make Active** first, on a collection that is not active;
@@ -147,7 +147,7 @@ any of these, and the connector editor, as its **Cancel** button does.
   the copy active.
 - **The connector list** has its **+** under the header's ⋯, beside the
   count (tooltip "Add Connector"). It opens the editor on a new connector in
-  this collection. Each row has a tick — a lock on a subscribed collection —
+  this collection. Each row has a tick - a lock on a subscribed collection -
   then the connector's name, a caution glyph when something needs your
   attention, and what the connector runs. Click a row anywhere but its tick
   to open its editor (read-only on a subscribed collection); a click on or
@@ -165,7 +165,7 @@ any of these, and the connector editor, as its **Cancel** button does.
 The column after the name says what the connector runs: a remote connector's
 host (with its scheme, `https://mcp.example.com`, for one Claude reaches by
 URL alone rather than through mcp-remote), or a local one's program with its
-paths, URLs and package names — `npx …/server-filesystem ~/Documents`. It is
+paths, URLs and package names - `npx …/server-filesystem ~/Documents`. It is
 built to leave secrets out. It shows the program's name, a URL as its
 scheme, host and port, a file path with your home folder shortened to `~`,
 and a package's name. It leaves out whatever follows a flag named like a
@@ -179,20 +179,20 @@ hostname, or a hyphenated word in the place where npx or uvx names the
 server it runs. Check the column before you share a screenshot of the
 window.
 
-**Copy to** lists every other collection — a subscribed one is listed but
-dimmed and marked "read-only", since its connectors are the author's — then
+**Copy to** lists every other collection - a subscribed one is listed but
+dimmed and marked "read-only", since its connectors are the author's - then
 **New Collection…**, which asks for a name and makes an empty local
 collection to take the copies. Copies arrive switched off and record where
 they came from. The window stays on the collection you copied from, and the
-count under its name confirms the copy — "5 connectors · Copied 2 connectors
+count under its name confirms the copy - "5 connectors · Copied 2 connectors
 to “Work”" - until you tick a row, run another command in the window (Rename…,
 Duplicate…, Delete and the like) or choose another collection. When the destination already holds a name you ticked, the
 Copy sheet asks about each clash: **Replace**, **Keep both**, which lands the
 copy as `<name> 2` and is the default, or **Skip**; the rest are listed as
 "new · arrives off". Replacing a connector in the active collection applies
 at once. **Export…** opens the
-Export sheet on the ticked rows. **Delete** asks first — "Delete
-“<name>”?", or "Delete 3 connectors?" — adding "A copy remains in Backups.";
+Export sheet on the ticked rows. **Delete** asks first - "Delete
+“<name>”?", or "Delete 3 connectors?" - adding "A copy remains in Backups.";
 deleting from the active collection applies at once.
 
 A connector that another local collection holds an identical copy of, under
@@ -208,7 +208,7 @@ that old. Beside it, a
 collections.json records which collection is which kind, what each one
 still needs, and each published collection's settings, including the text
 of every path you marked. **If you sync mcps.json across machines, every
-machine must run 1.1 or later** — an older app can't parse the v2 file and
+machine must run 1.1 or later** - an older app can't parse the v2 file and
 will treat it as corrupt.
 
 ### Sharing a collection with a team
@@ -222,8 +222,8 @@ carry the master list today.
 #### Publishing
 
 Select a local collection in the Collections window and choose **Start
-Publishing…** from its **⋯**. Point it at a folder in a repository or a synced drive — the master list's
-own folder and the backups folder are refused — and the app writes
+Publishing…** from its **⋯**. Point it at a folder in a repository or a synced drive - the master list's
+own folder and the backups folder are refused - and the app writes
 `<collection-name>.json` there: the name lowercased, keeping only ASCII
 letters and digits, with every run of other characters between them collapsed
 to one hyphen (`collection.json` when nothing is left). The file name and
@@ -276,7 +276,7 @@ the document.
 `${COLLECTION_DIR}` is the other way to keep a path out of a document. Write
 it into a local server's command, arguments or environment values and each
 subscriber's app expands it to the folder their copy of the document sits
-in — so a team that keeps the document beside the server in one repository
+in - so a team that keeps the document beside the server in one repository
 shares one entry:
 
     "command": "node",
@@ -286,14 +286,14 @@ On the machine that publishes the collection, `${COLLECTION_DIR}` stands for
 the publish folder, so a tool you keep beside the document runs from there
 from the moment publishing starts. The published document still carries the
 token as written, and each subscriber resolves it against their own copy of
-the folder. In a local collection this machine does not publish — never
-published, stopped, or published from your other machine — the token has no
+the folder. In a local collection this machine does not publish - never
+published, stopped, or published from your other machine - the token has no
 folder: Claude gets it unexpanded, and the connector's row says
 "${COLLECTION_DIR} has no folder until this collection is published from
 this Mac." ("this PC" on Windows). Stop Publishing leaves the token in place
 rather than writing the folder into those connectors. A connector that moves
-from a document into a local collection — imported as a copy, copied to a
-local collection, or kept by Make Local Copy or Stop Syncing — gets the
+from a document into a local collection - imported as a copy, copied to a
+local collection, or kept by Make Local Copy or Stop Syncing - gets the
 folder written in place of the token, once, since a local collection has no
 document to resolve it against later.
 
@@ -341,12 +341,12 @@ locked in the editor under a grey line reading "Synced from <name> ·
 read-only", with a **What can I change?** link that spells out the rule.
 What is yours: the values the document asks this machine for, and which
 connectors are on. If the author changes or deletes a connector while its
-editor is open, **Save** refuses — "“<name>” changed outside this editor."
-or "“<name>” was deleted outside this editor." — rather than write the old
+editor is open, **Save** refuses - "“<name>” changed outside this editor."
+or "“<name>” was deleted outside this editor." - rather than write the old
 version back; reopen the editor to fill in your values again.
 
-When the author changes the file the collection says so — "Data team changed
-at its source: adds jira; deletes confluence." — with **Review & Apply…**.
+When the author changes the file the collection says so - "Data team changed
+at its source: adds jira; deletes confluence." - with **Review & Apply…**.
 The review sheet groups what would land under **Added**, **Deleted** and
 **Changed**, with the JSON either side of every change, and nothing lands
 until you press **Apply**. Added connectors arrive switched off, and your
@@ -359,7 +359,7 @@ retried quietly before anything is reported.
 Another machine picks the collection up from the master list, but where the
 document sits is a per-machine fact. If it lies inside the master-list
 folder the app finds it by itself; otherwise the collection shows "<name>’s
-file isn’t on this Mac yet." — "this PC" on Windows — with
+file isn’t on this Mac yet." - "this PC" on Windows - with
 **Locate <file>…**.
 
 To take a subscribed collection somewhere you can edit it, choose **Make
@@ -405,7 +405,7 @@ collection file to resolve paths." on the rows that need it.
 
 Every connector in a document is a command Claude runs. Anyone with write
 access to the shared folder can change what Claude runs on every subscriber,
-once those subscribers apply the change — the review step is the control.
+once those subscribers apply the change - the review step is the control.
 A connector that runs a program kept in the shared folder through
 `${COLLECTION_DIR}` is the exception: a change to that program reaches every
 subscriber the next time Claude starts it, with nothing to review, because
@@ -415,8 +415,8 @@ machines that follow it, including the one that publishes it.
 
 #### Worth knowing
 
-- On the machine that writes the file, **Stop Publishing** — and deleting a
-  published collection — asks "Also delete <file> from the folder?", and
+- On the machine that writes the file, **Stop Publishing** - and deleting a
+  published collection - asks "Also delete <file> from the folder?", and
   keeping it is the default: Return and Escape both keep it, and deleting it
   takes a click on **Delete**. Stop Publishing from the failed-write banner,
   or from the **⋯** while the last write is failing, keeps the file without
@@ -429,8 +429,8 @@ machines that follow it, including the one that publishes it.
 - A path you mark in the Publish sheet is remembered together with the text it
   had, so it stays a placeholder when you add, delete or reorder arguments
   around it, correct it in place in the editor's form, or rename the
-  connector. If it changes somewhere the app cannot follow — the JSON view,
-  a hand edit, or an older version of the app on any machine — and the app
+  connector. If it changes somewhere the app cannot follow - the JSON view,
+  a hand edit, or an older version of the app on any machine - and the app
   can no longer tell which argument it is, the app stops publishing that
   collection rather than send the path as written. The banner gives the
   reason, "A path marked in “<connector>” has moved. Open Publishing
@@ -450,8 +450,8 @@ machines that follow it, including the one that publishes it.
   preview. This collection's own publish folder: **Use ${COLLECTION_DIR}**
   alone, which rewrites that connector to the token; it is never released,
   because a document that would carry it is never written. Another folder
-  this machine keeps — one it publishes another collection into, or where a
-  subscribed collection's document sits — is kept back too: its entry names
+  this machine keeps - one it publishes another collection into, or where a
+  subscribed collection's document sits - is kept back too: its entry names
   that collection, and you tick it where it sits or **Release** it like any
   other path.
 - A path your other machine marks, in a collection published from there, is
@@ -471,7 +471,7 @@ machines that follow it, including the one that publishes it.
   tell the two apart, so the new one keeps the old one's releases and
   publish folders.
 - A differently spelled version of a marked path is a different path to the
-  app — another case, `~` in place of your home folder, a trailing slash.
+  app - another case, `~` in place of your home folder, a trailing slash.
   It is not recognised as the one you marked, so it travels as written;
   read the preview.
 - Restoring a backup of Claude's configuration puts it back into the
@@ -479,8 +479,8 @@ machines that follow it, including the one that publishes it.
   whose collection is gone is refused: "This backup was taken from
   “<name>”, which no longer exists. Nothing was restored. Create a
   collection named “<name>” again, and this backup goes back into it." Only
-  this version records the collection, so a backup from an earlier one —
-  which is every backup you already have, and the first-run original —
+  this version records the collection, so a backup from an earlier one -
+  which is every backup you already have, and the first-run original -
   goes into the active collection instead. While the active collection is
   subscribed, such a backup is refused before anything is asked: "“<name>”
   is subscribed, so its connectors are the author’s. Make a local
@@ -506,8 +506,8 @@ whether the integration is on or off.
 
 ### Turning it on
 
-Until you answer it, the popover or flyout offers it — "Let Claude manage
-Connector Control?" — with **Turn On** and **Not Now**, on a new install as
+Until you answer it, the popover or flyout offers it - "Let Claude manage
+Connector Control?" - with **Turn On** and **Not Now**, on a new install as
 after an upgrade. Either answer is for good. The offer waits behind any error
 or collection banner, and isn't shown while the switch would be dimmed (see
 below). The switch itself is Settings ▸ Claude ▸ **Let Claude manage
@@ -539,18 +539,18 @@ running, then restart this one."
 The tools Claude sees, grouped as `connector-control help` groups the
 commands:
 
-- **Status** — Get status, Check launchers.
-- **Connectors** — List connectors, Show connector, Turn connector on or off,
+- **Status** - Get status, Check launchers.
+- **Connectors** - List connectors, Show connector, Turn connector on or off,
   Add connector, Change connector, Delete connectors. Turning a connector on
   or off acts on the active collection; the others work there unless Claude
   names another collection.
-- **Collections** — List collections, Switch collection, Create collection,
+- **Collections** - List collections, Switch collection, Create collection,
   Rename collection, Duplicate collection, Delete collection.
-- **Sharing** — Import collection, Subscribe to collection, Show pending
+- **Sharing** - Import collection, Subscribe to collection, Show pending
   update, Apply update, Refresh subscription.
-- **Settings and backups** — Show settings, Change setting, List backups,
+- **Settings and backups** - Show settings, Change setting, List backups,
   Restore backup.
-- **Claude** — Restart Claude.
+- **Claude** - Restart Claude.
 
 Claude can't publish a collection or stop publishing one, Stop Syncing, or
 Make Local Copy; those stay in the Collections window. It can't change
@@ -558,9 +558,9 @@ Make Local Copy; those stay in the Collections window. It can't change
 decide what it may do, or `notify-external-changes` and
 `automatic-updates`, which keep you told about changes and updates. And it never sees a secret: for an environment
 variable or a header it sees whether a value is set, never the value, and an
-argument that reads as a secret — a value after a flag named like a secret,
+argument that reads as a secret - a value after a flag named like a secret,
 a `NAME=value` word whose name is a secret's, a URL's password or a query value, even inside a
-multi-word or JSON argument — reads as `•••`. When Claude adds a connector
+multi-word or JSON argument - reads as `•••`. When Claude adds a connector
 that needs a secret you haven't given it, it is told to write a
 `${CC_NEEDS:<name>}` placeholder, and you fill the value in in Connector
 Control. While the integration is off, Claude is refused everything.
@@ -614,14 +614,14 @@ without asking here. Text Claude reads, such as a web page, could ask it
 to.", and each change Claude makes posts a notification instead.
 
 The confirmation covers Claude asking Connector Control. A change made
-directly in a file Connector Control watches — the master list, a subscribed
-collection's document — is not Claude asking, and arrives under the usual
+directly in a file Connector Control watches - the master list, a subscribed
+collection's document - is not Claude asking, and arrives under the usual
 rules for outside changes (see How it works and Syncing across machines).
 
 The question is asked only on the machine where Claude made the change,
 and the switch is set on each machine. When your master list is in a synced
-folder, a change Claude makes there — adding a connector, turning one off,
-switching collections — reaches every machine sharing that folder, and
+folder, a change Claude makes there - adding a connector, turning one off,
+switching collections - reaches every machine sharing that folder, and
 arrives on the others as an outside change.
 
 ### The command line
@@ -649,8 +649,8 @@ always use" and the tool's full path:
     & "$env:LOCALAPPDATA\Connector Control\bin\connector-control.exe" status
 
 The tool needs Connector Control running. If it isn't, the tool says
-"Starting Connector Control…" and starts it in the background — on a Mac
-with `open -g`, on Windows without the flyout — and waits for it. A tool from
+"Starting Connector Control…" and starts it in the background - on a Mac
+with `open -g`, on Windows without the flyout - and waits for it. A tool from
 a development build starts nothing, and no tool starts the app while
 `CONNECTOR_CONTROL_STORE_DIR` or `CONNECTOR_CONTROL_CLAUDE_CONFIG` is set.
 If the app isn't up within 15 seconds, the tool says "Connector Control isn’t
@@ -668,8 +668,8 @@ the tool reaches it.
 
 The command line is you: it is never asked, never announced, and works
 whether the integration is on or off. Results go to standard output and a
-refusal's sentence to standard error. A change that has to wait its turn —
-behind one of Claude's that Connector Control is asking you about, say —
+refusal's sentence to standard error. A change that has to wait its turn -
+behind one of Claude's that Connector Control is asking you about, say -
 prints "Waiting for another change in Connector Control to finish." to
 standard error and finishes once its turn comes. It exits 0 when the command
 is done, 1 when it is refused, 2 for a usage error and 3 when Connector Control can't
@@ -775,7 +775,7 @@ runs without Gatekeeper warnings.
 1. Download `ConnectorControl_<version>.dmg` from the
    [latest release](https://github.com/dlaporte/connector-control/releases/latest).
 2. Open it and drag **Connector Control** to Applications.
-3. Launch it — a plug icon appears in the menu bar. On first run it imports
+3. Launch it - a plug icon appears in the menu bar. On first run it imports
    your existing connectors from Claude's config into the master list.
    Before the app first writes Claude's config, it keeps a permanent
    snapshot of the original.
@@ -826,7 +826,7 @@ then **Run anyway**. The warning goes away as the signature earns reputation.
 1. Download `ConnectorControl-win-x64-Setup.exe` (Intel and AMD PCs) or
    `ConnectorControl-win-arm64-Setup.exe` (Arm PCs) from the
    [latest release](https://github.com/dlaporte/connector-control/releases/latest).
-2. Run it. It installs for the current user — no administrator prompt —
+2. Run it. It installs for the current user - no administrator prompt -
    under `%LOCALAPPDATA%\ConnectorControl`, adds a Start menu entry (no
    desktop icon), and launches the app.
 3. A plug icon appears in the system tray; open the `^` overflow if Windows
@@ -868,7 +868,7 @@ If you chose a Master List Location, mcps.json and collections.json are in
 that folder instead; leave them there if your other machines still use it.
 
 Your claude_desktop_config.json keeps whatever connectors were enabled at
-the time — the app leaves Claude's config valid on the way out.
+the time - the app leaves Claude's config valid on the way out.
 
 ## How it works
 
@@ -922,7 +922,7 @@ and an update whose certificate revocation couldn't be checked.
 
 Every change (toggle, edit, add, delete, restore) writes the master list
 and, when it alters what Claude runs, regenerates the `mcpServers` section of
-Claude's config — atomically, after backing up each file it writes. Backups are named by the millisecond they were taken; two
+Claude's config - atomically, after backing up each file it writes. Backups are named by the millisecond they were taken; two
 taken in the same one are numbered, and still list, restore and prune
 newest first. A master list that can't be read is kept aside as
 `mcps.corrupt.<time>.json` and replaced by its newest backup that can be
@@ -948,7 +948,7 @@ calls on the same endpoint. Neither side talks to a connection made by
 another user. The relay outlives the app: when Connector Control quits,
 restarts or updates, the relay reconnects on Claude's next request, starting
 the app if it has to, and a call caught in between is answered "Connector
-Control restarted — try again."
+Control restarted - try again."
 
 On Windows, **Restart Claude** asks Claude Desktop to end its session cleanly
 (the same request Windows sends at sign-out) and relaunches it from its Start
@@ -995,12 +995,12 @@ mcps.json already there, or seeds the folder with your current list. Other
 machines running Connector Control point at the same folder and pick up
 changes live (the file is watched). Notes:
 
-- The whole file syncs — including enabled/disabled state.
+- The whole file syncs - including enabled/disabled state.
 - Connector env vars (API keys!) sync too. Use a private repo, or keep
   secrets out of synced connectors.
 - A change that arrives through the synced folder is written into Claude's
   config and, while **Notify on external changes** is on (the default),
-  announced by name — which connectors it added, deleted or changed —
+  announced by name - which connectors it added, deleted or changed -
   whether or not Claude is running at the time. Every connector is a command
   Claude runs, so treat write access to the synced folder as you would treat
   access to the machines that follow it.
@@ -1014,7 +1014,7 @@ changes live (the file is watched). Notes:
 - A Mac and a PC can share one list, but connector commands are OS-specific:
   a Mac writes remote connectors as `npx mcp-remote …`, Windows writes them
   as `cmd /c npx mcp-remote …`, and local servers carry their own paths.
-  Each app preserves the other platform's entries untouched — an entry may
+  Each app preserves the other platform's entries untouched - an entry may
   simply fail to start in Claude on the other OS until you edit it there.
   Because cmd.exe re-parses everything after `cmd /c`, the Windows editor
   refuses a URL, header name, OAuth client ID or client secret containing
@@ -1043,8 +1043,8 @@ changes live (the file is watched). Notes:
   collection is subscribed and edits it as an ordinary one. This app then reads
   those edits as a pending update from the source, and applying reverts
   them; use Make Local Copy or Stop Syncing first if you want to keep them.
-- collections.json travels with mcps.json. The per-machine facts — where a
-  source document sits, which folder a collection publishes to — live in a
+- collections.json travels with mcps.json. The per-machine facts - where a
+  source document sits, which folder a collection publishes to - live in a
   collections-local.json that stays out of the synced folder, as backups do.
 
 ## Building from source
@@ -1089,7 +1089,7 @@ so a command changed in one without the other fails the build.
 ### Windows
 
 Requires the .NET SDK 10.0.400 or a later 10.0.x (`windows/global.json`).
-The solution also builds — but the app cannot run — on a Mac or Linux with
+The solution also builds - but the app cannot run - on a Mac or Linux with
 the same SDK, which is how the shared Core tests run on both.
 
     dotnet test windows/ConnectorControl.slnx          # Core + app tests, no network
@@ -1106,7 +1106,7 @@ Windows build fails otherwise), which is also what the in-app updater
 consumes.
 
 Releases are produced by [`.github/workflows/release.yml`](.github/workflows/release.yml)
-on an exact `vX.Y.Z` tag on master — both platforms from one tag, onto one GitHub release: the
+on an exact `vX.Y.Z` tag on master - both platforms from one tag, onto one GitHub release: the
 universal Mac build, Developer ID signing with hardened runtime, Apple
 notarization of both the app and the DMG, stapling, and the Sparkle
 appcast; and the Windows installers for x64 and Arm64, code-signed with
@@ -1151,7 +1151,7 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
 | `scripts/test-mac.sh` | Runs the Swift suite the way CI gates it (no test may skip or fail). | `mac-ci.yml`, `preview.yml`, `release.yml` |
 | `scripts/regenerate-goldens.sh` | Rewrites the golden JSON fixtures under `Tests/Fixtures/` from the Swift Core's output after a deliberate format change; the C# tests compare against the same files. | run by hand, on a Mac |
 | `scripts/generate-combining-marks.py` | Writes the combining-mark table into both platforms' `ControlText` files from one pinned Unicode version. | run by hand |
-| `scripts/generate-icon.swift` | Renders the app icon — macOS `.icns` or Windows `.ico`, chosen by the output extension. | `scripts/build-app.sh`; the `.ico` path is run by hand, on a Mac |
+| `scripts/generate-icon.swift` | Renders the app icon - macOS `.icns` or Windows `.ico`, chosen by the output extension. | `scripts/build-app.sh`; the `.ico` path is run by hand, on a Mac |
 | `scripts/mac/import-signing-cert.sh` | Imports the Developer ID certificate into a throwaway CI keychain. | `mac-build.yml` |
 | `scripts/mac/notarize.sh` | Submits a binary or app bundle for Apple notarization and staples the ticket. | `mac-build.yml` |
 | `scripts/mac/make-appcast.sh` | Builds and EdDSA-signs the Sparkle appcast for one release or preview. | `mac-build.yml` |
@@ -1170,7 +1170,7 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
 ## Scope and caveats
 
 - Manages the `mcpServers` section of Claude **Desktop**'s config only, plus
-  one entry of its own when the integration is on — not claude.ai web
+  one entry of its own when the integration is on - not claude.ai web
   connectors, Claude Desktop extensions, or Claude Code's MCP configuration.
 - Neither app is sandboxed: each needs to read and write Claude Desktop's
   config file and to quit and relaunch Claude.
@@ -1239,4 +1239,4 @@ scripts are linted by [`infra-ci.yml`](.github/workflows/infra-ci.yml).
 
 ## License
 
-[MIT](LICENSE) — © 2026 David LaPorte
+[MIT](LICENSE) - © 2026 David LaPorte

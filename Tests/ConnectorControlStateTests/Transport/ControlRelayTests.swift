@@ -75,7 +75,7 @@ final class ControlRelayTests: XCTestCase {
                        "held for the next connection, and no reconnect for it")
     }
 
-    /// A cancelled request is never answered — the session drops its answer — so the relay stops
+    /// A cancelled request is never answered - the session drops its answer - so the relay stops
     /// waiting for it: Claude closing its side ends the relay, and a lost connection answers nothing
     /// for it.
     func testACancelledRequestIsNoLongerWaitedFor() {
@@ -137,8 +137,8 @@ final class ControlRelayTests: XCTestCase {
         XCTAssertEqual(relay.fromApp(answer(8)), [.toClaude(answer(8)), .exit(ControlOutput.doneExit)])
     }
 
-    /// A request the session answers with id null — an id that is neither a string nor an integer, or
-    /// one already running — is not waited for under that id.
+    /// A request the session answers with id null - an id that is neither a string nor an integer, or
+    /// one already running - is not waited for under that id.
     func testARequestTheSessionCannotAnswerByItsIDIsNotWaitedFor() {
         let relay = started()
         _ = relay.fromClaude(#"{"jsonrpc":"2.0","id":1.5,"method":"ping"}"#)
@@ -266,8 +266,8 @@ final class ControlRelayTests: XCTestCase {
         XCTAssertEqual(relay.fromApp(answer(7)), [.toClaude(answer(7)), .exit(ControlOutput.doneExit)])
     }
 
-    /// Once Claude has closed its side, whatever settles the last request ends the relay — its answer,
-    /// the connection going, or a connection that could not be made — so the relay never outlives it.
+    /// Once Claude has closed its side, whatever settles the last request ends the relay - its answer,
+    /// the connection going, or a connection that could not be made - so the relay never outlives it.
     func testOnceClaudeHasClosedALostOrFailedConnectionEndsTheRelay() {
         let lost = started()
         _ = lost.fromClaude(call(12))

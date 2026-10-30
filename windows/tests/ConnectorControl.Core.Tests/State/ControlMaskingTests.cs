@@ -263,7 +263,7 @@ public class ControlMaskingTests
 
     /// <summary>In the dialog a single value reads one way only, as an argument does: the command, a URL, a
     /// key's text value and a variable's name are quoted, with \ and ' escaped, when they hold a space, a
-    /// quote or anything shown as an escape — so a newline and the two characters \n read apart, and a run
+    /// quote or anything shown as an escape - so a newline and the two characters \n read apart, and a run
     /// of spaces cannot pass for the start of another row. What Claude and the command line read is
     /// unchanged.</summary>
     [Fact]
@@ -570,8 +570,8 @@ public class ControlMaskingTests
         }
     }
 
-    /// <summary>Every masked view of <paramref name="config"/> — its structured form, its code lines and its change lines
-    /// from nothing — without any of <paramref name="secrets"/>.</summary>
+    /// <summary>Every masked view of <paramref name="config"/> - its structured form, its code lines and its change lines
+    /// from nothing - without any of <paramref name="secrets"/>.</summary>
     private static void AssertHidden(string[] secrets, JsonValue config)
     {
         var structured = System.Text.Encoding.UTF8.GetString(ControlMasking.MaskedConfig(config).Serialize());
@@ -747,7 +747,7 @@ public class ControlMaskingTests
         }
     }
 
-    /// <summary>JSON passed as an argument — Smithery's <c>run &lt;server&gt; --config '{"apiKey":"…"}'</c> — is masked
+    /// <summary>JSON passed as an argument - Smithery's <c>run &lt;server&gt; --config '{"apiKey":"…"}'</c> - is masked
     /// leaf by leaf, by key, as a config is; JSON with nothing to mask reads as written.</summary>
     [Fact]
     public void AJSONArgumentIsMaskedByKey()
@@ -936,7 +936,7 @@ public class ControlMaskingTests
         Assert.Equal(["--token=•••", "server.js"], ControlMasking.Arguments(["--token=abc", "server.js"]));
     }
 
-    /// <summary>Text that starts with a bracket but is not JSON — an IPv6 literal, a glob — reads as written.</summary>
+    /// <summary>Text that starts with a bracket but is not JSON - an IPv6 literal, a glob - reads as written.</summary>
     [Fact]
     public void BracketedValuesThatAreNotJsonReadAsWritten()
     {

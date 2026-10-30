@@ -35,7 +35,7 @@ struct CollectionsWindowView: View {
     @Environment(\.openWindow) private var openWindow
     @State private var sheet: Sheet?
     /// A sheet asked for while another is still on screen. Dismissing one is animated, and the
-    /// replacement can only go up once that has finished — which is what `onDismiss` reports.
+    /// replacement can only go up once that has finished - which is what `onDismiss` reports.
     @State private var pendingSheet: Sheet?
     /// Whether the window is on screen. The request is taken a turn after it is noticed, and the
     /// window can close in that turn: a request taken then would be lost to a window nobody sees,
@@ -155,7 +155,7 @@ struct CollectionsWindowView: View {
             // Selecting a collection only shows it; making it the active one is a second action.
             // The list's own primary action is that action: a double-click or Return makes the
             // row active. It is not a tap gesture on the row: a List row is an NSTableView cell,
-            // and a count-2 TapGesture there — even a simultaneous one — holds every click back
+            // and a count-2 TapGesture there - even a simultaneous one - holds every click back
             // to wait for a second, so single clicks select late or not at all. The menu is the
             // labelled route that a screen reader reads out.
             .contextMenu(forSelectionType: String.self) { names in
@@ -234,7 +234,7 @@ struct CollectionsWindowView: View {
         return model.items.first { $0.name == name }
     }
 
-    /// The chain, and the sentence naming the document behind it — which the model withholds for
+    /// The chain, and the sentence naming the document behind it - which the model withholds for
     /// a synced collection whose file it cannot name. An empty tooltip and a nameless label are
     /// worse than neither, so the glyph goes up bare instead.
     @ViewBuilder private func chain(_ item: CollectionsModel.Item) -> some View {
@@ -387,7 +387,7 @@ struct CollectionsWindowView: View {
         .background(RoundedRectangle(cornerRadius: 6).fill(Color.orange.opacity(0.12)))
     }
 
-    /// The `+` that adds a connector here — dimmed on a synced collection, whose tooltip then says
+    /// The `+` that adds a connector here - dimmed on a synced collection, whose tooltip then says
     /// where additions go instead. Borderless, as the `⋯` above it is: an accessory-bar button
     /// gives up its height when disabled, and the count would move on a synced collection.
     private var addConnectorButton: some View {
@@ -656,8 +656,8 @@ struct CollectionsWindowView: View {
 
     // MARK: - Requests
 
-    /// The next turn of the main queue, so a request that arrives with the window — `onAppear`
-    /// runs inside its first layout — does not put a modal panel in front of a window that is
+    /// The next turn of the main queue, so a request that arrives with the window - `onAppear`
+    /// runs inside its first layout - does not put a modal panel in front of a window that is
     /// not on screen yet.
     private func scheduleRequest() {
         Task { @MainActor in consumeRequest() }
@@ -665,7 +665,7 @@ struct CollectionsWindowView: View {
 
     /// Puts a sheet up, replacing whatever is already there. SwiftUI will not swap one item for
     /// another: the open sheet has to be dismissed first, and the new one presented after it has
-    /// gone — not one turn later, which is shorter than the dismissal itself. A platform
+    /// gone - not one turn later, which is shorter than the dismissal itself. A platform
     /// difference, not a drift: these sheets are window-modal and the popover stays live beside
     /// them, so a request can arrive over one; the Windows dialogs are app-modal, so none can,
     /// and that window has nothing to replace.
@@ -704,7 +704,7 @@ struct CollectionsWindowView: View {
 
     /// The banner's one button. True says the news needs nothing from the file system and the
     /// Review sheet is the whole answer; false says this view owes a panel, and which one is what
-    /// the banner is — the model then refuses anything that is not what it asked for.
+    /// the banner is - the model then refuses anything that is not what it asked for.
     private func runBannerAction() {
         if model.bannerAction() {
             if let collection = model.selected {

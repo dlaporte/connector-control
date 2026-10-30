@@ -21,7 +21,7 @@ struct EditorWindowView: View {
 
     /// What the lock glyph says to a screen reader. A glyph on its own reads as nothing, and a
     /// lock is only ever on screen while the collection is synced, so this is the very sentence
-    /// the header shows — which is what the Windows glyph names too.
+    /// the header shows - which is what the Windows glyph names too.
     private var lockLabel: String { EditorModel.lockedFieldsNote(model.collectionName) }
 
     var body: some View {
@@ -254,7 +254,7 @@ struct EditorWindowView: View {
                         // Spoken names carry the row's number, which the visible "Name" and
                         // "Value" columns leave to position.
                         let position = model.envRows.firstIndex { $0.id == row.id } ?? 0
-                        // Titles are kept for accessibility but hidden — the
+                        // Titles are kept for accessibility but hidden - the
                         // grouped form would render them as per-field labels,
                         // duplicating the column headers above.
                         TextField(EditorModel.nameLabel, text: $row.name)
@@ -395,7 +395,7 @@ struct EditorWindowView: View {
             }
             if model.isReadOnly {
                 // WrappingCodeEditor wraps an editable NSTextView, and SwiftUI's disabled state
-                // does not reach inside an NSViewRepresentable — so the read-only view of the
+                // does not reach inside an NSViewRepresentable - so the read-only view of the
                 // same bytes is a selectable text pane rather than a greyed-out editor.
                 ScrollView {
                     Text(model.jsonText)

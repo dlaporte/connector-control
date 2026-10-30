@@ -40,7 +40,7 @@ final class ToolNoteTests: XCTestCase {
         XCTAssertEqual(ToolNote.statusText(.notFound), "Not found")
     }
 
-    /// Ordering, name mapping, and lookup — behavior StringCatalogTests
+    /// Ordering, name mapping, and lookup - behavior StringCatalogTests
     /// doesn't cover (it pins strings, not enum order or lookup logic).
     func testOrderNameMappingAndFamilyLookup() {
         XCTAssertEqual(Tool.allCases, [.npx, .node, .uvx, .uv])

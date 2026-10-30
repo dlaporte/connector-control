@@ -2,7 +2,7 @@
 
 Release notes for Connector Control on macOS and Windows. The section
 matching the tagged version becomes the GitHub release notes and the
-text both apps show in their update dialogs — the release build fails if
+text both apps show in their update dialogs - the release build fails if
 the section is missing. The top section also names the version a preview
 build is cut from (a preview is versioned as that number followed by
 -preview.N, and the preview build fails if that version has already been
@@ -22,14 +22,14 @@ has one.
 
 - Restart Claude no longer says Claude “didn’t quit” when it actually did; Connector Control now reopens it.
 - The JSON editor now supports undo (Cmd-Z) and no longer autocorrects or spell-checks what you type, so commands, arguments and header names stay as written.
-- The menu bar icon now has a name for VoiceOver — “Connector Control”, or “Connector Control: Apply Failed — Retry” when an apply is waiting to be retried — and VoiceOver no longer reads the “▾” after the collection name in the popover.
+- The menu bar icon now has a name for VoiceOver - “Connector Control”, or “Connector Control: Apply Failed - Retry” when an apply is waiting to be retried - and VoiceOver no longer reads the “▾” after the collection name in the popover.
 
 ### Windows
 
 - Pressing Escape to close the editor’s Authentication drop-down now closes just the drop-down; before, it closed the whole editor and lost your unsaved changes. Escape in the flyout’s collection menu likewise closes only the menu. With nothing open, Escape still cancels the editor and dismisses the flyout.
 - Check for Updates now reads “Checking…” and can’t be clicked while a check runs, instead of looking as if nothing happened. After Install and Relaunch, the update dialog stays open reading “Downloading…” until Connector Control relaunches, so the app no longer just vanishes; if the download fails, the dialog closes and says why.
 - Narrator now names the flyout’s Restart Claude button and the collection switcher (with its waiting update), the Settings backup − and + buttons (which also dim at 5 and 100) and the Name field in New Collection, Rename and Duplicate. Each Use Default and Choose… button in Settings now says which row it belongs to.
-- The Settings tabs now show their icons — a gear for General, a drive for Storage, and Claude’s own icon, or a generic app icon where Claude’s can’t be read — instead of an empty space before each name. Claude’s icon is now sharp at 150% and 200% scaling.
+- The Settings tabs now show their icons - a gear for General, a drive for Storage, and Claude’s own icon, or a generic app icon where Claude’s can’t be read - instead of an empty space before each name. Claude’s icon is now sharp at 150% and 200% scaling.
 - The Publish and Export dialogs now fit on a short screen: when there isn’t room, the preview gets shorter so the Publish, Export and Cancel buttons stay visible.
 
 ### Both platforms
@@ -41,11 +41,13 @@ has one.
 - When Claude or the command-line tool tries to add, change or delete a connector in a subscribed collection, the refusal now names the collection and says what to do instead (add the connector to a local collection, or make a local copy with Make Local Copy to change it), rather than repeating a window tooltip.
 - Copy to now confirms a copy: the count under the collection’s name adds, for example, “Copied 2 connectors to “Work”” until you tick a row, run another command in the window or choose another collection. Before, the ticks just cleared and nothing said where the copies went.
 - After you pick a Claude app in Settings ▸ Claude (on Windows, its launch target), the row now reads “Checking…” and Choose… is dimmed while its signature is verified, which can take a few seconds. Before, nothing changed on screen until the check finished, and a second click started a second check.
+- Messages, tooltips and help text use a hyphen where they used an em-dash.
 
 ### Release pipeline
 
 - A release now fails at its first step if its changelog section holds only the empty sub-headings, and drops any sub-heading with no bullets from the notes it publishes, so the GitHub release and both apps’ update dialogs never show bare headings.
 - The Sparkle tools version used to sign the Mac update feed is now checked against the Sparkle the app links on every push that touches `Package.resolved`, so a Sparkle bump fails on its pull request instead of partway through a signed build.
+- Every push now checks that no file contains an em-dash.
 
 ## v1.5.0
 
@@ -133,7 +135,7 @@ has one.
 - A restore writes the backup as Connector Control read it, in the format every apply writes, and
   refuses a backup that lists the same name twice, which Connector Control and Claude would read
   differently. Before, it copied the backup byte for byte.
-- A file that isn't valid JSON — Claude's config, a backup or a collection document — is reported
+- A file that isn't valid JSON - Claude's config, a backup or a collection document - is reported
   in the same words on both platforms, and the message quotes nothing from the file.
 - A setting changed with `connector-control settings set` shows at once in a Settings window that
   is already open.
@@ -423,8 +425,8 @@ has one.
   why.
 - In a subscribed collection, a local server authored on the other platform is marked on
   its row; remote connectors cross either way.
-- A folder the app watches — Claude's config folder, the master list's, or a subscribed
-  collection's — that is deleted and recreated, or replaced wholesale by a sync client,
+- A folder the app watches - Claude's config folder, the master list's, or a subscribed
+  collection's - that is deleted and recreated, or replaced wholesale by a sync client,
   is picked up again.
 - Two backups taken in the same millisecond list, restore and prune newest first;
   before, the newer one could list below the older and be pruned in its place.
@@ -519,8 +521,8 @@ Hardening from a security review of the app and its release pipeline.
   symlinked into a dotfiles folder is backed up, restored and written
   through correctly instead of the link itself being copied or replaced.
 - Both platforms: the one-time permissions repair at launch now touches only
-  the app's own files in the master-list folder — mcps.json and any
-  corrupt-file copies beside it — and never the folder's other contents.
+  the app's own files in the master-list folder - mcps.json and any
+  corrupt-file copies beside it - and never the folder's other contents.
   On Windows it also refuses to run on a drive root or a shell folder such
   as Documents or OneDrive, and no longer records itself as done when every
   step failed. Earlier builds rewrote the permissions of everything under a
@@ -536,12 +538,12 @@ Hardening from a security review of the app and its release pipeline.
   uses the `cmd /c npx` launcher, and says why: Claude Desktop hands that
   launcher's arguments to cmd.exe unescaped, so a pasted URL such as
   `https://host/mcp&<command>` would run the command. A URL with more than
-  one `%` shows a caution instead. Connectors written as bare `npx` — the
-  Mac's shape — are unaffected, because Claude escapes npx's arguments
+  one `%` shows a caution instead. Connectors written as bare `npx` - the
+  Mac's shape - are unaffected, because Claude escapes npx's arguments
   itself.
 - Windows: every file the app writes is private from the instant it is
-  created — the permissions travel with the create call rather than being
-  applied afterwards — the folders it creates are private too, and
+  created - the permissions travel with the create call rather than being
+  applied afterwards - the folders it creates are private too, and
   replacing an existing file carries the new file's permissions instead of
   keeping the old file's. If the master-list folder refuses the permission
   change, the flyout says so instead of staying silent.
@@ -561,10 +563,10 @@ Hardening from a security review of the app and its release pipeline.
   place whenever the target is on the same volume, and a one-time pass
   strips inherited entries from files written by earlier builds.
 - Windows: a downloaded update is installed only if every program and
-  library inside it is validly signed — the app's own files and the updater
+  library inside it is validly signed - the app's own files and the updater
   by the same publisher as the running app, the .NET runtime and the
   libraries the app is built from by that publisher or by Microsoft or the
-  .NET Foundation — and only if the app inside it carries the version the
+  .NET Foundation - and only if the app inside it carries the version the
   update feed advertises, so an older signed release cannot be replayed as
   new. Programs are recognized by their content, not their file name. A
   package that fails these checks is discarded, the previous updater is put
@@ -585,7 +587,7 @@ Hardening from a security review of the app and its release pipeline.
 
 ## v1.3.1
 
-- macOS: every file the app writes — Claude's config and the master list —
+- macOS: every file the app writes - Claude's config and the master list -
   now ends up readable by you alone, even when it already existed with
   wider permissions (a config Claude Desktop created, a master list checked
   out of a repo). Earlier builds set the private mode on the file they
@@ -609,7 +611,7 @@ Hardening from a security review of the app and its release pipeline.
   ConnectorControl-win-x64-Setup.exe (or the win-arm64 one) on the release
   page; it keeps itself up to date from then on. Both apps read and write
   the same mcps.json, so a master list synced between a Mac and a PC
-  serves both — local-server commands stay OS-specific, see the README.
+  serves both - local-server commands stay OS-specific, see the README.
 - Both platforms: missing-tool warnings for a connector that starts through npx, node,
   uvx or uv now show a caution glyph in the connector list when that
   tool isn't installed where Claude Desktop can find it. The editor explains
@@ -637,7 +639,7 @@ Reliability release: fixes from a full code review of 1.1.4–1.2.2.
 - Update feed hardening: version numbers (not build counters) order updates,
   and prerelease tags can no longer reach the auto-update feed.
 - Deleting or breaking the connector-list file mid-session can no longer
-  wipe Claude's config — the app restores its own list instead.
+  wipe Claude's config - the app restores its own list instead.
 - Backup ordering is immune to daylight-saving clock rollbacks (timestamps
   are now UTC).
 
@@ -649,8 +651,8 @@ Reliability release: fixes from a full code review of 1.1.4–1.2.2.
 
 ## v1.2.1
 
-- Settings cleanup: the About tab is gone — the current version now lives in
-  Settings ▸ General ▸ Updates — and the settings window is taller so the
+- Settings cleanup: the About tab is gone - the current version now lives in
+  Settings ▸ General ▸ Updates - and the settings window is taller so the
   General tab no longer needs a scrollbar.
 
 ## v1.2.0

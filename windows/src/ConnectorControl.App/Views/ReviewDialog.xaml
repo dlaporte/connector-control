@@ -36,7 +36,7 @@
             <StackPanel Margin="0,0,0,10">
               <TextBlock Text="{Binding Name}" FontWeight="Medium" />
               <!-- The JSON both sides of the change, as the editor would show it. A side that does
-                   not exist — nothing before an addition, nothing after a removal — still holds
+                   not exist - nothing before an addition, nothing after a removal - still holds
                    its column, so the side that does stays where the eye left it on the row above. -->
               <Grid Margin="0,4,0,0">
                 <Grid.ColumnDefinitions>

@@ -5,14 +5,14 @@ namespace ConnectorControl.Core.State;
 /// <summary>
 /// The writes that change what a connector runs, or what Claude could run: connectors, deleting a
 /// collection, importing, subscribing, applying an update, restoring a backup, and the restart.
-/// Each is prepared in full before anyone is asked: every refusal, then the question — who is
-/// asking, for what, and exactly what would run, with secrets masked — then the change itself,
+/// Each is prepared in full before anyone is asked: every refusal, then the question - who is
+/// asking, for what, and exactly what would run, with secrets masked - then the change itself,
 /// which runs only on Allow (or with confirmations off, or for the command-line tool; never
 /// unasked for the restart Claude asks for) and is announced when nobody was asked.
 ///
 /// The question, the answer and the announcement name connectors, collections and the asker as
-/// others chose them — Claude names connectors, creates and renames collections without asking, and
-/// any client names itself — so every name goes through <see cref="ControlText.EscapedName"/>, and the asker
+/// others chose them - Claude names connectors, creates and renames collections without asking, and
+/// any client names itself - so every name goes through <see cref="ControlText.EscapedName"/>, and the asker
 /// arrives as <see cref="ControlCaller.ShownAsker"/>, escaped and framed already: none can break a line, reorder
 /// or hide text, or close its own quotes.
 ///
@@ -391,9 +391,9 @@ public sealed partial class ControlTools
 
     public static string RestartTitle(string shownAsker) => $"{shownAsker} wants to restart Claude Desktop";
 
-    /// <summary>A connector as a question lists it: its name in quotes, through <see cref="ControlText.QuotedList"/>
-    /// — so no name can close its quotes, break its line, or pass for a line of what a connector
-    /// runs, which are indented under it — then what becomes of it, when that is said.</summary>
+    /// <summary>A connector as a question lists it: its name in quotes, through <see cref="ControlText.QuotedList"/> -
+    /// so no name can close its quotes, break its line, or pass for a line of what a connector
+    /// runs, which are indented under it - then what becomes of it, when that is said.</summary>
     internal static string ConnectorHeading(string name, string? detail = null)
     {
         var quoted = ControlText.QuotedList([name]);
@@ -451,7 +451,7 @@ public sealed partial class ControlTools
     }
 
     /// <summary>The collection's own Delete: the window's question, refused first for what the window
-    /// refuses. A subscribed collection's file is never touched, nor a published one's — the window
+    /// refuses. A subscribed collection's file is never touched, nor a published one's - the window
     /// asks whether that one goes too, and nothing here asks twice, so it stays, as Keep leaves it.</summary>
     private ControlStep DeleteCollection(ControlArguments arguments, string shownAsker)
     {
@@ -528,8 +528,8 @@ public sealed partial class ControlTools
     // one under /net is mounted by autofs on first access, but as an NFS mount that sends none of the person's
     // credentials, so neither signs in anywhere on their behalf, as opening a UNC path here does.
     /// <summary>Why <paramref name="caller"/> may not read the document at <paramref name="full"/>, a full path,
-    /// by its form alone, or null. The relay is refused any path that starts with <c>\\</c> or <c>\??\</c> — a UNC
-    /// or WebDAV path, or another device form — since opening one has Windows sign in to that host as the user, with nothing asked, while the
+    /// by its form alone, or null. The relay is refused any path that starts with <c>\\</c> or <c>\??\</c> - a UNC
+    /// or WebDAV path, or another device form - since opening one has Windows sign in to that host as the user, with nothing asked, while the
     /// command-line tool keeps its team shares; and a <c>\\.\</c> path, Windows' way to a device or a pipe,
     /// or a <c>\\?\</c> or <c>\??\</c> path to anything but a drive or a share, is refused to everyone, since
     /// the rule cannot tell where it leads. Pure, so it is tested on any platform.</summary>
@@ -551,7 +551,7 @@ public sealed partial class ControlTools
 
     /// <summary>Whether <paramref name="full"/> is a <c>\\?\</c> or <c>\??\</c> path to anything but a drive
     /// (<c>\\?\C:\</c>) or a share (<c>\\?\UNC\</c>): a volume by its GUID, <c>GLOBALROOT</c>, a pipe or a
-    /// device. The rule cannot tell where these lead — a volume path can be a real file — so they are
+    /// device. The rule cannot tell where these lead - a volume path can be a real file - so they are
     /// refused to every caller, the command line included.</summary>
     private static bool IsDeviceNamespace(string full)
     {
@@ -566,7 +566,7 @@ public sealed partial class ControlTools
 
     /// <summary>Why the document at <paramref name="full"/> is not read, or null to read it, found before anything
     /// opens it, so no path can stall the app or reach what is not a file: it must be a regular file, or a link
-    /// to one — not a folder, a device, or a link to one — of at most <see cref="McpSession.MaxMessageBytes"/>,
+    /// to one - not a folder, a device, or a link to one - of at most <see cref="McpSession.MaxMessageBytes"/>,
     /// the most a message carries. A path with nothing there is left to the read, which says so in the
     /// system's words.</summary>
     private static string? DocumentFileRefusal(string full)

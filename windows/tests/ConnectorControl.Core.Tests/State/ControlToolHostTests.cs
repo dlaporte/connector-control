@@ -121,8 +121,8 @@ public class ControlToolHostTests
         Assert.Same(ControlTools.McpDescriptors, cli.ListTools());
     }
 
-    /// <summary>A tool or relay newer than the app it reached — an update replaced the app on disk while the
-    /// old one still runs — is told to restart the app, not that the tool does not exist.</summary>
+    /// <summary>A tool or relay newer than the app it reached - an update replaced the app on disk while the
+    /// old one still runs - is told to restart the app, not that the tool does not exist.</summary>
     [Fact]
     public void ANewerClientAskingForAToolThisAppLacksIsToldToRestartTheApp()
     {

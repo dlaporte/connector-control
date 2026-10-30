@@ -8,7 +8,7 @@
     windows-build.yml's smoke job, for both a release and a preview, runs this two ways:
       * The win-x64 package it just built: the full flow below.
       * The win-arm64 package, which cannot be installed on the x64 runner that job uses:
-        -SignatureOnly -SetupExe <path> only — no install, no launch, just the signature check.
+        -SignatureOnly -SetupExe <path> only - no install, no launch, just the signature check.
 
     The full flow:
       1. INSTALL assertions, always run. Setup.exe --silent →
@@ -16,8 +16,8 @@
          with the version and channel read back out of sq.version. The Run key relies on
          current\ConnectorControl.exe being the stable path it records: asserted here.
       2. LAUNCH assertions. This starts current\ConnectorControl.exe against a throwaway Claude
-         config and master-list folder (CONNECTOR_CONTROL_CLAUDE_CONFIG / CONNECTOR_CONTROL_STORE_DIR
-         — the same env overrides AppPaths honours), polls up to -Seconds for the first-run
+         config and master-list folder (CONNECTOR_CONTROL_CLAUDE_CONFIG / CONNECTOR_CONTROL_STORE_DIR -
+         the same env overrides AppPaths honours), polls up to -Seconds for the first-run
          import to write <store>\mcps.json, and asserts:
            a. the process is still alive;
            b. no crash.log under %LOCALAPPDATA%\Connector Control;
@@ -30,15 +30,15 @@
            h. the relay, fed a handshake and a call on standard input, answers the call.
          The relay is bounded: one that does not answer in time is killed and fails the run.
          Deliberately NOT asserted, because a passive first run does not produce them:
-           * backups\claude_desktop_config.original.json — ConfigService.Apply is the only caller
+           * backups\claude_desktop_config.original.json - ConfigService.Apply is the only caller
              of EnsureOriginalSnapshot, and AppState.Reload calls PerformApply only when the file
              and the store disagree, which they do not immediately after an import. (It would also
              be in the wrong place: with CONNECTOR_CONTROL_STORE_DIR set, AppPaths puts backups
              under the sandbox store, not under %LOCALAPPDATA%\Connector Control.)
-           * settings.json — written last of all, by FirstRunTip, so asserting it turns any
+           * settings.json - written last of all, by FirstRunTip, so asserting it turns any
              tray-layer problem into a confusing store-layer failure.
          Both are on the manual PC checklist instead, after a real toggle.
-      3. With -ExpectSigned: the installed exe's own signature, then a package verification —
+      3. With -ExpectSigned: the installed exe's own signature, then a package verification -
          the installed exe checks this build's own full package with --verify-package, the same
          rule VelopackUpdater applies to a downloaded update. Running the app's own check here,
          rather than a second copy of it in PowerShell, means the two cannot drift apart.

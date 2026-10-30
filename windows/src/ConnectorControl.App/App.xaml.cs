@@ -160,7 +160,7 @@ public partial class App : Application
 
     /// <summary>
     /// The app's one durable log, crash.log in its data folder: a crash, and the few failures that would
-    /// otherwise go unseen — a tray app has no console, and Trace reaches only a debugger. The Mac's
+    /// otherwise go unseen - a tray app has no console, and Trace reaches only a debugger. The Mac's
     /// counterpart is NSLog, which the system keeps. One line each, stamped in UTC, from any thread.
     /// </summary>
     internal static void Log(string message)

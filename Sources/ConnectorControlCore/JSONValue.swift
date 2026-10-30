@@ -60,7 +60,7 @@ public extension JSONValue {
         try JSONEncoder.canonical.encode(self)
     }
 
-    /// Pretty JSON for display/editing — like `serialized()` but without
+    /// Pretty JSON for display/editing - like `serialized()` but without
     /// escaping forward slashes, so URLs read cleanly.
     func editorText() -> String {
         let e = JSONEncoder()
@@ -138,7 +138,7 @@ public extension JSONValue {
 }
 
 extension JSONEncoder {
-    /// Pretty, key-sorted output — the on-disk file format everywhere this app
+    /// Pretty, key-sorted output - the on-disk file format everywhere this app
     /// writes JSON (`JSONValue.serialized()`, `MasterStoreIO.save`). A fresh
     /// instance per use: `JSONEncoder` is a class, and nothing here needs to
     /// share one across calls.

@@ -4,7 +4,7 @@ namespace ConnectorControl.Core.State;
 /// Mirror: Sources/ConnectorControlState/CommandLineTool.swift
 ///
 /// Putting <c>connector-control</c> on PATH for terminal use, and taking it off again. Claude never needs
-/// it — its entry names the tool by its full path — so this is for people and scripts. The Mac links
+/// it - its entry names the tool by its full path - so this is for people and scripts. The Mac links
 /// /usr/local/bin/connector-control to the tool inside the app, through an administrator prompt;
 /// Windows adds the folder of its copy to the user PATH.
 /// </summary>
@@ -20,7 +20,7 @@ public interface ICommandLineTool
     /// Null on Windows, which puts a folder in the user PATH.</summary>
     string? InstalledLocation { get; }
 
-    /// <summary>Install or Remove is running — an administrator prompt is up, or the PATH's change is being
+    /// <summary>Install or Remove is running - an administrator prompt is up, or the PATH's change is being
     /// announced. The seam's, not a window's, so a Settings window opened meanwhile cannot start another.</summary>
     bool IsBusy { get; }
 
@@ -35,7 +35,7 @@ public interface ICommandLineTool
 
     /// <summary>Puts the tool on PATH. The seam keeps <c>IsBusy</c> and <c>LastProblem</c> itself and announces them on
     /// <c>Changed</c>; a caller keeps no state of its own. <c>completion</c> runs on the UI thread, once, after they
-    /// are set, with null when it is done or the person cancelled — <c>IsInstalled</c> says which — or the reason
+    /// are set, with null when it is done or the person cancelled - <c>IsInstalled</c> says which - or the reason
     /// it failed, in the app's words. It may run before <c>Install</c> returns (nothing to do, or a refusal).</summary>
     void Install(Action<string?> completion);
 

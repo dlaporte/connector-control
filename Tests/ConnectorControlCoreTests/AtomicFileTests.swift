@@ -9,7 +9,7 @@ final class AtomicFileTests: XCTestCase {
 
     override func setUpWithError() throws {
         tempDir = TempDir(prefix: "atomic")
-        dir = tempDir.file("target")   // not created — tests exercise AtomicFile creating it
+        dir = tempDir.file("target")   // not created - tests exercise AtomicFile creating it
     }
 
     override func tearDownWithError() throws {
@@ -39,7 +39,7 @@ final class AtomicFileTests: XCTestCase {
 
     /// Claude's own config file is created by Claude Desktop with the default
     /// umask (0644). Every write over it must end owner-only, not inherit the
-    /// old mode — that is the whole point of the 0600 set on the temp file.
+    /// old mode - that is the whole point of the 0600 set on the temp file.
     func testWriteOverExistingWorldReadableFileIsPrivate() throws {
         let fm = FileManager.default
         let url = dir.appendingPathComponent("claude_desktop_config.json")
@@ -53,7 +53,7 @@ final class AtomicFileTests: XCTestCase {
     }
 
     /// windows/tests/ConnectorControl.Core.Tests/AtomicFileTests.cs
-    /// ADirectoryWriteCreatesIsOwnerOnlyWhileAnExistingParentIsUntouched — the
+    /// ADirectoryWriteCreatesIsOwnerOnlyWhileAnExistingParentIsUntouched - the
     /// other half of that test: a directory the app did NOT create (a folder
     /// the user chose) keeps whatever mode and ACL it already had.
     func testAPreExistingParentIsLeftAsItWas() throws {
@@ -111,14 +111,14 @@ final class AtomicFileTests: XCTestCase {
         XCTAssertEqual(mode, 0o600)
     }
 
-    /// windows/tests/ConnectorControl.Core.Tests/AtomicFileTests.cs —
+    /// windows/tests/ConnectorControl.Core.Tests/AtomicFileTests.cs -
     /// WritesThroughADanglingSymlinkedTarget. A link whose target does not
     /// exist yet (created but never populated) is still written through, not
     /// replaced by a plain file.
     func testWritesThroughADanglingSymlinkedTarget() throws {
         let fm = FileManager.default
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        let real = dir.appendingPathComponent("real.json")   // never created — the link's target does not exist yet
+        let real = dir.appendingPathComponent("real.json")   // never created - the link's target does not exist yet
         let link = dir.appendingPathComponent("link.json")
         try fm.createSymbolicLink(at: link, withDestinationURL: real)
         try AtomicFile.write(Data("through".utf8), to: link)
@@ -126,9 +126,9 @@ final class AtomicFileTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: real, encoding: .utf8), "through")
     }
 
-    /// windows/tests/ConnectorControl.Core.Tests/AtomicFileTests.cs —
+    /// windows/tests/ConnectorControl.Core.Tests/AtomicFileTests.cs -
     /// WritesThroughARelativeSymlinkedTarget. Exercises resolveWriteTarget's
-    /// relative-destination branch (AtomicFile.swift:106-108) — the two symlink
+    /// relative-destination branch (AtomicFile.swift:106-108) - the two symlink
     /// tests above only ever create links with absolute destinations.
     func testWritesThroughARelativeSymlinkedTarget() throws {
         let fm = FileManager.default
@@ -183,8 +183,8 @@ final class AtomicFileTests: XCTestCase {
     }
 
     /// The temp file is born in the app's own private folder and renamed into the target
-    /// folder: a rename does not re-inherit ACEs, so there is no instant — not even a
-    /// zero-byte one — at which a shared folder's principal can open it.
+    /// folder: a rename does not re-inherit ACEs, so there is no instant - not even a
+    /// zero-byte one - at which a shared folder's principal can open it.
     func testStagingIsUsedOnTheSameVolumeAndSkippedAcrossVolumes() throws {
         let staging = dir.appendingPathComponent("staging")
         let target = dir.appendingPathComponent("shared")

@@ -37,7 +37,7 @@ fi
 
 SECTION=$(awk -v ver="## $VER" '$0 == ver {found=1; next} /^## / && found {exit} found {print}' "$FILE")
 if [ -z "$(printf '%s' "$SECTION" | tr -d '[:space:]')" ]; then
-  $QUIET || echo "::error::$FILE has no '## $VER' section — write one before tagging." >&2
+  $QUIET || echo "::error::$FILE has no '## $VER' section - write one before tagging." >&2
   exit 1
 fi
 
@@ -51,7 +51,7 @@ if [ -n "$MODE" ]; then
       END { if (heading != "" && body != "") printf "%s", held }
   ')
   if [ "$MODE" = release ] && [ -z "$(printf '%s' "$SECTION" | tr -d '[:space:]')" ]; then
-    $QUIET || echo "::error::the '## $VER' section of $FILE has only empty sub-headings — add the release notes before tagging." >&2
+    $QUIET || echo "::error::the '## $VER' section of $FILE has only empty sub-headings - add the release notes before tagging." >&2
     exit 1
   fi
 fi

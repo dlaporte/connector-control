@@ -8,7 +8,7 @@ import Foundation
 /// Everything runs on a private serial queue; a confirmed change is handed to
 /// `marshal`, which posts `onChange` to the main actor. The
 /// callback re-checks on delivery and is dropped if the watcher was stopped or
-/// restarted in the meantime — a `stop()` that raced the check wins.
+/// restarted in the meantime - a `stop()` that raced the check wins.
 public final class FileWatcher: @unchecked Sendable {
     private let url: URL
     private let onChange: MainActorAction
@@ -38,8 +38,8 @@ public final class FileWatcher: @unchecked Sendable {
     }
 
     /// True while the parent-directory source is live AND still watching the
-    /// directory the path resolves to. A directory replaced wholesale — deleted
-    /// and recreated, or swapped in by a sync client — leaves the descriptor on
+    /// directory the path resolves to. A directory replaced wholesale - deleted
+    /// and recreated, or swapped in by a sync client - leaves the descriptor on
     /// an orphaned inode where nothing under the path can fire again, and
     /// calling that armed would make the caller's re-arm a no-op forever.
     /// A parent that is simply missing stays armed until the event handler sees
@@ -128,7 +128,7 @@ public final class FileWatcher: @unchecked Sendable {
     /// the one `fd` was opened on. Device plus inode is the fingerprint: a
     /// directory recreated at the same path is a new inode, and events for it
     /// never reach a descriptor still holding the old one. A path that resolves
-    /// to nothing is not a replacement — that is the deleted-directory case.
+    /// to nothing is not a replacement - that is the deleted-directory case.
     private func directoryWasReplaced(watching fd: Int32) -> Bool {
         guard fd >= 0 else { return false }
         var held = stat()
@@ -156,7 +156,7 @@ public final class FileWatcher: @unchecked Sendable {
     private func checkForChange() {
         guard dirSource != nil else { return }
         guard FileManager.default.fileExists(atPath: url.deletingLastPathComponent().path) else {
-            // The watched directory itself is gone. Disarm now — the next
+            // The watched directory itself is gone. Disarm now - the next
             // start() (AppState retries on every reload) finds it still
             // missing and stays unarmed until the directory reappears. The
             // final callback below cannot use isLive(generation:): that

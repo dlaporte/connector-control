@@ -8,8 +8,8 @@ import ConnectorControlState
 /// app. Where the person can write that folder (Homebrew on Intel makes it theirs) the link is made
 /// directly; elsewhere `osascript` makes it with administrator privileges, the paths and the prompt
 /// passed as the run handler's arguments and quoted with `quoted form of`, so no path is ever read as
-/// script or shell. A file at the link's path that is not a link is never replaced — the script checks
-/// again under the password, in case one appeared — and Remove takes away only this install's own link.
+/// script or shell. A file at the link's path that is not a link is never replaced - the script checks
+/// again under the password, in case one appeared - and Remove takes away only this install's own link.
 /// An app run from where it will not stay installs nothing.
 @MainActor
 public final class SymlinkCommandLineTool: CommandLineTool {

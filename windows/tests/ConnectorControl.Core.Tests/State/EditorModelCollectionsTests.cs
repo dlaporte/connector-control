@@ -284,7 +284,7 @@ public class EditorModelCollectionsTests
         var folder = Path.GetDirectoryName(rig.H.Publish(state, "Team", folder: "share"))!;
         using var published = rig.Editor("scoutbook", "Team");
         Assert.Equal(new EditorModel.HeaderState.Published(folder), published.Header);
-        Assert.Equal($"Published to {folder} — saving updates the file your team reads. Secrets stay here.",
+        Assert.Equal($"Published to {folder} - saving updates the file your team reads. Secrets stay here.",
                      published.HeaderNote);
         Assert.False(published.IsReadOnly);
     }
@@ -377,7 +377,7 @@ public class EditorModelCollectionsTests
 
         using var editor = rig.Editor("scoutbook", "Default");
         Assert.Equal(["Backup"], editor.PropagateTargets);
-        // A second window on the twin saved first — the checkbox's promise no longer holds for it.
+        // A second window on the twin saved first - the checkbox's promise no longer holds for it.
         var moved = new McpEntry(AppStateHarness.Remote("https://scoutbook.example.com/mcp/other"));
         Assert.Null(state.Upsert("scoutbook", moved, "scoutbook", "Backup"));
 

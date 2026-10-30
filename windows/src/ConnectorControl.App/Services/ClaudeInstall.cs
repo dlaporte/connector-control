@@ -82,7 +82,7 @@ public sealed class ClaudeInstall : IClaudeInstall
     /// name is Claude's: the family name, its best-effort AUMID (falling back to
     /// <c>family!Claude</c> when the app-list entry can't be read), and its install location when
     /// available. Null means the query worked and found no Claude package; an exception means
-    /// WinRT itself is unusable — <see cref="DetectMsixViaPackageManager"/> tells those apart.
+    /// WinRT itself is unusable - <see cref="DetectMsixViaPackageManager"/> tells those apart.
     /// </summary>
     internal static (string Family, string Aumid, string? InstalledPath)? FindClaudePackage()
     {

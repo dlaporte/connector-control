@@ -16,7 +16,7 @@ namespace ConnectorControl.Core.Transport;
 /// </summary>
 public sealed class ControlRelay
 {
-    public const string RestartedError = "Connector Control restarted — try again.";
+    public const string RestartedError = "Connector Control restarted - try again.";
     /// <summary>The replayed <c>initialize</c> goes out under an id of this form, which Claude never uses, so
     /// its answer is known and dropped.</summary>
     public const string ReplayIdPrefix = "connector-control-replay-";
@@ -31,7 +31,7 @@ public sealed class ControlRelay
 
         public sealed record ToClaude(string Line) : Action;
 
-        /// <summary>Connect — starting the app where that is allowed — and report with
+        /// <summary>Connect - starting the app where that is allowed - and report with
         /// <see cref="ConnectSucceeded"/> or <see cref="ConnectFailed"/>.</summary>
         public sealed record Connect : Action;
 
@@ -126,7 +126,7 @@ public sealed class ControlRelay
     }
 
     /// <summary>No connection could be made: each request held for it is answered with
-    /// <paramref name="reason"/>, as <see cref="Forward"/> waits for one — under an id the session answers by,
+    /// <paramref name="reason"/>, as <see cref="Forward"/> waits for one - under an id the session answers by,
     /// once. Before the first handshake there is nothing to keep running for, and the relay ends.</summary>
     public IReadOnlyList<Action> ConnectFailed(string reason)
     {
@@ -231,11 +231,11 @@ public sealed class ControlRelay
     }
 
     /// <summary>Passes a line on. A request is waited for only when the session will answer it under its own
-    /// id: one whose id is neither a string nor an integer, or is already running — a cancelled request's
-    /// included — is answered with id null or not at all.</summary>
+    /// id: one whose id is neither a string nor an integer, or is already running - a cancelled request's
+    /// included - is answered with id null or not at all.</summary>
     private List<Action> Forward(string line, JsonValue? message)
     {
-        // A cancelled request is never answered — the session drops its answer — so it is waited for no
+        // A cancelled request is never answered - the session drops its answer - so it is waited for no
         // longer. Settled as the cancel goes to the app, not as it arrives: a cancel held for a new
         // connection follows its request there, and only then is that request waited for.
         if (message is not null && message["id"] is null && message["method"] == JsonValue.String("notifications/cancelled")
@@ -259,7 +259,7 @@ public sealed class ControlRelay
             ? (id, method.StringValue)
             : null;
 
-    /// <summary>The object a line holds, read only to know what the line is — never to change it.</summary>
+    /// <summary>The object a line holds, read only to know what the line is - never to change it.</summary>
     internal static JsonValue? Message(string line)
     {
         if (!McpSession.Nests(McpSession.MaxNestingDepth, line))

@@ -7,7 +7,7 @@ namespace ConnectorControl.Core;
 /// <summary>
 /// Windows counterpart of the Mac app's mode 0600 / 0700: a protected DACL
 /// granting the current user full control and nobody else. Connector configs
-/// can hold env-var secrets, so every file this app writes gets this — in the
+/// can hold env-var secrets, so every file this app writes gets this - in the
 /// create call itself where possible (<see cref="WriteNewProtectedFile"/>,
 /// <see cref="CreateDirectoryProtected"/>, both reached through <see cref="AtomicFile"/>),
 /// after the fact only as a repair (<see cref="TryApply"/>).
@@ -43,7 +43,7 @@ public static class OwnerOnlyAcl
 
     /// <summary>
     /// Creates <paramref name="path"/>, which must not exist yet, with the owner-only DACL in the
-    /// create call itself — the Windows counterpart of <c>open(O_CREAT|O_EXCL, 0600)</c> — and
+    /// create call itself - the Windows counterpart of <c>open(O_CREAT|O_EXCL, 0600)</c> - and
     /// writes <paramref name="data"/> into it. Nothing else ever sees the file with the parent
     /// folder's inherited permissions. When the ACL machinery itself fails (no SID, an unsupported
     /// object) the file is created plainly and <see cref="TryApply"/> repairs it. Returns whether
@@ -80,8 +80,8 @@ public static class OwnerOnlyAcl
 
     /// <summary>
     /// Creates <paramref name="dir"/> owner-only when it does not exist yet, missing parents
-    /// included — the Mac's <c>createDirectory(attributes: 0o700)</c>. A directory that already
-    /// exists — a folder the user chose — is never rewritten (the sweep's rule too). Throws
+    /// included - the Mac's <c>createDirectory(attributes: 0o700)</c>. A directory that already
+    /// exists - a folder the user chose - is never rewritten (the sweep's rule too). Throws
     /// IOException when a file sits where the directory should be.
     /// </summary>
     internal static void CreateDirectoryProtected(string dir)
@@ -140,7 +140,7 @@ public static class OwnerOnlyAcl
         return currentUser;
     }
 
-    /// <summary>Whether an ACL was actually set — false for a path that is neither a directory nor a file (e.g. a vanished backup).</summary>
+    /// <summary>Whether an ACL was actually set - false for a path that is neither a directory nor a file (e.g. a vanished backup).</summary>
     [SupportedOSPlatform("windows")]
     private static bool Apply(string path)
     {
@@ -158,9 +158,9 @@ public static class OwnerOnlyAcl
     }
 
     /// <summary>
-    /// The ACL machinery is unavailable on its own terms — no SID, an object or volume without security
+    /// The ACL machinery is unavailable on its own terms - no SID, an object or volume without security
     /// (NotSupportedException is what .NET raises for ERROR_NO_SECURITY_ON_OBJECT on FAT/exFAT and
-    /// some shares) — as opposed to the file operation it was attached to failing.
+    /// some shares) - as opposed to the file operation it was attached to failing.
     /// </summary>
     private static bool IsAclUnavailable(Exception ex) => ex is InvalidOperationException
         or PlatformNotSupportedException

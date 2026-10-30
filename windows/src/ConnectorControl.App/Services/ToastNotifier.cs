@@ -52,7 +52,7 @@ public sealed class ToastNotifier : INotifier, IDisposable
     }
 
     /// <summary>
-    /// The toast itself: title, body, and — for the restart category only — the
+    /// The toast itself: title, body, and - for the restart category only - the
     /// Restart Claude button carrying the action this class routes back.
     /// Separate from Show() so the content is testable.
     /// </summary>

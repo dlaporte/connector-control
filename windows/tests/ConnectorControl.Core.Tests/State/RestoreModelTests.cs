@@ -142,8 +142,8 @@ public class RestoreModelTests
         Assert.Equal(0, closed);
     }
 
-    /// <summary>Restore() clears RestoreError as its first act — before the confirm dialog even
-    /// resolves — so a stale error from a prior failed attempt never lingers into the next one.</summary>
+    /// <summary>Restore() clears RestoreError as its first act - before the confirm dialog even
+    /// resolves - so a stale error from a prior failed attempt never lingers into the next one.</summary>
     [Fact]
     public void ANewAttemptClearsThePreviousError()
     {

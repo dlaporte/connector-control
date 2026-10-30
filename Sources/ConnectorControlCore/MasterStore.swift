@@ -22,7 +22,7 @@ public struct Collection: Equatable, Codable, Sendable {
     public init(mcps: [String: MCPEntry] = [:]) { self.mcps = mcps }
 }
 
-/// Schema v2 only — no v1 fallback. A v1 (or otherwise malformed) file on
+/// Schema v2 only - no v1 fallback. A v1 (or otherwise malformed) file on
 /// disk fails to decode and is handled by `MasterStoreIO.load`'s existing
 /// corrupt-file path: moved aside and rebuilt fresh from Claude's config.
 public struct MasterStore: Equatable, Codable, Sendable {
@@ -38,13 +38,13 @@ public struct MasterStore: Equatable, Codable, Sendable {
         case collections = "profiles"
     }
 
-    /// The active collection's connectors — the view the entire app operates on.
+    /// The active collection's connectors - the view the entire app operates on.
     public var mcps: [String: MCPEntry] {
         get { collections[activeCollection]?.mcps ?? [:] }
         set { collections[activeCollection, default: Collection()].mcps = newValue }
     }
 
-    /// Claude's `mcpServers` section rendered from this store — the enabled
+    /// Claude's `mcpServers` section rendered from this store - the enabled
     /// subset's configs. The store is the source of truth; Claude's config is
     /// downstream, and any divergence from this render is regenerated away.
     public var enabledServers: [String: JSONValue] {
@@ -69,8 +69,8 @@ public struct MasterStore: Equatable, Codable, Sendable {
     }
 
     /// The one place that guarantees `collections[activeCollection]` exists, as the Windows
-    /// mirror's constructor is: a store that names a collection it does not hold — a hand edit, a
-    /// backup written elsewhere — makes the first existing one in ordinal order active, or a fresh
+    /// mirror's constructor is: a store that names a collection it does not hold - a hand edit, a
+    /// backup written elsewhere - makes the first existing one in ordinal order active, or a fresh
     /// "Default" when none remain. Every decode comes through here, so a load, the store watcher's
     /// peek and a backup restored in place of an unreadable master list all heal alike.
     private init(version: Int, activeCollection: String, collections: [String: Collection]) {
@@ -175,7 +175,7 @@ public enum MasterStoreIO {
         do {
             let data = try Data(contentsOf: url)
             // A decoded-but-inconsistent activeCollection (hand-edited or corrupted file) is
-            // self-healed by the decoder itself — see `init(version:activeCollection:collections:)`.
+            // self-healed by the decoder itself - see `init(version:activeCollection:collections:)`.
             return (try JSONDecoder().decode(MasterStore.self, from: data), nil)
         } catch {
             let stamp = BackupTimestamp.string(from: now)
@@ -196,7 +196,7 @@ public enum MasterStoreIO {
     }
 
     /// Side-effect-free peek: nil when the file is missing or undecodable.
-    /// Unlike `load`, never moves a corrupt file aside — used by the store
+    /// Unlike `load`, never moves a corrupt file aside - used by the store
     /// watcher to classify an on-disk change (own write echo, external edit,
     /// or a sync tool's mid-write partial) before deciding to adopt it.
     public static func read(from url: URL) -> MasterStore? {

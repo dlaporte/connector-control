@@ -46,8 +46,8 @@ public partial class ReviewDialog : DialogWindow
     /// The grouped view over the rows as they now stand. Re-reading the source replaces the row
     /// list outright, and a view belongs to the collection it was made for, so both are rebuilt
     /// together whenever the model says anything changed. A group is made where its kind first
-    /// appears, so the rows go in sorted by <see cref="ReviewModel.Kinds"/> — a stable sort, which
-    /// keeps the model's order within a kind — and the groups come out in the model's order, as
+    /// appears, so the rows go in sorted by <see cref="ReviewModel.Kinds"/> - a stable sort, which
+    /// keeps the model's order within a kind - and the groups come out in the model's order, as
     /// the Mac sheet's do, whatever order the rows arrive in.
     /// </summary>
     private void Rebind()

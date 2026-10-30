@@ -223,7 +223,7 @@ final class ControlMaskingTests: XCTestCase {
 
     /// In the dialog a single value reads one way only, as an argument does: the command, a URL, a
     /// key's text value and a variable's name are quoted, with \ and ' escaped, when they hold a
-    /// space, a quote or anything shown as an escape — so a newline and the two characters \n read
+    /// space, a quote or anything shown as an escape - so a newline and the two characters \n read
     /// apart, and a run of spaces cannot pass for the start of another row. What Claude and the
     /// command line read is unchanged.
     func testTheDialogShowsASingleValueOneWayOnly() {
@@ -474,8 +474,8 @@ final class ControlMaskingTests: XCTestCase {
         }
     }
 
-    /// Every masked view of `config` — its structured form, its code lines and its change lines
-    /// from nothing — without any of `secrets`.
+    /// Every masked view of `config` - its structured form, its code lines and its change lines
+    /// from nothing - without any of `secrets`.
     private func assertHidden(_ secrets: [String], in config: JSONValue,
                               file: StaticString = #filePath, line: UInt = #line) throws {
         let structured = try XCTUnwrap(String(data: try ControlMasking.maskedConfig(config).serialized(), encoding: .utf8))
@@ -627,7 +627,7 @@ final class ControlMaskingTests: XCTestCase {
         }
     }
 
-    /// JSON passed as an argument — Smithery's `run <server> --config '{"apiKey":"…"}'` — is masked
+    /// JSON passed as an argument - Smithery's `run <server> --config '{"apiKey":"…"}'` - is masked
     /// leaf by leaf, by key, as a config is; JSON with nothing to mask reads as written.
     func testAJSONArgumentIsMaskedByKey() throws {
         let smithery = ["-y", "@smithery/cli", "run", "@x/server", "--config", #"{"apiKey":"sk_abc123","region":"us"}"#]
@@ -785,7 +785,7 @@ final class ControlMaskingTests: XCTestCase {
         XCTAssertEqual(ControlMasking.arguments(["--token=abc", "server.js"]), ["--token=•••", "server.js"])
     }
 
-    /// Text that starts with a bracket but is not JSON — an IPv6 literal, a glob — reads as written.
+    /// Text that starts with a bracket but is not JSON - an IPv6 literal, a glob - reads as written.
     func testBracketedValuesThatAreNotJSONReadAsWritten() {
         XCTAssertEqual(ControlMasking.arguments(["--host", "[::1]"]), ["--host", "[::1]"])
         XCTAssertEqual(ControlMasking.arguments(["--listen", "[::]:8080"]), ["--listen", "[::]:8080"])

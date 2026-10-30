@@ -35,7 +35,7 @@ public class SettingsStoreTests : IDisposable
     }
 
     /// <summary>Every ISettings property round-trips through a second instance over the same
-    /// file — the Windows counterpart of UserDefaultsSettingsTests.testEveryKeyRoundTripsAndDefaultsApplyWhenAbsent,
+    /// file - the Windows counterpart of UserDefaultsSettingsTests.testEveryKeyRoundTripsAndDefaultsApplyWhenAbsent,
     /// widened to the two properties Windows has that the Mac does not (ClaudeConfigPath,
     /// AutoUpdate, TrayTipShown; ClaudeLaunchTarget replaces the Mac's claudeAppPath).</summary>
     [Fact]

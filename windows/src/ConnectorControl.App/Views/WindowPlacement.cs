@@ -6,8 +6,8 @@ namespace ConnectorControl.App.Views;
 /// <summary>
 /// The flyout opens beside the notification area (fallbacks: the
 /// cursor, then the work-area corner). Every coordinate here is a physical
-/// pixel — what TrayInfo.GetTrayLocation, GetCursorPos, GetMonitorInfo and
-/// SetWindowPos all speak — so no DPI conversion happens anywhere.
+/// pixel - what TrayInfo.GetTrayLocation, GetCursorPos, GetMonitorInfo and
+/// SetWindowPos all speak - so no DPI conversion happens anywhere.
 /// </summary>
 public static class WindowPlacement
 {
@@ -47,7 +47,7 @@ public static class WindowPlacement
     /// The anchoring rule, pure so it can be unit-tested: the notification
     /// area's own corner if the shell reported one, else the cursor, else the
     /// bottom-right corner of the work area. (0,0) from either source means
-    /// "not reported" — neither the tray nor a real cursor ever sits there.
+    /// "not reported" - neither the tray nor a real cursor ever sits there.
     /// </summary>
     public static Point Anchor(Point? tray, Point? cursor, Rectangle workArea)
     {

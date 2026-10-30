@@ -17,7 +17,7 @@ public enum IsoTimestamp {
 
     /// The calendar date here, "2026-09-21": what an imported copy records as the day it
     /// arrived. Local rather than UTC, because that date is read by the person who did the
-    /// importing and has to be the day they lived through — and built from the same hand-written
+    /// importing and has to be the day they lived through - and built from the same hand-written
     /// digits, so a machine on a non-Gregorian calendar still writes the ones everyone reads.
     public static func localDate(from date: Date) -> String {
         var calendar = Calendar(identifier: .gregorian)

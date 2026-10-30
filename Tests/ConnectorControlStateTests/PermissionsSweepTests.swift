@@ -121,7 +121,7 @@ final class PermissionsSweepTests: XCTestCase {
     }
 
     /// A real file the sweep attempts to repair (chflags uchg blocks chmod and
-    /// ACL changes even for the owner — unlike a write-blocked parent
+    /// ACL changes even for the owner - unlike a write-blocked parent
     /// directory, which only stops new entries, not metadata changes on an
     /// existing one) plus an entirely missing backups directory: every
     /// attempted repair fails, so the version may not advance. Windows has no
@@ -140,7 +140,7 @@ final class PermissionsSweepTests: XCTestCase {
                              backupsDirURL: dir.file("backups-never-created"))
         let settings = FakeSettings()
         // A chosen store dir: its own mode is never the sweep's to touch, so
-        // the only store-side attempt is the immutable file — the real
+        // the only store-side attempt is the immutable file - the real
         // failure this test is about, not an incidental one from the dir.
         settings.masterStoreDir = storeDir.path
 

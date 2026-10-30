@@ -77,7 +77,7 @@ final class MasterStoreTests: XCTestCase {
         // Missing file → nil, nothing created.
         XCTAssertNil(MasterStoreIO.read(from: url))
         // Corrupt file → nil, file left exactly in place (unlike load, which
-        // moves it aside — the watcher must be able to peek at a sync tool's
+        // moves it aside - the watcher must be able to peek at a sync tool's
         // mid-write partial without destroying it).
         try Data("{not json!!".utf8).write(to: url)
         XCTAssertNil(MasterStoreIO.read(from: url))
@@ -160,7 +160,7 @@ final class MasterStoreTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 
-    /// MasterStore has no custom `init(from:)` — decoding is exactly as
+    /// MasterStore has no custom `init(from:)` - decoding is exactly as
     /// strict as the synthesized Codable conformance, so every one of these
     /// malformed shapes fails to decode and flows through the same
     /// corrupt-file path as garbage bytes: moved aside, empty store returned.

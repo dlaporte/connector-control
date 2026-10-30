@@ -112,8 +112,8 @@ final class ClaudeConfigIOTests: XCTestCase {
                        ["scoutbook", "service-now"])
     }
 
-    /// A key the top level or mcpServers names twice — exactly, or in two spellings Unicode counts as
-    /// the same text — is refused: this app's parser keeps one and Claude's may keep the other.
+    /// A key the top level or mcpServers names twice - exactly, or in two spellings Unicode counts as
+    /// the same text - is refused: this app's parser keeps one and Claude's may keep the other.
     func testARepeatedKeyIsRefusedExactlyOrAsAnEquivalentSpelling() {
         let repeated = [
             #"{"x": 1, "x": 2}"#,

@@ -57,9 +57,9 @@ public static class ControlText
     internal static string TrimmingTrailingSpaces(string line) => line.TrimEnd(' ');
 
     /// <summary>Text as a line shows it: a control character, and a character that shows as nothing or as a
-    /// blank — every Default_Ignorable code point (soft hyphen, joiners, direction marks, variation
+    /// blank - every Default_Ignorable code point (soft hyphen, joiners, direction marks, variation
     /// selectors, tags…), the blank letters (U+115F, U+1160, U+2800, U+3164, U+FFA0), the interlinear
-    /// annotation marks, the object replacement character — as a visible escape, <c>\n</c>, <c>\r</c>, <c>\t</c> or <c>\u{202E}</c>, so a value
+    /// annotation marks, the object replacement character - as a visible escape, <c>\n</c>, <c>\r</c>, <c>\t</c> or <c>\u{202E}</c>, so a value
     /// can neither break its line, nor hide part of it, nor pass for another. A combining mark past the
     /// second on a character, or with no character to sit on, shows as its code too (see <see cref="Marks"/>).</summary>
     public static string Escaped(string text)
@@ -74,8 +74,8 @@ public static class ControlText
     }
 
     /// <summary>One of the app's own sentences that quotes names someone else chose, read once from the left: at
-    /// each place, the longest of <paramref name="names"/> whose quoted form — “, the name, ” — starts there is shown as
-    /// “ + <see cref="EscapedName"/> + ”, and anything else — the sentence's own quotes included — as
+    /// each place, the longest of <paramref name="names"/> whose quoted form - “, the name, ” - starts there is shown as
+    /// “ + <see cref="EscapedName"/> + ”, and anything else - the sentence's own quotes included - as
     /// <see cref="Escaped(string)"/> does. A name is found only between the app's own quotes, so a name that begins with “ can never
     /// match at another name's opening quote, and no name's escape is ever read again as part of another
     /// name. Names are matched ordinally, as the Mac mirror matches them scalar by scalar; equal lengths in
@@ -147,7 +147,7 @@ public static class ControlText
     }
 
     /// <summary>A path as a dialog's footer quotes it: as <see cref="Escaped(string)"/> shows it, with “ and ” escaped as
-    /// well so it cannot close the app's quotes around it, and its backslashes as they are — on Windows they are
+    /// well so it cannot close the app's quotes around it, and its backslashes as they are - on Windows they are
     /// the path's own separators.</summary>
     public static string EscapedPath(string text)
     {
@@ -323,7 +323,7 @@ public static class ControlText
 
     /// <summary>The rule for combining marks as a text is read from its start: the first two marks on a character
     /// are drawn, and a third or later one, or a mark that starts the text, shows as its code. Two, because
-    /// ordinary text needs two — a Thai vowel and its tone, decomposed Vietnamese, a Hebrew dagesh and
+    /// ordinary text needs two - a Thai vowel and its tone, decomposed Vietnamese, a Hebrew dagesh and
     /// vowel, an Arabic shadda and vowel. Even two tall marks reach past a line's own height, so the
     /// dialog clips each line of what would run to its own box, and no mark can draw over another line;
     /// the count keeps a tall stack, cut off by that clip, from hiding the line's own text.</summary>
@@ -367,8 +367,8 @@ public static class ControlText
     /// <summary>A character by its code, as <c>\u{202E}</c>: at least four hex digits, five beyond the Basic Plane.</summary>
     internal static string HexEscape(int scalar) => $"\\u{{{scalar:X4}}}";
 
-    /// <summary>One argument of a command line: as written when it reads as one word — not empty, with no
-    /// space, no ' and nothing <see cref="EscapedValue"/> escapes — else between single quotes, with \ and '
+    /// <summary>One argument of a command line: as written when it reads as one word - not empty, with no
+    /// space, no ' and nothing <see cref="EscapedValue"/> escapes - else between single quotes, with \ and '
     /// escaped inside as well, so no two argument lists read alike.</summary>
     public static string Word(string text)
     {
@@ -401,7 +401,7 @@ public static class ControlText
     internal static bool IsSpace(int scalar) =>
         scalar is < 0xD800 or > 0xDFFF && Rune.GetUnicodeCategory(new Rune(scalar)) == UnicodeCategory.SpaceSeparator;
 
-    /// <summary>“a”, “a” and “b”, “a”, “b” and “c” — names as the app's sentences list them, each through
+    /// <summary>“a”, “a” and “b”, “a”, “b” and “c” - names as the app's sentences list them, each through
     /// <see cref="EscapedName"/>.</summary>
     public static string QuotedList(IReadOnlyList<string> names)
     {

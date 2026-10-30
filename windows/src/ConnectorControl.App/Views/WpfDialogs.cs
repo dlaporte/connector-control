@@ -4,7 +4,7 @@ using ConnectorControl.Core.State;
 namespace ConnectorControl.App.Views;
 
 /// <summary>
-/// IDialogs on WPF. Given a window — the editor's, whose dialogs center on it — or given none,
+/// IDialogs on WPF. Given a window - the editor's, whose dialogs center on it - or given none,
 /// which is App's instance, shared by AppState, the update coordinator, the confirmer of Claude's
 /// changes and the Collections window's model: that one centers on whichever of our windows is
 /// active, and with none of ours up it centers on screen above every other window and asks to be
@@ -22,8 +22,8 @@ public sealed class WpfDialogs : IDialogs
     }
 
     /// <summary>
-    /// The window to centre on: the one that asked, or — for the tray-initiated
-    /// instance that passes none — whichever of our windows is active, so
+    /// The window to centre on: the one that asked, or - for the tray-initiated
+    /// instance that passes none - whichever of our windows is active, so
     /// Settings ▸ Check for Updates centres on Settings and not on the screen.
     /// Null means there is nothing of ours on screen: centre and force to front.
     /// Never the flyout: it hides itself on Deactivated, which is exactly what

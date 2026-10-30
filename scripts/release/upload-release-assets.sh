@@ -13,7 +13,7 @@
 #   Validation Failed: {"resource":"Release","code":"already_exists","field":"tag_name"}
 # gh targets the tag directly. A published asset is never overwritten: a re-run has rebuilt the
 # packages, and a different Setup.exe or .nupkg under the same version is exactly what an update
-# system must never see. Per RID the upload is all-or-nothing — releases.<rid>.json carries the
+# system must never see. Per RID the upload is all-or-nothing - releases.<rid>.json carries the
 # packages' sizes and hashes, so completing a half-uploaded RID with this run's index would point
 # Velopack at files it does not describe. A RID whose assets are all there is skipped (so a re-run
 # of a job that failed AFTER uploading is idempotent); a RID with some but not all of them fails

@@ -70,8 +70,8 @@ struct CopySheetView: View {
         }
     }
 
-    /// A copy that did not land with nothing to say for itself — the ticks went while the sheet
-    /// was up — has nothing left to ask either, so the sheet goes.
+    /// A copy that did not land with nothing to say for itself - the ticks went while the sheet
+    /// was up - has nothing left to ask either, so the sheet goes.
     private func perform() {
         failure = model.perform() ? nil : refusal()
         if failure == nil { onDone() }

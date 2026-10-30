@@ -346,7 +346,7 @@ public class AppStateTests
     }
 
     /// <summary>A stored empty string (e.g. a setting cleared by hand) counts as absent, same as
-    /// null — the default location, not a literal empty path.</summary>
+    /// null - the default location, not a literal empty path.</summary>
     [Fact]
     public void AnEmptyStoredStoreDirIsTheDefault()
     {

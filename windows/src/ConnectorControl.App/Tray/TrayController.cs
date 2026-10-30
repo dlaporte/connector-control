@@ -59,7 +59,7 @@ public sealed class TrayController : IDisposable
     {
         if (ObservableObject.Affects(e, nameof(AppState.ApplyRetryNeeded)))
         {
-            // A state tick never touches theme or DPI — only the glyph can have changed.
+            // A state tick never touches theme or DPI - only the glyph can have changed.
             Render(GlyphFor(state));
         }
     }
@@ -74,7 +74,7 @@ public sealed class TrayController : IDisposable
 
     private static TrayGlyph GlyphFor(AppState state) => state.ApplyRetryNeeded ? TrayGlyph.Warning : TrayGlyph.Plug;
 
-    /// <summary>Theme and DPI are read here and in the constructor only — reading the registry and
+    /// <summary>Theme and DPI are read here and in the constructor only - reading the registry and
     /// calling GetDpiForSystem on every AppState tick was pure waste for a value that rarely moves.</summary>
     private void RefreshTheme()
     {

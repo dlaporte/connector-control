@@ -26,7 +26,7 @@ final class ConfigServiceTests: XCTestCase {
     }
 
     /// Claude's file holds the collection it was last applied from, so what that collection renders
-    /// is left where it is; with nothing recorded — a first launch — everything is ingested.
+    /// is left where it is; with nothing recorded - a first launch - everything is ingested.
     func testTheIngestLeavesTheRecordedCollectionsOwnServersWhereTheyAre() throws {
         XCTAssertEqual(Set(try service.loadAndReconcile(lastAppliedCollection: "Default").store.mcps.keys),
                        ["scoutbook", "aws-mcp", "service-now"], "the recorded collection is the active one")
@@ -48,8 +48,8 @@ final class ConfigServiceTests: XCTestCase {
                         "a name no collection renders is genuinely new and comes in")
         XCTAssertNil(loaded.store.collections["Team"]?.mcps["installer"], "and only into the active one")
 
-        // A record naming a collection this store does not have — deleted here, or on another
-        // machine — has no render to compare against, so the names that apply wrote stand in for it.
+        // A record naming a collection this store does not have - deleted here, or on another
+        // machine - has no render to compare against, so the names that apply wrote stand in for it.
         try FileManager.default.removeItem(at: paths.masterStoreURL)
         XCTAssertEqual(Set(try service.loadAndReconcile(lastAppliedCollection: "Gone",
                                                         lastAppliedNames: ["scoutbook", "aws-mcp"]).store.mcps.keys),
@@ -246,8 +246,8 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertTrue(result.notes[0].hasSuffix(" and restored from the backup of \(IsoTimestamp.localDateTime(from: taken))."))
     }
 
-    /// A backup whose active collection names one it does not hold — a hand edit, a foreign
-    /// machine's — makes the first existing collection in ordinal order active, and the reconcile
+    /// A backup whose active collection names one it does not hold - a hand edit, a foreign
+    /// machine's - makes the first existing collection in ordinal order active, and the reconcile
     /// takes Claude's connectors there rather than into a new collection under the missing name.
     func testARestoredBackupWhoseActiveCollectionIsMissingActivatesTheOrdinalFirst() throws {
         let saved = try service.loadAndReconcile().store
@@ -302,7 +302,7 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL).count, 3)
     }
 
-    /// The restore applies the bytes it is handed — the ones its caller checked — not the file as it
+    /// The restore applies the bytes it is handed - the ones its caller checked - not the file as it
     /// is by then.
     func testRestoreUsesTheBytesItIsGivenNotTheFileNow() throws {
         var store = try service.loadAndReconcile().store
@@ -326,7 +326,7 @@ final class ConfigServiceTests: XCTestCase {
         try service.restoreClaudeConfig(from: backup, mergedWith: store)
         let persisted = MasterStoreIO.load(from: paths.masterStoreURL).store
         XCTAssertEqual(persisted.mcps["aws-mcp"]?.enabled, true,
-                       "a restored snapshot becomes the truth — re-enabled in the store")
+                       "a restored snapshot becomes the truth - re-enabled in the store")
         XCTAssertEqual(persisted.enabledServers,
                        try ClaudeConfigIO.readMCPServers(at: paths.claudeConfigURL),
                        "no divergence may remain after a restore, or the next reload undoes it")
@@ -370,7 +370,7 @@ final class ConfigServiceTests: XCTestCase {
         let limited = ConfigService(paths: paths, keepCount: 2)
         _ = try limited.loadAndReconcile()
         let base = Date()
-        // Distinct contents per backup — identical snapshots dedup instead.
+        // Distinct contents per backup - identical snapshots dedup instead.
         for i in 0..<3 {
             try Data("v\(i)".utf8).write(to: paths.masterStoreURL)
             try limited.backups.backUp(fileAt: paths.masterStoreURL, series: "mcps",
@@ -419,7 +419,7 @@ final class ConfigServiceTests: XCTestCase {
                        "external addition must survive the adoption")
         XCTAssertNil(result.store.mcps["aws-mcp"],
                      "entries matching the baseline are this machine's own "
-                     + "applied state — never imported into an adopted store")
+                     + "applied state - never imported into an adopted store")
     }
 
     func testRestoreReturnsRestoredServers() throws {
@@ -522,8 +522,8 @@ final class ConfigServiceTests: XCTestCase {
     }
 
     /// parseRoot treats zero bytes as an empty root (the same rule
-    /// ClaudeConfigIO's own read path already applies), so a zero-byte backup —
-    /// the same crash/truncation artifact — restores to an empty config
+    /// ClaudeConfigIO's own read path already applies), so a zero-byte backup -
+    /// the same crash/truncation artifact - restores to an empty config
     /// instead of being refused as malformed.
     func testRestoreFromAnEmptyBackupTreatsItAsAnEmptyConfig() throws {
         let store = try service.loadAndReconcile().store

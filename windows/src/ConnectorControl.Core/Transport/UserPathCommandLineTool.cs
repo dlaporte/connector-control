@@ -48,7 +48,7 @@ public sealed class UserPathCommandLineTool(string binDir, IUserEnvironment envi
         }
     }
 
-    /// <summary>Refused while the tool's copy is missing — its refresh as the app starts can fail — or the folder would be
+    /// <summary>Refused while the tool's copy is missing - its refresh as the app starts can fail - or the folder would be
     /// on PATH with nothing in it, and Settings would say the tool is there.</summary>
     // Platform idiom: the Mac's link points into the app's own bundle, which cannot be missing while it runs, so
     // the Mac checks nothing.

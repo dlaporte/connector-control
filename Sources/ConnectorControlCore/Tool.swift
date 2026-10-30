@@ -1,6 +1,6 @@
 import Foundation
 
-/// The four launchers a connector's command can name — what `npx mcp-remote`
+/// The four launchers a connector's command can name - what `npx mcp-remote`
 /// and most local servers run through. When one is missing from the PATH
 /// Claude Desktop uses, Claude shows only "server disconnected".
 public enum Tool: String, CaseIterable, Sendable {

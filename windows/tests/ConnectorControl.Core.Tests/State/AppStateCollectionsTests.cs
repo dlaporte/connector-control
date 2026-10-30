@@ -10,7 +10,7 @@ namespace ConnectorControl.Core.Tests.State;
 /// harness builds.
 ///
 /// Where a test needs a synced or published collection without subscribing or publishing, it is
-/// set up the way those flows leave it — the two files on disk — and read back through a real
+/// set up the way those flows leave it - the two files on disk - and read back through a real
 /// reload.
 /// </summary>
 public class AppStateCollectionsTests
@@ -645,7 +645,7 @@ public class AppStateCollectionsTests
     // MARK: synced collections
 
     /// <summary>Gives a just-armed source watcher a moment before a test relies on it seeing the
-    /// very next write — the same arming race AppStateWatcherTests waits out. A FileSystemWatcher
+    /// very next write - the same arming race AppStateWatcherTests waits out. A FileSystemWatcher
     /// arms on a background thread on the Mac and leaves no signal to wait on, so only the one test
     /// that proves the watcher delivers a change uses it; every other test reads the source
     /// through RecomputePending, the watcher's own non-manual read.</summary>
@@ -663,7 +663,7 @@ public class AppStateCollectionsTests
                 [name] = new(new CollectionDocument.Launcher.Local(command, args, platform)),
             });
 
-    /// <summary>The sample with github gone and dbt's arguments changed — an author's next commit.</summary>
+    /// <summary>The sample with github gone and dbt's arguments changed - an author's next commit.</summary>
     private static CollectionDocument ChangedSample()
     {
         var sample = CollectionDocumentSamples.DataTeam;
@@ -1195,7 +1195,7 @@ public class AppStateCollectionsTests
         return path;
     }
 
-    /// <summary>A local connector with two environment values and an absolute path argument — what
+    /// <summary>A local connector with two environment values and an absolute path argument - what
     /// the Publish sheet's rows are built from, and what the intent strips or shares.</summary>
     private static JsonValue LedgerConfig() => JsonValue.Object(new Dictionary<string, JsonValue>(StringComparer.Ordinal)
     {
@@ -1252,7 +1252,7 @@ public class AppStateCollectionsTests
         var folder = PublishFolder(h);
 
         // A synced collection has an author elsewhere, and nothing in the window offers Publish
-        // for one — its ⋯ menu has Refresh and Make Local Copy instead. The refusal is the same
+        // for one - its ⋯ menu has Refresh and Make Local Copy instead. The refusal is the same
         // silence LocateSource gives a collection that is not synced.
         Assert.Null(state.StartPublishing("Data team", folder, PublishIntent.None));
         Assert.False(state.IsPublished("Data team"));
@@ -1367,7 +1367,7 @@ public class AppStateCollectionsTests
     /// <summary>
     /// A failed write's banner goes when the other machine stops publishing the collection: it names a
     /// folder and a write this machine no longer makes. Choose Folder has no binding left to move, so it
-    /// starts nothing — publishing here again is the dialog's, which shows what it reviews — and a
+    /// starts nothing - publishing here again is the dialog's, which shows what it reviews - and a
     /// connector added there meanwhile, credential and all, is never sent.
     /// </summary>
     [Fact]
@@ -1547,8 +1547,8 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
-    /// A change to the connector that did not come through its editor — the JSON view of another
-    /// window, the author's other machine, an older app — so nothing re-keyed the marks.
+    /// A change to the connector that did not come through its editor - the JSON view of another
+    /// window, the author's other machine, an older app - so nothing re-keyed the marks.
     /// </summary>
     private static void RewriteLedger(AppState state, params string[] args) =>
         Assert.Null(state.Upsert("ledger", new McpEntry(NodeWith(args)), "ledger"));
@@ -1847,8 +1847,8 @@ public class AppStateCollectionsTests
 
     /// <summary>
     /// A Release is the author's word for the collection they gave it in. One given in a collection since
-    /// deleted does not pass to a later collection bearing its name — made here, renamed onto it, or one
-    /// that has published and stopped since — though the name's marks do. The new collection's dialog
+    /// deleted does not pass to a later collection bearing its name - made here, renamed onto it, or one
+    /// that has published and stopped since - though the name's marks do. The new collection's dialog
     /// ticks the path and lists it, and Release there lets it travel.
     /// </summary>
     [Theory]
@@ -2065,8 +2065,8 @@ public class AppStateCollectionsTests
 
     /// <summary>
     /// What a refusal and the Publish dialog call a field. Wherever the editor opens the connector in
-    /// the local form they use its own words — the command, an argument counted from one, the value
-    /// of a variable — and a hint belongs to the dialog whatever the form. Where the editor has no
+    /// the local form they use its own words - the command, an argument counted from one, the value
+    /// of a variable - and a hint belongs to the dialog whatever the form. Where the editor has no
     /// row of its own, the document's name is given as the document's, rather than one the author
     /// would go looking for and not find.
     /// </summary>
@@ -2553,8 +2553,8 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
-    /// An own folder where the rewrite cannot reach — a remote connector's client id, which the
-    /// command line carries inside a JSON blob — is a folder entry all the same: it says the dialog
+    /// An own folder where the rewrite cannot reach - a remote connector's client id, which the
+    /// command line carries inside a JSON blob - is a folder entry all the same: it says the dialog
     /// cannot write there, both answers say so, and the connector's editor is the way out.
     /// </summary>
     [Fact]
@@ -2784,7 +2784,7 @@ public class AppStateCollectionsTests
 
     /// <summary>
     /// A record belongs to the collection that published it, and that collection leaving the store is
-    /// what ends the claim — wherever it leaves from. A collection of the same name arriving from the
+    /// what ends the claim - wherever it leaves from. A collection of the same name arriving from the
     /// author's other machine is as much a different collection as one made here.
     /// </summary>
     [Fact]
@@ -2992,7 +2992,7 @@ public class AppStateCollectionsTests
     /// <summary>
     /// The merged record is the renamed collection's own: it published under the origin the record
     /// carries, so publishing again takes its folders back as its own, while the departed
-    /// collection's folder stays what it was to it — a path kept back, releasable, never the
+    /// collection's folder stays what it was to it - a path kept back, releasable, never the
     /// token's.
     /// </summary>
     [Fact]
@@ -3064,8 +3064,8 @@ public class AppStateCollectionsTests
     /// Team, published from the author's other machine, marks <c>MarkedPath</c> in the sidecar. This
     /// machine publishes its active collection, whose <c>ledger</c> the author reviews in the Publish
     /// dialog while it holds a path of its own, and then edits to hold the marked path. Only the
-    /// sidecar's mark keeps that path back — the review holds nothing, <c>ledger</c> having been
-    /// reviewed — so the refusal is the kept-path one. Returns the active collection's document.
+    /// sidecar's mark keeps that path back - the review holds nothing, <c>ledger</c> having been
+    /// reviewed - so the refusal is the kept-path one. Returns the active collection's document.
     /// </summary>
     private static string CopyAnotherMachinesMarkedPath(AppStateHarness h, AppState state)
     {
@@ -4100,8 +4100,8 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
-    /// However a connector arrives — copied from another collection, imported from a document, or
-    /// added on the author's other machine — one nobody reviewed here waits; and one deleted and added
+    /// However a connector arrives - copied from another collection, imported from a document, or
+    /// added on the author's other machine - one nobody reviewed here waits; and one deleted and added
     /// again under its old name is new again.
     /// </summary>
     [Fact]
@@ -4140,8 +4140,8 @@ public class AppStateCollectionsTests
 
     /// <summary>
     /// A reviewed connector deleted, and a different one added under its name, is new however long the
-    /// publish is held in between — by a connector nobody reviewed, by a folder that will not take the
-    /// write, or across two syncs from the other machine — even with a credential in the argument the
+    /// publish is held in between - by a connector nobody reviewed, by a folder that will not take the
+    /// write, or across two syncs from the other machine - even with a credential in the argument the
     /// reviewed one held its own. The review goes on the pass that finds the connector gone, written or
     /// not.
     /// </summary>
@@ -4222,8 +4222,8 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
-    /// A reviewed connector edited so it holds something that looks like a credential — in an
-    /// argument, or in a value it shares — waits for review. Reviewed in the dialog, it travels, and
+    /// A reviewed connector edited so it holds something that looks like a credential - in an
+    /// argument, or in a value it shares - waits for review. Reviewed in the dialog, it travels, and
     /// an edit that holds only what was reviewed publishes on its own again.
     /// </summary>
     [Fact]
@@ -4733,7 +4733,7 @@ public class AppStateCollectionsTests
     }
 
     /// <summary>
-    /// With no local collection left — a 1.3 app sharing the store can delete the last one — the
+    /// With no local collection left - a 1.3 app sharing the store can delete the last one - the
     /// addition goes into a new, empty "Default", which does not become active.
     /// </summary>
     [Fact]

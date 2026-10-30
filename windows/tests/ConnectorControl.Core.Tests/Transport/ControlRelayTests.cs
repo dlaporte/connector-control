@@ -90,7 +90,7 @@ public class ControlRelayTests
         Assert.Empty(relay.FromClaude("""{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":3}}"""));
     }
 
-    /// <summary>A cancelled request is never answered — the session drops its answer — so the relay stops
+    /// <summary>A cancelled request is never answered - the session drops its answer - so the relay stops
     /// waiting for it: Claude closing its side ends the relay, and a lost connection answers nothing
     /// for it.</summary>
     [Fact]
@@ -107,8 +107,8 @@ public class ControlRelayTests
         Assert.Empty(other.ConnectionLost());   // no stray answer for a cancelled request
     }
 
-    /// <summary>A request the session answers with id null — an id that is neither a string nor an integer, or
-    /// one already running — is not waited for under that id.</summary>
+    /// <summary>A request the session answers with id null - an id that is neither a string nor an integer, or
+    /// one already running - is not waited for under that id.</summary>
     /// <summary>An answer under a cancelled id is the answer to a request reusing it, so the request first sent under it
     /// has ended: the id is waited for again.</summary>
     [Fact]
@@ -305,8 +305,8 @@ public class ControlRelayTests
         Assert.Equal([ToClaude(Answer(7)), Exit(ControlOutput.DoneExit)], relay.FromApp(Answer(7)));
     }
 
-    /// <summary>Once Claude has closed its side, whatever settles the last request ends the relay — its answer,
-    /// the connection going, or a connection that could not be made — so the relay never outlives it.</summary>
+    /// <summary>Once Claude has closed its side, whatever settles the last request ends the relay - its answer,
+    /// the connection going, or a connection that could not be made - so the relay never outlives it.</summary>
     [Fact]
     public void OnceClaudeHasClosedALostOrFailedConnectionEndsTheRelay()
     {

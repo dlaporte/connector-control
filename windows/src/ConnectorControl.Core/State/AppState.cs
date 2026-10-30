@@ -12,10 +12,10 @@ namespace ConnectorControl.Core.State;
 public sealed class AppState : ObservableObject, IDisposable
 {
     public const string NoConnectorsSubtitle = "No connectors configured";
-    public const string ClaudeConfigRegeneratedBody = "Claude's config was changed outside Connector Control — regenerated from your connector list. Restart Claude to pick it up.";
-    public const string RegenerationFailedBody = "The connector configuration changed, but Claude's config could not be updated — open Connector Control to retry.";
+    public const string ClaudeConfigRegeneratedBody = "Claude's config was changed outside Connector Control - regenerated from your connector list. Restart Claude to pick it up.";
+    public const string RegenerationFailedBody = "The connector configuration changed, but Claude's config could not be updated - open Connector Control to retry.";
     public const string ClaudeConfigChangedBody = "Claude's config changed outside Connector Control.";
-    public const string StoreChangedBody = "The connector list changed outside Connector Control — review it before your next change is applied.";
+    public const string StoreChangedBody = "The connector list changed outside Connector Control - review it before your next change is applied.";
     public const string QuitMessage = "Quit Connector Control?";
     public const string QuitButton = "Quit";
     public const string RestartMessage = "Restart Claude Desktop now?";
@@ -133,7 +133,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// </summary>
     private bool collectionsLoaded;
     /// <summary>
-    /// The hash of the sidecar bytes on disk as this app last saw them — written or loaded — so a
+    /// The hash of the sidecar bytes on disk as this app last saw them - written or loaded - so a
     /// save that would change nothing costs neither a write nor a backup rotation, and a file
     /// another machine changed is still rewritten when our copy differs from it.
     /// </summary>
@@ -152,7 +152,7 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>
     /// One collection document as this platform renders it, with the bytes and the origin it was
-    /// read from — what Apply needs, and what the row cautions read the author's platform from.
+    /// read from - what Apply needs, and what the row cautions read the author's platform from.
     /// </summary>
     private sealed record RenderedSource(RenderedCollection Rendered, string Hash, string? Origin);
 
@@ -200,20 +200,20 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>Settable: the restore dialog reports its failure here.</summary>
     public string? LastError { get => lastError; set => Set(ref lastError, value); }
 
-    /// <summary>Why Claude and the command-line tool cannot reach this app — its control endpoint could not be
-    /// served, or stopped being served — or null while it serves. Settings shows it.</summary>
+    /// <summary>Why Claude and the command-line tool cannot reach this app - its control endpoint could not be
+    /// served, or stopped being served - or null while it serves. Settings shows it.</summary>
     public string? ControlEndpointProblem { get => controlEndpointProblem; private set => Set(ref controlEndpointProblem, value); }
 
     private int settingsRevision;
-    /// <summary>Moves on each time a setting is changed from outside the Settings window — the command line's
-    /// <c>settings set</c> — so an open Settings window shows the new value at once, as its Claude group
+    /// <summary>Moves on each time a setting is changed from outside the Settings window - the command line's
+    /// <c>settings set</c> - so an open Settings window shows the new value at once, as its Claude group
     /// already follows the integration's switches.</summary>
     public int SettingsRevision { get => settingsRevision; private set => Set(ref settingsRevision, value); }
 
     private bool storeNotPrivate;
     /// <summary>
-    /// Windows: the last master-list save could not make mcps.json owner-only — the folder refused
-    /// the permission change — so the connector secrets in it are readable by whoever can read that
+    /// Windows: the last master-list save could not make mcps.json owner-only - the folder refused
+    /// the permission change - so the connector secrets in it are readable by whoever can read that
     /// folder. Cleared by the next save that succeeds. Always false off Windows.
     /// </summary>
     public bool StoreNotPrivate { get => storeNotPrivate; internal set => Set(ref storeNotPrivate, value); }
@@ -284,7 +284,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// plus Connector Control's own entry while the integration is on. The store itself keeps the
     /// token, so the same list still resolves on the next machine, and a published document
     /// carries it as written for each subscriber to resolve against their own copy. With no folder
-    /// the token is written as it stands — guessing one would start the wrong program — and the
+    /// the token is written as it stands - guessing one would start the wrong program - and the
     /// row carries the caution that says so. The entry joins here and only here: the store, the
     /// collections and every document never hold it, and it is written, compared, backed up and
     /// regenerated like every other entry.
@@ -309,7 +309,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>
     /// The folder <c>${COLLECTION_DIR}</c> stands for in <paramref name="collection"/> on this
     /// machine, or null when it stands for none here. A synced collection's is the folder its
-    /// located document sits in. A local one's is the folder this machine publishes it into —
+    /// located document sits in. A local one's is the folder this machine publishes it into -
     /// where the document is written and the tools shipped beside it live, the same folder a
     /// subscriber's copy resolves against. A collection published from another machine, or not at
     /// all, has none on this one.
@@ -352,8 +352,8 @@ public sealed class AppState : ObservableObject, IDisposable
     // MARK: tools
 
     /// <summary>
-    /// Which of the four launchers Claude Desktop can start: probed on demand — Settings ▸ Claude,
-    /// the editor — and cached for the rest of the run. A tool absent here has not been probed yet.
+    /// Which of the four launchers Claude Desktop can start: probed on demand - Settings ▸ Claude,
+    /// the editor - and cached for the rest of the run. A tool absent here has not been probed yet.
     /// </summary>
     public IReadOnlyDictionary<Tool, ToolStatus> ToolStatuses => toolStatuses;
 
@@ -361,7 +361,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// Probes <paramref name="tools"/> (all four when null) off the UI thread, through the host's
     /// <c>Background</c>, and posts the results to the host for publication; a tool already in
     /// flight is not probed twice. The returned task completes once the probe batch has been
-    /// posted, not once the results are applied — when every requested tool is already in flight,
+    /// posted, not once the results are applied - when every requested tool is already in flight,
     /// it returns already completed. Every production caller discards it; tests read it.
     /// </summary>
     public Task RefreshToolsAsync(IReadOnlyList<Tool>? tools = null)
@@ -501,8 +501,8 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>
     /// The store's mtime changed on disk. Classify before adopting: our own PersistStore writes echo
-    /// through this watcher (skip — memory already matches), a sync tool's mid-write partial parses as
-    /// garbage (wait for the completed write to fire again — adopting it would rebuild the store from
+    /// through this watcher (skip - memory already matches), a sync tool's mid-write partial parses as
+    /// garbage (wait for the completed write to fire again - adopting it would rebuild the store from
     /// the local Claude config and clobber the synced list), and only a decodable store that differs
     /// from memory is a genuine outside edit to adopt and announce.
     /// </summary>
@@ -526,12 +526,12 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>
     /// Runs a watcher-triggered callback with a catch-all around its ENTIRE body, including the
     /// part outside Reload's own catch-all. This also covers <see cref="AdoptExternalStoreChange"/>'s
-    /// File.Exists/MasterStoreIO.Read/equality work, which runs before any Reload is reached —
+    /// File.Exists/MasterStoreIO.Read/equality work, which runs before any Reload is reached -
     /// without this, an exception there would escape through a
     /// marshalled FileWatcher callback and take the whole app down instead of showing a banner.
     /// Also re-arms both watchers here: an exception means the ReArm at the bottom of Reload never
     /// ran, so without this a watcher could stay disarmed until the next reload. Not used for a Reload
-    /// called directly from a public method — those are already on the caller's stack, not a marshalled
+    /// called directly from a public method - those are already on the caller's stack, not a marshalled
     /// callback, so their exceptions propagate as before.
     /// </summary>
     private void RunWatcherCallback(Action work)
@@ -585,7 +585,7 @@ public sealed class AppState : ObservableObject, IDisposable
             {
                 // The new location refused the seed copy. Switching to it now would leave it with
                 // no mcps.json, and Reload would read that as an empty store and quietly wipe the
-                // connector list — so the repoint is abandoned and the old location stays authoritative.
+                // connector list - so the repoint is abandoned and the old location stays authoritative.
                 settings.MasterStoreDir = previousDir;
                 LastError = Friendly(ex);
                 RaiseAll();
@@ -630,7 +630,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// The snapshot goes back into the collection the backup was taken from, which becomes the
     /// active one again, since Claude's file held that collection's connectors. A backup whose
     /// collection is gone is refused (<see cref="RestoreCollectionGoneException"/>). One with no
-    /// record — older than the record, the first-run original, a file from elsewhere — goes into the
+    /// record - older than the record, the first-run original, a file from elsewhere - goes into the
     /// active collection, and publishing still keeps back any path or folder it carries. While that
     /// collection is subscribed, it is refused (<see cref="RestoreRefusal"/>).
     /// <para>
@@ -727,7 +727,7 @@ public sealed class AppState : ObservableObject, IDisposable
             var previousStoreMcps = new Dictionary<string, McpEntry>(Store.Mcps, StringComparer.Ordinal);
 
             // The store file vanished mid-session (deleted store dir, sync eviction). The in-memory
-            // store is the source of truth — persist it back rather than loading an empty store and
+            // store is the source of truth - persist it back rather than loading an empty store and
             // regenerating Claude's config down to nothing.
             if (wasLoaded && !File.Exists(Service.Paths.MasterStorePath))
             {
@@ -767,8 +767,8 @@ public sealed class AppState : ObservableObject, IDisposable
             // LastError itself, which this line would then overwrite.
             //
             // What the file added and a subscribed collection could not hold went into a local
-            // collection. A notification below says which; where none fires — a first load, a quiet
-            // adoption — the banner says it instead, since Claude stops running the connector.
+            // collection. A notification below says which; where none fires - a first load, a quiet
+            // adoption - the banner says it instead, since Claude stops running the connector.
             var elsewhereSentence = result.IngestedElsewhere is { } ingested
                 ? IngestedElsewhereSentence(ActiveCollection, ServerDelta.List(ingested.Names, limit: 4), ingested.Collection)
                 : null;
@@ -803,13 +803,13 @@ public sealed class AppState : ObservableObject, IDisposable
                 var alreadyFailing = ApplyRetryNeeded;
                 PerformApply();
                 regenerated = !ApplyRetryNeeded;
-                // Notify a failure only on the transition into it — retry reloads (every flyout open) must not re-post it.
+                // Notify a failure only on the transition into it - retry reloads (every flyout open) must not re-post it.
                 regenerationFailed = ApplyRetryNeeded && !alreadyFailing;
             }
             else if (result.ClaudeServers is { } held)
             {
                 // Claude's file already holds exactly what the active collection renders, so it holds
-                // that collection — which a first launch, with no apply yet, needs recorded.
+                // that collection - which a first launch, with no apply yet, needs recorded.
                 RecordApplied(ActiveCollection, held.Keys);
             }
             // A regeneration that lands clears the banner, and the notes above still have something
@@ -874,7 +874,7 @@ public sealed class AppState : ObservableObject, IDisposable
         // What this machine publishes follows the store it has just loaded: a change made on the
         // author's other machine arrives as a store change and reaches the team from here.
         PublishIfChanged();
-        // Only when arming previously failed — the parent directory did not exist, or
+        // Only when arming previously failed - the parent directory did not exist, or
         // FileWatcher.HandleError disarmed itself because the directory was deleted.
         // Never a blanket re-arm: a flyout open reloads, and tearing two
         // FileSystemWatchers down and rebuilding them each time would re-baseline the
@@ -938,7 +938,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>
     /// What Claude's file was last written from, for the launch ingest: the collection and the
     /// connector names that apply wrote. In memory once the collections files are loaded, and read
-    /// from this machine's cache before then — at launch the store loads first.
+    /// from this machine's cache before then - at launch the store loads first.
     /// </summary>
     private (string? Collection, IReadOnlySet<string>? Names) LastApplied
     {
@@ -952,8 +952,8 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Records what Claude's file now holds — <paramref name="collection"/>, and the names written
-    /// into it — in this machine's cache, through the same gate as every other cache save. A save
+    /// Records what Claude's file now holds - <paramref name="collection"/>, and the names written
+    /// into it - in this machine's cache, through the same gate as every other cache save. A save
     /// that fails leaves the record in memory for the next.
     /// </summary>
     private void RecordApplied(string collection, IEnumerable<string> names)
@@ -980,7 +980,7 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// The master list first, then the sidecar beside it, then this machine's cache — the order a
+    /// The master list first, then the sidecar beside it, then this machine's cache - the order a
     /// crash has to survive: a half-done write leaves the collection loading as an ordinary local
     /// one until the next save, and loses nothing the app cannot rebuild. One catch for the
     /// three: the first failure stops the chain, since a sidecar written against a master list
@@ -988,15 +988,15 @@ public sealed class AppState : ObservableObject, IDisposable
     /// </summary>
     private void PersistStore()
     {
-        // The store just changed, so what a source document would change with it may have too —
+        // The store just changed, so what a source document would change with it may have too -
         // and the excluded lists a re-render produces belong in the cache this save writes.
         RecomputePending();
         try
         {
             var isProtected = Service.SaveStore(Store).Protected;
             // A sidecar that the last load could not read is one something else is writing. Our
-            // copy of it may never have been filled, and saving that would land an empty sidecar
-            // — and, behind it, a cache pruned against nothing — on top of the real file the
+            // copy of it may never have been filled, and saving that would land an empty sidecar -
+            // and, behind it, a cache pruned against nothing - on top of the real file the
             // moment the other writer finishes. Both wait for a load that can read it. The
             // master list is ours alone and always saves.
             if (collectionsLoaded)
@@ -1050,7 +1050,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// The sidecar only when it would differ: every connector change persists the store, and most
     /// of them say nothing new about collections. Rewriting the same bytes would rotate a backup
     /// and churn a file that travels through someone's sync tool for nothing. Returns whether the
-    /// bytes on disk are owner-only — true when there was nothing to write.
+    /// bytes on disk are owner-only - true when there was nothing to write.
     /// </summary>
     private bool SaveCollectionsIfChanged()
     {
@@ -1074,7 +1074,7 @@ public sealed class AppState : ObservableObject, IDisposable
     {
         var target = collection ?? ActiveCollection;
         // Read-only lookup: a collection that isn't there has nothing to toggle, and must not be
-        // brought into being by the attempt — what Swift's optional chain gives for free.
+        // brought into being by the attempt - what Swift's optional chain gives for free.
         if (Store.Collections.TryGetValue(target, out var held) && held.Mcps.TryGetValue(name, out var entry))
         {
             held.Mcps[name] = entry with { Enabled = on };
@@ -1094,7 +1094,7 @@ public sealed class AppState : ObservableObject, IDisposable
         RaiseAll();
     }
 
-    /// <summary>Editor-window flow: saving there is a deliberate final act, so apply immediately — but only if something changed.</summary>
+    /// <summary>Editor-window flow: saving there is a deliberate final act, so apply immediately - but only if something changed.</summary>
     public void ApplyInteractively()
     {
         if (!IsDirty)
@@ -1118,8 +1118,8 @@ public sealed class AppState : ObservableObject, IDisposable
     /// save as the connector, so the document written at the end of it never pairs the new
     /// arguments with the old marks.
     ///
-    /// <paramref name="alsoIn"/> is the same save again in other collections — the editor's
-    /// propagate checkbox — under the same name and rename. It is tried only once the save itself
+    /// <paramref name="alsoIn"/> is the same save again in other collections - the editor's
+    /// propagate checkbox - under the same name and rename. It is tried only once the save itself
     /// is accepted, a name already taken in one of them leaves that collection alone, and all of it
     /// reaches disk as one write: one backup of the master list, one publish pass, rather than one
     /// for each halfway state.
@@ -1234,7 +1234,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>
     /// Rewrites a published collection's intent in memory, for the save that follows to write. A
     /// collection that publishes nothing is left alone, and so is the sidecar when the edit changes
-    /// nothing — every assignment announces itself to the windows watching it. A mark the edit drops
+    /// nothing - every assignment announces itself to the windows watching it. A mark the edit drops
     /// from a collection another machine publishes is remembered here
     /// (<see cref="CollectionsLocalCache.RememberingMarks"/>).
     /// </summary>
@@ -1256,7 +1256,7 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>
     /// A named collection's connectors, ready to be written to. Store.Mcps is deliberately
-    /// side-effect free, so the one place that may create a missing collection is here — the
+    /// side-effect free, so the one place that may create a missing collection is here - the
     /// same thing Swift's <c>store.collections[target, default: Collection()]</c> does. Called
     /// only once a write is certain, so nothing that fails leaves an empty collection behind.
     /// </summary>
@@ -1374,15 +1374,15 @@ public sealed class AppState : ObservableObject, IDisposable
     // MARK: Claude integration
 
     /// <summary>
-    /// A connector the active collection already holds under the reserved name — from before the
-    /// name was reserved, or synced in from an older app — leaves no room for Connector Control's
+    /// A connector the active collection already holds under the reserved name - from before the
+    /// name was reserved, or synced in from an older app - leaves no room for Connector Control's
     /// own entry: Settings dims the switch and names the clash, and nothing is added.
     /// </summary>
     public bool ClaudeIntegrationClash =>
         Store.Collections.TryGetValue(ActiveCollection, out var collection) && collection.Mcps.ContainsKey(ClaudeIntegration.EntryName);
 
     /// <summary>
-    /// Whether the app runs from where it will not stay — a translocated copy, or its disk image — so
+    /// Whether the app runs from where it will not stay - a translocated copy, or its disk image - so
     /// what that refuses can be dimmed in Settings, with the reason.
     /// </summary>
     public bool ControlToolIsTransient => host.ControlToolIsTransient;
@@ -1412,7 +1412,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>
     /// The popover's one-time offer: shown until it is answered, never once the setting has been
     /// decided anywhere (Settings and the command-line tool answer it too), and never where turning
-    /// it on could not work — no bundled tool, a connector holding the name, or an app that runs
+    /// it on could not work - no bundled tool, a connector holding the name, or an app that runs
     /// from where it will not stay.
     /// </summary>
     public bool ShowsClaudeIntegrationOffer =>
@@ -1420,7 +1420,7 @@ public sealed class AppState : ObservableObject, IDisposable
         && host.ControlToolPath is not null && !ClaudeIntegrationClash && !host.ControlToolIsTransient;
 
     /// <summary>
-    /// Turns the integration on or off from anywhere — Settings, the offer, the command-line tool —
+    /// Turns the integration on or off from anywhere - Settings, the offer, the command-line tool -
     /// and applies at once, so the entry appears or goes and Restart Required follows. Deciding it
     /// answers the offer for good. Turning it on is refused while a connector holds the name, or
     /// while the app runs from where it will not stay, with the sentence that says so; turning it
@@ -1491,7 +1491,7 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// A change Claude made without asking — confirmations are off, or the user answered after the
+    /// A change Claude made without asking - confirmations are off, or the user answered after the
     /// call had already returned. Always announced, whatever "Notify on external changes" says:
     /// with confirmations off it is the only sign that what Claude runs has changed. The Restart
     /// Claude action rides along while Claude runs an older config.
@@ -1593,12 +1593,12 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>
     /// Deletes a collection and everything keyed by its name. A synced collection's source file
-    /// is never touched — only this machine's binding to it goes. null on success.
+    /// is never touched - only this machine's binding to it goes. null on success.
     /// </summary>
     public string? DeleteCollection(string name)
     {
         // There must always be somewhere to add a connector, and only a local collection takes
-        // one — so the last local collection stays even when synced ones remain beside it. The
+        // one - so the last local collection stays even when synced ones remain beside it. The
         // store still owns "no collection by that name": a name it does not have is not the last
         // anything, and its own message is the one to show.
         if (Store.Collections.ContainsKey(name) && IsLocal(name) && LocalCollectionNames.Count <= 1)
@@ -1614,7 +1614,7 @@ public sealed class AppState : ObservableObject, IDisposable
         CollectionsCache = CollectionsCache with { Synced = Without(CollectionsCache.Synced, name) };
         // Deleting a collection is not the author's word that the paths it kept back may travel: the
         // connector that carried one is still in another collection, or comes back by an import, a
-        // copy or an ingest. What Stop Publishing remembers, this remembers too — this machine's
+        // copy or an ingest. What Stop Publishing remembers, this remembers too - this machine's
         // binding, and the marks of a record another machine publishes.
         RememberWhatWasKeptBack(name);
         RememberMarks(before);
@@ -1631,7 +1631,7 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// The collection that becomes active if <paramref name="name"/>, the active one, is deleted — the
+    /// The collection that becomes active if <paramref name="name"/>, the active one, is deleted - the
     /// store's rule, told which collections are local. The Delete confirmation names it from here.
     /// </summary>
     public string? ActiveAfterDeleting(string name) =>
@@ -1709,7 +1709,7 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>
     /// A kept record belongs to the collection that published it. Once that collection has left the
-    /// store — deleted here, or gone from a store that synced — the record outlives it and belongs
+    /// store - deleted here, or gone from a store that synced - the record outlives it and belongs
     /// to nothing: a collection that later bears the name, made here or arriving from the author's
     /// other machine, is a different one, and the folders this one left are another collection's to
     /// it. A collection that only stopped publishing never left, and keeps its own.
@@ -1973,7 +1973,7 @@ public sealed class AppState : ObservableObject, IDisposable
         // PersistStore re-derives what the newly bound document would change.
         PersistStore();
         // ${COLLECTION_DIR} resolves against the folder just bound, so what Claude runs changes
-        // the moment the file is found — with no second click. The dirty check keeps a locate
+        // the moment the file is found - with no second click. The dirty check keeps a locate
         // that resolves to nothing new from rewriting Claude's config for the sake of it.
         if (collection == ActiveCollection)
         {
@@ -2030,7 +2030,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>
     /// Stop Syncing: the collection keeps its connectors, its filled values and its enabled flags
     /// and becomes an ordinary local one. Unfilled markers stay as text, so a row still says what
-    /// it needs — without the hint, which travelled with the document.
+    /// it needs - without the hint, which travelled with the document.
     /// </summary>
     public void StopSyncing(string collection)
     {
@@ -2040,7 +2040,7 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         // The token resolved against the bound document's folder for as long as there was one. A
         // local collection has no document, so the folder it resolved to is written into the
-        // configs once, exactly as an imported copy expands it — otherwise a path that worked a
+        // configs once, exactly as an imported copy expands it - otherwise a path that worked a
         // second ago would become the literal token, with nothing left to explain it.
         if (SourceFolder(collection) is { } directory && Store.Collections.TryGetValue(collection, out var held))
         {
@@ -2110,8 +2110,8 @@ public sealed class AppState : ObservableObject, IDisposable
         if (pendingRendered.GetValueOrDefault(collection) is { } kept && kept.Hash == hash)
         {
             // The same bytes as last time: the render they produce cannot have changed, so only
-            // the diff below is re-derived. The store moves under it constantly — a local edit,
-            // another machine's apply arriving — and the answer has to follow it.
+            // the diff below is re-derived. The store moves under it constantly - a local edit,
+            // another machine's apply arriving - and the answer has to follow it.
             rendered = kept.Rendered;
         }
         else
@@ -2168,7 +2168,7 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// A failed read. A watcher-driven one backs off and tries again — the third consecutive
+    /// A failed read. A watcher-driven one backs off and tries again - the third consecutive
     /// failure is the one the user hears about; Refresh, with someone waiting for an answer,
     /// reports the first.
     /// </summary>
@@ -2221,7 +2221,7 @@ public sealed class AppState : ObservableObject, IDisposable
     internal const int MaxDocumentBytes = McpSession.MaxMessageBytes;
 
     /// <summary>
-    /// The document at <paramref name="path"/>, or the message to show for it — the one
+    /// The document at <paramref name="path"/>, or the message to show for it - the one
     /// read-and-decode every caller that opens a collection document shares. The tuple's document
     /// is null exactly when the failure is not; the bytes come back too, since the callers that
     /// keep a binding hash exactly what they read.
@@ -2275,8 +2275,8 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>
     /// Imports a document's connectors into a local collection as copies: each one rendered for
     /// this platform, <c>${COLLECTION_DIR}</c> expanded once against the folder the document sits
-    /// in, disabled, and stamped with where it came from. There is no link to the file afterwards
-    /// — that is what Keep as its own collection is for.
+    /// in, disabled, and stamped with where it came from. There is no link to the file afterwards -
+    /// that is what Keep as its own collection is for.
     /// <para>
     /// <paramref name="choices"/> answers, per connector, what to do where the target already
     /// holds that name: Replace keeps the values the user filled in, Keep both lands a suffixed
@@ -2336,7 +2336,7 @@ public sealed class AppState : ObservableObject, IDisposable
             var present = target.Mcps.ContainsKey(name);
             // A collision with nothing said about it is left alone: an import must never
             // overwrite something the user did not point at. Add on a collision means the same
-            // thing — there is no way to add under a name that is taken.
+            // thing - there is no way to add under a name that is taken.
             var choice = choices.TryGetValue(name, out var chosen)
                 ? chosen
                 : present ? ImportChoice.Skip : ImportChoice.Add;
@@ -2387,7 +2387,7 @@ public sealed class AppState : ObservableObject, IDisposable
         SetSidecarEntry(collection, entry with { Provenance = provenance });
         PersistStore();
         // Everything imported arrives off, so only a Replace over a connector that was already on
-        // can change what Claude runs — and the dirty check spares the write when it doesn't.
+        // can change what Claude runs - and the dirty check spares the write when it doesn't.
         if (collection == ActiveCollection)
         {
             ApplyIfChanged();
@@ -2404,7 +2404,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// nothing. <paramref name="choices"/> is keyed by the connector's name in the source. null on
     /// success.
     /// <para>
-    /// Unlike <see cref="ImportCopies"/>, a collision nothing is said about still lands beside —
+    /// Unlike <see cref="ImportCopies"/>, a collision nothing is said about still lands beside -
     /// and Add means the same. An import arrives from a file the user did not write, where
     /// silence should change nothing; a copy is an act they just asked for on rows they ticked,
     /// where silence should do it. Only Skip and Replace read the same way in both.
@@ -2456,7 +2456,7 @@ public sealed class AppState : ObservableObject, IDisposable
         SetSidecarEntry(target, entry with { Provenance = provenance });
         PersistStore();
         // Every copy arrives off, so only a Replace over a connector that was already on can
-        // change what Claude runs — and the dirty check spares the write when it doesn't.
+        // change what Claude runs - and the dirty check spares the write when it doesn't.
         if (target == ActiveCollection)
         {
             ApplyIfChanged();
@@ -2550,7 +2550,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <summary>
     /// One connector's config as a local collection has to hold it: what it says, with
     /// <c>${COLLECTION_DIR}</c> resolved against the folder the source's document sits in. A local
-    /// collection has no document, so the token would resolve to nothing afterwards — exactly what
+    /// collection has no document, so the token would resolve to nothing afterwards - exactly what
     /// Stop Syncing bakes in for the same reason. <c>${CC_NEEDS:…}</c> markers stay as they are: a
     /// copy asks the user for the same values the original did.
     /// </summary>
@@ -2564,7 +2564,7 @@ public sealed class AppState : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// <paramref name="name"/>, or "name 2", "name 3", … — the first one no connector in
+    /// <paramref name="name"/>, or "name 2", "name 3", … - the first one no connector in
     /// <paramref name="collection"/> is called. Keep both lands beside what is already there
     /// rather than over it.
     /// </summary>
@@ -2601,9 +2601,9 @@ public sealed class AppState : ObservableObject, IDisposable
     /// machine's list of marked paths (<see cref="CollectionsLocalCache.PublishBinding.MarkedValues"/>),
     /// which keeps every path already on it but the ones the author released there
     /// (<paramref name="releasedValues"/>). A path leaves the list only by Release, never because the
-    /// dialog has no row holding it — its argument deleted, or its connector — so a path put back
-    /// later is still refused, and the dialog lists it where it sits. Null — the banner's Choose
-    /// Folder, which nobody reviewed — adds nothing.
+    /// dialog has no row holding it - its argument deleted, or its connector - so a path put back
+    /// later is still refused, and the dialog lists it where it sits. Null - the banner's Choose
+    /// Folder, which nobody reviewed - adds nothing.
     /// </param>
     /// <param name="releasedValues">
     /// The paths the author released in the dialog, let travel in this collection's document
@@ -2646,7 +2646,7 @@ public sealed class AppState : ObservableObject, IDisposable
         var target = Path.Combine(full, fileName);
         // Somebody else's document under the name this one would take: publishing over it would
         // replace what their subscribers follow. A file that cannot be read within the document
-        // bound or decoded counts too — it has no origin to vouch for it.
+        // bound or decoded counts too - it has no origin to vouch for it.
         if (File.Exists(target) && ReadOrigin(target) != origin)
         {
             return PublishSlugTakenError(fileName);
@@ -2655,7 +2655,7 @@ public sealed class AppState : ObservableObject, IDisposable
         var previous = CollectionsCache.Published.GetValueOrDefault(collection);
         // Publishing again takes back what stopping left behind: the lists are this machine's memory
         // of what must not travel, and they outlive the binding. The folders, though, are this
-        // collection's to take back only where the record is its own — entry.Publish is the origin
+        // collection's to take back only where the record is its own - entry.Publish is the origin
         // it published under before this call, and a record whose collection has gone belongs to
         // none. A re-used name inherits its paths, but the folders stay in the record, kept back as
         // another collection's: taking them would withdraw a release the dialog offered and refuse
@@ -2678,7 +2678,7 @@ public sealed class AppState : ObservableObject, IDisposable
         // What the dialog's Publish showed is what it reviewed. Choose Folder moves a binding and
         // reviews nothing, so it carries the review it had; it never makes a first one
         // (ChangePublishFolder), so a first binding with no dialog is a caller vouching for what the
-        // collection holds — only the tests start publishing that way.
+        // collection holds - only the tests start publishing that way.
         var reviewing = reviewedValues is not null || previous is null;
         var review = SheetReview(collection, intent, shown, previous);
         SetPublishBinding(collection, new CollectionsLocalCache.PublishBinding(
@@ -2728,7 +2728,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// and it goes through <see cref="StartPublishing"/> with the intent the author has just
     /// corrected.
     ///
-    /// Nothing happens without a binding here to move — the collection stopped publishing or was
+    /// Nothing happens without a binding here to move - the collection stopped publishing or was
     /// deleted on the other machine under a banner that has since gone. Publishing here again is the
     /// dialog's, which shows the author what it reviews; a Choose Folder that started it would review
     /// every connector the collection holds, unseen.
@@ -2854,14 +2854,14 @@ public sealed class AppState : ObservableObject, IDisposable
     /// collection, which is what publishing always writes. Rendered from the subset rather than
     /// filtered afterwards, so nothing in the document describes a connector that is not in it.
     /// The origin travels unchanged, so a subset is indistinguishable by origin from the whole
-    /// collection — deliberate: the origin says who published it, not how much of it.
+    /// collection - deliberate: the origin says who published it, not how much of it.
     /// </param>
     /// <exception cref="PathMarkMovedException">
     /// A path mark cannot be placed on the argument it was made on, so a marked path is never
     /// written into a document as it stands. A mark for a connector the collection no longer holds
     /// counts, whatever the subset: it was made on one renamed or removed where the record could
-    /// not follow — an older app, a hand edit, a master list that synced ahead of the file beside
-    /// it — and the path it stood for may be travelling under another name.
+    /// not follow - an older app, a hand edit, a master list that synced ahead of the file beside
+    /// it - and the path it stood for may be travelling under another name.
     /// </exception>
     /// <param name="refusingCopies">
     /// False lets a copy of a marked path travel as written, for the Publish sheet's own reading
@@ -2948,7 +2948,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// hold when they did, is held for review rather than written (<see cref="RefuseUnreviewed"/>).
     /// </summary>
     /// <param name="forced">
-    /// The one collection whose write happens whether or not the document changed — a retry,
+    /// The one collection whose write happens whether or not the document changed - a retry,
     /// where the recorded hash says the bytes are in a folder they never reached.
     /// </param>
     internal void PublishIfChanged(string? forced = null)
@@ -2967,8 +2967,8 @@ public sealed class AppState : ObservableObject, IDisposable
             }
             var mcps = Store.Collections.GetValueOrDefault(collection)?.Mcps ?? [];
             // A reviewed connector that has gone takes its review with it on every pass, whether or not
-            // this one writes: whatever next takes its name — added here, copied, imported or synced in
-            // — is a new connector, however long a hold or a folder that will not take the write keeps
+            // this one writes: whatever next takes its name - added here, copied, imported or synced in -
+            // is a new connector, however long a hold or a folder that will not take the write keeps
             // the document from being published in between.
             var binding = found.KeepingReview(mcps.Keys.ToHashSet(StringComparer.Ordinal));
             if (!binding.Equals(found))
@@ -2980,15 +2980,15 @@ public sealed class AppState : ObservableObject, IDisposable
             {
                 var document = ExportDocument(collection, record.Intent);
                 // A path this machine has published as a placeholder, now in the document as
-                // written: whatever the marks say — the other machine dropped them in a sidecar that
-                // landed before its master list, a connector came back without them — this machine
+                // written: whatever the marks say - the other machine dropped them in a sidecar that
+                // landed before its master list, a connector came back without them - this machine
                 // does not send it. Only the author's Release in the dialog clears it.
                 RefuseKeptBackPaths(document, collection);
                 var hash = PublishHash(document);
                 if (hash == binding.LastWrittenHash && collection != forced)
                 {
-                    // The folder already holds what the store renders — the change that failed or
-                    // was refused has been undone — so nothing is failing any more.
+                    // The folder already holds what the store renders - the change that failed or
+                    // was refused has been undone - so nothing is failing any more.
                     if (PublishError?.Collection == collection)
                     {
                         PublishError = null;
@@ -3109,7 +3109,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// What the dialog's Publish reviews of <paramref name="collection"/> under <paramref name="intent"/>:
     /// every connector the dialog showed that still stands as it showed it (<paramref name="shown"/>,
     /// name → config), and for every other one the review <paramref name="previous"/> already gave it. A
-    /// connector that arrived under the open dialog — synced in, or added in an editor — has none, so it
+    /// connector that arrived under the open dialog - synced in, or added in an editor - has none, so it
     /// stays unreviewed and holds the next publish; one changed there keeps the review it had, as any edit
     /// of a reviewed connector does, credential check and all. Null <paramref name="shown"/>, from a
     /// caller with no dialog, is everything the collection holds.
@@ -3171,7 +3171,7 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>
     /// What a document says, with the export stamp left out. The moment it was written is not part
-    /// of its content, and hashing it would rewrite the shared folder on every store change —
+    /// of its content, and hashing it would rewrite the shared folder on every store change -
     /// including the toggles that must never publish.
     /// </summary>
     private static string PublishHash(CollectionDocument document) =>
@@ -3262,7 +3262,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             collectionsLoaded = false;
             // At launch there is no in-memory state to stand yet, so the cache is taken as it
-            // stands — unreconciled, since the sidecar that would vouch for it is the file that
+            // stands - unreconciled, since the sidecar that would vouch for it is the file that
             // cannot be read. A good set of bindings then outlives a bad sidecar, and the first
             // load that can read the sidecar again prunes whatever it no longer vouches for.
             if (!hasLoadedCollectionsOnce)
@@ -3285,14 +3285,14 @@ public sealed class AppState : ObservableObject, IDisposable
         var rememberedMarks = !DictionaryEquality.Equal(cache.Kept, fromDisk.Kept);
         CollectionsFile = reconciled;
         // Only this machine writes its cache, so a record of the last apply made in memory is never
-        // older than the file's — and it may be newer, when the save it waited for was held back.
+        // older than the file's - and it may be newer, when the save it waited for was held back.
         // The names that apply wrote are half of that record and travel with it: dropping them would
         // leave a collection recorded with no account of what it rendered.
         CollectionsCache = CollectionsCache.LastAppliedCollection is { } applied
             ? cache with { LastAppliedCollection = applied, LastAppliedNames = CollectionsCache.LastAppliedNames }
             : cache;
-        // A failure is this machine's binding's to report. One whose binding this load dropped — the
-        // collection stopped or deleted on the other machine — names a folder and a write this machine
+        // A failure is this machine's binding's to report. One whose binding this load dropped - the
+        // collection stopped or deleted on the other machine - names a folder and a write this machine
         // no longer makes, and its Choose Folder would have nothing to move.
         if (PublishError is { } failure && !CollectionsCache.Published.ContainsKey(failure.Collection))
         {
@@ -3391,7 +3391,7 @@ public sealed class AppState : ObservableObject, IDisposable
     {
         var what = delta.IsEmpty ? "was regenerated" : "now " + delta.Summary();
         var then = restartRequired ? "Restart Claude to pick it up." : "Claude will use it the next time it starts.";
-        return $"The connector list changed outside Connector Control — Claude's config {what}. {then}";
+        return $"The connector list changed outside Connector Control - Claude's config {what}. {then}";
     }
 
     /// <summary>
@@ -3439,7 +3439,7 @@ public sealed class AppState : ObservableObject, IDisposable
     /// What this machine keeps back from <paramref name="collection"/>'s document. <c>Folders</c> are
     /// the collection's own: every folder this machine has published it into, which
     /// <c>${COLLECTION_DIR}</c> stands for, and none of them is ever released. <c>Values</c> are
-    /// everything else, less the paths the author released for this collection — every path on any
+    /// everything else, less the paths the author released for this collection - every path on any
     /// of its lists of marked paths, and every other folder it binds: another collection's publish
     /// folders, the folders of collections that have since left the store, and each synced
     /// collection's located folder. The lists are not the
@@ -3468,8 +3468,8 @@ public sealed class AppState : ObservableObject, IDisposable
         }
         // Every mark in the sidecar's publish records, whichever machine made it: the sidecar travels
         // with the master list, so a collection the author publishes from another machine of their own
-        // marks its paths here too. A colleague's collection is another matter — this machine never
-        // sees their sidecar — and their document reaches it as placeholders anyway.
+        // marks its paths here too. A colleague's collection is another matter - this machine never
+        // sees their sidecar - and their document reaches it as placeholders anyway.
         // Kept remembers every one of them from the first load that sees it, so a record that stops
         // marking a path still keeps it back (CollectionsLocalCache.RememberingMarks).
         foreach (var entry in CollectionsFile.Collections.Values)
@@ -3479,8 +3479,8 @@ public sealed class AppState : ObservableObject, IDisposable
                 values.UnionWith(record.Intent.MarkedValues);
             }
         }
-        // What a stopped publish left behind keeps its say, so publishing the collection again — or
-        // another collection carrying one of its paths — is still refused.
+        // What a stopped publish left behind keeps its say, so publishing the collection again - or
+        // another collection carrying one of its paths - is still refused.
         var ownOrigin = CollectionsFile.Collections.GetValueOrDefault(collection)?.Publish?.Origin;
         foreach (var (name, remembered) in CollectionsCache.Kept)
         {
@@ -3488,8 +3488,8 @@ public sealed class AppState : ObservableObject, IDisposable
             // The folders of the collections that bore a record's name and left are no collection's
             // own here, whatever the record's origin says about the rest of it.
             values.UnionWith(remembered.DepartedFolders);
-            // A record's folders are this collection's own — the ones ${COLLECTION_DIR} stands for,
-            // never released — only where the record is this collection's. Anywhere else they are a
+            // A record's folders are this collection's own - the ones ${COLLECTION_DIR} stands for,
+            // never released - only where the record is this collection's. Anywhere else they are a
             // path it keeps back, released rather than written over and named as that collection's
             // in the dialog.
             if (IsOwn(remembered, name, collection, ownOrigin))

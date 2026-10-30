@@ -16,7 +16,7 @@ public enum CredentialHeuristics {
         if prefixes.contains(where: { units.starts(with: $0.utf16) }) { return true }
         guard units.count >= 32, !units.contains(0x20), !units.contains(0x2F) else { return false }
         // By general category, as C#'s char.IsLetter and char.IsDigit read them: a letter is L*, a
-        // digit is a decimal digit (Nd) — not "²", "½" or a Roman numeral, which isNumber takes.
+        // digit is a decimal digit (Nd) - not "²", "½" or a Roman numeral, which isNumber takes.
         let scalars = units.compactMap(Unicode.Scalar.init)
         let letters = scalars.contains { letterCategories.contains($0.properties.generalCategory) }
         let digits = scalars.contains { $0.properties.generalCategory == .decimalNumber }
@@ -35,7 +35,7 @@ public enum CredentialHeuristics {
     }
 
     /// `text` lowered unit by unit, as C#'s ToLowerInvariant lowers it: a unit whose lower case is
-    /// one scalar in the Basic Plane becomes it, and any other stays as it is — half of a surrogate
+    /// one scalar in the Basic Plane becomes it, and any other stays as it is - half of a surrogate
     /// pair, and İ (U+0130), whose lower case is two scalars, i and a combining dot, and which
     /// ToLowerInvariant leaves unchanged.
     public static func loweredUnits(_ text: String) -> [UInt16] {
@@ -55,7 +55,7 @@ public enum CredentialHeuristics {
     private static let secretNames = ["token", "key", "secret", "pass", "pwd", "pw", "auth", "credential", "bearer"]
 
     /// Whether `word` is an authentication scheme that comes before a credential in a header's
-    /// value — `Bearer`, `Basic` or `Token` — whatever its case.
+    /// value - `Bearer`, `Basic` or `Token` - whatever its case.
     public static func isSchemeWord(_ word: String) -> Bool {
         let lowered = loweredUnits(word)
         return schemeWords.contains { lowered.elementsEqual($0.utf16) }
@@ -86,7 +86,7 @@ public enum CredentialHeuristics {
     ]
 
     /// Whether `value` takes its secret from somewhere else rather than holding it: one or more
-    /// `${NAME}` or `$NAME` references — an environment variable, a `${CC_NEEDS:NAME}` placeholder —
+    /// `${NAME}` or `$NAME` references - an environment variable, a `${CC_NEEDS:NAME}` placeholder -
     /// with, beside them, at most one word of letters before them, an authentication scheme such as
     /// `Bearer`, `SSWS` or `Bot`. Text after a reference (`${CC_NEEDS:PW}hunter`) can be the secret
     /// itself. A `$NAME` without braces counts only as `shellVariableEnd` reads one.

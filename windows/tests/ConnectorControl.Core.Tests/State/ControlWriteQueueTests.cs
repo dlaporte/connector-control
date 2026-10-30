@@ -292,7 +292,7 @@ public class ControlWriteQueueTests
         Assert.Equal(["c"], performed);
     }
 
-    /// <summary>A write whose connection closed before its turn — a command line stopped with Control-C — is
+    /// <summary>A write whose connection closed before its turn - a command line stopped with Control-C - is
     /// dropped unrun: nobody is left to hear of it, and the queue moves on.</summary>
     [Fact]
     public void AWriteWhoseConnectionClosedBeforeItsTurnIsDroppedUnrun()
@@ -332,8 +332,8 @@ public class ControlWriteQueueTests
     }
 
     /// <summary>A relay write waiting its turn whose connection closes before its early answer hears nothing
-    /// more — no progress, no "queued" — and is dropped when its turn comes: Claude was never told it
-    /// was waiting, and a retry after "restarted — try again" must not land it twice.</summary>
+    /// more - no progress, no "queued" - and is dropped when its turn comes: Claude was never told it
+    /// was waiting, and a retry after "restarted - try again" must not land it twice.</summary>
     [Fact]
     public void ARelayWriteWhoseConnectionClosesBeforeItsEarlyAnswerIsDropped()
     {

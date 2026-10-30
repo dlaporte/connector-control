@@ -49,9 +49,9 @@ public enum ControlText {
     }
 
     /// Text as a line shows it: a control character, and a character that shows as nothing or as a
-    /// blank — every Default_Ignorable code point (soft hyphen, joiners, direction marks, variation
+    /// blank - every Default_Ignorable code point (soft hyphen, joiners, direction marks, variation
     /// selectors, tags…), the blank letters (U+115F, U+1160, U+2800, U+3164, U+FFA0), the interlinear
-    /// annotation marks, the object replacement character — as a visible escape, `\n`, `\r`, `\t` or `\u{202E}`, so a value
+    /// annotation marks, the object replacement character - as a visible escape, `\n`, `\r`, `\t` or `\u{202E}`, so a value
     /// can neither break its line, nor hide part of it, nor pass for another. A combining mark past the
     /// second on a character, or with no character to sit on, shows as its code too (see `Marks`).
     public static func escaped(_ text: String) -> String {
@@ -62,8 +62,8 @@ public enum ControlText {
     }
 
     /// One of the app's own sentences that quotes names someone else chose, read once from the left: at
-    /// each place, the longest of `names` whose quoted form — “, the name, ” — starts there is shown as
-    /// “ + `escapedName(_:)` + ”, and anything else — the sentence's own quotes included — as `escaped(_:)`
+    /// each place, the longest of `names` whose quoted form - “, the name, ” - starts there is shown as
+    /// “ + `escapedName(_:)` + ”, and anything else - the sentence's own quotes included - as `escaped(_:)`
     /// does. A name is found only between the app's own quotes, so a name that begins with “ can never
     /// match at another name's opening quote, and no name's escape is ever read again as part of another
     /// name. Names are matched scalar by scalar, as the Windows mirror matches them ordinally; equal
@@ -121,7 +121,7 @@ public enum ControlText {
     }
 
     /// A path as a dialog's footer quotes it: as `escaped(_:)` shows it, with “ and ” escaped as well so
-    /// it cannot close the app's quotes around it, and its backslashes as they are — on Windows they are
+    /// it cannot close the app's quotes around it, and its backslashes as they are - on Windows they are
     /// the path's own separators.
     public static func escapedPath(_ text: String) -> String {
         var path = ""
@@ -249,7 +249,7 @@ public enum ControlText {
 
     /// The rule for combining marks as a text is read from its start: the first two marks on a character
     /// are drawn, and a third or later one, or a mark that starts the text, shows as its code. Two, because
-    /// ordinary text needs two — a Thai vowel and its tone, decomposed Vietnamese, a Hebrew dagesh and
+    /// ordinary text needs two - a Thai vowel and its tone, decomposed Vietnamese, a Hebrew dagesh and
     /// vowel, an Arabic shadda and vowel. Even two tall marks reach past a line's own height, so the
     /// dialog clips each line of what would run to its own box, and no mark can draw over another line;
     /// the count keeps a tall stack, cut off by that clip, from hiding the line's own text.
@@ -294,8 +294,8 @@ public enum ControlText {
         return "\\u{" + String(repeating: "0", count: max(0, 4 - hex.count)) + hex + "}"
     }
 
-    /// One argument of a command line: as written when it reads as one word — not empty, with no
-    /// space, no ' and nothing `escapedValue(_:)` escapes — else between single quotes, with \ and '
+    /// One argument of a command line: as written when it reads as one word - not empty, with no
+    /// space, no ' and nothing `escapedValue(_:)` escapes - else between single quotes, with \ and '
     /// escaped inside as well, so no two argument lists read alike.
     public static func word(_ text: String) -> String {
         var reading = Marks()
@@ -325,7 +325,7 @@ public enum ControlText {
         scalar.properties.generalCategory == .spaceSeparator
     }
 
-    /// “a”, “a” and “b”, “a”, “b” and “c” — names as the app's sentences list them, each through
+    /// “a”, “a” and “b”, “a”, “b” and “c” - names as the app's sentences list them, each through
     /// `escapedName(_:)`.
     public static func quotedList(_ names: [String]) -> String {
         let quoted = names.map { "“\(escapedName($0))”" }

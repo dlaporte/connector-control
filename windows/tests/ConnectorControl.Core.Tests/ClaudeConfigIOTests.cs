@@ -130,8 +130,8 @@ public class ClaudeConfigIOTests : IDisposable
         Assert.Equal(expected, File.ReadAllText(Url));
     }
 
-    /// <summary>A key the top level or mcpServers names twice — exactly, or in two spellings Unicode counts as
-    /// the same text — is refused: this app's parser keeps one and Claude's may keep the other.</summary>
+    /// <summary>A key the top level or mcpServers names twice - exactly, or in two spellings Unicode counts as
+    /// the same text - is refused: this app's parser keeps one and Claude's may keep the other.</summary>
     [Fact]
     public void ARepeatedKeyIsRefusedExactlyOrAsAnEquivalentSpelling()
     {

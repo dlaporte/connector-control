@@ -151,8 +151,8 @@ struct ImportSheetView: View {
         }
     }
 
-    /// What would happen to this connector: how the collision it would cause resolves, or — for
-    /// every other row, and for a collision that is not coming across — the row's own badge.
+    /// What would happen to this connector: how the collision it would cause resolves, or - for
+    /// every other row, and for a collision that is not coming across - the row's own badge.
     /// Unticking a collision and choosing Skip in the picker mean the same thing, so a row that
     /// is not coming across says so instead of offering the choice.
     @ViewBuilder private func badge(for row: Binding<ImportModel.Row>) -> some View {

@@ -41,7 +41,7 @@ public enum PasteRecovery {
 
     private static func candidates(_ t: String) -> [String] {
         var out = [t]
-        // A leading quote means a bare `"key": value` fragment — not a legal
+        // A leading quote means a bare `"key": value` fragment - not a legal
         // top-level document. Wrap it, and also try after trimming the stray
         // trailing brace(s) left over from copying one entry out of a block.
         if t.first == "\"" {
@@ -49,7 +49,7 @@ public enum PasteRecovery {
             let balanced = trimStrayTrailingBraces(t)
             if balanced != t { out.append("{\(balanced)}") }
         }
-        // Curled quotes (Slack/Notion/Notes) break JSON — retry each candidate
+        // Curled quotes (Slack/Notion/Notes) break JSON - retry each candidate
         // with them normalized to straight quotes.
         out += out.map(normalizeQuotes).filter { !out.contains($0) }
         return out
@@ -97,7 +97,7 @@ public enum PasteRecovery {
     // MARK: unwrapping
 
     private static func unwrap(_ value: JSONValue) -> Result {
-        // {"mcpServers": {"NAME": {…}}} — single entry.
+        // {"mcpServers": {"NAME": {…}}} - single entry.
         if case .object(let outer) = value, outer.count == 1,
            case .object(let inner)? = outer["mcpServers"], inner.count == 1,
            let entry = inner.first {

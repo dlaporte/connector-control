@@ -14,9 +14,9 @@ namespace ConnectorControl.App.Services;
 /// This app's own binaries are Authenticode-signed by its publisher, an identity a release
 /// token does not carry: before an update is staged, the replaced Update.exe and every
 /// executable inside the package (found by content, not by name) must be validly signed, with
-/// revocation checked — this app's own files and the updater by the running app's own certificate
+/// revocation checked - this app's own files and the updater by the running app's own certificate
 /// subject, every attribute of it, the runtime and libraries it is built from by that subject or an
-/// organization in <see cref="TrustedOrganizations"/> — and the package's own ConnectorControl.exe must
+/// organization in <see cref="TrustedOrganizations"/> - and the package's own ConnectorControl.exe must
 /// carry the version the feed advertises, prerelease label and all, so an old signed release or
 /// preview cannot be replayed as a newer one.
 /// Sparkle's pinned EdDSA key plays this role on the Mac. Known residual: any library this
@@ -59,7 +59,7 @@ public static class UpdateVerifier
 
     /// <summary>
     /// Null when the update may be staged; otherwise a user-facing reason. Only an UNSIGNED running
-    /// app (a dev build) skips the check — it has no identity to compare against and the updater is
+    /// app (a dev build) skips the check - it has no identity to compare against and the updater is
     /// inert there anyway. A running app whose signature cannot be validated refuses: that is the
     /// machine, not the build, and an unverifiable identity must not become "accept everything".
     /// </summary>
@@ -217,8 +217,8 @@ public static class UpdateVerifier
     }
 
     /// <summary>
-    /// Null when <paramref name="path"/> is validly signed, revocation included, by <paramref name="expectedSubject"/>
-    /// — every attribute of it, not just the O= another certificate could share — or, when it need not be ours, by an
+    /// Null when <paramref name="path"/> is validly signed, revocation included, by <paramref name="expectedSubject"/> -
+    /// every attribute of it, not just the O= another certificate could share - or, when it need not be ours, by an
     /// organization in <see cref="TrustedOrganizations"/>; else why not. A revocation status that could not be
     /// determined is said once to <paramref name="revocation"/>'s log and does not refuse (<see cref="Revocation"/>).
     /// </summary>
@@ -287,8 +287,8 @@ public static class UpdateVerifier
         ControlVersion.Semantic(one) is { } a && string.Equals(a, ControlVersion.Semantic(other), StringComparison.Ordinal);
 
     /// <summary>
-    /// The product version baked into a signed executable — the build's informational version,
-    /// "1.5.0-preview.3+1a2b3c4" for a preview — as SemVer without its build metadata; null when it carries none.
+    /// The product version baked into a signed executable - the build's informational version,
+    /// "1.5.0-preview.3+1a2b3c4" for a preview - as SemVer without its build metadata; null when it carries none.
     /// </summary>
     internal static string? EmbeddedVersion(string path) =>
         FileVersionInfo.GetVersionInfo(path).ProductVersion is { } product ? ControlVersion.Semantic(product) : null;

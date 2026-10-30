@@ -185,7 +185,7 @@ final class ControlSocketTests: XCTestCase {
     }
 
     /// Only a refusal, tried a few times, or nothing there at all makes a socket file stale: one that
-    /// refuses for any other reason — here, no permission — is left alone and starting fails.
+    /// refuses for any other reason - here, no permission - is left alone and starting fails.
     func testASocketThatFailsForAnotherReasonIsLeftAlone() throws {
         let socket = try SocketRig(); defer { socket.dispose() }
         let odd = socket.folder + "/odd.sock"
@@ -235,7 +235,7 @@ final class ControlSocketTests: XCTestCase {
                                                                       message: ControlTools.needsNewerAppError("99.0.0"), id: .int(2))])
     }
 
-    /// A client that ends only its writing half — as the relay does when a write to the app fails — is at
+    /// A client that ends only its writing half - as the relay does when a write to the app fails - is at
     /// the end of its stream to the server, which closes the connection, and the client's reading ends
     /// too once it has read what was sent to it.
     func testAClientThatEndsItsWritingHalfIsClosedByTheServer() throws {

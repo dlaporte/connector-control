@@ -5,7 +5,7 @@ namespace ConnectorControl.Core;
 /// Reconciliation therefore performs exactly one file→store flow: ingesting
 /// entries the store has never heard of (installer scripts and hand-edits
 /// writing straight into claude_desktop_config.json). Known entries are never
-/// modified by the file — edits, re-adds of disabled connectors, and removals
+/// modified by the file - edits, re-adds of disabled connectors, and removals
 /// are all resolved by the caller regenerating the file from
 /// <see cref="MasterStore.EnabledServers"/>.
 /// </summary>
@@ -54,14 +54,14 @@ public static class Reconciler
                 }
                 ingested.Add(kept);
             }
-            // else: matches the baseline but is gone from the store — a PENDING
+            // else: matches the baseline but is gone from the store - a PENDING
             // REMOVAL awaiting Apply. Re-importing would resurrect a deletion.
         }
         return new ReconcileOutcome(result, changed) { Ingested = [.. ingested.Order(StringComparer.Ordinal)] };
     }
 
     /// <summary>
-    /// <paramref name="name"/>, or "name 2", "name 3", … — the first name under which <paramref name="held"/>
+    /// <paramref name="name"/>, or "name 2", "name 3", … - the first name under which <paramref name="held"/>
     /// has nothing or has this very config. The active collection never holds the name, so there it is
     /// <paramref name="name"/> itself; another collection may hold a connector of its own under it, which
     /// stays as it is.
@@ -86,7 +86,7 @@ public static class Reconciler
         baseline is null || !baseline.TryGetValue(name, out var known) || known != config;
 
     /// <summary>
-    /// Adopts a deliberately restored Claude-config snapshot INTO the store —
+    /// Adopts a deliberately restored Claude-config snapshot INTO the store -
     /// the one case where the file legitimately rewrites store truth, because
     /// the user chose that snapshot. Entries in the snapshot are upserted
     /// (config, enabled; view memory preserved for known names); known entries

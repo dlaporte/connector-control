@@ -53,7 +53,7 @@ public sealed record CollectionDiff(IReadOnlyList<string> Added, IReadOnlyList<s
     }
 
     /// <summary>
-    /// "adds a, b; deletes c; changes d" — same shape as <c>ServerDelta.Summary</c>, kept as its
+    /// "adds a, b; deletes c; changes d" - same shape as <c>ServerDelta.Summary</c>, kept as its
     /// own copy here since this type lives beside the document Core builds, not the state layer.
     /// </summary>
     public string Summary(int limit = 4)

@@ -77,7 +77,7 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(popover.collectionItems, [CollectionMenuItem(name: "Default", isActive: true)])
 
         XCTAssertNil(state.createActiveCopy(named: "Work"))
-        XCTAssertEqual(popover.collectionItems.map(\.name), ["Default", "Work"], "switching only — New, Rename and Delete live in the window")
+        XCTAssertEqual(popover.collectionItems.map(\.name), ["Default", "Work"], "switching only - New, Rename and Delete live in the window")
         XCTAssertEqual(popover.collectionItems.map(\.isActive), [false, true])
         XCTAssertEqual(popover.collectionItems.map(\.isSynced), [false, false])
         XCTAssertEqual(popover.collectionItems.map(\.hasPendingUpdate), [false, false])
@@ -163,7 +163,7 @@ final class PopoverModelTests: XCTestCase {
         try Data("{oops".utf8).write(to: h.claudeConfigURL)
         state.setEnabled("scoutbook", false)   // apply fails
         XCTAssertEqual(popover.footer, .retryApply)
-        XCTAssertEqual(popover.footerTitle, "Apply Failed — Retry")
+        XCTAssertEqual(popover.footerTitle, "Apply Failed - Retry")
         XCTAssertEqual(popover.footerGlyph, "exclamationmark.arrow.circlepath")
         XCTAssertNotNil(popover.errorMessage)
 
@@ -252,7 +252,7 @@ final class PopoverModelTests: XCTestCase {
         XCTAssertEqual(h.background.pending, 1)
         h.drain()
         XCTAssertNotNil(state.toolStatuses[.npx])
-        // Three npx connectors: one tool, one batch — not one probe per row.
+        // Three npx connectors: one tool, one batch - not one probe per row.
         XCTAssertEqual(h.tools.probed, [.npx])
         XCTAssertEqual(h.tools.batches, 1)
 

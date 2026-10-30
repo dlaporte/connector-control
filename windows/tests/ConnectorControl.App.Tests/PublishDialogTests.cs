@@ -21,7 +21,7 @@ public class PublishDialogTests
 
     /// <summary>
     /// One local connector with a stripped environment value that looks like a credential, a
-    /// harmless one, and one absolute path argument — a row of each kind the sheet offers.
+    /// harmless one, and one absolute path argument - a row of each kind the sheet offers.
     /// </summary>
     private static JsonValue Connector() => JsonValue.Object(
         ("command", JsonValue.String("node")),
@@ -43,7 +43,7 @@ public class PublishDialogTests
 
     /// <summary>
     /// The sheet, laid out with its rows generated, for the body to work through, and closed
-    /// whether the body finishes or throws — a sheet left alive and on screen is a window every
+    /// whether the body finishes or throws - a sheet left alive and on screen is a window every
     /// later test in this assembly then finds.
     /// </summary>
     private static void Publishing(PublishModel model, Action<PublishDialog> body)
@@ -55,8 +55,8 @@ public class PublishDialogTests
         {
             // The editor tests' order, for the same reason: bindings settle first, while nothing
             // of ours is on screen, because that is the step that pumps. Between Show and Hide
-            // there is no pump at all — UpdateLayout runs the real layout pass, the one that
-            // generates the rows, synchronously — and the body then works on a hidden window.
+            // there is no pump at all - UpdateLayout runs the real layout pass, the one that
+            // generates the rows, synchronously - and the body then works on a hidden window.
             Layout(window);
             window.Show();
             window.UpdateLayout();
@@ -95,8 +95,8 @@ public class PublishDialogTests
     }
 
     /// <summary>
-    /// A Release the model refuses — the path is this machine's publish folder, copied where a
-    /// ticked row already marks it — hands back the entry's note, and the failure line says it, as
+    /// A Release the model refuses - the path is this machine's publish folder, copied where a
+    /// ticked row already marks it - hands back the entry's note, and the failure line says it, as
     /// the Mac sheet's does. Choosing a folder afterwards clears it.
     /// </summary>
     [Fact]
@@ -221,7 +221,7 @@ public class PublishDialogTests
     }
 
     /// <summary>
-    /// Capped below what it asks for — the work area of a short screen — the dialog gives the room up from the preview,
+    /// Capped below what it asks for - the work area of a short screen - the dialog gives the room up from the preview,
     /// and its buttons stay inside it rather than being cut off below. Windows only.
     /// </summary>
     [Fact]

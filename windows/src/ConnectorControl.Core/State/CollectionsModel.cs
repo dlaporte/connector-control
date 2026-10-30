@@ -7,7 +7,7 @@ namespace ConnectorControl.Core.State;
 /// collection's connectors as rows in the right one, the connector count below them, and the controls
 /// that follow the selection: the sidebar's +, the header's ⋯ menu and the + under it, and the
 /// selection bar. Everything is derived from AppState; the model owns only what the window itself
-/// knows — which collection is showing and which rows are ticked.
+/// knows - which collection is showing and which rows are ticked.
 ///
 /// Mirror: Sources/ConnectorControlState/CollectionsModel.swift
 /// </summary>
@@ -77,8 +77,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         names.Count == 1 ? $"Delete “{names[0]}”?" : $"Delete {names.Count} connectors?";
 
     /// <summary>
-    /// Lifted from the editor's old delete confirmation, which the list now replaces: the sentence —
-    /// the most useful thing in that confirmation — survives here unchanged. Delete Collection's
+    /// Lifted from the editor's old delete confirmation, which the list now replaces: the sentence -
+    /// the most useful thing in that confirmation - survives here unchanged. Delete Collection's
     /// confirmation ends with it too.
     /// </summary>
     public const string DeleteCheckedInformative = "A copy remains in Backups.";
@@ -86,7 +86,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>
     /// The sidebar's chain glyph, or null when there is no chain to explain: a local collection
     /// has no source, and a synced one whose file is still to be found has no path to name. The
-    /// sentence is the flyout chip's, borrowed rather than copied — one fact, one wording.
+    /// sentence is the flyout chip's, borrowed rather than copied - one fact, one wording.
     ///
     /// Takes the item rather than the path so that "which items have a tooltip" stays here; a
     /// converter over an optional path would be the same rule, kept somewhere worse.
@@ -143,19 +143,19 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
         public string Id => Name;
     }
 
-    /// <summary>The menu's annotation beside a disabled destination — why a synced collection is listed but cannot be chosen.</summary>
+    /// <summary>The menu's annotation beside a disabled destination - why a synced collection is listed but cannot be chosen.</summary>
     public const string ReadOnlyNote = "read-only";
 
     /// <summary>
-    /// One connector of the selected collection. Checked is the window's own state — an export
-    /// tick, not anything the store holds — so it is the one field the model fills in itself.
+    /// One connector of the selected collection. Checked is the window's own state - an export
+    /// tick, not anything the store holds - so it is the one field the model fills in itself.
     /// </summary>
     public sealed record Row(string Name, string? Caution, bool IsLocked, bool Checked, string Target)
     {
         public string Id => Name;
     }
 
-    /// <summary>Property names this window actually depends on — everything else AppState raises is noise for it.</summary>
+    /// <summary>Property names this window actually depends on - everything else AppState raises is noise for it.</summary>
     private static readonly string[] RelevantProperties =
     [
         nameof(AppState.Store), nameof(AppState.CollectionsFile), nameof(AppState.CollectionsCache),
@@ -176,7 +176,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     private string? checkedCollection;
     /// <summary>
     /// The two panes, kept rather than rebuilt on every read. WPF regenerates every container when
-    /// ItemsSource is handed a new list, which drops keyboard focus from the row that had it — so
+    /// ItemsSource is handed a new list, which drops keyboard focus from the row that had it - so
     /// a list is replaced, and announced, only when what it holds has actually changed. The Mac
     /// needs none of this: SwiftUI's List diffs its rows by id and keeps an unchanged row's view.
     /// </summary>
@@ -229,11 +229,11 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// The collection the right pane is showing. It defaults to the active one and falls back to
-    /// it whenever the chosen name stops being a collection — deleted here, or renamed from
+    /// it whenever the chosen name stops being a collection - deleted here, or renamed from
     /// anywhere else.
     /// </summary>
     /// <remarks>
-    /// An assignment that would show the collection already showing does nothing at all — no
+    /// An assignment that would show the collection already showing does nothing at all - no
     /// raise, no cleared ticks, not even the name remembered. The sidebar's two-way binding writes
     /// its selection straight back, and a raise here fed it until the stack ran out; remembering
     /// the name would pin the window to a collection it was only showing because it was the
@@ -261,8 +261,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     private string SelectedCollection => EffectiveCollection(selection);
 
     /// <summary>
-    /// Lets go of a remembered name that no longer names a collection. Nothing on screen changes —
-    /// the window was already showing the fallback — so nothing is raised. Without it, a collection
+    /// Lets go of a remembered name that no longer names a collection. Nothing on screen changes -
+    /// the window was already showing the fallback - so nothing is raised. Without it, a collection
     /// renamed away and later renamed back would pull the window to it unprompted, because the
     /// name would start resolving again. Called from the no-op branch of <see cref="Selected"/>
     /// and on every store change, so a view that never writes its selection back is covered too.
@@ -276,11 +276,11 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Everything the window binds that follows the collection on show, and nothing that does not
-    /// — in particular not <see cref="Items"/>, whose content the selection never touches. What
-    /// the code-behind reads when a menu opens or a button is clicked — <see cref="CopyDestinations"/>,
+    /// Everything the window binds that follows the collection on show, and nothing that does not -
+    /// in particular not <see cref="Items"/>, whose content the selection never touches. What
+    /// the code-behind reads when a menu opens or a button is clicked - <see cref="CopyDestinations"/>,
     /// <see cref="CollectionMenu"/>, <see cref="CanRefresh"/>, <see cref="CanDelete"/>,
-    /// <see cref="PublishedFilePath"/>, <see cref="SourceFilePath"/> and <see cref="Banner"/> — is
+    /// <see cref="PublishedFilePath"/>, <see cref="SourceFilePath"/> and <see cref="Banner"/> - is
     /// read fresh there, so nothing listens for it and it is not raised.
     /// </summary>
     private void RaiseSelectionDependents()
@@ -306,7 +306,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// Moves the window to a collection this model just created or renamed, keeping the ticks with
-    /// it — unlike Selected, which is the user picking a different collection.
+    /// it - unlike Selected, which is the user picking a different collection.
     /// </summary>
     private void Retarget(string name)
     {
@@ -336,7 +336,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// Both panes, each replaced and announced only when its content differs. The records are
-    /// value-equal, so a rebuild that says the same thing leaves the list — and the focus on it —
+    /// value-equal, so a rebuild that says the same thing leaves the list - and the focus on it -
     /// where it was.
     /// </summary>
     private void RefreshPanes()
@@ -384,8 +384,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// inputs. <paramref name="home"/> is the user's home folder, abbreviated to "~".
     ///
     /// An allowlist, not a mask: an argument is shown only when it is a URL, an explicit path or
-    /// a named artefact, and every other argument — a flag, a flag's value, <c>KEY=value</c>, a
-    /// header, a shell string, a bare word — is left out. A list of secret shapes to hide would
+    /// a named artefact, and every other argument - a flag, a flag's value, <c>KEY=value</c>, a
+    /// header, a shell string, a bare word - is left out. A list of secret shapes to hide would
     /// leak every shape it did not foresee. The one exception is backed by a name rather than a
     /// shape: whatever follows a flag named for a secret is left out too, since a password can
     /// look like a package.
@@ -443,14 +443,14 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     private static readonly HashSet<string> PackageRunners = ["npx", "uvx", "pipx", "bunx", "pnpx"];
 
     /// <summary>
-    /// A launcher written as a whole command line — <c>npx -y server --token x</c> in one string —
+    /// A launcher written as a whole command line - <c>npx -y server --token x</c> in one string -
     /// split into arguments the way a shell passes them: its first argument is the launcher and
     /// the rest are arguments ahead of <paramref name="args"/>, each held to the same rule, so a
     /// flag named for a secret at its end guards <c>args[0]</c> as it would any value.
     ///
     /// A command that is a path is not tokenized, since a Windows path holds spaces. It keeps its
-    /// launcher — the last component of the path, which runs to the last word holding a separator
-    /// — only when the words after its first are plainly more path or plain words: none starts
+    /// launcher - the last component of the path, which runs to the last word holding a separator -
+    /// only when the words after its first are plainly more path or plain words: none starts
     /// with <c>-</c> or <c>/</c> or holds <c>:</c> (which covers <c>://</c>), <c>=</c> or a quote.
     /// Otherwise that last component could be the tail of a packed argument, and the launcher is
     /// omitted. The packed words are never shown, but a flag named for a secret at their end,
@@ -535,7 +535,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// The launcher, named the way it would be typed, or null when it could be a secret — or when
+    /// The launcher, named the way it would be typed, or null when it could be a secret - or when
     /// it holds whitespace, a path with arguments packed into its last component.
     /// </summary>
     private static string? Launcher(string command)
@@ -548,7 +548,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>
     /// One argument as the target column shows it, or null when it is none of the three shapes
     /// known to be safe: a URL, as its scheme and host; an explicit path, with the home folder
-    /// abbreviated; or a named artefact — a package, image, script or module. A bare word, one
+    /// abbreviated; or a named artefact - a package, image, script or module. A bare word, one
     /// with no <c>/</c>, <c>@</c> or <c>.</c>, is an artefact only in the server slot.
     /// </summary>
     private static string? Shown(string arg, string home, bool isServerSlot)
@@ -684,7 +684,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// The idle selection bar: how many connectors the collection holds, and nothing else — the
+    /// The idle selection bar: how many connectors the collection holds, and nothing else - the
     /// pills, the banner and the ⋯ menu say what kind it is and where its file is. The one
     /// addition is a synced source that could not be read, which no banner reports: without it
     /// the window would not say why a subscription has stopped updating. The other is a copy's
@@ -713,12 +713,12 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>
     /// The synced document as this machine can name it, or null when it cannot: not synced, no
     /// binding, or a sidecar entry that records neither a path nor a file name. The last of those
-    /// takes a hand-edited or foreign collections file — every writer here sets a file name — but
+    /// takes a hand-edited or foreign collections file - every writer here sets a file name - but
     /// the decoder accepts one, and there is nothing to refresh or to report about a document
     /// nobody can point at.
     /// </summary>
     /// <remarks>
-    /// Still its own rule — Refresh and Show Source File both need a document to point at — but
+    /// Still its own rule - Refresh and Show Source File both need a document to point at - but
     /// the naming is <c>AppState.SourceLocation</c>'s, so the derivation lives in one place.
     /// </remarks>
     private string? LocatedSource(string collection) =>
@@ -749,7 +749,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// The strip's button. True says the news is an update, so the view has only to put the Review
     /// dialog in front of the selected collection. False says the view decides by the banner's
     /// kind: a file or folder dialog, handed to <see cref="LocateSource"/> or
-    /// <see cref="ChoosePublishFolder"/>, or — for a publish blocked for review — the Publish
+    /// <see cref="ChoosePublishFolder"/>, or - for a publish blocked for review - the Publish
     /// dialog, since another folder is no answer to that.
     /// </summary>
     public bool BannerAction() => Banner is CollectionBanner.UpdateAvailable;
@@ -830,7 +830,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>
     /// Marks an exception to the ordinary local collection: Published and Subscribed are
     /// mutually exclusive, since a subscribed collection has an author elsewhere and cannot also
-    /// publish. There is no member for the default — an ordinary local collection carries no pill.
+    /// publish. There is no member for the default - an ordinary local collection carries no pill.
     /// </summary>
     public enum Pill
     {
@@ -880,8 +880,8 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>
     /// The collection's ⋯ menu (spec §4), built here so both platforms show the same list from
     /// the same flags the window's other controls already read. A record hierarchy, the same
-    /// shape <see cref="CollectionBanner"/> uses, because two members —
-    /// <see cref="MenuEntry.ExportAll"/> and <see cref="MenuEntry.Delete"/> — carry an
+    /// shape <see cref="CollectionBanner"/> uses, because two members -
+    /// <see cref="MenuEntry.ExportAll"/> and <see cref="MenuEntry.Delete"/> - carry an
     /// <c>Enabled</c> flag the rest do not.
     /// </summary>
     public abstract record MenuEntry
@@ -1016,7 +1016,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// Duplicate: the whole collection as it stands, every connector's switch kept and nothing
-    /// marked as imported — unlike every other copy in this window, it is the user's own (see
+    /// marked as imported - unlike every other copy in this window, it is the user's own (see
     /// <see cref="AppState.DuplicateCollection"/>). The selection stays where it was rather than
     /// following the new one the way <see cref="MakeLocalCopy"/> and <see cref="Create"/> do.
     /// </summary>
@@ -1051,7 +1051,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// A located synced collection's document — <see cref="LocatedSource"/> again, named for the
+    /// A located synced collection's document - <see cref="LocatedSource"/> again, named for the
     /// menu's ShowSourceFile and the header's own use, both of which want the same null for a
     /// file not located on this machine.
     /// </summary>
@@ -1300,7 +1300,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// <summary>
     /// What Delete takes with the collection and what it leaves: its connectors (copies elsewhere
     /// stay), the collection that becomes active if this one is, a synced source it never
-    /// touches, and the backup the store keeps before it saves — said only when it held
+    /// touches, and the backup the store keeps before it saves - said only when it held
     /// connectors, since an empty collection has nothing in it to get back.
     /// </summary>
     public string DeleteInformative(string collection)

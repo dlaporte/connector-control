@@ -4,7 +4,7 @@ namespace ConnectorControl.Core;
 /// Where the app reads and writes, plus resolution of the defaults: Windows edition of Swift
 /// <c>AppPaths.live</c> plus the Mac app's custom-store rule: env overrides first, then
 /// settings, then defaults. Claude's config can exist both inside an MSIX package's
-/// virtualized AppData and at the real AppData path — a machine that upgraded from an older
+/// virtualized AppData and at the real AppData path - a machine that upgraded from an older
 /// MSIX build to a current one can have both, with the MSIX copy stale. Since Claude rewrites
 /// its config on every startup, the file with the newest last-write time is the live one; when
 /// neither exists, or both are exactly as old as each other, we fall back to the real AppData
@@ -18,7 +18,7 @@ public sealed record AppPaths(string ClaudeConfigPath, string StoreDir, string B
 {
     /// <summary>
     /// A folder name, not a display string: it happens to match <see cref="Product.Name"/> today,
-    /// but must not be rewired to it — every existing install's data already lives under this
+    /// but must not be rewired to it - every existing install's data already lives under this
     /// exact folder, and a rename here would silently orphan it.
     /// </summary>
     public const string DataDirName = "Connector Control";
@@ -80,7 +80,7 @@ public sealed record AppPaths(string ClaudeConfigPath, string StoreDir, string B
 
     /// <summary>
     /// Picks the Claude config to use: among every MSIX LocalCache candidate
-    /// plus the real AppData (Roaming) path, the one written most recently —
+    /// plus the real AppData (Roaming) path, the one written most recently -
     /// ties, and the case where none exists, go to Roaming, since Claude
     /// always writes there once it is past the MSIX-virtualized builds.
     /// </summary>
@@ -106,7 +106,7 @@ public sealed record AppPaths(string ClaudeConfigPath, string StoreDir, string B
 
     /// <summary>
     /// Every LocalCache config path a Claude MSIX package folder could produce, in ordinal
-    /// folder-name order. Existence of the file or the package folder is not implied — callers
+    /// folder-name order. Existence of the file or the package folder is not implied - callers
     /// probe for that.
     /// </summary>
     internal static IReadOnlyList<string> MsixClaudeConfigCandidates(KnownFolders folders, IPathProbe probe) =>

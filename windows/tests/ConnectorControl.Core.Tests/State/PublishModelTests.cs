@@ -11,7 +11,7 @@ namespace ConnectorControl.Core.Tests.State;
 public class PublishModelTests
 {
     /// <summary>One local connector with a stripped and a shared environment value and one
-    /// absolute path argument — a row of each kind the sheet offers.</summary>
+    /// absolute path argument - a row of each kind the sheet offers.</summary>
     private static JsonValue Connector() => JsonValue.Object(new Dictionary<string, JsonValue>(StringComparer.Ordinal)
     {
         ["command"] = JsonValue.String("node"),
@@ -780,7 +780,7 @@ public class PublishModelTests
         File.Delete(folder);
         Directory.CreateDirectory(folder);
         // Nothing about the document or the ticks has changed since the failure, so only an
-        // unconditional write puts it back — which is what pressing Publish again has to do,
+        // unconditional write puts it back - which is what pressing Publish again has to do,
         // rather than waiting for whatever the user changes next.
         var retry = new PublishModel(state, state.ActiveCollection);
         Assert.Equal(folder, retry.Folder);

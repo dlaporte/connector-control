@@ -276,7 +276,7 @@ public class ImportModelTests
         Assert.Equal(1, model.ImportCount);
         model.ImportMode = ImportModel.Mode.AddToCollection;
 
-        // Ticking it makes no difference — an excluded row cannot be included.
+        // Ticking it makes no difference - an excluded row cannot be included.
         bad.Include = true;
         Assert.Equal(1, model.ImportCount);
         Assert.Null(model.Perform());
@@ -457,7 +457,7 @@ public class ImportModelTests
 
     /// <summary>
     /// C#-only: SwiftUI binds the optional <c>loadError</c> itself, so the Mac has no bool to
-    /// assert — the same one-sided pattern <c>HasCollectionBanner</c> already follows.
+    /// assert - the same one-sided pattern <c>HasCollectionBanner</c> already follows.
     /// </summary>
     [Fact]
     public void ADocumentThatCannotBeReadSaysSoAsABool()

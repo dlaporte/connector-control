@@ -21,7 +21,7 @@ final class StringCatalogTests: XCTestCase {
     }
 
     /// nil means the key is Windows-only (no `mac` side, and not a bare
-    /// shared value) — such a key must never appear in `actual` below.
+    /// shared value) - such a key must never appear in `actual` below.
     private static func macValue(_ entry: JSONValue) -> MacValue? {
         switch entry {
         case .string(let s):
@@ -45,7 +45,7 @@ final class StringCatalogTests: XCTestCase {
         }
     }
 
-    /// Substitutes `{0}`, `{1}`, … with `args`, in order — the same
+    /// Substitutes `{0}`, `{1}`, … with `args`, in order - the same
     /// convention the C# test's fixture resolution uses.
     private static func expand(_ format: String, _ args: [String]) -> String {
         var result = format
@@ -67,7 +67,7 @@ final class StringCatalogTests: XCTestCase {
     /// Fixed arguments, by key, for every fixture entry whose Mac value is a
     /// `{n}` template: `"X"`/`"Y"` for string parameters, `"3"`/`"7"` for int
     /// parameters, and the joined-keys rendering for a factory that takes a
-    /// list of keys — matching the convention the C# test also follows.
+    /// list of keys - matching the convention the C# test also follows.
     private static let argsByKey: [String: [String]] = [
         "AppState.collectionLocateBanner": ["X"],
         "AppState.collectionPublishFailedBanner": ["X", "Y", "Z"],
@@ -805,7 +805,7 @@ final class StringCatalogTests: XCTestCase {
 
         // MARK: MasterStore
         // Every message below is returned by a real mutation, not a bare
-        // constant — each store is set up so that mutation fails for exactly
+        // constant - each store is set up so that mutation fails for exactly
         // the reason this key names.
 
         var nameEmptyStore = MasterStore.empty
@@ -982,12 +982,12 @@ final class StringCatalogTests: XCTestCase {
             XCTAssertEqual(actual[key], expected, key)
         }
 
-        // An unpaired key — present in `actual` but missing (or Windows-only)
-        // in the fixture, or vice versa — fails here on whichever side lacks it.
+        // An unpaired key - present in `actual` but missing (or Windows-only)
+        // in the fixture, or vice versa - fails here on whichever side lacks it.
         XCTAssertEqual(Set(actual.keys), macKeys)
     }
 
-    /// The comparison above only ever looks at keys `macValue` resolves — a fixture entry
+    /// The comparison above only ever looks at keys `macValue` resolves - a fixture entry
     /// resolving on neither platform (both `mac` and `win` omitted, or an unrecognized value
     /// shape) is silently skipped here AND by the C# mirror's equivalent loop, so such a mistake
     /// would be asserted nowhere. This pins the fixture-wide invariant directly: every root key
@@ -1014,9 +1014,9 @@ final class StringCatalogTests: XCTestCase {
 
     /// True when `value` is present and not JSON `null`. A `"mac"`/`"win"`
     /// key explicitly set to `null` is present but unresolved and must not
-    /// count as resolving — matching StringCatalogTests.cs's `mac is not
+    /// count as resolving - matching StringCatalogTests.cs's `mac is not
     /// null` check on `JsonNode`, where a JSON null parses to a null node
-    /// (and every other JSON type — string, nested `format` object, etc. —
+    /// (and every other JSON type - string, nested `format` object, etc. -
     /// parses to a non-null one).
     private static func isResolved(_ value: JSONValue?) -> Bool {
         guard let value else { return false }

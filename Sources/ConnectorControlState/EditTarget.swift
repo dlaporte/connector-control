@@ -7,7 +7,7 @@ import ConnectorControlCore
 ///
 /// Mirror: windows/src/ConnectorControl.Core/State/EditTarget.cs
 public struct EditTarget: Identifiable, Codable, Hashable, Sendable {
-    /// The editor `WindowGroup`'s id — shared by `ConnectorControlApp`'s declaration and
+    /// The editor `WindowGroup`'s id - shared by `ConnectorControlApp`'s declaration and
     /// `CollectionsWindowView`'s `openWindow` calls so they cannot drift apart.
     public static let editorWindowID = "editor"
     public static let addTitle = "Add Connector"

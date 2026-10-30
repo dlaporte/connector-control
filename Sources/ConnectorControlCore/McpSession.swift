@@ -309,7 +309,7 @@ public final class McpSession {
 
     /// Whether `text` has a comma, outside a string, followed by nothing but JSON whitespace and then a
     /// closing bracket or brace. Platform idiom: `JSONDecoder` and `JSONSerialization` read one trailing
-    /// comma, where the Windows reader — and Claude Desktop — refuse it; refused here alike, so a line or a
+    /// comma, where the Windows reader - and Claude Desktop - refuse it; refused here alike, so a line or a
     /// file reads the same on both.
     public nonisolated static func hasTrailingComma(_ text: String) -> Bool {
         var inString = false

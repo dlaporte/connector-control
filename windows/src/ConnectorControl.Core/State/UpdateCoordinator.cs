@@ -5,8 +5,8 @@ namespace ConnectorControl.Core.State;
 
 /// <summary>
 /// Checks 10 s after launch and every 24 h; with autoUpdate on,
-/// download silently, stage for quit, and toast once per version; otherwise —
-/// and always for Check for Updates — show the update dialog. A version the
+/// download silently, stage for quit, and toast once per version; otherwise -
+/// and always for Check for Updates - show the update dialog. A version the
 /// user declines from a background offer is not re-offered by later
 /// background checks (Sparkle's Skip This Version is the Mac counterpart);
 /// Check for Updates always offers, even a version already declined. Manual
@@ -30,7 +30,7 @@ public sealed class UpdateCoordinator : IDisposable
     public static string UpToDateDetail(string version) => $"Connector Control {version} is currently the newest version available.";
 
     public static string AvailableDetail(string newVersion, string currentVersion) =>
-        $"Connector Control {newVersion} is now available — you have {currentVersion}. Would you like to install it now?";
+        $"Connector Control {newVersion} is now available - you have {currentVersion}. Would you like to install it now?";
 
     private readonly IUpdater updater;
     private readonly ISettings settings;
@@ -136,7 +136,7 @@ public sealed class UpdateCoordinator : IDisposable
         }
         // inFlightCheck is UI-thread state (CheckAsync reads and writes it there) and this
         // continuation is on a pool thread, so the clear goes through the host like every
-        // other state write in this class — and the outcome is published only AFTER it has
+        // other state write in this class - and the outcome is published only AFTER it has
         // run, so a caller resuming on the UI thread never finds the finished task still
         // parked in the field and joins it instead of checking afresh. Installing is the one
         // outcome this never delivers on a real install: ApplyAndRestart, posted just before,
@@ -189,7 +189,7 @@ public sealed class UpdateCoordinator : IDisposable
         {
             // Stage each version once. The 24 h check keeps finding the same pending update
             // until the user quits; downloading it again and queueing a second Update.exe
-            // wait buys nothing — the first staging is the one that will run.
+            // wait buys nothing - the first staging is the one that will run.
             if (StagedVersion == update.Version)
             {
                 return UpdateOutcome.StagedForQuit;

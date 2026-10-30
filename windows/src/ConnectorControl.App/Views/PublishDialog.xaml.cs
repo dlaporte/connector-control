@@ -8,8 +8,8 @@ namespace ConnectorControl.App.Views;
 
 /// <summary>
 /// The Publish dialog and, in the model's other mode, the Export dialog: layout, bindings and the
-/// two native pickers. Every rule and string is PublishModel's — the mode included, and with it
-/// the title, the gate and the verb — and so is every refresh: a tick or a keystroke reaches the
+/// two native pickers. Every rule and string is PublishModel's - the mode included, and with it
+/// the title, the gate and the verb - and so is every refresh: a tick or a keystroke reaches the
 /// preview because the row it changed raises it, not because this window nudges a binding.
 /// </summary>
 public partial class PublishDialog : DialogWindow

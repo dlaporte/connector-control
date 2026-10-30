@@ -4,7 +4,7 @@ import Foundation
 /// Mirror: windows/src/ConnectorControl.Core/State/CommandLineTool.cs
 ///
 /// Putting `connector-control` on PATH for terminal use, and taking it off again. Claude never needs
-/// it — its entry names the tool by its full path — so this is for people and scripts. The Mac links
+/// it - its entry names the tool by its full path - so this is for people and scripts. The Mac links
 /// /usr/local/bin/connector-control to the tool inside the app, through an administrator prompt;
 /// Windows adds the folder of its copy to the user PATH.
 @MainActor
@@ -16,7 +16,7 @@ public protocol CommandLineTool: AnyObject {
     /// Where the tool is on PATH, when that is one place a person can be told of: the Mac's link.
     /// nil on Windows, which puts a folder in the user PATH.
     var installedLocation: String? { get }
-    /// Install or Remove is running — an administrator prompt is up, or the PATH's change is being
+    /// Install or Remove is running - an administrator prompt is up, or the PATH's change is being
     /// announced. The seam's, not a window's, so a Settings window opened meanwhile cannot start another.
     var isBusy: Bool { get }
     /// Why the last Install or Remove failed, in the app's words; nil from the moment the next one starts,
@@ -28,7 +28,7 @@ public protocol CommandLineTool: AnyObject {
     var changes: AnyPublisher<Void, Never> { get }
     /// Puts the tool on PATH. The seam keeps `isBusy` and `lastProblem` itself and announces them on
     /// `changes`; a caller keeps no state of its own. `completion` runs on the main actor, once, after they
-    /// are set, with nil when it is done or the person cancelled — `isInstalled` says which — or the reason
+    /// are set, with nil when it is done or the person cancelled - `isInstalled` says which - or the reason
     /// it failed, in the app's words. It may run before `install` returns (nothing to do, or a refusal).
     func install(completion: @escaping (String?) -> Void)
     /// Takes the tool off PATH; `completion` as for `install`.

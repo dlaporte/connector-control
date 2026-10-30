@@ -292,7 +292,7 @@ public class UpdateCoordinatorTests
         Assert.Equal(UpdateOutcome.StagedForQuit, await first.WaitAsync(Wait.Eventually, TestContext.Current.CancellationToken));
 
         // Two marshalled actions reached the UI thread: the staging block, then the in-flight
-        // clear — and the task completed only after the pump ran the second one. (A clear on
+        // clear - and the task completed only after the pump ran the second one. (A clear on
         // the pool thread posts nothing, so this count is what tells the two apart.)
         Assert.Equal(2, Volatile.Read(ref posted));
         Assert.Equal(0, ui.Pending);
@@ -447,7 +447,7 @@ public class UpdateCoordinatorTests
 
     /// <summary>
     /// The decline is persisted (ISettings.DeclinedUpdateVersion), not held only in the
-    /// coordinator's memory, so it survives a relaunch — a fresh coordinator over the same
+    /// coordinator's memory, so it survives a relaunch - a fresh coordinator over the same
     /// settings still treats the version as declined.
     /// </summary>
     [Fact]

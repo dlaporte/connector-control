@@ -6,13 +6,13 @@ namespace ConnectorControl.Core.State;
 /// Mirror: Sources/ConnectorControlState/Control/ControlVersion.swift
 ///
 /// Versions as the hello carries them and the apps show them, compared by Semantic Versioning's
-/// precedence. A version that cannot be read — "development build" — is newer than nothing and
+/// precedence. A version that cannot be read - "development build" - is newer than nothing and
 /// older than nothing, so it never decides anything.
 /// </summary>
 public static class ControlVersion
 {
-    /// <summary>The SemVer at the start of <paramref name="text"/> — "1.5.0" from the Mac's "1.5.0 (10500)",
-    /// "1.5.0-preview.3" from .NET's "1.5.0-preview.3+1a2b3c4" — or null when it starts with none.</summary>
+    /// <summary>The SemVer at the start of <paramref name="text"/> - "1.5.0" from the Mac's "1.5.0 (10500)",
+    /// "1.5.0-preview.3" from .NET's "1.5.0-preview.3+1a2b3c4" - or null when it starts with none.</summary>
     public static string? Semantic(string text)
     {
         var end = 0;
@@ -107,7 +107,7 @@ public static class ControlVersion
     }
 
     /// <summary>One prerelease identifier against another: below zero, zero or above zero. An identifier is a
-    /// number only when it is all ASCII digits — "-0" is a word on both platforms — and numbers compare by value
+    /// number only when it is all ASCII digits - "-0" is a word on both platforms - and numbers compare by value
     /// without being parsed, so none is too long to compare.</summary>
     internal static int Compare(string one, string other)
     {

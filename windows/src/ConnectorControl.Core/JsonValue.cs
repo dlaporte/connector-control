@@ -8,7 +8,7 @@ using System.Text.Json;
 namespace ConnectorControl.Core;
 
 /// <summary>
-/// Immutable JSON tree with structural equality — the C# twin of the Swift
+/// Immutable JSON tree with structural equality - the C# twin of the Swift
 /// <c>JSONValue</c> enum. Objects keep their keys ordinally sorted, which is
 /// also the order Apple's JSONEncoder emits with <c>.sortedKeys</c>.
 /// </summary>
@@ -126,7 +126,7 @@ public sealed class JsonValue : IEquatable<JsonValue>
     /// writes it on the Swift side, which this reproduces byte for byte
     /// (<c>AppleJsonFormat.SerializationCompact</c>, pinned by the serialization-compact goldens).
     /// Platform idiom: the Mac writer answers <c>"null"</c> for a value JSON cannot hold (NaN,
-    /// infinity); a C# <see cref="JsonValue"/> cannot hold one — <see cref="Double"/> refuses them — so
+    /// infinity); a C# <see cref="JsonValue"/> cannot hold one - <see cref="Double"/> refuses them - so
     /// this never does.
     /// <c>escapeSlashes: false</c> is for what the command line prints under <c>--json</c>, which people and
     /// scripts read: a path comes out as written. The wire is always escaped.

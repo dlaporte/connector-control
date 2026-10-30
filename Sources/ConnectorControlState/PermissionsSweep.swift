@@ -6,7 +6,7 @@ import ConnectorControlCore
 /// error is ignored (try?), as before.
 ///
 /// The sweep touches only what this app writes. The store directory can be a
-/// folder the user chose — a git checkout, iCloud Drive, Documents — so only
+/// folder the user chose - a git checkout, iCloud Drive, Documents - so only
 /// the files `isStoreFile` names are repaired there, never
 /// anything else in the folder and never anything below it, and the folder's
 /// own mode is tightened only while it is the app's default location. The
@@ -23,7 +23,7 @@ import ConnectorControlCore
 /// Each pass keeps its own attempted/applied count: `sweepVersion` lands on
 /// the number of CONTIGUOUS done passes from the start, so a mode pass that
 /// fails on every file cannot be hidden behind an ACL pass that happens to
-/// succeed in the same run — the failed pass, and anything after it, is
+/// succeed in the same run - the failed pass, and anything after it, is
 /// retried on the next launch.
 public enum PermissionsSweep {
     /// Bump this, and add the new pass's `< currentVersion` check below, to add a pass.

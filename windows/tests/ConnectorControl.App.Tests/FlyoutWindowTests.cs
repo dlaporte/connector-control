@@ -41,8 +41,8 @@ public class FlyoutWindowTests
 
     /// <summary>
     /// One flyout with its pickers recorded instead of shown, hidden however the body ends, and
-    /// never both visible and active while it lives. Closing it only hides it — OnClosing cancels
-    /// while the app is alive — so the helper does both. <paramref name="rows"/> buys the real
+    /// never both visible and active while it lives. Closing it only hides it - OnClosing cancels
+    /// while the app is alive - so the helper does both. <paramref name="rows"/> buys the real
     /// layout pass an ItemsControl needs before it generates any container.
     /// </summary>
     private static void Showing(AppStateHarness h, AppState state,
@@ -59,7 +59,7 @@ public class FlyoutWindowTests
         {
             // Bindings settle first, while nothing of ours is on screen, because that is the step
             // that pumps. Between Show and Hide there is no pump at all: UpdateLayout runs the
-            // real layout pass — the one that generates the rows — synchronously.
+            // real layout pass - the one that generates the rows - synchronously.
             Layout(window);
             if (rows)
             {
@@ -186,9 +186,9 @@ public class FlyoutWindowTests
             var window = new FlyoutWindow(model, new WindowRegistry(state, services, updates, h.Dialogs));
             Layout(window);
             Assert.Equal(Visibility.Visible, window.FooterPanel.Visibility);
-            Assert.Equal("Apply Failed — Retry", window.FooterTitle.Text);
+            Assert.Equal("Apply Failed - Retry", window.FooterTitle.Text);
             // A button built from a glyph and a title has no name of its own: it speaks the title.
-            Assert.Equal("Apply Failed — Retry", AutomationProperties.GetName(window.FooterButton));
+            Assert.Equal("Apply Failed - Retry", AutomationProperties.GetName(window.FooterButton));
             Assert.Equal(Visibility.Visible, window.ErrorBanner.Visibility);
         });
     }
@@ -361,7 +361,7 @@ public class FlyoutWindowTests
         using var state = h.Create();
         SubscribeToDataTeam(h, state);
         state.SwitchCollection("Data team");
-        // The document changes under the collection, read back through Refresh — the same read
+        // The document changes under the collection, read back through Refresh - the same read
         // the watcher would drive, without waiting for one.
         File.WriteAllBytes(DataTeamPath(h), Without("github").Serialize());
         state.RefreshSource("Data team");
@@ -513,7 +513,7 @@ public class FlyoutWindowTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         SubscribeToDataTeam(h, state);
-        // This machine forgets where the document is — the state a second machine is in when the
+        // This machine forgets where the document is - the state a second machine is in when the
         // collection arrives through the synced master list. The file sits outside the store's
         // folder, so nothing binds it again on its own.
         File.Delete(state.Service.Paths.CollectionsCachePath);
@@ -677,7 +677,7 @@ public class FlyoutWindowTests
                 Assert.NotNull(state.LastError);
                 Assert.Equal(Visibility.Collapsed, window.ClaudeOfferStrip.Visibility);
                 Assert.Equal(Visibility.Visible, window.FooterPanel.Visibility);
-                Assert.Equal("Apply Failed — Retry", window.FooterTitle.Text);
+                Assert.Equal("Apply Failed - Retry", window.FooterTitle.Text);
             }
             finally
             {
@@ -687,7 +687,7 @@ public class FlyoutWindowTests
     }
 
     /// <summary>
-    /// A key pressed on an element as the keyboard delivers it — tunnelling first, then bubbling
+    /// A key pressed on an element as the keyboard delivers it - tunnelling first, then bubbling
     /// unless something took it on the way down. The window's source stands in for the element's:
     /// an open menu's own popup window may not exist yet.
     /// </summary>

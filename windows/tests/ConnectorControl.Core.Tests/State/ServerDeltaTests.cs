@@ -51,10 +51,10 @@ public class ServerDeltaTests
         Assert.Equal("restartClaude", Notifications.RestartAction);
         Assert.Equal(TimeSpan.FromSeconds(3), AppState.RestartRecheckDelay);
         Assert.Equal(
-            "The connector list changed outside Connector Control — Claude's config now adds evil; deletes fs. Restart Claude to pick it up.",
+            "The connector list changed outside Connector Control - Claude's config now adds evil; deletes fs. Restart Claude to pick it up.",
             AppState.ConnectorListChangedBody(new ServerDelta(["evil"], ["fs"], []), restartRequired: true));
         Assert.Equal(
-            "The connector list changed outside Connector Control — Claude's config was regenerated. Claude will use it the next time it starts.",
+            "The connector list changed outside Connector Control - Claude's config was regenerated. Claude will use it the next time it starts.",
             AppState.ConnectorListChangedBody(new ServerDelta([], [], []), restartRequired: false));
     }
 }

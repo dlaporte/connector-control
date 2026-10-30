@@ -32,7 +32,7 @@ public abstract record ControlInvocation
 ///
 /// <c>connector-control</c>'s arguments, read into what to run: one command per tool, as <c>help</c> lists
 /// them, or <c>help</c>, <c>--version</c> and the relay. <c>--json</c> anywhere asks for the structure
-/// Claude receives instead of text — except in <c>add</c> and <c>edit</c>, where <c>--json</c> followed by
+/// Claude receives instead of text - except in <c>add</c> and <c>edit</c>, where <c>--json</c> followed by
 /// a JSON object (its first character not a space is "{") is the connector's config. Words after
 /// <c>--</c> are names. Paths are made full here, against the directory the command runs in, because the
 /// app runs elsewhere.
@@ -371,7 +371,7 @@ public sealed record ControlOutput(string? Stdout, string? Stderr, int ExitCode)
     public static ControlOutput Unreachable(string message) => new(null, message, UnreachableExit);
 
     /// <summary>The app's answer to the command's call. A refusal, or an error the session answered instead,
-    /// exits 1 with its sentence on stderr — or as <c>{"error": …}</c> on stdout under <paramref name="json"/>.</summary>
+    /// exits 1 with its sentence on stderr - or as <c>{"error": …}</c> on stdout under <paramref name="json"/>.</summary>
     public static ControlOutput Answer(JsonValue response, bool json)
     {
         if (response.Kind != JsonKind.Object)

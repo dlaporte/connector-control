@@ -2,7 +2,7 @@ import SwiftUI
 import ConnectorControlState
 
 /// The Publish sheet and, in the model's other mode, the Export sheet: layout, bindings and the
-/// two native panels, which are FilePanels'. Every rule and string is PublishModel's — the mode
+/// two native panels, which are FilePanels'. Every rule and string is PublishModel's - the mode
 /// included, and with it the title, the gate and the verb; the preview under the ticks is the
 /// document itself, so nothing here filters, elides or reformats it.
 struct PublishSheetView: View {

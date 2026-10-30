@@ -9,7 +9,7 @@
 #   --dialog  print only what an update dialog shows: the opening line and the CHANGELOG
 #             section. That text is embedded in the preview's Sparkle appcast (and so shows in
 #             a Mac preview's update dialog), where "download the DMG", "back to the stable
-#             release" and a commit list mean nothing to someone already updating — the same
+#             release" and a commit list mean nothing to someone already updating - the same
 #             split release.yml makes between notes.md (the appcast) and body.md (the release
 #             page). Without it, the full notes for the GitHub prerelease's body.
 #
@@ -40,7 +40,7 @@ REPO_URL="${GITHUB_SERVER_URL:-https://github.com}/$GITHUB_REPOSITORY"
 
 # Commits since the more recent of two points: the highest REAL preview below this one (a
 # preview-dry-<n> tag is never a comparison point) and the newest v* release reachable from
-# here — a preview cut right after a release would otherwise re-list that whole release. With
+# here - a preview cut right after a release would otherwise re-list that whole release. With
 # neither (a first preview on a fresh branch), since the branch left master.
 PREV=$(git tag -l 'preview-[0-9]*' \
   | sed -n 's/^preview-\([0-9][0-9]*\)$/\1/p' \

@@ -6,7 +6,7 @@ import Foundation
 /// The values the control layer passes around: who is calling, how a tool is guarded, what it
 /// declares, what it answers, and what it asks the user.
 
-/// Who is calling: the command-line tool, trusted as the user, or the relay Claude Desktop runs —
+/// Who is calling: the command-line tool, trusted as the user, or the relay Claude Desktop runs -
 /// which is also what anything but a well-formed command-line hello is taken for, so the gate
 /// guards it. The Windows mirror has no enum payloads, so its two callers are records.
 public enum ControlCaller: Equatable, Sendable {
@@ -62,7 +62,7 @@ public enum ControlGateClass: Equatable, Sendable {
 }
 
 /// The gate's rule, apart from any one tool. The command-line tool is the user and is never gated.
-/// Claude is refused everything while the integration is off — including between turning it off and
+/// Claude is refused everything while the integration is off - including between turning it off and
 /// Claude restarting without the entry.
 @MainActor
 public enum ControlGate {
@@ -236,8 +236,8 @@ public protocol ControlConfirmer: AnyObject {
     func confirm(_ request: ConfirmationRequest, completion: @escaping (Bool) -> Void)
 }
 
-/// Answers every question Don't Allow, at once: the confirmer of a host that can show no dialog —
-/// the test hosts; the apps ask in their own (`DialogConfirmer`) — so a change that must be asked about is
+/// Answers every question Don't Allow, at once: the confirmer of a host that can show no dialog -
+/// the test hosts; the apps ask in their own (`DialogConfirmer`) - so a change that must be asked about is
 /// refused, never made unasked. It keeps the confirmer's contract: one completion, every time.
 @MainActor
 public final class DecliningConfirmer: ControlConfirmer {

@@ -10,7 +10,7 @@ import ConnectorControlTestSupport
 @MainActor
 final class PublishModelTests: XCTestCase {
     /// One local connector with a stripped and a shared environment value and one absolute path
-    /// argument — a row of each kind the sheet offers.
+    /// argument - a row of each kind the sheet offers.
     private let connector = JSONValue.object([
         "command": .string("node"),
         "args": .array([.string("/Users/d/x.js"), .string("--quiet")]),
@@ -637,7 +637,7 @@ final class PublishModelTests: XCTestCase {
         try FileManager.default.removeItem(at: folder)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         // Nothing about the document or the ticks has changed since the failure, so only an
-        // unconditional write puts it back — which is what pressing Publish again has to do,
+        // unconditional write puts it back - which is what pressing Publish again has to do,
         // rather than waiting for whatever the user changes next.
         let retry = PublishModel(state: state, collection: state.activeCollection)
         XCTAssertEqual(retry.folder, folder.path)

@@ -3,10 +3,10 @@ import ConnectorControlCore
 
 /// Mirror: windows/src/ConnectorControl.Core/Transport/ControlHello.cs
 ///
-/// The first line on every connection to the app — who is calling and which version it is,
+/// The first line on every connection to the app - who is calling and which version it is,
 /// `{"client":"cli"|"relay","version":"1.5.0"}`. The command-line tool is trusted as the user and
-/// the relay Claude runs is gated, so only a well-formed command-line hello — an object whose
-/// "client" is exactly "cli" and whose "version" is text — makes a connection the command line;
+/// the relay Claude runs is gated, so only a well-formed command-line hello - an object whose
+/// "client" is exactly "cli" and whose "version" is text - makes a connection the command line;
 /// anything else is the relay. Other keys are ignored, so a later tool can say more without being
 /// gated for it.
 public struct ControlHello: Equatable, Sendable {

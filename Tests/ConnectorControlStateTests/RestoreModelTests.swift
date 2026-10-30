@@ -139,7 +139,7 @@ final class RestoreModelTests: XCTestCase {
         XCTAssertFalse(model.confirming)
     }
 
-    /// A fresh attempt starts with a clean sheet — the previous
+    /// A fresh attempt starts with a clean sheet - the previous
     /// attempt's error must not outlive a new selection or a cancelled confirmation.
     func testRequestRestoreClearsThePreviousError() throws {
         let (h, state) = AppStateHarness.started()

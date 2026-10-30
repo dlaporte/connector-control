@@ -6,7 +6,7 @@ namespace ConnectorControl.Core.Transport;
 /// <summary>
 /// Mirror: Sources/ConnectorControlTransport/ControlRelayRunner.swift
 ///
-/// Runs <see cref="ControlRelay"/> between Claude — the relay's standard input and output — and the app.
+/// Runs <see cref="ControlRelay"/> between Claude - the relay's standard input and output - and the app.
 /// A task reads each side; everything the relay decides happens on the thread that called
 /// <see cref="Run"/>, one event at a time in the order it arrived, connecting included, so what Claude
 /// sends while the app starts waits its turn. Platform idiom: tasks and a blocking collection here;
@@ -45,8 +45,8 @@ public sealed class ControlRelayRunner(ControlClient client, string version, Str
         return ControlOutput.DoneExit;
     }
 
-    /// <summary>A reader blocks for as long as its side stays open, so it runs as a long-running task — a
-    /// thread of its own, as the Mac's readers are — and never holds a pool thread that long.</summary>
+    /// <summary>A reader blocks for as long as its side stays open, so it runs as a long-running task - a
+    /// thread of its own, as the Mac's readers are - and never holds a pool thread that long.</summary>
     private static void Read(Action reading) =>
         _ = Task.Factory.StartNew(reading, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 

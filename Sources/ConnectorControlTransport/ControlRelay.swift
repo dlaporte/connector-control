@@ -12,7 +12,7 @@ import ConnectorControlState
 /// reconnects only when Claude next sends something. No I/O: `ControlRelayRunner` does that. The
 /// Windows mirror has no enum payloads, so its actions are records.
 public final class ControlRelay {
-    public static let restartedError = "Connector Control restarted — try again."
+    public static let restartedError = "Connector Control restarted - try again."
     /// The replayed `initialize` goes out under an id of this form, which Claude never uses, so its
     /// answer is known and dropped.
     public static let replayIDPrefix = "connector-control-replay-"
@@ -20,7 +20,7 @@ public final class ControlRelay {
     public enum Action: Equatable, Sendable {
         case toApp(String)
         case toClaude(String)
-        /// Connect — starting the app where that is allowed — and report with `connectSucceeded()` or
+        /// Connect - starting the app where that is allowed - and report with `connectSucceeded()` or
         /// `connectFailed(_:)`.
         case connect
         case exit(Int32)
@@ -96,7 +96,7 @@ public final class ControlRelay {
     }
 
     /// No connection could be made: each request held for it is answered with `reason`, as `forward`
-    /// waits for one — under an id the session answers by, once. Before the first handshake there is
+    /// waits for one - under an id the session answers by, once. Before the first handshake there is
     /// nothing to keep running for, and the relay ends.
     public func connectFailed(_ reason: String) -> [Action] {
         connecting = false
@@ -171,10 +171,10 @@ public final class ControlRelay {
     }
 
     /// Passes a line on. A request is waited for only when the session will answer it under its own id:
-    /// one whose id is neither a string nor an integer, or is already running — a cancelled request's
-    /// included — is answered with id null or not at all.
+    /// one whose id is neither a string nor an integer, or is already running - a cancelled request's
+    /// included - is answered with id null or not at all.
     private func forward(_ line: String, _ message: [String: JSONValue]?) -> [Action] {
-        // A cancelled request is never answered — the session drops its answer — so it is waited for no
+        // A cancelled request is never answered - the session drops its answer - so it is waited for no
         // longer. Settled as the cancel goes to the app, not as it arrives: a cancel held for a new
         // connection follows its request there, and only then is that request waited for.
         if let message, message["id"] == nil, message["method"] == .string("notifications/cancelled"),
@@ -196,7 +196,7 @@ public final class ControlRelay {
         return (id, method)
     }
 
-    /// The object a line holds, read only to know what the line is — never to change it.
+    /// The object a line holds, read only to know what the line is - never to change it.
     static func message(_ line: String) -> [String: JSONValue]? {
         guard McpSession.nests(atMost: McpSession.maxNestingDepth, line),
               case .object(let fields)? = try? JSONValue.parse(Data(line.utf8)) else { return nil }

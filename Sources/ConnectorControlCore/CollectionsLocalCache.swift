@@ -2,7 +2,7 @@ import Foundation
 
 /// The bindings only this machine knows: where a synced collection's document actually sits
 /// here, what it hashed to the last time it was read, and which folder a published collection
-/// writes to. Never synced — the sidecar beside the master list carries what every machine
+/// writes to. Never synced - the sidecar beside the master list carries what every machine
 /// shares.
 ///
 /// Mirror: windows/src/ConnectorControl.Core/CollectionsLocalCache.cs
@@ -24,7 +24,7 @@ public struct CollectionsLocalCache: Equatable, Sendable {
     public var lastAppliedCollection: String?
     /// The connector names that apply wrote into Claude's file. They are what
     /// `lastAppliedCollection` rendered, so they still say which entries are its own once the
-    /// collection itself is gone — deleted here, or on another machine, which leaves nothing
+    /// collection itself is gone - deleted here, or on another machine, which leaves nothing
     /// else behind. nil until the first apply that records them.
     public var lastAppliedNames: Set<String>?
 
@@ -45,8 +45,8 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         public var releasedValues: Set<String>
         public var publishedFolders: Set<String>
         /// The folders that collections which once bore this name, and have since left the store,
-        /// published into. They are this machine's paths to keep back — refused as a releasable
-        /// kept path, named in the sheet as that collection's folder — and never any collection's
+        /// published into. They are this machine's paths to keep back - refused as a releasable
+        /// kept path, named in the sheet as that collection's folder - and never any collection's
         /// own, so `${COLLECTION_DIR}` never stands for them and no publish consumes them. Kept
         /// apart from `publishedFolders` because a Stop would otherwise fold them into the next
         /// collection's own, and withdraw the release the sheet offered for them.
@@ -74,12 +74,12 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         }
 
         /// What a publish binding leaves behind when it goes, merged with anything already
-        /// remembered under that name. The binding goes three ways — Stop Publishing, a delete
-        /// made here, and a load finding the collection deleted or unpublished on another machine
-        /// — and all three leave the same memory of what must not travel.
+        /// remembered under that name. The binding goes three ways - Stop Publishing, a delete
+        /// made here, and a load finding the collection deleted or unpublished on another machine -
+        /// and all three leave the same memory of what must not travel.
         ///
         /// The earlier record's folders merge into the binding's own only where the two published
-        /// under one origin, none on either side counting as one — a binding and a record written
+        /// under one origin, none on either side counting as one - a binding and a record written
         /// before origins were kept are read as one collection's. Otherwise the record is another
         /// collection's, one that bore the name and left, and its folders go to `departedFolders`
         /// with whatever it already held there: the next publish must not take them as its own. Its
@@ -108,8 +108,8 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         }
 
         /// What a rename files under a name a departed collection left a record under. A rename
-        /// can land on a record only where the collection that left it has gone — a live
-        /// collection's name is refused — so the record already there is a departed collection's,
+        /// can land on a record only where the collection that left it has gone - a live
+        /// collection's name is refused - so the record already there is a departed collection's,
         /// or one written before origins were kept, read the same way, and the collection taking
         /// the name is a different one. Its folders are departed to it, as they would be to a
         /// collection made with the name, and its paths are inherited, as a re-used name inherits
@@ -148,7 +148,7 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         /// never appear in it as written. Kept here, where nothing syncs it, so the publisher
         /// fails closed whatever the sidecar or the editor says: a publish that happens on its
         /// own only adds to it, the sheet's Publish adds what its rows tick, and a path leaves it
-        /// only when the author releases it there after reading the preview — never because the
+        /// only when the author releases it there after reading the preview - never because the
         /// sheet had no row holding it.
         public var markedValues: Set<String>
         /// Paths the author let travel as written in this collection's document, pressing Release
@@ -156,7 +156,7 @@ public struct CollectionsLocalCache: Equatable, Sendable {
         /// back elsewhere: on another collection's list, or as a folder it binds.
         public var releasedValues: Set<String>
         /// Every folder this binding has published into, the current one included. A connector
-        /// can bring an earlier one back as written — a backup taken before the folder moved — and
+        /// can bring an earlier one back as written - a backup taken before the folder moved - and
         /// the author's old folder is no more a subscriber's than the current one.
         public var publishedFolders: Set<String>
         /// The origin the collection publishes under, so what this binding leaves behind still
@@ -289,7 +289,7 @@ public struct CollectionsLocalCache: Equatable, Sendable {
     /// A publish binding dropped here is a collection deleted, or stopped, on another machine,
     /// which is how a collection disappears from a store that syncs. It leaves what stopping it
     /// here leaves: the paths it kept back, the paths the author released and the folders it
-    /// published into. Nothing else on this machine remembers them — there is no record to union,
+    /// published into. Nothing else on this machine remembers them - there is no record to union,
     /// and the sidecar entry that carried its marks went with it.
     public func reconciled(with file: CollectionsFile) -> CollectionsLocalCache {
         let vouched = published.filter { file.collections[$0.key]?.publish != nil }
@@ -309,9 +309,9 @@ public struct CollectionsLocalCache: Equatable, Sendable {
     /// Remembers every path the sidecar's publish records in `file` mark, for every collection this
     /// machine has no publish binding for. A mark in the sidecar is kept back on every machine the
     /// sidecar reaches, and on one that does not publish the collection it is the only thing that
-    /// marks the path. The record losing it — the collection deleted or unpublished, or the
+    /// marks the path. The record losing it - the collection deleted or unpublished, or the
     /// connector deleted, here or on another machine, or the collection dropped by a master list
-    /// restored from a backup that does not hold it — is not the author's word that the path may
+    /// restored from a backup that does not hold it - is not the author's word that the path may
     /// travel. It is remembered when a load or an edit first sees it, not when it goes: the other
     /// machine's change can sync in while this one is off, and the launch after finds nothing left
     /// to remember it by. So a mark the author drops on the other machine stays kept back here until

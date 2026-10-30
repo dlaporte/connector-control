@@ -22,10 +22,10 @@ public class EditorWindowTests
     ///
     /// Every App test funnels through the one WPF application's dispatcher, xUnit runs test
     /// classes in parallel, and <see cref="Layout"/> pumps that dispatcher down to DataBind
-    /// priority — which is where another class's queued WpfApp.Invoke body gets to run, nested
+    /// priority - which is where another class's queued WpfApp.Invoke body gets to run, nested
     /// inside this one. A window of ours that is visible AND active during such a pump is the
     /// answer WpfDialogs.ResolveOwner() gives, and DialogTests asserts there is none. So a window
-    /// that needs a real layout pass — an ItemsControl generates no containers without one — is
+    /// that needs a real layout pass - an ItemsControl generates no containers without one - is
     /// shown without taking the activation, and hidden again the moment it has had its pass. The
     /// containers it generated outlive the hiding.
     /// </summary>
@@ -41,7 +41,7 @@ public class EditorWindowTests
             {
                 // Bindings settle first, while nothing of ours is on screen, because that is the
                 // step that pumps. Between Show and Hide there is no pump at all: UpdateLayout
-                // runs the real layout pass — the one that generates the rows — synchronously.
+                // runs the real layout pass - the one that generates the rows - synchronously.
                 Layout(window);
                 window.Show();
                 window.UpdateLayout();
@@ -89,7 +89,7 @@ public class EditorWindowTests
     }
 
     /// <summary>
-    /// A key pressed on an element as the keyboard delivers it — tunnelling first, then bubbling
+    /// A key pressed on an element as the keyboard delivers it - tunnelling first, then bubbling
     /// unless something took it on the way down. Returns whether anything took it: a key nothing
     /// took goes on to the window's access keys, which is where Escape finds the Cancel button.
     /// </summary>
@@ -402,7 +402,7 @@ public class EditorWindowTests
 
     /// <summary>
     /// A connector in a synced collection opens with its author's fields dead and only the values
-    /// the document asks this machine for live — including the env row's name and the row
+    /// the document asks this machine for live - including the env row's name and the row
     /// structure, because the read-only save projection matches leaves by pointer. The on/off
     /// switch is not in this window at all (the flyout row owns it), so what the editor has to
     /// keep working is Save.
@@ -497,7 +497,7 @@ public class EditorWindowTests
     }
 
     /// <summary>
-    /// One header line per kind of collection, and none at all for an ordinary local connector —
+    /// One header line per kind of collection, and none at all for an ordinary local connector -
     /// plus the repaint a collection that stops syncing under an open editor has to cause.
     /// </summary>
     [Fact]
@@ -602,7 +602,7 @@ public class EditorWindowTests
                     Assert.Equal(Visibility.Collapsed, RowElements.Find<TextBox>(open.EnvList, token, "EnvPlaceholder").Visibility);
                     Assert.Equal(Visibility.Visible, RowElements.Find<ContentControl>(open.EnvList, token, "EnvValue").Visibility);
 
-                    // ledger's marker survives, so its box stays the live one — but the needs the
+                    // ledger's marker survives, so its box stays the live one - but the needs the
                     // hint came from went with the subscription, and the hint must not outlive them.
                     Assert.True(ledger.Model.Args[0].Asks);
                     Assert.Equal(Visibility.Visible, RowElements.Find<TextBox>(ledger.ArgList, arg, "ArgPlaceholder").Visibility);

@@ -262,7 +262,7 @@ public class ClaudeIntegrationTests
 
     // MARK: Where the app runs from, and whether it can be reached
 
-    /// <summary>A Mac app run from where it will not stay — translocated, or from its disk image — refuses to
+    /// <summary>A Mac app run from where it will not stay - translocated, or from its disk image - refuses to
     /// turn the integration on, and leaves an entry Claude already has exactly as it is rather than write a
     /// path that will be gone. Turning it off still works.</summary>
     [Fact]
@@ -287,7 +287,7 @@ public class ClaudeIntegrationTests
     }
 
     /// <summary>With the switch on but no entry in Claude's config, an app run from where it will not stay
-    /// adds none — not at launch, and not when an apply writes Claude's config for another reason.</summary>
+    /// adds none - not at launch, and not when an apply writes Claude's config for another reason.</summary>
     [Fact]
     public void AnAppRunFromWhereItWillNotStayAddsNoEntryWhereClaudeHasNone()
     {

@@ -8,7 +8,7 @@ enum ClaudeRestarter {
 
     /// Gracefully terminate Claude (never force-kill), wait up to quitTimeout,
     /// relaunch. Calls completion with nil on success or an error message; the
-    /// ClaudeProcess protocol says any thread is fine — AppState marshals it.
+    /// ClaudeProcess protocol says any thread is fine - AppState marshals it.
     static func restart(appURL: URL, completion: @escaping (String?) -> Void) {
         guard FileManager.default.fileExists(atPath: appURL.path) else {
             completion(ClaudeSignature.notFoundMessage(path: appURL.path))

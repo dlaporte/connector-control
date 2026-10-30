@@ -29,7 +29,7 @@ public extension Dialogs {
     }
 
     /// The usual shape: a Cancel button. Deliberately NOT the requirement's
-    /// label set — an overload with the same labels would double as the
+    /// label set - an overload with the same labels would double as the
     /// requirement's default implementation, and a conformer that forgot the
     /// method would compile clean and recurse forever at runtime.
     func confirm(message: String, informative: String?, primary: String, destructive: Bool = false) -> Bool {

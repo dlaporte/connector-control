@@ -12,7 +12,7 @@ final class UserNotificationsNotifier: Notifier {
     /// The center holds its delegate weakly; this notifier retains the bridge.
     private var handler: NotificationActionHandler?
     /// Whether authorization has been granted, so later notifications skip asking again; nil
-    /// until a request has succeeded. Only a grant is remembered — a denial is NOT cached, so
+    /// until a request has succeeded. Only a grant is remembered - a denial is NOT cached, so
     /// the next notification asks again, in case the user granted it later in System Settings
     /// without relaunching the app.
     private var authorization: Bool?
@@ -78,7 +78,7 @@ private final class NotificationActionHandler: NSObject, UNUserNotificationCente
     }
 
     /// Without this, notifications are silently discarded while Connector
-    /// Control is the active app (Settings or the editor focused) — exactly
+    /// Control is the active app (Settings or the editor focused) - exactly
     /// when a restart-pending banner is still worth showing.
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,

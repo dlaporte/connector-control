@@ -54,7 +54,7 @@ public class ControlPipeTests
         using var first = ControlPipe.CreateServer(name, first: true);
         // CurrentUserOnly keys on the token's owner, not its user: .NET grants the pipe to
         // WindowsIdentity.Owner and makes it the pipe's owner, and the client compares the pipe's owner
-        // with its own token's. An elevated token's owner is BUILTIN\Administrators — which is why an
+        // with its own token's. An elevated token's owner is BUILTIN\Administrators - which is why an
         // elevated Claude and an app that is not reach different owners. The name still carries .User.
         var owner = WindowsIdentity.GetCurrent().Owner!;
         var security = first.GetAccessControl();
@@ -312,8 +312,8 @@ public class ControlPipeTests
         Assert.True(pipe.Rig.State.Store.Collections.ContainsKey("Later"));
     }
 
-    /// <summary>A client that ends its writing while the app is still connected — as the relay does after a write
-    /// that failed some way other than on a broken pipe — has no half-close to make: the pipe closes both ways,
+    /// <summary>A client that ends its writing while the app is still connected - as the relay does after a write
+    /// that failed some way other than on a broken pipe - has no half-close to make: the pipe closes both ways,
     /// the server closes the connection, and the client's reading ends, having read what was sent to it. The
     /// Mac's socket ends only its writing half, to the same end.</summary>
     [Fact]
@@ -330,7 +330,7 @@ public class ControlPipeTests
         Assert.Equal(["""{"id":1,"jsonrpc":"2.0","result":{}}"""], client.Lines);
     }
 
-    /// <summary>A client whose write failed on a broken pipe — the app's end has gone — ends nothing more: what the
+    /// <summary>A client whose write failed on a broken pipe - the app's end has gone - ends nothing more: what the
     /// app sent before it went is still read, and then the end of the stream. Windows only: a socket's write
     /// half is ended either way, and its counterpart is the fact above.</summary>
     [Fact]

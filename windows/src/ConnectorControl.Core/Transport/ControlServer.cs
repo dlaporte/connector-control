@@ -6,7 +6,7 @@ namespace ConnectorControl.Core.Transport;
 /// Mirror: Sources/ConnectorControlTransport/ControlServer.swift (ControlConnection)
 ///
 /// One client of the app's endpoint, as the server sees it. Called on the UI thread; <c>Send</c> must
-/// not wait for the client to read — a client that stopped reading would stall the app — so each
+/// not wait for the client to read - a client that stopped reading would stall the app - so each
 /// endpoint queues the line and writes it on a thread of the connection's own.
 /// </summary>
 public interface IControlConnection
@@ -24,7 +24,7 @@ public interface IControlConnection
 /// The app's end of the control layer, apart from any socket or pipe. Each connection's first line
 /// says who it is (<see cref="ControlHello"/>); the connection then gets a <see cref="ControlToolHost"/>
 /// and an <see cref="McpSession"/> of its own over the app's one <see cref="ControlTools"/>, which every
-/// connection shares — the write queue that runs changes one at a time is that one instance's. A
+/// connection shares - the write queue that runs changes one at a time is that one instance's. A
 /// handful of connections are served at once: Claude Desktop opens two relays, beside any command line.
 /// UI-thread only (the Swift side is <c>@MainActor</c>): the endpoint hands each frame over on the UI
 /// thread, where the tools run.

@@ -114,7 +114,7 @@ extension ControlTools {
                              isError: false)
     }
 
-    /// Probes all four launchers again — the user may have installed one since — and answers once
+    /// Probes all four launchers again - the user may have installed one since - and answers once
     /// every result is in.
     func checkTools(_ done: @escaping (ControlResult) -> Void) {
         state.refreshTools()
@@ -124,8 +124,8 @@ extension ControlTools {
         }
     }
 
-    /// Each launcher as the app's own words put it — "Found", "Not found" or, on the Mac, "Not visible
-    /// to Claude Desktop"; never a version, so the column reads the same whatever is installed — with
+    /// Each launcher as the app's own words put it - "Found", "Not found" or, on the Mac, "Not visible
+    /// to Claude Desktop"; never a version, so the column reads the same whatever is installed - with
     /// where it is or how to install it.
     func toolsResult() -> ControlResult {
         var rows: [[String]] = []
@@ -234,8 +234,8 @@ extension ControlTools {
                              isError: false)
     }
 
-    /// What an update adds, deletes and changes, each name quoted through `ControlText.quotedList(_:)`
-    /// — the document's author names its connectors — so that none can invent a clause of its own.
+    /// What an update adds, deletes and changes, each name quoted through `ControlText.quotedList(_:)` -
+    /// the document's author names its connectors - so that none can invent a clause of its own.
     /// The window's banner, written for names read beside a list, joins them bare.
     static func changesText(_ diff: CollectionDiff) -> String {
         var clauses: [String] = []

@@ -9,8 +9,8 @@ namespace ConnectorControl.TestHost;
 /// <summary>
 /// Mirror: Sources/ConnectorControlTestHost/TestHost.swift
 ///
-/// <c>ConnectorControl.TestHost &lt;sandbox&gt;</c>: the real control layer — AppState, ControlTools, the server and
-/// its pipe — over a sandbox folder, with no window, no Claude and no updater, for the MCP Inspector check.
+/// <c>ConnectorControl.TestHost &lt;sandbox&gt;</c>: the real control layer - AppState, ControlTools, the server and
+/// its pipe - over a sandbox folder, with no window, no Claude and no updater, for the MCP Inspector check.
 /// Every path comes from the sandbox argument and none from this process's environment, so it never reaches a
 /// person's store or Claude's real config. The integration is on, confirmations are on, and every question is
 /// declined: gated changes are refused.

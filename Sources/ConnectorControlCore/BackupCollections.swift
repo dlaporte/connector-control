@@ -3,8 +3,8 @@ import Foundation
 /// Which collection each Claude-config backup was taken from. Claude's file holds whichever
 /// collection it was last applied from, so a restore belongs in that collection and no other. The
 /// record is one small index beside the backups, so every backup stays a byte copy of Claude's
-/// file. A backup the index does not name — one from before it was kept, the first-run original, a
-/// file chosen from elsewhere — has no recorded collection.
+/// file. A backup the index does not name - one from before it was kept, the first-run original, a
+/// file chosen from elsewhere - has no recorded collection.
 ///
 /// The name is chosen so no backup series lists it: every series is matched by "<series>.".
 ///

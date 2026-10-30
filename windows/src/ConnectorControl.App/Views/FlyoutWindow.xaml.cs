@@ -139,7 +139,7 @@ public partial class FlyoutWindow : Window
     }
 
     /// <summary>
-    /// Deactivation normally dismisses the flyout — but a WPF ContextMenu lives in its own
+    /// Deactivation normally dismisses the flyout - but a WPF ContextMenu lives in its own
     /// top-level window, so opening the collection chip's menu deactivates us, and hiding here
     /// would pull the menu's PlacementTarget out from under it: the switch list and Manage
     /// Collections would go with it. Ignore those; the check is repeated once the menu closes.
@@ -197,7 +197,7 @@ public partial class FlyoutWindow : Window
 
     /// <summary>
     /// The collection chip menu: the collections to switch between with a check on the active
-    /// one, then the window that owns everything else — creating, renaming, deleting, and the
+    /// one, then the window that owns everything else - creating, renaming, deleting, and the
     /// document commands included. Built without being shown, so a test can read it.
     /// </summary>
     internal ContextMenu BuildCollectionMenu()
@@ -208,12 +208,12 @@ public partial class FlyoutWindow : Window
             var name = item.Name;
             // IsCheckable, not just IsChecked: the Fluent MenuItem template gives an item its check
             // column only when it is checkable, so the active collection's mark would not be drawn.
-            // Clicking toggles the mark before Click runs, which is harmless — the menu closes and
+            // Clicking toggles the mark before Click runs, which is harmless - the menu closes and
             // the next open rebuilds every item from CollectionItems.
             var entry = new MenuItem { Header = MenuHeader(item), IsCheckable = true, IsChecked = item.IsActive };
             // A header built from elements gives the item no name of its own to announce, so it
-            // is given the model's title — the one the Mac draws, where the pending update is
-            // words — and a row reads the same whether it is seen or heard.
+            // is given the model's title - the one the Mac draws, where the pending update is
+            // words - and a row reads the same whether it is seen or heard.
             AutomationProperties.SetName(entry, FlyoutModel.MenuTitle(item));
             // The chain's tooltip is out of a screen reader's reach inside the header, so the
             // item carries where the document is as its help text.
@@ -245,7 +245,7 @@ public partial class FlyoutWindow : Window
 
     /// <summary>
     /// One collection's row in the menu: its name, then the same two marks the chip carries for
-    /// the collection it is showing — a chain for a synced one, an amber dot for one with news.
+    /// the collection it is showing - a chain for a synced one, an amber dot for one with news.
     /// </summary>
     private StackPanel MenuHeader(CollectionMenuItem item)
     {
@@ -280,7 +280,7 @@ public partial class FlyoutWindow : Window
     /// <summary>
     /// The collection banner's first button. True says the news needs nothing from the file
     /// system and the Collections window is the whole answer; false says this window owes a
-    /// picker, and which one is what the banner is — the model then refuses anything that is not
+    /// picker, and which one is what the banner is - the model then refuses anything that is not
     /// what it asked for.
     /// </summary>
     private void OnCollectionBanner(object sender, RoutedEventArgs e)

@@ -127,7 +127,7 @@ public sealed partial class ControlTools
             false);
     }
 
-    /// <summary>Probes all four launchers again — the user may have installed one since — and answers once
+    /// <summary>Probes all four launchers again - the user may have installed one since - and answers once
     /// every result is in.</summary>
     internal void CheckTools(Action<ControlResult> done)
     {
@@ -135,8 +135,8 @@ public sealed partial class ControlTools
         state.WhenToolsProbed(null, () => done(ToolsResult()));
     }
 
-    /// <summary>Each launcher as the app's own words put it — "Found", "Not found" or, on the Mac, "Not visible
-    /// to Claude Desktop"; never a version, so the column reads the same whatever is installed — with
+    /// <summary>Each launcher as the app's own words put it - "Found", "Not found" or, on the Mac, "Not visible
+    /// to Claude Desktop"; never a version, so the column reads the same whatever is installed - with
     /// where it is or how to install it.</summary>
     internal ControlResult ToolsResult()
     {
@@ -264,8 +264,8 @@ public sealed partial class ControlTools
             false);
     }
 
-    /// <summary>What an update adds, deletes and changes, each name quoted through <see cref="ControlText.QuotedList"/>
-    /// — the document's author names its connectors — so that none can invent a clause of its own.
+    /// <summary>What an update adds, deletes and changes, each name quoted through <see cref="ControlText.QuotedList"/> -
+    /// the document's author names its connectors - so that none can invent a clause of its own.
     /// The window's banner, written for names read beside a list, joins them bare.</summary>
     internal static string ChangesText(CollectionDiff diff)
     {

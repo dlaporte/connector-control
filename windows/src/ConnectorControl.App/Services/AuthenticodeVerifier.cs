@@ -8,8 +8,8 @@ namespace ConnectorControl.App.Services;
 
 /// <summary>
 /// The Windows half of the Mac ClaudeRestarter's SecStaticCode check. A legacy
-/// (exe-path) launch target — detected, or the string the user chose under
-/// Settings ▸ Claude, which lives in settings.json — is launched by this app
+/// (exe-path) launch target - detected, or the string the user chose under
+/// Settings ▸ Claude, which lives in settings.json - is launched by this app
 /// as a child process. Before Claude is quit and that path started, the file
 /// has to carry a valid Authenticode signature chained to a trusted root
 /// (WinVerifyTrust, no UI, no network) AND name Anthropic as the signing
@@ -39,7 +39,7 @@ public static class AuthenticodeVerifier
     }
 
     /// <summary>
-    /// <see cref="Unsigned"/> is TRUST_E_NOSIGNATURE — the file carries no Authenticode signature at
+    /// <see cref="Unsigned"/> is TRUST_E_NOSIGNATURE - the file carries no Authenticode signature at
     /// all (a dev build). Every other failure (untrusted root, tampered file, unreadable signer)
     /// is a <see cref="Problem"/> with a null <see cref="Identity"/>; a null Problem always carries one.
     /// </summary>
@@ -156,7 +156,7 @@ public static class AuthenticodeVerifier
                 dwStateAction = WtdStateActionIgnore,
                 // Claude's launch: no revocation fetch. A restart click must not wait on the network, and a
                 // revoked Anthropic certificate is not the threat there (a stranger's exe is). An update:
-                // revocation is checked along the chain below the root, fetching what it needs, not cache-only —
+                // revocation is checked along the chain below the root, fetching what it needs, not cache-only -
                 // a cache-only check would answer "could not determine" on any machine that has not seen the
                 // certificate lately. Revoked comes back as CERT_E_REVOKED and refuses; a revocation that could
                 // not be determined comes back as CERT_E_REVOCATION_FAILURE (or the chain's own OFFLINE / NO_CHECK

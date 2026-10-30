@@ -1,10 +1,10 @@
-// Generates Connector Control's app icon — SF Symbol "powerplug.fill" in white on a blue
-// gradient rounded square — as either a macOS .icns or a Windows .ico, chosen by the extension
+// Generates Connector Control's app icon - SF Symbol "powerplug.fill" in white on a blue
+// gradient rounded square - as either a macOS .icns or a Windows .ico, chosen by the extension
 // of the output path.
 //
 // Usage: swift scripts/generate-icon.swift <output.icns|output.ico>
 // The .ico path is run by hand, on a Mac (AppKit is needed for the SF Symbol); commit its
-// result — it's windows/assets/ConnectorControl.ico, the Windows build's app icon.
+// result - it's windows/assets/ConnectorControl.ico, the Windows build's app icon.
 
 import AppKit
 import Foundation

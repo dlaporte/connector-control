@@ -10,8 +10,8 @@ public enum ControlEndpoint {
     public static let socketName = "control.sock"
     public static let toolName = "connector-control"
 
-    /// The socket: in the machine-local data folder — the default store folder, never the synced
-    /// master-list folder a person may choose — or in the store folder CONNECTOR_CONTROL_STORE_DIR
+    /// The socket: in the machine-local data folder - the default store folder, never the synced
+    /// master-list folder a person may choose - or in the store folder CONNECTOR_CONTROL_STORE_DIR
     /// names for a development run or a test.
     public static func socketPath(environment: [String: String], appSupport: URL) -> String {
         AppPaths.live(environment: environment, appSupport: appSupport).storeDirURL
@@ -25,7 +25,7 @@ public enum ControlEndpoint {
         (environment[AppPaths.storeDirEnv] ?? "").isEmpty && (environment[AppPaths.claudeConfigEnv] ?? "").isEmpty
     }
 
-    /// Whether the tool runs as root — under sudo, say. Its socket check admits only an app of the same
+    /// Whether the tool runs as root - under sudo, say. Its socket check admits only an app of the same
     /// user, so it cannot reach the person's app, and an app it started would run as root, out of reach
     /// of everything the person runs as themselves.
     public static func isElevated(effectiveUserID: uid_t = geteuid()) -> Bool {
@@ -38,8 +38,8 @@ public enum ControlEndpoint {
         appExecutable.deletingLastPathComponent().appendingPathComponent(toolName).path
     }
 
-    /// Whether the app runs from somewhere it will not stay: a translocated copy — what macOS runs when
-    /// a quarantined app is opened where it was downloaded — or a read-only volume, such as its disk
+    /// Whether the app runs from somewhere it will not stay: a translocated copy - what macOS runs when
+    /// a quarantined app is opened where it was downloaded - or a read-only volume, such as its disk
     /// image. A path there is gone once the app is moved or the image ejected.
     public static func isTransient(bundle: URL, volumeIsReadOnly: (URL) -> Bool = ControlEndpoint.volumeIsReadOnly) -> Bool {
         bundle.path.contains("/AppTranslocation/") || volumeIsReadOnly(bundle)
@@ -60,8 +60,8 @@ public enum ControlEndpoint {
         return URL(fileURLWithPath: raw).resolvingSymlinksInPath().path
     }
 
-    /// The app bundle the tool runs from — `…/Connector Control.app` for its
-    /// `…/Contents/MacOS/connector-control` — or nil for a tool outside one, as a development build's.
+    /// The app bundle the tool runs from - `…/Connector Control.app` for its
+    /// `…/Contents/MacOS/connector-control` - or nil for a tool outside one, as a development build's.
     public static func enclosingBundle(ofTool path: String) -> String? {
         let macOS = URL(fileURLWithPath: path).deletingLastPathComponent()
         let contents = macOS.deletingLastPathComponent()
@@ -73,7 +73,7 @@ public enum ControlEndpoint {
     }
 
     /// The version the tool says in its hello and prints for `--version`: its app's marketing
-    /// version, read from the bundle it is in — never the build number the Mac's Settings shows
+    /// version, read from the bundle it is in - never the build number the Mac's Settings shows
     /// beside it.
     public static func toolVersion(executablePath: String) -> String {
         guard let bundle = enclosingBundle(ofTool: executablePath),
@@ -85,7 +85,7 @@ public enum ControlEndpoint {
     }
 
     /// What the tool says for the version a build stamped: its SemVer, or "development build" for a stamp
-    /// that is none — build-app.sh's default `1.0`, an empty one — or for `0.0.0`, what a build nobody
+    /// that is none - build-app.sh's default `1.0`, an empty one - or for `0.0.0`, what a build nobody
     /// stamped carries on Windows, so both platforms call such a build the same thing.
     public static func toolVersion(stamped: String) -> String {
         guard let version = ControlVersion.semantic(stamped), version != "0.0.0" else { return AppVersion.developmentBuild }
@@ -93,7 +93,7 @@ public enum ControlEndpoint {
     }
 
     /// Opens the app the tool came with, without bringing it forward: the bundle the tool runs from,
-    /// which the /usr/local/bin link resolves into. A tool outside a bundle — a development build —
+    /// which the /usr/local/bin link resolves into. A tool outside a bundle - a development build -
     /// starts nothing, as a Windows tool that is not the packaged one starts nothing. False when nothing
     /// opened.
     public static func launchApp(executablePath: String, run: ([String]) -> Int32 = runOpen) -> Bool {

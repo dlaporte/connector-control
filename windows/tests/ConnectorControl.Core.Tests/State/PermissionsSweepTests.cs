@@ -93,7 +93,7 @@ public class PermissionsSweepTests : IDisposable
 
     /// <summary>
     /// A store directory that IS a shell folder (the user pointed the master list at Documents
-    /// itself) is refused outright — not even mcps.json inside it is touched. The refusal is
+    /// itself) is refused outright - not even mcps.json inside it is touched. The refusal is
     /// per directory, by exact match: the app's own backups directory, which the path rule keeps
     /// under LocalAppData rather than under the chosen folder, is still repaired, and so is the
     /// default store location, which sits one level below LocalAppData. C#-only, as are the next

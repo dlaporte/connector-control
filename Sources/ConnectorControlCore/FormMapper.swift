@@ -2,7 +2,7 @@ public struct FormModel: Equatable, Sendable {
     public var command: String
     public var args: [String]
     public var env: [String: String]
-    /// Keys the form has no widget for — preserved verbatim, shown read-only.
+    /// Keys the form has no widget for - preserved verbatim, shown read-only.
     public var additional: [String: JSONValue]
 
     public init(command: String = "", args: [String] = [],

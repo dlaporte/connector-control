@@ -7,11 +7,11 @@ import ConnectorControlTestSupport
 /// against the real DispatchSource watchers. `touchWatchedFiles()`/
 /// `TempDir.bumpModificationDate` keep an external write's mtime distinct
 /// from the file the harness (or a prior write in the same test) just wrote,
-/// deterministically — no sleep needed to let real time do that.
+/// deterministically - no sleep needed to let real time do that.
 @MainActor
 final class AppStateWatcherTests: XCTestCase {
     /// A window to prove an event does NOT arrive (an echo stays quiet, a
-    /// watcher stays silent) — unlike `Wait.eventually`, timing out here is the pass case,
+    /// watcher stays silent) - unlike `Wait.eventually`, timing out here is the pass case,
     /// so it cannot be replaced by `pumpUntil` waiting on a condition.
     private let settle: TimeInterval = 1.5
     private let fixture = ["aws-mcp", "scoutbook", "service-now"]
@@ -60,7 +60,7 @@ final class AppStateWatcherTests: XCTestCase {
     }
 
     /// A synced list can add a command Claude will run. With Claude not running there is no
-    /// restart to offer, but the adoption still has to be announced — before, every branch of
+    /// restart to offer, but the adoption still has to be announced - before, every branch of
     /// the notification chain missed this case and the new server simply started next launch.
     func testStoreWatcherAnnouncesAnAdoptedAdditionEvenWhenClaudeIsNotRunning() throws {
         let h = AppStateHarness()

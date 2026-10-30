@@ -5,7 +5,7 @@ namespace ConnectorControl.Core.Transport;
 /// <summary>
 /// Mirror: Sources/ConnectorControlTransport/ControlClient.swift
 ///
-/// The tool's way to the app: connect, and when nothing answers — and starting is allowed — start the app
+/// The tool's way to the app: connect, and when nothing answers - and starting is allowed - start the app
 /// in the background and wait for it, up to <see cref="StartTimeout"/>. An elevated tool never starts it.
 /// </summary>
 public sealed class ControlClient
@@ -53,10 +53,10 @@ public sealed class ControlClient
     private readonly bool elevated;
 
     /// <summary><paramref name="connectOnce"/> tries the endpoint once; <paramref name="launch"/> starts the
-    /// app, null where starting is not allowed; <paramref name="announce"/> says it is being started — the
+    /// app, null where starting is not allowed; <paramref name="announce"/> says it is being started - the
     /// command line prints <see cref="StartingText"/>, the relay says nothing on Claude's stream.
     /// <paramref name="now"/> reads a monotonic clock, so a change to the clock cannot stretch the wait.
-    /// <paramref name="elevated"/> says the tool runs with administrator rights — as root on the Mac, with an
+    /// <paramref name="elevated"/> says the tool runs with administrator rights - as root on the Mac, with an
     /// elevated token on Windows.</summary>
     public ControlClient(Func<IControlStream?> connectOnce, Func<bool>? launch, Action? announce,
         Action<TimeSpan>? sleep = null, Func<TimeSpan>? now = null, bool elevated = false)

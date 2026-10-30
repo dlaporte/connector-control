@@ -8,7 +8,7 @@ import ConnectorControlTestSupport
 /// layout the harness builds.
 ///
 /// Where a test needs a synced or published collection without subscribing or publishing, it is
-/// set up the way those flows leave it — the two files on disk — and read back through a real
+/// set up the way those flows leave it - the two files on disk - and read back through a real
 /// reload.
 @MainActor
 final class AppStateCollectionsTests: XCTestCase {
@@ -579,7 +579,7 @@ final class AppStateCollectionsTests: XCTestCase {
             connectors: [name: .init(launcher: .local(.init(command: command, args: args, platform: platform)))])
     }
 
-    /// The sample with github gone and dbt's arguments changed — an author's next commit.
+    /// The sample with github gone and dbt's arguments changed - an author's next commit.
     private func changedSample() -> CollectionDocument {
         var doc = CollectionDocumentSamples.dataTeam
         doc.connectors["github"] = nil
@@ -1035,7 +1035,7 @@ final class AppStateCollectionsTests: XCTestCase {
         return url
     }
 
-    /// A local connector with two environment values and an absolute path argument — what the
+    /// A local connector with two environment values and an absolute path argument - what the
     /// Publish sheet's rows are built from, and what the intent strips or shares.
     private var ledgerConfig: JSONValue {
         .object([
@@ -1083,7 +1083,7 @@ final class AppStateCollectionsTests: XCTestCase {
         let folder = try publishFolder(h)
 
         // A synced collection has an author elsewhere, and nothing in the window offers Publish
-        // for one — its ⋯ menu has Refresh and Make Local Copy instead. The refusal is the
+        // for one - its ⋯ menu has Refresh and Make Local Copy instead. The refusal is the
         // same silence locateSource gives a collection that is not synced.
         XCTAssertNil(state.startPublishing("Data team", to: folder.path, intent: .none))
         XCTAssertFalse(state.isPublished("Data team"))
@@ -1189,8 +1189,8 @@ final class AppStateCollectionsTests: XCTestCase {
 
     /// A failed write's banner goes when the other machine stops publishing the collection: it
     /// names a folder and a write this machine no longer makes. Choose Folder has no binding left to
-    /// move, so it starts nothing — publishing here again is the sheet's, which shows what it
-    /// reviews — and a connector added there meanwhile, credential and all, is never sent.
+    /// move, so it starts nothing - publishing here again is the sheet's, which shows what it
+    /// reviews - and a connector added there meanwhile, credential and all, is never sent.
     func testAFailedWritesBannerGoesWhenTheCollectionStopsPublishingElsewhere() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
@@ -1337,8 +1337,8 @@ final class AppStateCollectionsTests: XCTestCase {
         return (folder, folder.appendingPathComponent(Slug.make(state.activeCollection) + ".json"))
     }
 
-    /// A change to the connector that did not come through its editor — the JSON view of another
-    /// window, the author's other machine, an older app — so nothing re-keyed the marks.
+    /// A change to the connector that did not come through its editor - the JSON view of another
+    /// window, the author's other machine, an older app - so nothing re-keyed the marks.
     private func rewriteLedger(_ state: AppState, args: [String]) {
         XCTAssertNil(state.upsert(name: "ledger", entry: MCPEntry(config: .object([
             "command": .string("node"), "args": .array(args.map(JSONValue.string)),
@@ -1600,8 +1600,8 @@ final class AppStateCollectionsTests: XCTestCase {
     }
 
     /// A Release is the author's word for the collection they gave it in. One given in a collection
-    /// since deleted does not pass to a later collection bearing its name — made here, renamed onto
-    /// it, or one that has published and stopped since — though the name's marks do. The new
+    /// since deleted does not pass to a later collection bearing its name - made here, renamed onto
+    /// it, or one that has published and stopped since - though the name's marks do. The new
     /// collection's sheet ticks the path and lists it, and Release there lets it travel.
     func testAReleaseDoesNotPassToALaterCollectionOfTheSameName() throws {
         for route in ["made again", "renamed onto the name", "published and stopped"] {
@@ -1763,8 +1763,8 @@ final class AppStateCollectionsTests: XCTestCase {
     }
 
     /// What a refusal and the Publish sheet call a field. Wherever the editor opens the connector
-    /// in the local form they use its own words — the command, an argument counted from one, the
-    /// value of a variable — and a hint belongs to the sheet whatever the form. Where the editor
+    /// in the local form they use its own words - the command, an argument counted from one, the
+    /// value of a variable - and a hint belongs to the sheet whatever the form. Where the editor
     /// has no row of its own, the document's name is given as the document's, rather than one the
     /// author would go looking for and not find.
     func testARefusalAndTheSheetNameAFieldTheWayTheEditorShowsIt() throws {
@@ -2177,8 +2177,8 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNotNil(s.store.collections["Team A"]?.mcps["team-only"])
     }
 
-    /// An own folder where the rewrite cannot reach — a remote connector's client id, which the
-    /// command line carries inside a JSON blob — is a folder entry all the same: it says the sheet
+    /// An own folder where the rewrite cannot reach - a remote connector's client id, which the
+    /// command line carries inside a JSON blob - is a folder entry all the same: it says the sheet
     /// cannot write there, both answers say so, and the connector's editor is the way out.
     func testAnOwnFolderTheSheetCannotRewriteSaysWhereToWriteTheToken() throws {
         let (h, state) = AppStateHarness.started()
@@ -2388,7 +2388,7 @@ final class AppStateCollectionsTests: XCTestCase {
     }
 
     /// A record belongs to the collection that published it, and that collection leaving the store
-    /// is what ends the claim — wherever it leaves from. A collection of the same name arriving
+    /// is what ends the claim - wherever it leaves from. A collection of the same name arriving
     /// from the author's other machine is as much a different collection as one made here.
     func testACollectionOfTheSameNameArrivingFromAnotherMachineInheritsNoFolders() throws {
         let (h, state) = AppStateHarness.started()
@@ -2570,7 +2570,7 @@ final class AppStateCollectionsTests: XCTestCase {
 
     /// The merged record is the renamed collection's own: it published under the origin the
     /// record carries, so publishing again takes its folders back as its own, while the departed
-    /// collection's folder stays what it was to it — a path kept back, releasable, never the
+    /// collection's folder stays what it was to it - a path kept back, releasable, never the
     /// token's.
     func testACollectionRenamedOntoADepartedNameStillOwnsItsFoldersWhenItPublishesAgain() throws {
         let (h, state) = AppStateHarness.started()
@@ -2634,8 +2634,8 @@ final class AppStateCollectionsTests: XCTestCase {
     /// Team, published from the author's other machine, marks `markedPath` in the sidecar. This
     /// machine publishes its active collection, whose `ledger` the author reviews in the Publish
     /// sheet while it holds a path of its own, and then edits to hold the marked path. Only the
-    /// sidecar's mark keeps that path back — the review holds nothing, `ledger` having been reviewed
-    /// — so the refusal is the kept-path one. Returns the active collection's document.
+    /// sidecar's mark keeps that path back - the review holds nothing, `ledger` having been reviewed -
+    /// so the refusal is the kept-path one. Returns the active collection's document.
     private func copyAnotherMachinesMarkedPath(_ h: AppStateHarness, _ state: AppState) throws -> URL {
         let home = state.activeCollection
         let ledger = MCPEntry(config: .object(["command": .string("node"), "args": .array([.string(markedPath)])]))
@@ -3539,8 +3539,8 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertNotNil(try CollectionDocument.decode(try Data(contentsOf: file)).connectors["renamed"])
     }
 
-    /// However a connector arrives — copied from another collection, imported from a document, or
-    /// added on the author's other machine — one nobody reviewed here waits; and one deleted and
+    /// However a connector arrives - copied from another collection, imported from a document, or
+    /// added on the author's other machine - one nobody reviewed here waits; and one deleted and
     /// added again under its old name is new again.
     func testACopiedImportedOrSyncedConnectorWaitsForReview() throws {
         let (h, state) = AppStateHarness.started()
@@ -3575,8 +3575,8 @@ final class AppStateCollectionsTests: XCTestCase {
     }
 
     /// A reviewed connector deleted, and a different one added under its name, is new however long
-    /// the publish is held in between — by a connector nobody reviewed, by a folder that will not
-    /// take the write, or across two syncs from the other machine — even with a credential in the
+    /// the publish is held in between - by a connector nobody reviewed, by a folder that will not
+    /// take the write, or across two syncs from the other machine - even with a credential in the
     /// argument the reviewed one held its own. The review goes on the pass that finds the connector
     /// gone, written or not.
     func testADeletedConnectorsReviewGoesWithItWhileThePublishIsHeld() throws {
@@ -3644,8 +3644,8 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertFalse(try jsonFile(file, contains: "mcp.github.com"))
     }
 
-    /// A reviewed connector edited so it holds something that looks like a credential — in an
-    /// argument, or in a value it shares — waits for review. Reviewed in the sheet, it travels, and
+    /// A reviewed connector edited so it holds something that looks like a credential - in an
+    /// argument, or in a value it shares - waits for review. Reviewed in the sheet, it travels, and
     /// an edit that holds only what was reviewed publishes on its own again.
     func testACredentialAddedToAReviewedConnectorWaitsForReview() throws {
         let (h, state) = AppStateHarness.started()
@@ -4070,7 +4070,7 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(try h.storeOnDisk().collections["Default"]?.mcps["installer"]?.enabled, true)
     }
 
-    /// With no local collection left — a 1.3 app sharing the store can delete the last one — the
+    /// With no local collection left - a 1.3 app sharing the store can delete the last one - the
     /// addition goes into a new, empty "Default", which does not become active.
     func testAnExternalAdditionWithNoLocalCollectionMakesOne() throws {
         let (h, state) = AppStateHarness.started()

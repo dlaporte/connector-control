@@ -225,7 +225,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         set { state.SetClaudeIntegrationEnabled(value); RaiseAll(); }
     }
 
-    /// <summary>Dimmed while a connector holds the name, or the app runs from where it will not stay — unless
+    /// <summary>Dimmed while a connector holds the name, or the app runs from where it will not stay - unless
     /// the switch is on, so it can still go off.</summary>
     public bool CanChangeClaudeIntegration =>
         settings.ClaudeIntegrationEnabled || (!state.ClaudeIntegrationClash && !state.ControlToolIsTransient);
@@ -481,7 +481,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>What to do with it: run <c>help</c> once installed; else the full path scripts can always use — left
+    /// <summary>What to do with it: run <c>help</c> once installed; else the full path scripts can always use - left
     /// out while Install is refused, since that path is about to be gone.</summary>
     public IReadOnlyList<TextRun> CommandLineToolCaption
     {
@@ -510,7 +510,7 @@ public sealed class SettingsModel : ObservableObject, IDisposable
     /// so a window opened meanwhile sees it too.</summary>
     public bool CommandLineToolBusy => commandLineTool?.IsBusy == true;
 
-    /// <summary>Under the row: why the last try failed — the seam's, so a window opened meanwhile shows it — else
+    /// <summary>Under the row: why the last try failed - the seam's, so a window opened meanwhile shows it - else
     /// why Install cannot work here; null otherwise.</summary>
     public string? CommandLineToolMessage =>
         commandLineTool?.LastProblem ?? (InstallRefused ? ClaudeIntegration.MoveToApplicationsError : null);
@@ -589,8 +589,8 @@ public sealed class SettingsModel : ObservableObject, IDisposable
             Raise(nameof(ToolFooterLines));
             Raise(nameof(HasToolFooterLines));
         }
-        // The Claude group follows a change made anywhere — the command-line tool or MDM turning the
-        // integration on, a clash arriving with the store, the endpoint failing — as the Mac relays every
+        // The Claude group follows a change made anywhere - the command-line tool or MDM turning the
+        // integration on, a clash arriving with the store, the endpoint failing - as the Mac relays every
         // change AppState announces. Platform idiom: WPF bindings listen by name, so this raises the members
         // each change affects, where SwiftUI repaints from the Mac's one relay.
         if (ClaudeGroupSources.Any(name => Affects(e, name)))

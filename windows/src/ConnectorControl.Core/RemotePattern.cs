@@ -5,7 +5,7 @@ namespace ConnectorControl.Core;
 /// <summary>
 /// Recognizes the <c>npx [-y] mcp-remote[@version] &lt;url&gt;</c> bridge pattern (and
 /// its Windows spelling <c>cmd /c npx …</c>) so the form view can show just Name + Server URL.
-/// Keys other than command/args (env, headers, …) don't disqualify — they surface in the
+/// Keys other than command/args (env, headers, …) don't disqualify - they surface in the
 /// form's read-only Additional fields.
 /// </summary>
 public static class RemotePattern
@@ -27,7 +27,7 @@ public static class RemotePattern
         && uri.Host.Length > 0;
 
     /// <summary>
-    /// Characters cmd.exe acts on wherever they appear on its command line — separators, redirections,
+    /// Characters cmd.exe acts on wherever they appear on its command line - separators, redirections,
     /// its escape and its quote. Claude Desktop starts the <c>cmd /c npx …</c> shape through cross-spawn,
     /// which escapes arguments only for batch-file commands; cmd.exe itself is an .exe, so every argument
     /// reaches it verbatim and a URL such as <c>https://host/mcp&amp;calc</c> runs <c>calc</c>. Bare
@@ -37,8 +37,8 @@ public static class RemotePattern
     public const string CmdUnsafeCharacters = "&|<>^\"";
 
     /// <summary>
-    /// The first character of <paramref name="value"/> cmd.exe would act on — one of
-    /// <see cref="CmdUnsafeCharacters"/>, or whitespace unless <paramref name="allowWhitespace"/> — or null.
+    /// The first character of <paramref name="value"/> cmd.exe would act on - one of
+    /// <see cref="CmdUnsafeCharacters"/>, or whitespace unless <paramref name="allowWhitespace"/> - or null.
     /// </summary>
     public static char? CmdUnsafeCharacter(string value, bool allowWhitespace = false)
     {
@@ -102,7 +102,7 @@ public static class RemotePattern
     };
 
     /// <summary>
-    /// Strips the launcher — <c>npx</c> or <c>cmd /c npx</c> — and returns the style
+    /// Strips the launcher - <c>npx</c> or <c>cmd /c npx</c> - and returns the style
     /// plus the remaining args (before "-y" handling). Null when the config is not an
     /// all-string-args npx invocation.
     /// </summary>
@@ -285,8 +285,8 @@ public static class RemotePattern
             {
                 var raw = args[i + 1];
                 int colon = raw.IndexOf(':');
-                // Recognize ONLY this app's own indirection sentinel — `Name:${AUTH_HEADER}`
-                // backed by an AUTH_HEADER env var — as the editable auth header, and only
+                // Recognize ONLY this app's own indirection sentinel - `Name:${AUTH_HEADER}`
+                // backed by an AUTH_HEADER env var - as the editable auth header, and only
                 // the first one. Every other --header (literal values, other env vars,
                 // additional headers) is preserved verbatim as an extra arg so nothing is
                 // ever lost or collides with our fixed AUTH_HEADER slot on re-encode.
@@ -347,7 +347,7 @@ public static class RemotePattern
         return new RemoteConfig(urlString, auth, style, extraArgs, env, package);
     }
 
-    /// <summary>Compact, key-sorted JSON — what mcp-remote expects in a single CLI argument.</summary>
+    /// <summary>Compact, key-sorted JSON - what mcp-remote expects in a single CLI argument.</summary>
     private static string CompactJson(params (string Key, string Value)[] pairs) =>
         AppleJsonWriter.Write(
             JsonValue.Object(pairs.Select(p => (p.Key, JsonValue.String(p.Value))).ToArray()),

@@ -6,7 +6,7 @@ import ConnectorControlCore
 /// collection's connectors as rows in the right one, the connector count below them, and the controls
 /// that follow the selection: the sidebar's +, the header's ⋯ menu and the + under it, and the
 /// selection bar. Everything is derived from AppState; the model owns only what the window itself
-/// knows — which collection is showing and which rows are ticked.
+/// knows - which collection is showing and which rows are ticked.
 ///
 /// Mirror: windows/src/ConnectorControl.Core/State/CollectionsModel.cs
 @MainActor
@@ -65,14 +65,14 @@ public final class CollectionsModel: ObservableObject {
         names.count == 1 ? "Delete “\(names[0])”?" : "Delete \(names.count) connectors?"
     }
 
-    /// Lifted from the editor's old delete confirmation, which the list now replaces: the sentence —
-    /// the most useful thing in that confirmation — survives here unchanged. Delete Collection's
+    /// Lifted from the editor's old delete confirmation, which the list now replaces: the sentence -
+    /// the most useful thing in that confirmation - survives here unchanged. Delete Collection's
     /// confirmation ends with it too.
     public static let deleteCheckedInformative = "A copy remains in Backups."
 
     /// The sidebar's chain glyph, or nil when there is no chain to explain: a local collection
     /// has no source, and a synced one whose file is still to be found has no path to name. The
-    /// sentence is the popover chip's, borrowed rather than copied — one fact, one wording.
+    /// sentence is the popover chip's, borrowed rather than copied - one fact, one wording.
     ///
     /// Takes the item rather than the path so that "which items have a tooltip" stays here; a
     /// view mapping over an optional path would be the same rule, kept somewhere worse.
@@ -146,12 +146,12 @@ public final class CollectionsModel: ObservableObject {
         }
     }
 
-    /// The menu's annotation beside a disabled destination — why a synced collection is listed
+    /// The menu's annotation beside a disabled destination - why a synced collection is listed
     /// but cannot be chosen.
     public static let readOnlyNote = "read-only"
 
-    /// One connector of the selected collection. `checked` is the window's own state — an export
-    /// tick, not anything the store holds — so it is the one field the model fills in itself.
+    /// One connector of the selected collection. `checked` is the window's own state - an export
+    /// tick, not anything the store holds - so it is the one field the model fills in itself.
     public struct Row: Identifiable, Equatable, Sendable {
         public let id: String
         public let name: String
@@ -224,10 +224,10 @@ public final class CollectionsModel: ObservableObject {
     // MARK: - Selection
 
     /// The collection the right pane is showing. It defaults to the active one and falls back to
-    /// it whenever the chosen name stops being a collection — deleted here, or renamed from
+    /// it whenever the chosen name stops being a collection - deleted here, or renamed from
     /// anywhere else.
     ///
-    /// An assignment that would show the collection already showing does nothing at all — no
+    /// An assignment that would show the collection already showing does nothing at all - no
     /// republish, no cleared ticks, not even the name remembered. A view that writes its selection
     /// straight back would otherwise feed itself, and remembering the name would pin the window
     /// to a collection it was only showing because it was the active one.
@@ -248,8 +248,8 @@ public final class CollectionsModel: ObservableObject {
 
     private var selectedCollection: String { effectiveCollection(for: selection) }
 
-    /// Lets go of a remembered name that no longer names a collection. Nothing on screen changes —
-    /// the window was already showing the fallback — so nothing is republished. Without it, a
+    /// Lets go of a remembered name that no longer names a collection. Nothing on screen changes -
+    /// the window was already showing the fallback - so nothing is republished. Without it, a
     /// collection renamed away and later renamed back would pull the window to it unprompted,
     /// because the name would start resolving again.
     private func forgetUnresolvedSelection(in store: MasterStore) {
@@ -268,7 +268,7 @@ public final class CollectionsModel: ObservableObject {
     }
 
     /// Moves the window to a collection this model just created or renamed, keeping the ticks
-    /// with it — unlike `selected`, which is the user picking a different collection.
+    /// with it - unlike `selected`, which is the user picking a different collection.
     private func retarget(to name: String) {
         objectWillChange.send()
         if checkedCollection != nil { checkedCollection = name }
@@ -308,8 +308,8 @@ public final class CollectionsModel: ObservableObject {
     /// inputs. `home` is the user's home folder, abbreviated to "~".
     ///
     /// An allowlist, not a mask: an argument is shown only when it is a URL, an explicit path or
-    /// a named artefact, and every other argument — a flag, a flag's value, `KEY=value`, a header,
-    /// a shell string, a bare word — is left out. A list of secret shapes to hide would leak
+    /// a named artefact, and every other argument - a flag, a flag's value, `KEY=value`, a header,
+    /// a shell string, a bare word - is left out. A list of secret shapes to hide would leak
     /// every shape it did not foresee. The one exception is backed by a name rather than a shape:
     /// whatever follows a flag named for a secret is left out too, since a password can look
     /// like a package.
@@ -357,14 +357,14 @@ public final class CollectionsModel: ObservableObject {
     /// Launchers whose first positional argument names the package they fetch and run.
     private static let packageRunners: Set<String> = ["npx", "uvx", "pipx", "bunx", "pnpx"]
 
-    /// A launcher written as a whole command line — `npx -y server --token x` in one string —
+    /// A launcher written as a whole command line - `npx -y server --token x` in one string -
     /// split into arguments the way a shell passes them: its first argument is the launcher and
     /// the rest are arguments ahead of `args`, each held to the same rule, so a flag named for a
     /// secret at its end guards `args[0]` as it would any value.
     ///
     /// A command that is a path is not tokenized, since a Windows path holds spaces. It keeps its
-    /// launcher — the last component of the path, which runs to the last word holding a separator
-    /// — only when the words after its first are plainly more path or plain words: none starts
+    /// launcher - the last component of the path, which runs to the last word holding a separator -
+    /// only when the words after its first are plainly more path or plain words: none starts
     /// with `-` or `/` or holds `:` (which covers `://`), `=` or a quote. Otherwise that last
     /// component could be the tail of a packed argument, and the launcher is omitted. The packed
     /// words are never shown, but a flag named for a secret at their end, read with its quotes
@@ -423,7 +423,7 @@ public final class CollectionsModel: ObservableObject {
         return words
     }
 
-    /// The launcher, named the way it would be typed, or nil when it could be a secret — or when
+    /// The launcher, named the way it would be typed, or nil when it could be a secret - or when
     /// it holds whitespace, a path with arguments packed into its last component.
     private static func launcher(_ command: String) -> String? {
         let name = launcherName(command)
@@ -434,7 +434,7 @@ public final class CollectionsModel: ObservableObject {
 
     /// One argument as the target column shows it, or nil when it is none of the three shapes
     /// known to be safe: a URL, as its scheme and host; an explicit path, with the home folder
-    /// abbreviated; or a named artefact — a package, image, script or module. A bare word, one
+    /// abbreviated; or a named artefact - a package, image, script or module. A bare word, one
     /// with no `/`, `@` or `.`, is an artefact only in the server slot.
     private static func shown(_ arg: String, home: String, isServerSlot: Bool) -> String? {
         if arg.contains("://") {
@@ -536,7 +536,7 @@ public final class CollectionsModel: ObservableObject {
         return isWindowsLauncher ? String(name.dropLast(4)) : name
     }
 
-    /// The idle selection bar: how many connectors the collection holds, and nothing else — the
+    /// The idle selection bar: how many connectors the collection holds, and nothing else - the
     /// pills, the banner and the `⋯` menu say what kind it is and where its file is. The one
     /// addition is a synced source that could not be read, which no banner reports: without it
     /// the window would not say why a subscription has stopped updating. The other is a copy's
@@ -553,11 +553,11 @@ public final class CollectionsModel: ObservableObject {
 
     /// The synced document as this machine can name it, or nil when it cannot: not synced, no
     /// binding, or a sidecar entry that records neither a path nor a file name. The last of those
-    /// takes a hand-edited or foreign collections file — every writer here sets a file name — but
+    /// takes a hand-edited or foreign collections file - every writer here sets a file name - but
     /// the decoder accepts one, and there is nothing to refresh or to report about a document
     /// nobody can point at.
     ///
-    /// Still its own rule — Refresh and Show Source File both need a document to point at — but
+    /// Still its own rule - Refresh and Show Source File both need a document to point at - but
     /// the naming is `AppState.sourceLocation(of:)`'s, so the derivation lives in one place.
     private func locatedSource(of collection: String) -> String? {
         state.isLocated(collection) ? state.sourceLocation(of: collection) : nil
@@ -584,7 +584,7 @@ public final class CollectionsModel: ObservableObject {
     /// The strip's button. True says the news is an update, so the view has only to put the
     /// Review sheet in front of the selected collection. False says the view decides by the
     /// banner's kind: a picker for the file or folder, handed to `locateSource` or
-    /// `choosePublishFolder`, or — for a publish blocked for review — the Publish sheet, since
+    /// `choosePublishFolder`, or - for a publish blocked for review - the Publish sheet, since
     /// another folder is no answer to that.
     ///
     /// Deliberately not `@discardableResult`, unlike the popover's, which sets the window request
@@ -655,7 +655,7 @@ public final class CollectionsModel: ObservableObject {
 
     /// Marks an exception to the ordinary local collection: `Published` and `Subscribed` are
     /// mutually exclusive, since a subscribed collection has an author elsewhere and cannot also
-    /// publish. There is no case for the default — an ordinary local collection carries no pill.
+    /// publish. There is no case for the default - an ordinary local collection carries no pill.
     public enum Pill: Equatable, Sendable {
         case active, published, subscribed
     }
@@ -761,7 +761,7 @@ public final class CollectionsModel: ObservableObject {
     }
 
     /// Duplicate: the whole collection as it stands, every connector's switch kept and nothing
-    /// marked as imported — unlike every other copy in this window, it is the user's own (see
+    /// marked as imported - unlike every other copy in this window, it is the user's own (see
     /// `AppState.duplicateCollection`). The selection stays where it was rather than following the
     /// new one the way `makeLocalCopy()` and `create()` do.
     @discardableResult
@@ -785,7 +785,7 @@ public final class CollectionsModel: ObservableObject {
         return URL(fileURLWithPath: folder).appendingPathComponent(fileName).path
     }
 
-    /// A located synced collection's document — `locatedSource(of:)` again, named for the menu's
+    /// A located synced collection's document - `locatedSource(of:)` again, named for the menu's
     /// `showSourceFile` and the header's own use, both of which want the same nil for a file not
     /// located on this machine.
     public var sourceFilePath: String? { locatedSource(of: selectedCollection) }
@@ -968,7 +968,7 @@ public final class CollectionsModel: ObservableObject {
 
     /// What Delete takes with the collection and what it leaves: its connectors (copies elsewhere
     /// stay), the collection that becomes active if this one is, a synced source it never
-    /// touches, and the backup the store keeps before it saves — said only when it held
+    /// touches, and the backup the store keeps before it saves - said only when it held
     /// connectors, since an empty collection has nothing in it to get back.
     public func deleteInformative(for collection: String) -> String {
         let count = state.store.collections[collection]?.mcps.count ?? 0

@@ -107,7 +107,7 @@ public sealed class VelopackUpdater : IUpdater
 
     /// <summary>
     /// The hooks <see cref="RunStartupHook"/> runs. Velopack would otherwise apply, at launch, the newest package
-    /// it finds in packages\ — a package this app's check refused, or never finished checking, included. Updates
+    /// it finds in packages\ - a package this app's check refused, or never finished checking, included. Updates
     /// are applied only by <see cref="ApplyOnQuit"/> and <see cref="ApplyAndRestart"/>, after the check has
     /// passed. Nothing is lost: a checked package left unapplied is found again by the next check, which
     /// re-verifies it before offering it.
@@ -155,8 +155,8 @@ public sealed class VelopackUpdater : IUpdater
 
     /// <summary>
     /// Before a download. Velopack may run the installed Update.exe during it, so it must already be ours. If it is
-    /// not, and a copy saved by an earlier check is there, that check never finished — the app was quit or ended
-    /// while it ran, after Velopack had put the package's Update.exe in place — so the saved one is put back, every
+    /// not, and a copy saved by an earlier check is there, that check never finished - the app was quit or ended
+    /// while it ran, after Velopack had put the package's Update.exe in place - so the saved one is put back, every
     /// package in packages\ (none of which that check passed) is deleted, and that is logged; then the installed one
     /// is checked again. Once it passes, it is read and saved to disk, staged, so a check that is interrupted in its
     /// turn can be recovered the same way. Returns the bytes to restore if this check refuses the package.

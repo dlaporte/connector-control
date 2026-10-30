@@ -26,11 +26,11 @@ public static class ControlToolCopy
 
     /// <summary>Brings the copy up to date with <paramref name="packaged"/> and records <paramref name="appExecutable"/>,
     /// when a packaged tool sits beside the app. True when it copied; false also when there was nothing to do.
-    /// A failure leaves the copy that is there serving, is said to <paramref name="failed"/> — the app's log —
+    /// A failure leaves the copy that is there serving, is said to <paramref name="failed"/> - the app's log -
     /// and is tried again at the next launch.
     /// <para>
     /// Two refreshes can run at once: the app's single-instance mutex is per logon session, so one person
-    /// signed in twice — at the console and over Remote Desktop — runs two apps against the one bin\. Their
+    /// signed in twice - at the console and over Remote Desktop - runs two apps against the one bin\. Their
     /// steps can interleave: one's sweep of leftovers can delete the other's staging copy, or the old copy the
     /// other has just renamed aside. The worst that leaves is a failed refresh, a stale copy or none until the
     /// next launch, whose refresh recovers it.
@@ -102,7 +102,7 @@ public static class ControlToolCopy
         }
     }
 
-    /// <summary>The app's executable, for the copy to start it: written only when it differs, and then whole —
+    /// <summary>The app's executable, for the copy to start it: written only when it differs, and then whole -
     /// a new record is written beside the old one and moved into place, so the tool never reads half of one.</summary>
     private static void Record(string bin, string appExecutable, Action<string>? failed)
     {

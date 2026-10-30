@@ -7,7 +7,7 @@ namespace ConnectorControl.Core;
 /// </summary>
 public sealed class MasterStore : IEquatable<MasterStore>
 {
-    // Schema v2 only — no v1 fallback. A v1 (or otherwise malformed) file on
+    // Schema v2 only - no v1 fallback. A v1 (or otherwise malformed) file on
     // disk fails to decode and is handled by MasterStoreIO.Load's existing
     // corrupt-file path: moved aside and rebuilt fresh from Claude's config.
     public const long CurrentVersion = 2;
@@ -31,7 +31,7 @@ public sealed class MasterStore : IEquatable<MasterStore>
         Version = version;
         Collections = new Dictionary<string, Collection>(collections, StringComparer.Ordinal);
         // The Mcps getter must never create a collection as a side effect, so this constructor is
-        // the one place that guarantees Collections[ActiveCollection] exists — including a decoded
+        // the one place that guarantees Collections[ActiveCollection] exists - including a decoded
         // file that names a collection it doesn't have (MasterStoreIO.Load relies on this).
         if (Collections.ContainsKey(activeCollection))
         {
@@ -54,14 +54,14 @@ public sealed class MasterStore : IEquatable<MasterStore>
     {
     }
 
-    /// <summary>Swift <c>.empty</c>. A fresh instance every call — this type is mutable.</summary>
+    /// <summary>Swift <c>.empty</c>. A fresh instance every call - this type is mutable.</summary>
     public static MasterStore Empty() =>
         new(CurrentVersion, DefaultCollectionName, [new KeyValuePair<string, Collection>(DefaultCollectionName, new Collection())]);
 
     /// <summary>
-    /// The active collection's connectors — the view the entire app operates on. Side-effect free:
+    /// The active collection's connectors - the view the entire app operates on. Side-effect free:
     /// an active collection that somehow doesn't exist yet returns an empty, unstored dictionary
-    /// rather than creating one — the constructor is what normally guarantees
+    /// rather than creating one - the constructor is what normally guarantees
     /// Collections[ActiveCollection] exists.
     /// </summary>
     public Dictionary<string, McpEntry> Mcps =>

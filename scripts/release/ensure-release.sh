@@ -16,7 +16,7 @@
 #                            prerelease, with assets still missing). On REUSE, each asset already
 #                            published is left untouched; if none of the given assets are
 #                            published yet, all are uploaded; if some are published and others are
-#                            not, the run fails instead of guessing which half to trust — a
+#                            not, the run fails instead of guessing which half to trust - a
 #                            published asset is never replaced, since a re-run has rebuilt its
 #                            file, and a different binary under the same name and version is
 #                            exactly what an update system must never see.
@@ -107,7 +107,7 @@ else
   fi
   # The assets are positional arguments to `gh release create`, NOT a follow-up upload: with
   # assets to attach, gh creates the release as a draft, uploads them, and only then publishes
-  # it — so a release with an asset requirement (the Mac DMG + appcast) is never live without
+  # it - so a release with an asset requirement (the Mac DMG + appcast) is never live without
   # them, even if this job dies mid-upload.
   # No --prerelease and no --latest for a full release: GitHub marks the newest full release
   # "latest" on its own, which is exactly what SUFeedURL relies on.

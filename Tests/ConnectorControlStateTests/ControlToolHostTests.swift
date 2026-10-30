@@ -101,8 +101,8 @@ final class ControlToolHostTests: XCTestCase {
         // so Swift has no identity to compare.
     }
 
-    /// A tool or relay newer than the app it reached — an update replaced the app on disk while the
-    /// old one still runs — is told to restart the app, not that the tool does not exist.
+    /// A tool or relay newer than the app it reached - an update replaced the app on disk while the
+    /// old one still runs - is told to restart the app, not that the tool does not exist.
     func testANewerClientAskingForAToolThisAppLacksIsToldToRestartTheApp() {
         let rig = ControlRig(); defer { rig.dispose() }
         let host = ControlToolHost(tools: rig.tools, isCLI: true)

@@ -71,8 +71,8 @@ final class AlertDialogs: Dialogs {
 
     /// Return presses the cancel button, and the primary answers only a click. Focus starts on the cancel
     /// button: NSAlert starts it on the first, where with keyboard navigation on Space would answer the
-    /// primary unclicked. A button holds one key equivalent, and a focused view — a line of the code block
-    /// takes focus, from Tab or a click, when the buttons cannot — swallows Return before any button sees it, so Escape,
+    /// primary unclicked. A button holds one key equivalent, and a focused view - a line of the code block
+    /// takes focus, from Tab or a click, when the buttons cannot - swallows Return before any button sees it, so Escape,
     /// Return and Enter reach the cancel button through a monitor that lives exactly as long as the
     /// alert, as the Windows dialog's IsDefault and IsCancel both sit on its cancel button.
     private func runSafeDefault(_ alert: NSAlert, primary: NSButton, cancel: NSButton) -> Bool {

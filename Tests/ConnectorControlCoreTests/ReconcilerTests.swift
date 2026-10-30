@@ -11,7 +11,7 @@ final class ReconcilerTests: XCTestCase {
         MasterStore.single(mcps)
     }
 
-    // MARK: ingestion — the only file→store flow
+    // MARK: ingestion - the only file→store flow
 
     func testUnknownServerIsImportedEnabled() {
         let outcome = Reconciler.reconcile(store: .empty, claudeServers: ["new": configA])
@@ -39,11 +39,11 @@ final class ReconcilerTests: XCTestCase {
         XCTAssertTrue(outcome.storeChanged)
     }
 
-    // MARK: store is the source of truth — the file never edits known entries
+    // MARK: store is the source of truth - the file never edits known entries
 
     func testExternalEditDoesNotChangeStore() {
         // Fresh launch (nil baseline): a hand-edit made while the app was off
-        // still loses — Claude's config is downstream.
+        // still loses - Claude's config is downstream.
         let outcome = Reconciler.reconcile(
             store: store(["s": MCPEntry(enabled: true, config: configA)]),
             claudeServers: ["s": configB])

@@ -1,11 +1,11 @@
 /// Mirror: windows/src/ConnectorControl.Core/State/Control/ControlVersion.cs
 ///
 /// Versions as the hello carries them and the apps show them, compared by Semantic Versioning's
-/// precedence. A version that cannot be read — "development build" — is newer than nothing and
+/// precedence. A version that cannot be read - "development build" - is newer than nothing and
 /// older than nothing, so it never decides anything.
 public enum ControlVersion {
-    /// The SemVer at the start of `text` — "1.5.0" from the Mac's "1.5.0 (10500)", "1.5.0-preview.3"
-    /// from .NET's "1.5.0-preview.3+1a2b3c4" — or nil when it starts with none.
+    /// The SemVer at the start of `text` - "1.5.0" from the Mac's "1.5.0 (10500)", "1.5.0-preview.3"
+    /// from .NET's "1.5.0-preview.3+1a2b3c4" - or nil when it starts with none.
     public static func semantic(_ text: String) -> String? {
         let scalars = Array(text.unicodeScalars)
         var end = 0
@@ -61,7 +61,7 @@ public enum ControlVersion {
     }
 
     /// One prerelease identifier against another: below zero, zero or above zero. An identifier is a
-    /// number only when it is all ASCII digits — "-0" is a word on both platforms — and numbers
+    /// number only when it is all ASCII digits - "-0" is a word on both platforms - and numbers
     /// compare by value without being parsed, so none is too long to compare.
     static func compare(_ one: String, _ other: String) -> Int {
         switch (isNumber(one), isNumber(other)) {

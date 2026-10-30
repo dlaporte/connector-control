@@ -44,7 +44,7 @@ public enum ClaudeConfigIO {
         try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
     }
 
-    /// Refuses a config whose top level, or whose mcpServers object, names one key twice — exactly, or
+    /// Refuses a config whose top level, or whose mcpServers object, names one key twice - exactly, or
     /// in two spellings Unicode counts as the same text, such as an é composed and decomposed. This
     /// app's parser keeps one of them and Claude's may keep the other, so a file put back as it stands
     /// could run a server the question never listed. It reads the raw bytes, since a parser has

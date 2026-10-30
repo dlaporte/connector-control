@@ -2,7 +2,7 @@ import XCTest
 import ConnectorControlCore
 @testable import ConnectorControlState
 
-/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/EditorModelSaveTests.cs —
+/// Mirror: windows/tests/ConnectorControl.Core.Tests/State/EditorModelSaveTests.cs -
 /// the save slice. The save-conflict alert goes through FakeDialogs.
 @MainActor
 final class EditorModelSaveTests: XCTestCase {

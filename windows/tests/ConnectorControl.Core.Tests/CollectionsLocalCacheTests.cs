@@ -218,7 +218,7 @@ public sealed class CollectionsLocalCacheTests : IDisposable
 
     /// <summary>
     /// An earlier record's folders are the binding's own only where the two published under one
-    /// origin. A record of another origin, or of none — a collection that left the store — belongs
+    /// origin. A record of another origin, or of none - a collection that left the store - belongs
     /// to another collection, and its folders are kept apart as departed so the next publish does
     /// not take them as its own; its releases, that collection's author's word, do not come at all.
     /// </summary>

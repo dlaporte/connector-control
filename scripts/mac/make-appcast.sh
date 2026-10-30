@@ -5,7 +5,7 @@
 #   make-appcast.sh <version> <tag> <notes.md>
 #
 # Must run from the directory holding ConnectorControl_<version>.dmg (the release job's working
-# directory), AFTER the DMG is signed, notarized and stapled — the EdDSA signature covers the
+# directory), AFTER the DMG is signed, notarized and stapled - the EdDSA signature covers the
 # final DMG bytes. Writes appcast.xml there too.
 #
 # Needs SPARKLE_ED_PRIVATE_KEY, GH_TOKEN and GITHUB_REPOSITORY in the environment; gh, curl,
@@ -21,7 +21,7 @@ NOTES=${3:?usage: make-appcast.sh <version> <tag> <notes.md>}
 
 REPO_URL="${GITHUB_SERVER_URL:-https://github.com}/$GITHUB_REPOSITORY"
 DMG="ConnectorControl_${VERSION}.dmg"
-[ -f "$DMG" ] || { echo "::error::$DMG not found in $(pwd) — run this after the DMG is built, signed, notarized and stapled."; exit 1; }
+[ -f "$DMG" ] || { echo "::error::$DMG not found in $(pwd) - run this after the DMG is built, signed, notarized and stapled."; exit 1; }
 
 # The tools pin (version and SHA-256) lives in sparkle-tools.env, which mac CI also reads through
 # check-sparkle-pin.sh, so a Sparkle bump that leaves the pin behind fails on the pull request.
@@ -51,7 +51,7 @@ mkdir -p "$APPCAST_WORK"
 cp "$DMG" "$APPCAST_WORK/"
 # Render the changelog to HTML (GitHub's markdown renderer) and drop it next to the DMG;
 # --embed-release-notes inlines it into the appcast item so the update dialog shows it. Emit an
-# HTML FRAGMENT (no DOCTYPE/body) — that's what generate_appcast embeds into the item's
+# HTML FRAGMENT (no DOCTYPE/body) - that's what generate_appcast embeds into the item's
 # description CDATA.
 NOTES_HTML="$WORK/notes-body.html"
 gh api -X POST /markdown -f mode=markdown -f text="$(cat "$NOTES")" > "$NOTES_HTML"

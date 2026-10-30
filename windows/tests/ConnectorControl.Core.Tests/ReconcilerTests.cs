@@ -12,7 +12,7 @@ public class ReconcilerTests
     private static Dictionary<string, JsonValue> Servers(params (string Name, JsonValue Config)[] servers) =>
         servers.ToDictionary(s => s.Name, s => s.Config, StringComparer.Ordinal);
 
-    // ingestion — the only file→store flow
+    // ingestion - the only file→store flow
 
     [Fact]
     public void UnknownServerIsImportedEnabled()
@@ -38,7 +38,7 @@ public class ReconcilerTests
         Assert.True(outcome.StoreChanged);
     }
 
-    // store is the source of truth — the file never edits known entries
+    // store is the source of truth - the file never edits known entries
 
     [Fact]
     public void ExternalEditDoesNotChangeStore()

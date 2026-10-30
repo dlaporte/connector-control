@@ -5,7 +5,7 @@ import ConnectorControlCore
 /// Mirror: windows/tests/ConnectorControl.Core.Tests/State/ControlGateMatrixTests.cs
 ///
 /// The gate on real tools, one of each class: every caller, both confirmation settings, the
-/// integration on and off — whether the call was refused, asked about, run, and announced.
+/// integration on and off - whether the call was refused, asked about, run, and announced.
 @MainActor
 final class ControlGateMatrixTests: XCTestCase {
     /// One real tool of each class, and how to tell it ran.
@@ -29,7 +29,7 @@ final class ControlGateMatrixTests: XCTestCase {
                         let label = "\(name) \(caller) integration:\(integration) confirm:\(confirm)"
                         XCTAssertTrue(rig.h.notifier.sent.isEmpty, label)
                         let result = rig.call(name, arguments, as: caller)
-                        // Whatever the call left for later — the restart, after its answer — happens.
+                        // Whatever the call left for later - the restart, after its answer - happens.
                         for _ in rig.h.delays.pending { rig.h.delays.runNext() }
                         let relay = caller != .cli
                         let refused = relay && !integration

@@ -28,8 +28,8 @@ internal static class UninstallCleanup
     /// Runs <paramref name="cleanup"/> holding the app's single-instance lock, taken before any step. Velopack stops
     /// the app before the hook, but Claude's relay, which lives outside the install folder and survives, may start
     /// it again for a call in between; holding the lock makes that app a second instance, which a background launch
-    /// ends without a word, before it could put back the entry this hook takes away. A lock that cannot be had —
-    /// such an app got there first — is said to <paramref name="log"/>, and the cleanup still runs: its last step
+    /// ends without a word, before it could put back the entry this hook takes away. A lock that cannot be had -
+    /// such an app got there first - is said to <paramref name="log"/>, and the cleanup still runs: its last step
     /// sweeps the configs again. So does a lock that throws: the lock only narrows a race, and the cleanup matters
     /// more. <paramref name="hold"/> takes the lock (<see cref="SingleInstance.Hold"/>; a test's keeps its name apart).
     /// </summary>

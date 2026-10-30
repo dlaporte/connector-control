@@ -3,7 +3,7 @@ import Foundation
 /// Mirror: windows/src/ConnectorControl.Core/McpLineFramer.cs
 ///
 /// One message as the transport read it: a line's bytes without their newline, or word that a line
-/// ran past the limit — whose bytes were dropped as they came, so a client cannot make the reader
+/// ran past the limit - whose bytes were dropped as they came, so a client cannot make the reader
 /// hold more than the limit. The Windows mirror has no enum payloads, so its frames are records.
 public enum McpFrame: Equatable, Sendable {
     case line(Data)

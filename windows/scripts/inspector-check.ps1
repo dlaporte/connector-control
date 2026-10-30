@@ -6,8 +6,8 @@
 .DESCRIPTION
     The Windows twin of scripts/mac/inspector-check.sh: the test host runs the real control layer over a
     sandbox folder and serves its pipe; the pinned Inspector starts the relay with
-    CONNECTOR_CONTROL_STORE_DIR pointing into the sandbox — which names the test host's pipe and keeps the
-    relay from starting any real app — and checks tools/list (strictly), get_status, list_connectors, and
+    CONNECTOR_CONTROL_STORE_DIR pointing into the sandbox - which names the test host's pipe and keeps the
+    relay from starting any real app - and checks tools/list (strictly), get_status, list_connectors, and
     that restart_claude, which the test host declines, exits 5 (isError).
 
 .PARAMETER Tool

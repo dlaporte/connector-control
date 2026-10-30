@@ -3,11 +3,11 @@ import ConnectorControlCore
 
 /// Mirror: windows/src/ConnectorControl.Core/Transport/ControlRelayRunner.cs
 ///
-/// Runs `ControlRelay` between Claude — the relay's standard input and output — and the app. A thread
+/// Runs `ControlRelay` between Claude - the relay's standard input and output - and the app. A thread
 /// reads each side; everything the relay decides happens on one serial queue, in the order it
 /// arrived, connecting included, so what Claude sends while the app starts waits its turn. Platform
 /// idiom: threads and a dispatch queue here; tasks and a blocking collection on Windows. A reader here
-/// cannot throw — a failure reads as the end of its stream — so its last word to the relay always
+/// cannot throw - a failure reads as the end of its stream - so its last word to the relay always
 /// comes; the Windows readers, which can throw, end in a `finally` to make it so.
 public final class ControlRelayRunner: @unchecked Sendable {
     private let client: ControlClient
@@ -37,8 +37,8 @@ public final class ControlRelayRunner: @unchecked Sendable {
     /// Relays until Claude closes its side or the relay must end, and returns the exit code.
     public func run() -> Int32 {
         // A write to a Claude that has gone fails with EPIPE and ends the relay as any failed write to
-        // Claude does, where SIGPIPE would end the process outright. An output that cannot take this — a
-        // file, say — raises no SIGPIPE either, so failing is let be. Platform idiom: Windows reports a
+        // Claude does, where SIGPIPE would end the process outright. An output that cannot take this - a
+        // file, say - raises no SIGPIPE either, so failing is let be. Platform idiom: Windows reports a
         // broken pipe as an IOException.
         _ = fcntl(output, F_SETNOSIGPIPE, 1)
         Thread.detachNewThread { [self] in readClaude() }

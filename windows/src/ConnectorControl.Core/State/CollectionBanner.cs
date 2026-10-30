@@ -27,7 +27,7 @@ public abstract record CollectionBanner
     public sealed record PublishFailed(string Collection, string Message) : CollectionBanner;
 
     /// <summary>
-    /// Publishing refused to write, for the author to review — a marked path that has moved, say.
+    /// Publishing refused to write, for the author to review - a marked path that has moved, say.
     /// Another folder answers nothing here: it would re-bind the collection, write nothing there
     /// and abandon the document the old folder still holds. The Publish dialog is the answer.
     /// </summary>

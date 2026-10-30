@@ -10,7 +10,7 @@ public struct AppPaths: Sendable {
     public let backupsDirURL: URL
     /// Where `AtomicFile` stages temp files before an atomic rename. Defaults under the
     /// store dir; `AppState.makeService` relocates it to the machine-local folder when a
-    /// custom store dir is set — like backups, it must never live in a chosen (synced) folder.
+    /// custom store dir is set - like backups, it must never live in a chosen (synced) folder.
     public let stagingDirURL: URL
     /// The machine-local bindings cache. Like backups, it never follows a chosen (synced)
     /// store dir: the paths in it are true on this machine only.
@@ -37,7 +37,7 @@ public struct AppPaths: Sendable {
     /// computes the live environment/appSupport, via `PathContext.live()`, and
     /// every caller threads its values through explicitly.
     public static func live(environment: [String: String], appSupport: URL) -> AppPaths {
-        // An empty override counts as absent — an inherited but unset environment
+        // An empty override counts as absent - an inherited but unset environment
         // variable must not shadow the real default (AppState.makeService and
         // PermissionsSweep apply the same rule to the stored setting).
         let claude = environment[claudeConfigEnv].flatMap { $0.isEmpty ? nil : $0 }.map(URL.init(fileURLWithPath:))

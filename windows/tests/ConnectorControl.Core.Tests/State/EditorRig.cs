@@ -5,7 +5,7 @@ namespace ConnectorControl.Core.Tests.State;
 
 /// <summary>
 /// The harness + AppState + EditorModel construction every EditorModel test needs.
-/// <paramref name="configure"/> runs on the harness BEFORE its AppState is created — for the
+/// <paramref name="configure"/> runs on the harness BEFORE its AppState is created - for the
 /// handful of tests that must seed a tool status the probe reads at launch.
 /// </summary>
 internal sealed class EditorRig : IDisposable
@@ -53,7 +53,7 @@ internal sealed class EditorRig : IDisposable
     public EditorModel Editor(string name, string collection) =>
         Editor(TestTargets.Existing(name, State.Store.Collections[collection].Mcps[name], collection));
 
-    /// <summary>EditorModel.AuthKinds' index for <paramref name="kind"/> — the picker's own
+    /// <summary>EditorModel.AuthKinds' index for <paramref name="kind"/> - the picker's own
     /// order, not an assumption about enum declaration order.</summary>
     public static int AuthKindIndexOf(RemoteAuthKind kind) => EditorModel.AuthKinds.ToList().IndexOf(kind);
 

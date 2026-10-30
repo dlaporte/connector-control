@@ -21,10 +21,10 @@ public final class AppState: ObservableObject {
     // deliberately off the main thread while it validates a whole app bundle.
 
     public static let noConnectorsSubtitle = "No connectors configured"
-    public static let claudeConfigRegeneratedBody = "Claude's config was changed outside Connector Control — regenerated from your connector list. Restart Claude to pick it up."
-    public static let regenerationFailedBody = "The connector configuration changed, but Claude's config could not be updated — open Connector Control to retry."
+    public static let claudeConfigRegeneratedBody = "Claude's config was changed outside Connector Control - regenerated from your connector list. Restart Claude to pick it up."
+    public static let regenerationFailedBody = "The connector configuration changed, but Claude's config could not be updated - open Connector Control to retry."
     public static let claudeConfigChangedBody = "Claude's config changed outside Connector Control."
-    public static let storeChangedBody = "The connector list changed outside Connector Control — review it before your next change is applied."
+    public static let storeChangedBody = "The connector list changed outside Connector Control - review it before your next change is applied."
     public static let quitMessage = "Quit Connector Control?"
     public static let quitButton = "Quit"
     public static let restartMessage = "Restart Claude Desktop now?"
@@ -99,7 +99,7 @@ public final class AppState: ObservableObject {
     public static func connectorListChangedBody(_ delta: ServerDelta, restartRequired: Bool) -> String {
         let what = delta.isEmpty ? "was regenerated" : "now " + delta.summary()
         let then = restartRequired ? "Restart Claude to pick it up." : "Claude will use it the next time it starts."
-        return "The connector list changed outside Connector Control — Claude's config \(what). \(then)"
+        return "The connector list changed outside Connector Control - Claude's config \(what). \(then)"
     }
 
     // MARK: - Published state
@@ -107,11 +107,11 @@ public final class AppState: ObservableObject {
     @Published public private(set) var store: MasterStore = .empty
     /// Settable: the restore sheet reports its failure here.
     @Published public var lastError: String?
-    /// Why Claude and the command-line tool cannot reach this app — its control endpoint could not be
-    /// served, or stopped being served — or nil while it serves. Settings shows it.
+    /// Why Claude and the command-line tool cannot reach this app - its control endpoint could not be
+    /// served, or stopped being served - or nil while it serves. Settings shows it.
     @Published public private(set) var controlEndpointProblem: String?
-    /// Moves on each time a setting is changed from outside the Settings window — the command line's
-    /// `settings set` — so an open Settings window shows the new value at once, as its Claude group
+    /// Moves on each time a setting is changed from outside the Settings window - the command line's
+    /// `settings set` - so an open Settings window shows the new value at once, as its Claude group
     /// already follows the integration's switches.
     @Published public private(set) var settingsRevision = 0
     @Published public private(set) var needsClaudeRestart = false
@@ -183,7 +183,7 @@ public final class AppState: ObservableObject {
     /// nothing to protect). While it is false our copy of the sidecar may be empty or stale, so
     /// nothing writes it or the bindings that hang off it.
     private var collectionsLoaded = false
-    /// The hash of the sidecar bytes on disk as this app last saw them — written or loaded — so
+    /// The hash of the sidecar bytes on disk as this app last saw them - written or loaded - so
     /// a save that would change nothing costs neither a write nor a backup rotation, and a file
     /// another machine changed is still rewritten when our copy differs from it.
     private var lastSavedSidecarHash: String?
@@ -203,7 +203,7 @@ public final class AppState: ObservableObject {
     }
 
     /// One collection document as this platform renders it, with the bytes and the origin it was
-    /// read from — what Apply needs, and what the row cautions read the author's platform from.
+    /// read from - what Apply needs, and what the row cautions read the author's platform from.
     private struct RenderedSource {
         var rendered: RenderedCollection
         var hash: String
@@ -262,7 +262,7 @@ public final class AppState: ObservableObject {
     /// Control's own entry while the integration is on. The store itself keeps the token, so the
     /// same list still resolves on the next machine, and a published document carries it as
     /// written for each subscriber to resolve against their own copy. With no folder the token is
-    /// written as it stands — guessing one would start the wrong program — and the row carries the
+    /// written as it stands - guessing one would start the wrong program - and the row carries the
     /// caution that says so. The entry joins here and only here: the store, the collections and
     /// every document never hold it, and it is written, compared, backed up and regenerated like
     /// every other entry.
@@ -277,7 +277,7 @@ public final class AppState: ObservableObject {
 
     /// The folder `${COLLECTION_DIR}` stands for in `collection` on this machine, or nil when it
     /// stands for none here. A synced collection's is the folder its located document sits in. A
-    /// local one's is the folder this machine publishes it into — where the document is written
+    /// local one's is the folder this machine publishes it into - where the document is written
     /// and the tools shipped beside it live, the same folder a subscriber's copy resolves against.
     /// A collection published from another machine, or not at all, has none on this one.
     func collectionDirectory(of collection: String) -> String? {
@@ -318,7 +318,7 @@ public final class AppState: ObservableObject {
             // Backups always stay machine-local: a synced store directory must
             // not fill the user's repo/cloud folder with rotating backups. The
             // staging folder stays there too: temp files must never be born in
-            // the synced folder — AtomicFile.write takes it as its `staging:`
+            // the synced folder - AtomicFile.write takes it as its `staging:`
             // parameter, threaded through ConfigService/BackupManager. The
             // bindings cache is machine-local for a different reason: the paths
             // in it are true here and nowhere else, so a synced copy of it would
@@ -385,9 +385,9 @@ public final class AppState: ObservableObject {
     }
 
     /// The store's mtime changed on disk. Classify before adopting: our own
-    /// persistStore writes echo through this watcher (skip — memory already
+    /// persistStore writes echo through this watcher (skip - memory already
     /// matches), a sync tool's mid-write partial parses as garbage (wait for
-    /// the completed write to fire again — adopting it would rebuild the
+    /// the completed write to fire again - adopting it would rebuild the
     /// store from the local Claude config and clobber the synced list), and
     /// only a decodable store that differs from memory is a genuine outside
     /// edit to adopt and announce.
@@ -423,8 +423,8 @@ public final class AppState: ObservableObject {
                 try AtomicFile.write(try Data(contentsOf: previousStoreURL), to: newStoreURL,
                                      staging: rebuilt.paths.stagingDirURL)
             } catch {
-                // The new location is left seedless — repointing to it would silently
-                // start empty — so the store stays where it was, settings included.
+                // The new location is left seedless - repointing to it would silently
+                // start empty - so the store stays where it was, settings included.
                 lastError = AppState.friendly(error)
                 settings.masterStoreDir = previousMasterStoreDir
                 return
@@ -434,7 +434,7 @@ public final class AppState: ObservableObject {
         // The saved-sidecar hash describes the file in the old folder; the new one has its own.
         lastSavedSidecarHash = nil
         armWatchers()
-        // An adopted (pre-existing) store is authoritative — reconciling it
+        // An adopted (pre-existing) store is authoritative - reconciling it
         // against the local Claude config with fresh-launch "file wins"
         // semantics would clobber a synced list with local state.
         reload(trigger: .quietStoreAdoption)
@@ -455,8 +455,8 @@ public final class AppState: ObservableObject {
     ///
     /// The snapshot goes back into the collection the backup was taken from, which becomes the
     /// active one again, since Claude's file held that collection's connectors. A backup whose
-    /// collection is gone is refused. One with no record — older than the record, the first-run
-    /// original, a file from elsewhere — goes into the active collection, and publishing still
+    /// collection is gone is refused. One with no record - older than the record, the first-run
+    /// original, a file from elsewhere - goes into the active collection, and publishing still
     /// keeps back any path or folder it carries. While that collection is subscribed, it is refused
     /// (`restoreRefusal(for:)`).
     ///
@@ -548,7 +548,7 @@ public final class AppState: ObservableObject {
 
     /// Claude needs a restart iff it is running on a config older than our last
     /// write. Derived from the process launch date, so it self-clears however
-    /// Claude gets restarted — via us, by hand, or by an update.
+    /// Claude gets restarted - via us, by hand, or by an update.
     func refreshRestartState() {
         guard let lastApply = settings.lastApplyDate, claude.isRunning, let launched = claude.launchDate else {
             needsClaudeRestart = false
@@ -568,7 +568,7 @@ public final class AppState: ObservableObject {
             let previousStoreMcps = store.mcps
 
             // The store file vanished mid-session (deleted store dir, sync
-            // eviction). The in-memory store is the source of truth — persist
+            // eviction). The in-memory store is the source of truth - persist
             // it back rather than loading an empty store and regenerating
             // Claude's config down to nothing.
             if wasLoaded, !FileManager.default.fileExists(atPath: service.paths.masterStoreURL.path) {
@@ -608,8 +608,8 @@ public final class AppState: ObservableObject {
             // then overwrite.
             //
             // What the file added and a subscribed collection could not hold went into a local
-            // collection. A notification below says which; where none fires — a first load, a
-            // quiet adoption — the banner says it instead, since Claude stops running the connector.
+            // collection. A notification below says which; where none fires - a first load, a
+            // quiet adoption - the banner says it instead, since Claude stops running the connector.
             let elsewhereSentence = result.ingestedElsewhere.map {
                 AppState.ingestedElsewhereSentence(activeCollection, ServerDelta.list($0.names, limit: 4), $0.collection)
             }
@@ -630,12 +630,12 @@ public final class AppState: ObservableObject {
                 let alreadyFailing = applyRetryNeeded
                 performApply()
                 regenerated = !applyRetryNeeded
-                // Notify a failure only on the transition into it — retry
+                // Notify a failure only on the transition into it - retry
                 // reloads (every popover open) must not re-post it.
                 regenerationFailed = applyRetryNeeded && !alreadyFailing
             } else if let servers = result.claudeServers {
                 // Claude's file already holds exactly what the active collection renders, so it
-                // holds that collection — which a first launch, with no apply yet, needs recorded.
+                // holds that collection - which a first launch, with no apply yet, needs recorded.
                 recordApplied(activeCollection, names: Set(servers.keys))
             }
             // A regeneration that lands clears the banner, and the notes above still have
@@ -715,7 +715,7 @@ public final class AppState: ObservableObject {
 
     /// What Claude's file was last written from, for the launch ingest: the collection and the
     /// connector names that apply wrote. In memory once the collections files are loaded, and read
-    /// from this machine's cache before then — at launch the store loads first.
+    /// from this machine's cache before then - at launch the store loads first.
     private var lastApplied: (collection: String?, names: Set<String>?) {
         let cache = hasLoadedCollectionsOnce
             ? collectionsCache
@@ -723,7 +723,7 @@ public final class AppState: ObservableObject {
         return (cache.lastAppliedCollection, cache.lastAppliedNames)
     }
 
-    /// Records what Claude's file now holds — `collection`, and the names written into it — in this
+    /// Records what Claude's file now holds - `collection`, and the names written into it - in this
     /// machine's cache, through the same gate as every other cache save. A save that fails leaves
     /// the record in memory for the next.
     private func recordApplied(_ collection: String, names: Set<String>) {
@@ -735,20 +735,20 @@ public final class AppState: ObservableObject {
         try? collectionsCache.save(to: service.paths.collectionsCacheURL, staging: service.paths.stagingDirURL)
     }
 
-    /// The master list first, then the sidecar beside it, then this machine's cache — the order
+    /// The master list first, then the sidecar beside it, then this machine's cache - the order
     /// a crash has to survive: a half-done write leaves the collection loading as an ordinary
     /// local one until the next save, and loses nothing the app cannot rebuild. One `catch` for
     /// the three: the first failure stops the chain, since a sidecar written against a master
     /// list that never landed would describe collections that do not exist.
     private func persistStore() {
-        // The store just changed, so what a source document would change with it may have too —
+        // The store just changed, so what a source document would change with it may have too -
         // and the excluded lists a re-render produces belong in the cache this save writes.
         recomputePending()
         do {
             try service.saveStore(store)
             // A sidecar that the last load could not read is one something else is writing.
             // Our copy of it may never have been filled, and saving that would land an empty
-            // sidecar — and, behind it, a cache pruned against nothing — on top of the real
+            // sidecar - and, behind it, a cache pruned against nothing - on top of the real
             // file the moment the other writer finishes. Both wait for a load that can read it.
             // The master list is ours alone and always saves.
             if collectionsLoaded {
@@ -802,7 +802,7 @@ public final class AppState: ObservableObject {
     }
 
     /// Editor-window flow: saving there is a deliberate final act, so apply
-    /// immediately — but only if something changed.
+    /// immediately - but only if something changed.
     public func applyInteractively() {
         guard isDirty else { return }
         performApply()
@@ -820,7 +820,7 @@ public final class AppState: ObservableObject {
     /// connector, so the document written at the end of it never pairs the new arguments with
     /// the old marks.
     ///
-    /// `alsoIn` is the same save again in other collections — the editor's propagate checkbox —
+    /// `alsoIn` is the same save again in other collections - the editor's propagate checkbox -
     /// under the same name and rename. It is tried only once the save itself is accepted, a name
     /// already taken in one of them leaves that collection alone, and all of it reaches disk as
     /// one write: one backup of the master list, one publish pass, rather than one for each
@@ -902,7 +902,7 @@ public final class AppState: ObservableObject {
 
     /// Rewrites a published collection's intent in memory, for the save that follows to write.
     /// A collection that publishes nothing is left alone, and so is the sidecar when the edit
-    /// changes nothing — every assignment announces itself to the windows watching it. A mark the
+    /// changes nothing - every assignment announces itself to the windows watching it. A mark the
     /// edit drops from a collection another machine publishes is remembered here
     /// (`CollectionsLocalCache.rememberingMarks(in:)`).
     private func editPublishIntent(of collection: String, _ edit: (inout PublishIntent) -> Void) {
@@ -959,14 +959,14 @@ public final class AppState: ObservableObject {
 
     // MARK: - Claude integration
 
-    /// A connector the active collection already holds under the reserved name — from before the
-    /// name was reserved, or synced in from an older app — leaves no room for Connector Control's
+    /// A connector the active collection already holds under the reserved name - from before the
+    /// name was reserved, or synced in from an older app - leaves no room for Connector Control's
     /// own entry: Settings dims the switch and names the clash, and nothing is added.
     public var claudeIntegrationClash: Bool {
         store.collections[activeCollection]?.mcps[ClaudeIntegration.entryName] != nil
     }
 
-    /// Whether the app runs from where it will not stay — a translocated copy, or its disk image — so
+    /// Whether the app runs from where it will not stay - a translocated copy, or its disk image - so
     /// what that refuses can be dimmed in Settings, with the reason.
     public var controlToolIsTransient: Bool { host.controlToolIsTransient }
 
@@ -982,14 +982,14 @@ public final class AppState: ObservableObject {
 
     /// The popover's one-time offer: shown until it is answered, never once the setting has been
     /// decided anywhere (Settings and the command-line tool answer it too), and never where turning
-    /// it on could not work — no bundled tool, a connector holding the name, or an app that runs
+    /// it on could not work - no bundled tool, a connector holding the name, or an app that runs
     /// from where it will not stay.
     public var showsClaudeIntegrationOffer: Bool {
         !settings.claudeIntegrationOfferAnswered && !settings.claudeIntegrationEnabled
             && host.controlToolPath != nil && !claudeIntegrationClash && !host.controlToolIsTransient
     }
 
-    /// Turns the integration on or off from anywhere — Settings, the offer, the command-line tool —
+    /// Turns the integration on or off from anywhere - Settings, the offer, the command-line tool -
     /// and applies at once, so the entry appears or goes and Restart Required follows. Deciding it
     /// answers the offer for good. Turning it on is refused while a connector holds the name, or
     /// while the app runs from where it will not stay, with the sentence that says so; turning it
@@ -1046,7 +1046,7 @@ public final class AppState: ObservableObject {
         toolWaiters.append((wanted, completion))
     }
 
-    /// A change Claude made without asking — confirmations are off, or the user answered after the
+    /// A change Claude made without asking - confirmations are off, or the user answered after the
     /// call had already returned. Always announced, whatever "Notify on external changes" says:
     /// with confirmations off it is the only sign that what Claude runs has changed. The Restart
     /// Claude action rides along while Claude runs an older config.
@@ -1069,7 +1069,7 @@ public final class AppState: ObservableObject {
     ///
     /// The window has to call this twice over: once as it appears, and again whenever
     /// `collectionsWindowRequest` changes while it is already on screen. A window that only
-    /// reads on appear strands every request raised after that — the popover can ask for a sheet
+    /// reads on appear strands every request raised after that - the popover can ask for a sheet
     /// at any time, and a platform that re-activates an existing window instead of building a
     /// new one never appears a second time.
     public func takeCollectionsWindowRequest() -> CollectionsWindowRequest? {
@@ -1117,10 +1117,10 @@ public final class AppState: ObservableObject {
     }
 
     /// Deletes a collection and everything keyed by its name. A synced collection's source file
-    /// is never touched — only this machine's binding to it goes. nil on success.
+    /// is never touched - only this machine's binding to it goes. nil on success.
     public func deleteCollection(named name: String) -> String? {
         // There must always be somewhere to add a connector, and only a local collection takes
-        // one — so the last local collection stays even when synced ones remain beside it. The
+        // one - so the last local collection stays even when synced ones remain beside it. The
         // store still owns "no collection by that name": a name it does not have is not the
         // last anything, and its own message is the one to show.
         if store.collections[name] != nil, isLocal(name), localCollectionNames.count <= 1 {
@@ -1132,7 +1132,7 @@ public final class AppState: ObservableObject {
         collectionsCache.synced.removeValue(forKey: name)
         // Deleting a collection is not the author's word that the paths it kept back may travel:
         // the connector that carried one is still in another collection, or comes back by an
-        // import, a copy or an ingest. What Stop Publishing remembers, this remembers too — this
+        // import, a copy or an ingest. What Stop Publishing remembers, this remembers too - this
         // machine's binding, and the marks of a record another machine publishes.
         rememberWhatWasKeptBack(of: name)
         rememberMarks(in: before)
@@ -1144,7 +1144,7 @@ public final class AppState: ObservableObject {
         return nil
     }
 
-    /// The collection that becomes active if `name`, the active one, is deleted — the store's rule,
+    /// The collection that becomes active if `name`, the active one, is deleted - the store's rule,
     /// told which collections are local. The Delete confirmation names it from here.
     public func activeAfterDeleting(_ name: String) -> String? {
         store.activeAfterDeleting(name, isLocal: isLocal)
@@ -1303,7 +1303,7 @@ public final class AppState: ObservableObject {
         // persistStore re-derives what the newly bound document would change.
         persistStore()
         // ${COLLECTION_DIR} resolves against the folder just bound, so what Claude runs changes
-        // the moment the file is found — with no second click. The dirty check keeps a locate
+        // the moment the file is found - with no second click. The dirty check keeps a locate
         // that resolves to nothing new from rewriting Claude's config for the sake of it.
         if collection == activeCollection { applyIfChanged() }
         return nil
@@ -1343,12 +1343,12 @@ public final class AppState: ObservableObject {
 
     /// Stop Syncing: the collection keeps its connectors, its filled values and its enabled
     /// flags and becomes an ordinary local one. Unfilled markers stay as text, so a row still
-    /// says what it needs — without the hint, which travelled with the document.
+    /// says what it needs - without the hint, which travelled with the document.
     public func stopSyncing(_ collection: String) {
         guard isSynced(collection) else { return }
         // The token resolved against the bound document's folder for as long as there was one.
         // A local collection has no document, so the folder it resolved to is written into the
-        // configs once, exactly as an imported copy expands it — otherwise a path that worked a
+        // configs once, exactly as an imported copy expands it - otherwise a path that worked a
         // second ago would become the literal token, with nothing left to explain it.
         if let directory = sourceFolder(of: collection) {
             for (name, entry) in store.collections[collection]?.mcps ?? [:]
@@ -1405,8 +1405,8 @@ public final class AppState: ObservableObject {
         let rendered: RenderedCollection
         if let kept = pendingRendered[collection], kept.hash == hash {
             // The same bytes as last time: the render they produce cannot have changed, so only
-            // the diff below is re-derived. The store moves under it constantly — a local edit,
-            // another machine's apply arriving — and the answer has to follow it.
+            // the diff below is re-derived. The store moves under it constantly - a local edit,
+            // another machine's apply arriving - and the answer has to follow it.
             rendered = kept.rendered
         } else {
             let document: CollectionDocument
@@ -1446,7 +1446,7 @@ public final class AppState: ObservableObject {
         notify(AppState.collectionUpdateNotificationBody(collection, diff.summary()))
     }
 
-    /// A failed read. A watcher-driven one backs off and tries again — the third consecutive
+    /// A failed read. A watcher-driven one backs off and tries again - the third consecutive
     /// failure is the one the user hears about; Refresh, with someone waiting for an answer,
     /// reports the first.
     private func noteSourceFailure(_ collection: String, _ message: String, manual: Bool) {
@@ -1482,7 +1482,7 @@ public final class AppState: ObservableObject {
     /// to send is refused by its read as much as by the size the control tools check first.
     static let maxDocumentBytes = McpSession.maxMessageBytes
 
-    /// The document at `url`, or the message to show for it — the one read-and-decode every
+    /// The document at `url`, or the message to show for it - the one read-and-decode every
     /// caller that opens a collection document shares. The tuple's document is nil exactly when
     /// the failure is not; the bytes come back too, since the callers that keep a binding hash
     /// exactly what they read.
@@ -1525,7 +1525,7 @@ public final class AppState: ObservableObject {
 
     /// Imports a document's connectors into a local collection as copies: each one rendered for
     /// this platform, `${COLLECTION_DIR}` expanded once against the folder the document sits in,
-    /// disabled, and stamped with where it came from. There is no link to the file afterwards —
+    /// disabled, and stamped with where it came from. There is no link to the file afterwards -
     /// that is what Keep as its own collection is for.
     ///
     /// `choices` answers, per connector, what to do where the target already holds that name:
@@ -1563,7 +1563,7 @@ public final class AppState: ObservableObject {
             let present = store.collections[collection]?.mcps[name] != nil
             // A collision with nothing said about it is left alone: an import must never
             // overwrite something the user did not point at. `add` on a collision means the
-            // same thing — there is no way to add under a name that is taken.
+            // same thing - there is no way to add under a name that is taken.
             let choice = choices[name] ?? (present ? .skip : .add)
             if choice == .skip || (present && choice == .add) { continue }
             // Expanded here, once: a copy has no document to resolve the token against later.
@@ -1592,7 +1592,7 @@ public final class AppState: ObservableObject {
         collectionsFile.collections[collection] = entry
         persistStore()
         // Everything imported arrives off, so only a Replace over a connector that was already
-        // on can change what Claude runs — and the dirty check spares the write when it doesn't.
+        // on can change what Claude runs - and the dirty check spares the write when it doesn't.
         if collection == activeCollection { applyIfChanged() }
         return nil
     }
@@ -1603,7 +1603,7 @@ public final class AppState: ObservableObject {
     /// otherwise: `.replace` takes the target's entry over under its own name, `.skip` copies
     /// nothing. `choices` is keyed by the connector's name in the source. nil on success.
     ///
-    /// Unlike `importCopies`, a collision nothing is said about still lands beside — and `.add`
+    /// Unlike `importCopies`, a collision nothing is said about still lands beside - and `.add`
     /// means the same. An import arrives from a file the user did not write, where silence
     /// should change nothing; a copy is an act they just asked for on rows they ticked, where
     /// silence should do it. Only `.skip` and `.replace` read the same way in both.
@@ -1631,7 +1631,7 @@ public final class AppState: ObservableObject {
         collectionsFile.collections[target] = entry
         persistStore()
         // Every copy arrives off, so only a Replace over a connector that was already on can
-        // change what Claude runs — and the dirty check spares the write when it doesn't.
+        // change what Claude runs - and the dirty check spares the write when it doesn't.
         if target == activeCollection { applyIfChanged() }
         return nil
     }
@@ -1689,7 +1689,7 @@ public final class AppState: ObservableObject {
 
     /// One connector's config as a local collection has to hold it: what it says, with
     /// `${COLLECTION_DIR}` resolved against the folder the source's document sits in. A local
-    /// collection has no document, so the token would resolve to nothing afterwards — exactly
+    /// collection has no document, so the token would resolve to nothing afterwards - exactly
     /// what Stop Syncing bakes in for the same reason. `${CC_NEEDS:…}` markers stay as they are:
     /// a copy asks the user for the same values the original did.
     private func copiedConfig(_ config: JSONValue, from source: String) -> JSONValue {
@@ -1697,7 +1697,7 @@ public final class AppState: ObservableObject {
         return Placeholder.expandDirectoryToken(in: config, directory: directory)
     }
 
-    /// `name`, or "name 2", "name 3", … — the first one no connector in `collection` is called.
+    /// `name`, or "name 2", "name 3", … - the first one no connector in `collection` is called.
     /// Keep both lands beside what is already there rather than over it.
     private func freeConnectorName(_ name: String, in collection: String) -> String {
         guard store.collections[collection]?.mcps[name] != nil else { return name }
@@ -1722,9 +1722,9 @@ public final class AppState: ObservableObject {
     /// `reviewedValues` is what the author's Publish in the sheet says must never travel as
     /// written: it joins this machine's list of marked paths (`PublishBinding.markedValues`), which
     /// keeps every path already on it but the ones the author released there (`releasedValues`).
-    /// A path leaves the list only by Release, never because the sheet has no row holding it — its
-    /// argument deleted, or its connector — so a path put back later is still refused, and the
-    /// sheet lists it where it sits. nil — the banner's Choose Folder, which nobody reviewed —
+    /// A path leaves the list only by Release, never because the sheet has no row holding it - its
+    /// argument deleted, or its connector - so a path put back later is still refused, and the
+    /// sheet lists it where it sits. nil - the banner's Choose Folder, which nobody reviewed -
     /// adds nothing. `releasedValues` are the paths the author released in the sheet, let travel
     /// in this collection's document although this machine keeps them back elsewhere. `shown` is
     /// each connector the sheet showed, as it showed it: its Publish reviews those alone
@@ -1754,7 +1754,7 @@ public final class AppState: ObservableObject {
         let target = url.appendingPathComponent(fileName)
         // Somebody else's document under the name this one would take: publishing over it would
         // replace what their subscribers follow. A file that cannot be read within the document
-        // bound or decoded counts too — it has no origin to vouch for it.
+        // bound or decoded counts too - it has no origin to vouch for it.
         if FileManager.default.fileExists(atPath: target.path),
            AppState.readDocument(at: target).document?.origin != origin {
             return AppState.publishSlugTakenError(fileName)
@@ -1765,7 +1765,7 @@ public final class AppState: ObservableObject {
         let previous = collectionsCache.published[collection]
         // Publishing again takes back what stopping left behind: the lists are this machine's
         // memory of what must not travel, and they outlive the binding. The folders, though, are
-        // this collection's to take back only where the record is its own — `record` is the
+        // this collection's to take back only where the record is its own - `record` is the
         // origin it published under before this call, and a record whose collection has gone
         // belongs to none. A re-used name inherits its paths, but the folders stay in the record,
         // kept back as another collection's: taking them would withdraw a release the sheet
@@ -1786,7 +1786,7 @@ public final class AppState: ObservableObject {
         // What the sheet's Publish showed is what it reviewed. Choose Folder moves a binding and
         // reviews nothing, so it carries the review it had; it never makes a first one
         // (`changePublishFolder`), so a first binding with no sheet is a caller vouching for what
-        // the collection holds — only the tests start publishing that way.
+        // the collection holds - only the tests start publishing that way.
         let reviewing = reviewedValues != nil || previous == nil
         let review = sheetReview(of: collection, intent: intent, shown: shown, after: previous)
         collectionsCache.published[collection] = CollectionsLocalCache.PublishBinding(
@@ -1828,7 +1828,7 @@ public final class AppState: ObservableObject {
     /// nothing, and leave the old folder's document behind. The Publish sheet is the way out, and
     /// it goes through `startPublishing` with the intent the author has just corrected.
     ///
-    /// Nothing happens without a binding here to move — the collection stopped publishing or was
+    /// Nothing happens without a binding here to move - the collection stopped publishing or was
     /// deleted on the other machine under a banner that has since gone. Publishing here again is
     /// the sheet's, which shows the author what it reviews; a Choose Folder that started it would
     /// review every connector the collection holds, unseen.
@@ -1907,13 +1907,13 @@ public final class AppState: ObservableObject {
     /// whole collection, which is what publishing always writes. Rendered from the subset rather
     /// than filtered afterwards, so nothing in the document describes a connector that is not in
     /// it. The origin travels unchanged, so a subset is indistinguishable by origin from the
-    /// whole collection — deliberate: the origin says who published it, not how much of it.
+    /// whole collection - deliberate: the origin says who published it, not how much of it.
     ///
     /// Throws `PublishIntentError.pathMarkMoved` when a path mark cannot be placed on the
     /// argument it was made on, so a marked path is never written into a document as it stands.
     /// A mark for a connector the collection no longer holds counts, whatever the subset: it was
-    /// made on one renamed or removed where the record could not follow — an older app, a hand
-    /// edit, a master list that synced ahead of the file beside it — and the path it stood for
+    /// made on one renamed or removed where the record could not follow - an older app, a hand
+    /// edit, a master list that synced ahead of the file beside it - and the path it stood for
     /// may be travelling under another name.
     ///
     /// `refusingCopies` false lets a copy of a marked path travel as written, for the Publish
@@ -2007,7 +2007,7 @@ public final class AppState: ObservableObject {
     /// What this machine keeps back from `collection`'s document. `folders` are the collection's
     /// own: every folder this machine has published it into, which `${COLLECTION_DIR}` stands for,
     /// and none of them is ever released. `values` are everything else, less the paths the author
-    /// released for this collection —
+    /// released for this collection -
     /// every path on any of its lists of marked paths, and every other folder it binds: another
     /// collection's publish folders, the folders of collections that have since left the store,
     /// and each synced collection's located folder. The lists are not the collection's own alone:
@@ -2028,24 +2028,24 @@ public final class AppState: ObservableObject {
         }
         // Every mark in the sidecar's publish records, whichever machine made it: the sidecar
         // travels with the master list, so a collection the author publishes from another machine
-        // of their own marks its paths here too. A colleague's collection is another matter — this
-        // machine never sees their sidecar — and their document reaches it as placeholders anyway.
+        // of their own marks its paths here too. A colleague's collection is another matter - this
+        // machine never sees their sidecar - and their document reaches it as placeholders anyway.
         // `kept` remembers every one of them from the first load that sees it, so a record that stops
         // marking a path still keeps it back (`rememberingMarks(in:)`).
         for entry in collectionsFile.collections.values {
             guard let record = entry.publish else { continue }
             values.formUnion(record.intent.markedValues)
         }
-        // What a stopped publish left behind keeps its say, so publishing the collection again —
-        // or another collection carrying one of its paths — is still refused.
+        // What a stopped publish left behind keeps its say, so publishing the collection again -
+        // or another collection carrying one of its paths - is still refused.
         let ownOrigin = collectionsFile.collections[collection]?.publish?.origin
         for (name, remembered) in collectionsCache.kept {
             values.formUnion(remembered.markedValues)
             // The folders of the collections that bore a record's name and left are no
             // collection's own here, whatever the record's origin says about the rest of it.
             values.formUnion(remembered.departedFolders)
-            // A record's folders are this collection's own — the ones ${COLLECTION_DIR} stands
-            // for, never released — only where the record is this collection's. Anywhere else
+            // A record's folders are this collection's own - the ones ${COLLECTION_DIR} stands
+            // for, never released - only where the record is this collection's. Anywhere else
             // they are a path it keeps back, released rather than written over and named as that
             // collection's in the sheet.
             if AppState.isOwn(remembered, filedUnder: name, of: collection, publishing: ownOrigin) {
@@ -2087,7 +2087,7 @@ public final class AppState: ObservableObject {
     }
 
     /// A kept record belongs to the collection that published it. Once that collection has left
-    /// the store — deleted here, or gone from a store that synced — the record outlives it and
+    /// the store - deleted here, or gone from a store that synced - the record outlives it and
     /// belongs to nothing: a collection that later bears the name, made here or arriving from the
     /// author's other machine, is a different one, and the folders this one left are another
     /// collection's to it. A collection that only stopped publishing never left, and keeps its own.
@@ -2152,7 +2152,7 @@ public final class AppState: ObservableObject {
     /// hold when they did, is held for review rather than written (`refuseUnreviewed`).
     ///
     /// `forcing` names the one collection whose write happens whether or not the document
-    /// changed — a retry, where the recorded hash says the bytes are in a folder they never
+    /// changed - a retry, where the recorded hash says the bytes are in a folder they never
     /// reached.
     func publishIfChanged(forcing forced: String? = nil) {
         guard !collectionsCache.published.isEmpty else { return }
@@ -2162,8 +2162,8 @@ public final class AppState: ObservableObject {
                   let record = collectionsFile.collections[collection]?.publish else { continue }
             let held = store.collections[collection]?.mcps ?? [:]
             // A reviewed connector that has gone takes its review with it on every pass, whether or
-            // not this one writes: whatever next takes its name — added here, copied, imported or
-            // synced in — is a new connector, however long a hold or a folder that will not take
+            // not this one writes: whatever next takes its name - added here, copied, imported or
+            // synced in - is a new connector, however long a hold or a folder that will not take
             // the write keeps the document from being published in between.
             let pruned = binding.keepingReview(of: Set(held.keys))
             if pruned != binding {
@@ -2174,14 +2174,14 @@ public final class AppState: ObservableObject {
             do {
                 let document = try exportDocument(for: collection, intent: record.intent)
                 // A path this machine has published as a placeholder, now in the document as
-                // written: whatever the marks say — the other machine dropped them in a sidecar
-                // that landed before its master list, a connector came back without them — this
+                // written: whatever the marks say - the other machine dropped them in a sidecar
+                // that landed before its master list, a connector came back without them - this
                 // machine does not send it. Only the author's Release in the sheet clears it.
                 try refuseKeptBackPaths(in: document, of: collection)
                 let hash = try AppState.publishHash(of: document)
                 guard hash != binding.lastWrittenHash || collection == forced else {
-                    // The folder already holds what the store renders — the change that failed or
-                    // was refused has been undone — so nothing is failing any more.
+                    // The folder already holds what the store renders - the change that failed or
+                    // was refused has been undone - so nothing is failing any more.
                     if publishError?.collection == collection { publishError = nil }
                     // A binding from before reviews were kept has reviewed what it published, and
                     // the folder holds all of it.
@@ -2267,8 +2267,8 @@ public final class AppState: ObservableObject {
 
     /// What the sheet's Publish reviews of `collection` under `intent`: every connector the sheet
     /// showed that still stands as it showed it (`shown`, name → config), and for every other one
-    /// the review `previous` already gave it. A connector that arrived under the open sheet —
-    /// synced in, or added in an editor — has none, so it stays unreviewed and holds the next
+    /// the review `previous` already gave it. A connector that arrived under the open sheet -
+    /// synced in, or added in an editor - has none, so it stays unreviewed and holds the next
     /// publish; one changed there keeps the review it had, as any edit of a reviewed connector does,
     /// credential check and all. nil `shown`, from a caller with no sheet, is everything the
     /// collection holds.
@@ -2305,8 +2305,8 @@ public final class AppState: ObservableObject {
     }
 
     /// What a document says, with the export stamp left out. The moment it was written is not
-    /// part of its content, and hashing it would rewrite the shared folder on every store change
-    /// — including the toggles that must never publish.
+    /// part of its content, and hashing it would rewrite the shared folder on every store change -
+    /// including the toggles that must never publish.
     private static func publishHash(of document: CollectionDocument) throws -> String {
         var identity = document
         identity.exported = ""
@@ -2374,7 +2374,7 @@ public final class AppState: ObservableObject {
         guard let loaded else {
             collectionsLoaded = false
             // At launch there is no in-memory state to stand yet, so the cache is taken as it
-            // stands — unreconciled, since the sidecar that would vouch for it is the file that
+            // stands - unreconciled, since the sidecar that would vouch for it is the file that
             // cannot be read. A good set of bindings then outlives a bad sidecar, and the first
             // load that can read the sidecar again prunes whatever it no longer vouches for.
             if !hasLoadedCollectionsOnce {
@@ -2393,7 +2393,7 @@ public final class AppState: ObservableObject {
         let rememberedMarks = cache.kept != fromDisk.kept
         collectionsFile = reconciled
         // Only this machine writes its cache, so a record of the last apply made in memory is never
-        // older than the file's — and it may be newer, when the save it waited for was held back.
+        // older than the file's - and it may be newer, when the save it waited for was held back.
         // The names that apply wrote are half of that record and travel with it: dropping them
         // would leave a collection recorded with no account of what it rendered.
         if let applied = collectionsCache.lastAppliedCollection {
@@ -2401,8 +2401,8 @@ public final class AppState: ObservableObject {
             cache.lastAppliedNames = collectionsCache.lastAppliedNames
         }
         collectionsCache = cache
-        // A failure is this machine's binding's to report. One whose binding this load dropped — the
-        // collection stopped or deleted on the other machine — names a folder and a write this
+        // A failure is this machine's binding's to report. One whose binding this load dropped - the
+        // collection stopped or deleted on the other machine - names a folder and a write this
         // machine no longer makes, and its Choose Folder would have nothing to move.
         if let failure = publishError, collectionsCache.published[failure.collection] == nil { publishError = nil }
         forgetOriginsOfDepartedCollections()

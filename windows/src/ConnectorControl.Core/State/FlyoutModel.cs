@@ -14,7 +14,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public const string Title = Product.Name;
     public const string SettingsTooltip = "Settings";
     public const string QuitTooltip = "Quit Connector Control";
-    public const string RetryTitle = "Apply Failed — Retry";
+    public const string RetryTitle = "Apply Failed - Retry";
     public const string RestartTitle = "Restart Required";
     public const string ReviewAndApplyButton = "Review & Apply…";
     public const string ChooseFolderButton = "Choose Folder…";
@@ -32,7 +32,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public const string ToolWarningGlyph = "\ue7ba";
     /// <summary>
     /// The same glyph under the name the other surfaces call it by: the row caution it was
-    /// written for is one of several the app now draws with it — an unfilled placeholder, a
+    /// written for is one of several the app now draws with it - an unfilled placeholder, a
     /// connector authored elsewhere, a document still to be located. One value, so the two
     /// cannot drift; two names, so neither call site has to lie about what it is marking.
     /// </summary>
@@ -75,7 +75,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
         item.HasPendingUpdate ? item.Name + PendingMenuMark : item.Name;
 
     /// <summary>
-    /// One row's chain tooltip, naming where that collection's document is — every synced row,
+    /// One row's chain tooltip, naming where that collection's document is - every synced row,
     /// not only the active one the chip names. Null for a row with no chain to explain.
     /// </summary>
     public static string? MenuTooltip(CollectionMenuItem item) =>
@@ -84,7 +84,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     /// <summary>The chain glyph's tooltip. Named with the <c>Format</c> suffix because this side cannot carry a static and an instance member (<see cref="SourceTooltip"/>) under one name.</summary>
     public static string SourceTooltipFormat(string source) => $"Synced from {source}";
 
-    /// <summary>Property names Rebuild actually depends on — everything else AppState raises is noise for this view.</summary>
+    /// <summary>Property names Rebuild actually depends on - everything else AppState raises is noise for this view.</summary>
     private static readonly string[] RelevantProperties =
     [
         nameof(AppState.Store), nameof(AppState.ToolStatuses), nameof(AppState.LastError),
@@ -147,7 +147,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     public CollectionBanner? CollectionBanner => state.CollectionBanner;
 
     /// <summary>
-    /// The flyout's slot speaks for whichever collection has news, active or not — unlike the
+    /// The flyout's slot speaks for whichever collection has news, active or not - unlike the
     /// Collections window's strip, which answers only for the collection it is showing.
     /// </summary>
     public string? CollectionBannerText =>
@@ -162,7 +162,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     // a settings file that would not save) the Mac has no counterpart for; the offer waits only behind the error
     // both platforms have.
     /// <summary>The one-time offer of the Claude integration, in the banner slot: shown until it is answered,
-    /// and only while neither an error nor a collection banner holds the slot — it waits behind both.</summary>
+    /// and only while neither an error nor a collection banner holds the slot - it waits behind both.</summary>
     public bool ShowsClaudeIntegrationOffer => state.ShowsClaudeIntegrationOffer && state.LastError is null && !HasCollectionBanner;
 
     /// <summary>Turn On or Not Now; either answers the offer for good. After Turn On the banner goes, and
@@ -299,7 +299,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
 
     /// <summary>
     /// The failed-publish banner's folder, for the collection that banner names. Publishing
-    /// again into a new folder is what re-points it, so the recorded intent travels unchanged —
+    /// again into a new folder is what re-points it, so the recorded intent travels unchanged -
     /// the dialog is where what the document says gets edited. Null as <see cref="LocateSource"/>
     /// returns null. Under a publish blocked for review the folder is refused inside
     /// <c>AppState.ChangePublishFolder</c>, which answers with the reason, so a folder dialog
@@ -313,7 +313,7 @@ public sealed class FlyoutModel : ObservableObject, IDisposable
     };
 
     /// <summary>
-    /// The banner's Review &amp; Apply, for the collection the banner names — which is not always
+    /// The banner's Review &amp; Apply, for the collection the banner names - which is not always
     /// the active one, so the name travels with the request.
     /// </summary>
     public void RequestReview()

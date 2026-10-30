@@ -142,8 +142,8 @@
                       </TextBlock>
 
                       <!-- What would happen to this connector: how the collision it would cause
-                           resolves, or — for every other row, and for a collision that is not
-                           coming across — the row's own badge. Which of the two is the row's
+                           resolves, or - for every other row, and for a collision that is not
+                           coming across - the row's own badge. Which of the two is the row's
                            ShowsPicker, which it raises as its Include changes. -->
                       <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,0,0,0">
                         <!-- The badge is a row's whole point and the skipped reason is the longest

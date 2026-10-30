@@ -195,8 +195,8 @@ public class UpdateVerifierTests : IDisposable
     [Fact]
     public void AFileOfOursMustCarryTheWholeSubjectNotJustTheOrganization()
     {
-        // Another certificate naming the same O= — the same organization's other signing identity, or one a CA
-        // issued in error — is not this app's signer. The running app's own subject is the only one accepted.
+        // Another certificate naming the same O= - the same organization's other signing identity, or one a CA
+        // issued in error - is not this app's signer. The running app's own subject is the only one accepted.
         RequireSignedFramework();
         var sameOrganization = "CN=Someone Else, O=" + SignerIdentity.OrganizationOf(Identity.Subject!) + ", C=US";
         var problem = UpdateVerifier.VerifyFile(SignedSibling, sameOrganization, "ConnectorControl.dll", mustBeOurs: true);

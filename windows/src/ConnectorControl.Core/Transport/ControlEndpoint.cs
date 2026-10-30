@@ -20,7 +20,7 @@ public static class ControlEndpoint
 
     /// <summary>The pipe: <c>ConnectorControl-&lt;user SID&gt;</c>, one per account on the PC; with
     /// CONNECTOR_CONTROL_STORE_DIR set, a suffix from that folder, so a development run or a test host never
-    /// meets the app the person is running — as the Mac's socket moves with the store folder.</summary>
+    /// meets the app the person is running - as the Mac's socket moves with the store folder.</summary>
     public static string PipeName(IReadOnlyDictionary<string, string> environment, string userSid)
     {
         var name = PipePrefix + userSid;
@@ -87,7 +87,7 @@ public static class ControlEndpoint
         return block.Append('\0').ToString();
     }
 
-    /// <summary>Whether a token runs elevated: its owner — who owns what it creates, the pipe among them — is not
+    /// <summary>Whether a token runs elevated: its owner - who owns what it creates, the pipe among them - is not
     /// its user, as for an administrator's elevated token, owned by BUILTIN\Administrators. Its pipe check admits
     /// only a pipe of the same owner, so it cannot reach the person's app, and an app it started would serve a
     /// pipe out of reach of everything the person runs as themselves. An owner or user Windows cannot name
@@ -106,7 +106,7 @@ public static class ControlEndpoint
     /// <summary>Where the app records its own executable, beside the copy of the tool it keeps.</summary>
     public const string AppPathFileName = "app-path.txt";
 
-    /// <summary>The app the tool starts: the one beside it — the packaged tool sits beside ConnectorControl.exe —
+    /// <summary>The app the tool starts: the one beside it - the packaged tool sits beside ConnectorControl.exe -
     /// else the one the app recorded beside the copy it keeps in bin\; null when neither is there, or the
     /// record names anything but a full path to ConnectorControl.exe: a relative one would resolve against
     /// whatever folder the tool was run from.</summary>
@@ -125,9 +125,9 @@ public static class ControlEndpoint
             && exists(recorded) ? recorded : null;
     }
 
-    /// <summary>What the tool says for the version a build stamped — .NET's informational version, which
-    /// carries the source revision after a "+": its SemVer, or "development build" for a stamp that is none
-    /// — an empty one — or for <c>0.0.0</c>, what a build nobody stamped carries (Directory.Build.props), so
+    /// <summary>What the tool says for the version a build stamped - .NET's informational version, which
+    /// carries the source revision after a "+": its SemVer, or "development build" for a stamp that is none -
+    /// an empty one - or for <c>0.0.0</c>, what a build nobody stamped carries (Directory.Build.props), so
     /// both platforms call such a build the same thing.</summary>
     public static string ToolVersion(string stamped) =>
         ControlVersion.Semantic(stamped) is { } version && version != "0.0.0" ? version : AppVersion.DevelopmentBuild;

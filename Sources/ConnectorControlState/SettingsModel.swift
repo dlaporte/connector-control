@@ -296,7 +296,7 @@ public final class SettingsModel: ObservableObject {
         }
     }
 
-    /// Dimmed while a connector holds the name, or the app runs from where it will not stay — unless
+    /// Dimmed while a connector holds the name, or the app runs from where it will not stay - unless
     /// the switch is on, so it can still go off.
     public var canChangeClaudeIntegration: Bool {
         settings.claudeIntegrationEnabled || (!state.claudeIntegrationClash && !state.controlToolIsTransient)
@@ -368,7 +368,7 @@ public final class SettingsModel: ObservableObject {
         return TextRun.runs(CommandLineToolText.installedInText(folder), settingApart: [folder])
     }
 
-    /// What to do with it: run `help` once installed; else the full path scripts can always use — left
+    /// What to do with it: run `help` once installed; else the full path scripts can always use - left
     /// out while Install is refused, since that path is about to be gone.
     public var commandLineToolCaption: [TextRun] {
         guard let tool = commandLineTool, !installRefused else { return [] }
@@ -390,7 +390,7 @@ public final class SettingsModel: ObservableObject {
     /// so a window opened meanwhile sees it too.
     public var commandLineToolBusy: Bool { commandLineTool?.isBusy == true }
 
-    /// Under the row: why the last try failed — the seam's, so a window opened meanwhile shows it — else
+    /// Under the row: why the last try failed - the seam's, so a window opened meanwhile shows it - else
     /// why Install cannot work here; nil otherwise.
     public var commandLineToolMessage: String? {
         commandLineTool?.lastProblem ?? (installRefused ? ClaudeIntegration.moveToApplicationsError : nil)

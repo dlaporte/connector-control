@@ -4,7 +4,7 @@ using System.Windows.Controls;
 namespace ConnectorControl.App.Views;
 
 /// <summary>
-/// What every modal dialog here has in common — Confirm, NamePrompt, Update, Restore, and the
+/// What every modal dialog here has in common - Confirm, NamePrompt, Update, Restore, and the
 /// Collections window's Copy, Import, Publish and Review: a fixed, non-resizable, taskbar-hidden
 /// modal that sizes to its content and shares the same background, plus the bits of code-behind
 /// machinery each of them would otherwise write out itself.

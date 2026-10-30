@@ -143,7 +143,7 @@ final class AppStateCommandTests: XCTestCase {
         XCTAssertEqual(state.lastError, errorBefore)
         XCTAssertEqual(state.needsClaudeRestart, needsRestartBefore)
 
-        // The completion block itself — not only the delayed follow-up — must be a no-op once
+        // The completion block itself - not only the delayed follow-up - must be a no-op once
         // disposed: a restart that finishes after dispose (the app quitting mid-restart) must
         // not resurrect state or schedule a fresh delay.
         state.lastError = "should not survive"

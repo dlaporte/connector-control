@@ -3,7 +3,7 @@ namespace ConnectorControl.Core.State;
 /// <summary>
 /// The copy clash sheet: opened only when <see cref="CollectionsModel.CheckedNamesClashing"/>
 /// says the ticked connectors are not all clean, to ask what to do about the ones the destination
-/// already holds. Not <see cref="ImportModel"/>, which is bound to a document path — the copy
+/// already holds. Not <see cref="ImportModel"/>, which is bound to a document path - the copy
 /// already has its own engine, <see cref="CollectionsModel.CopyChecked"/>; this model only builds
 /// the rows and hands its answers back to it.
 ///

@@ -4,7 +4,7 @@ namespace ConnectorControl.Core.State;
 // declares, what it answers, and what it asks the user.
 
 /// <summary>
-/// Who is calling: the command-line tool, trusted as the user, or the relay Claude Desktop runs —
+/// Who is calling: the command-line tool, trusted as the user, or the relay Claude Desktop runs -
 /// which is also what anything but a well-formed command-line hello is taken for, so the gate
 /// guards it. C# has no enum payloads, so the two callers are records.
 ///
@@ -74,7 +74,7 @@ public enum ControlGateClass { Read, Direct, Gated, AlwaysConfirm }
 
 /// <summary>
 /// The gate's rule, apart from any one tool. The command-line tool is the user and is never gated.
-/// Claude is refused everything while the integration is off — including between turning it off and
+/// Claude is refused everything while the integration is off - including between turning it off and
 /// Claude restarting without the entry.
 /// </summary>
 public static class ControlGate
@@ -174,7 +174,7 @@ public sealed record ControlResult(JsonValue Structured, string Text, bool IsErr
 
 /// <summary>
 /// What a confirmation shows: who is asking for what, what would run, and a closing line.
-/// <c>Code</c> holds the monospace lines — what would run, masked; empty for none. Equality
+/// <c>Code</c> holds the monospace lines - what would run, masked; empty for none. Equality
 /// compares them line by line: a record would compare the list by reference.
 /// </summary>
 public sealed record ConfirmationRequest(string Title, string Message, IReadOnlyList<string> Code, string? Footer)
@@ -219,8 +219,8 @@ public interface IControlConfirmer
     void Confirm(ConfirmationRequest request, Action<bool> completion);
 }
 
-/// <summary>Answers every question Don't Allow, at once: the confirmer of a host that can show no dialog —
-/// the test hosts; the apps ask in their own (<c>DialogConfirmer</c>) — so a change that must be asked about is
+/// <summary>Answers every question Don't Allow, at once: the confirmer of a host that can show no dialog -
+/// the test hosts; the apps ask in their own (<c>DialogConfirmer</c>) - so a change that must be asked about is
 /// refused, never made unasked. It keeps the confirmer's contract: one completion, every time. It never
 /// throws.</summary>
 public sealed class DecliningConfirmer : IControlConfirmer

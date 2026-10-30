@@ -11,7 +11,7 @@ public enum CollectionsFileError: Error, Equatable {
 /// The sidecar written beside the master list: for each collection that has something to say,
 /// whether it is synced or published, where its document is relative to the store, and the
 /// placeholders it carries. It travels with the master list, so it holds only what is true on
-/// every machine — the per-machine bindings live in `CollectionsLocalCache`.
+/// every machine - the per-machine bindings live in `CollectionsLocalCache`.
 ///
 /// Mirror: windows/src/ConnectorControl.Core/CollectionsFile.cs
 public struct CollectionsFile: Equatable, Sendable {
@@ -88,7 +88,7 @@ public struct CollectionsFile: Equatable, Sendable {
         }
     }
 
-    /// A collection with no entry is local — a profile the master list has and the sidecar has
+    /// A collection with no entry is local - a profile the master list has and the sidecar has
     /// never had anything to add about.
     public func kind(of name: String) -> CollectionKind { collections[name]?.kind ?? .local }
 
@@ -119,7 +119,7 @@ public struct CollectionsFile: Equatable, Sendable {
 
     // MARK: Disk
 
-    /// The sidecar, or nil when it exists and cannot be read, parsed or decoded — a file a sync
+    /// The sidecar, or nil when it exists and cannot be read, parsed or decoded - a file a sync
     /// tool is halfway through writing, which must not be taken for one with no entries. The file
     /// on disk is left exactly as it was. A missing sidecar loads as empty: nothing has been written
     /// yet, so nothing is being lost.

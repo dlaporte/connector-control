@@ -78,7 +78,7 @@ public class CollectionsModelTests
         Assert.True(state.IsLocated("Default"));
 
         // Dispose cuts the republish: nothing repaints. What the kept list holds afterwards is not
-        // asserted — nobody reads it once the window is gone, and pinning a stale value would make
+        // asserted - nobody reads it once the window is gone, and pinning a stale value would make
         // a behaviour of it.
         model.Dispose();
         var before = repaints;
@@ -306,7 +306,7 @@ public class CollectionsModelTests
 
     /// <summary>
     /// A command line written as one string is split into launcher and arguments and each word
-    /// held to the rule, so its last word — often a flag's value — is never shown for the launcher.
+    /// held to the rule, so its last word - often a flag's value - is never shown for the launcher.
     /// </summary>
     [Fact]
     public void TargetSplitsACommandLineWrittenAsOneString()
@@ -320,7 +320,7 @@ public class CollectionsModelTests
     }
 
     /// <summary>
-    /// A quoted argument in a one-string command line — a header value, some JSON — is one
+    /// A quoted argument in a one-string command line - a header value, some JSON - is one
     /// argument, and one holding whitespace fails every shape the column shows; an unterminated
     /// quote runs to the end as part of its word.
     /// </summary>
@@ -998,7 +998,7 @@ public class CollectionsModelTests
         Assert.Equal(CollectionsModel.ConnectorTally(3), model.ConnectorCount);
         Assert.False(model.CanRefresh);
 
-        // A synced entry that records no file name either — a hand-edited or foreign collections
+        // A synced entry that records no file name either - a hand-edited or foreign collections
         // file. Nothing asks to be located, but there is still no document to name or to read.
         h.Seed(state, File_(("Shared", Published("shared")), ("Team", new CollectionsFile.Entry(CollectionKind.Synced))),
             Cache(published: located.Published));
@@ -1211,7 +1211,7 @@ public class CollectionsModelTests
         var raised = new List<string?>();
         model.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
 
-        // The active collection is what is showing, so naming it again is the same selection —
+        // The active collection is what is showing, so naming it again is the same selection -
         // as is naming a collection that does not exist, which falls back to the same one.
         model.Selected = "Default";
         model.Selected = null;
@@ -1305,7 +1305,7 @@ public class CollectionsModelTests
         Assert.DoesNotContain(nameof(CollectionsModel.Items), raised);
         Assert.Same(items, model.Items);
 
-        // One that alters an item — which collection is active — replaces it.
+        // One that alters an item - which collection is active - replaces it.
         raised.Clear();
         state.SwitchCollection("Work");
         Assert.Contains(nameof(CollectionsModel.Items), raised);
@@ -1410,7 +1410,7 @@ public class CollectionsModelTests
     /// <summary>
     /// The kind guard specifically, not just an empty tick set: Selected clears the ticks on
     /// every switch, so a leg that ticks a row and only then switches to the synced collection
-    /// would find the predicate false regardless of the IsSynced term — the empty tick set
+    /// would find the predicate false regardless of the IsSynced term - the empty tick set
     /// alone would explain it. Reload does not clear ticks, so ticking first and letting the
     /// *same* collection turn synced underneath is the one path that isolates the guard.
     /// </summary>
@@ -1470,7 +1470,7 @@ public class CollectionsModelTests
 
     /// <summary>
     /// Delete(names, collection) persists but never applies on its own; the caller applies only
-    /// when the collection losing rows is the active one — the same rule AppState.SetEnabled follows.
+    /// when the collection losing rows is the active one - the same rule AppState.SetEnabled follows.
     /// </summary>
     [Fact]
     public void DeleteCheckedAppliesOnlyWhenTheActiveCollectionLosesRows()
@@ -1509,7 +1509,7 @@ public class CollectionsModelTests
     }
 
     /// <summary>
-    /// The copy lands in the target, disabled, and the ticks go with it — the same clearing
+    /// The copy lands in the target, disabled, and the ticks go with it - the same clearing
     /// DeleteChecked does on success. Every copy arrives disabled, so this never applies.
     /// </summary>
     [Fact]
@@ -1519,7 +1519,7 @@ public class CollectionsModelTests
         using var state = h.Create();
         // Created first: CreateActiveCopy starts a collection as a copy of whichever one is
         // active when it is made, so making Spare before alpha exists keeps alpha out of that
-        // starting snapshot — otherwise the copy below would collide with it and land as
+        // starting snapshot - otherwise the copy below would collide with it and land as
         // "alpha 2" instead, leaving the original untouched and this test green for the wrong
         // reason.
         Assert.Null(state.CreateActiveCopy("Spare"));
@@ -1537,8 +1537,8 @@ public class CollectionsModelTests
     }
 
     /// <summary>
-    /// The two early-outs CopyChecked documents: a target CopyDestinations does not enable —
-    /// the source itself, or a synced collection — and an empty tick set. Both return false without
+    /// The two early-outs CopyChecked documents: a target CopyDestinations does not enable -
+    /// the source itself, or a synced collection - and an empty tick set. Both return false without
     /// reaching AppState.MakeLocalCopy, so nothing lands anywhere and the ticks are left standing.
     /// The last error is cleared, so the window does not show it again as if this copy had failed.
     /// </summary>

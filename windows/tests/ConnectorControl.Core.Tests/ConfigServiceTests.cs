@@ -25,7 +25,7 @@ public class ConfigServiceTests : IDisposable
 
     /// <summary>
     /// Claude's file holds the collection it was last applied from, so what that collection renders
-    /// is left where it is; with nothing recorded — a first launch — everything is ingested.
+    /// is left where it is; with nothing recorded - a first launch - everything is ingested.
     /// </summary>
     [Fact]
     public void TheIngestLeavesTheRecordedCollectionsOwnServersWhereTheyAre()
@@ -53,8 +53,8 @@ public class ConfigServiceTests : IDisposable
         Assert.True(loaded.Store.Collections[loaded.Store.ActiveCollection].Mcps.ContainsKey("installer"));
         Assert.False(loaded.Store.Collections["Team"].Mcps.ContainsKey("installer"));
 
-        // A record naming a collection this store does not have — deleted here, or on another
-        // machine — has no render to compare against, so the names that apply wrote stand in for it.
+        // A record naming a collection this store does not have - deleted here, or on another
+        // machine - has no render to compare against, so the names that apply wrote stand in for it.
         File.Delete(paths.MasterStorePath);
         // What the collection that is gone rendered is left where it is, and the rest comes in.
         Assert.Equal(Set(["service-now", "installer"]),
@@ -277,8 +277,8 @@ public class ConfigServiceTests : IDisposable
     }
 
     /// <summary>
-    /// A backup whose active collection names one it does not hold — a hand edit, a foreign
-    /// machine's — makes the first existing collection in ordinal order active, and the reconcile
+    /// A backup whose active collection names one it does not hold - a hand edit, a foreign
+    /// machine's - makes the first existing collection in ordinal order active, and the reconcile
     /// takes Claude's connectors there rather than into a new collection under the missing name.
     /// </summary>
     [Fact]
@@ -345,7 +345,7 @@ public class ConfigServiceTests : IDisposable
         Assert.Equal(3, ClaudeConfigIO.ReadMcpServers(paths.ClaudeConfigPath).Count);
     }
 
-    /// <summary>The restore applies the bytes it is handed — the ones its caller checked — not the file as it
+    /// <summary>The restore applies the bytes it is handed - the ones its caller checked - not the file as it
     /// is by then.</summary>
     [Fact]
     public void RestoreUsesTheBytesItIsGivenNotTheFileNow()
@@ -552,7 +552,7 @@ public class ConfigServiceTests : IDisposable
 
     /// <summary>
     /// ParseRoot treats zero bytes as an empty root (the same rule ClaudeConfigIO's own read path
-    /// already applies), so a zero-byte backup — the same crash/truncation artifact — restores to
+    /// already applies), so a zero-byte backup - the same crash/truncation artifact - restores to
     /// an empty config instead of being refused as malformed.
     /// </summary>
     [Fact]

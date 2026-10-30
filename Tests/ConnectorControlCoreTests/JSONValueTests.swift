@@ -42,7 +42,7 @@ final class JSONValueTests: XCTestCase {
         XCTAssertEqual(value, .object(["x": .int(2), "y": .double(2.5)]))
 
         // Every spelling of a whole-valued number, parsed through JSONValue.parse
-        // (JSONDecoder), lands on the same .int — not just the plain "2.0" case.
+        // (JSONDecoder), lands on the same .int - not just the plain "2.0" case.
         for (literal, expectedInt) in [("2.0", 2), ("1e2", 100), ("100.000", 100), ("-0", 0)] {
             let parsed = try JSONValue.parse(Data(#"{"x": \#(literal)}"#.utf8))
             XCTAssertEqual(parsed, .object(["x": .int(expectedInt)]), "literal \(literal)")
@@ -99,7 +99,7 @@ final class JSONValueTests: XCTestCase {
 
     /// Unlike `JSONSerialization` (last wins) and Windows' `System.Text.Json`
     /// (also last wins by default), Foundation's `JSONDecoder` keeps the
-    /// FIRST value for a duplicate key — verified empirically, not assumed.
+    /// FIRST value for a duplicate key - verified empirically, not assumed.
     func testFirstDuplicateKeyWins() throws {
         let value = try JSONValue.parse(Data(#"{"a": 1, "a": 2}"#.utf8))
         XCTAssertEqual(value, .object(["a": .int(1)]))
@@ -117,7 +117,7 @@ final class JSONValueTests: XCTestCase {
     }
 
     /// A file saved by an editor that writes a BOM (common on Windows) must
-    /// still parse — Foundation's JSONDecoder skips it.
+    /// still parse - Foundation's JSONDecoder skips it.
     func testUtf8BomIsAccepted() throws {
         var data = Data([0xEF, 0xBB, 0xBF])
         data.append(Data(#"{"a": 1}"#.utf8))

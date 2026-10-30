@@ -5,8 +5,8 @@ namespace ConnectorControl.App.Services;
 
 /// <summary>
 /// The `--verify-package &lt;nupkg&gt; --report &lt;file&gt;` switch the app itself understands, so a
-/// build's own freshly packed nupkg can be checked against <see cref="UpdateVerifier"/> — the exact
-/// rule <see cref="VelopackUpdater"/> applies to a downloaded update — without a real update feed, a
+/// build's own freshly packed nupkg can be checked against <see cref="UpdateVerifier"/> - the exact
+/// rule <see cref="VelopackUpdater"/> applies to a downloaded update - without a real update feed, a
 /// scheduled check, or a download. smoke-test.ps1 runs the installed exe with these two flags and
 /// reads the report back; nothing else in the app produces this shape of invocation, so any other
 /// argument list (no args, a toast-activation relaunch) is simply not this command and a normal
@@ -150,7 +150,7 @@ internal static partial class PackageVerificationCommand
         File.WriteAllText(reportPath, text);
     }
 
-    /// <summary>The token after the first occurrence of <paramref name="flag"/>, wherever it sits in <paramref name="args"/>. False both when <paramref name="flag"/> is absent and when it is the last token (present but valueless) — callers that must tell those apart use <see cref="Contains"/> first.</summary>
+    /// <summary>The token after the first occurrence of <paramref name="flag"/>, wherever it sits in <paramref name="args"/>. False both when <paramref name="flag"/> is absent and when it is the last token (present but valueless) - callers that must tell those apart use <see cref="Contains"/> first.</summary>
     private static bool TryValue(string[] args, string flag, [NotNullWhen(true)] out string? value)
     {
         for (var i = 0; i < args.Length - 1; i++)

@@ -218,7 +218,7 @@ public class FileWatcherTests : IDisposable
     /// <summary>
     /// Drives HandleError's "directory is gone" branch entirely through the internal
     /// seam (no Start(), no live FileSystemWatcher at all). That branch is pure
-    /// internal logic — Stop() plus exactly one marshalled callback — and doesn't
+    /// internal logic - Stop() plus exactly one marshalled callback - and doesn't
     /// need a real OS watcher to prove it. This used to be folded into the
     /// real-file-system test below, alongside a genuinely-armed watcher and a real
     /// Directory.Delete; that combination was flaky on Windows CI (never on the
@@ -324,7 +324,7 @@ public class FileWatcherTests : IDisposable
     /// <summary>
     /// The rebuild that keeps a replaced folder from being watched by a dead handle. Whatever
     /// raised the error, the FileSystemWatcher behind it is spent, so a fresh one takes its
-    /// place — proved here by the arm count, which is a fact about this object and so does not
+    /// place - proved here by the arm count, which is a fact about this object and so does not
     /// depend on what a platform's FileSystemWatcher does with a handle on a folder that has
     /// been deleted. Nothing happens to the directory in this test, so the OS cannot raise an
     /// error of its own to race the count. C#-only: the Mac's watcher has no error event.
@@ -355,7 +355,7 @@ public class FileWatcherTests : IDisposable
     /// A FileSystemWatcher watches the folder it was armed on, not the path: a folder replaced
     /// wholesale leaves it holding one that is no longer there, where it is silent for good. The
     /// watcher's only handle on folder identity is the creation time it armed on, so changing
-    /// that is exactly the input a replacement produces — and it is the one way to produce it
+    /// that is exactly the input a replacement produces - and it is the one way to produce it
     /// without deleting or moving anything, which would let the OS raise an error of its own and
     /// race these assertions. IsArmed must then say no, and the re-arm every reload performs
     /// must swap the watcher onto the folder that is there. C#-only: the Mac tells folders apart
@@ -386,8 +386,8 @@ public class FileWatcherTests : IDisposable
 
     /// <summary>
     /// The real shape of the above: a sync client renames the shared folder away and puts
-    /// another copy at the path. A rename raises no error on Windows — the handle follows the
-    /// folder it was opened on — so nothing but the next Start() can notice, which is why
+    /// another copy at the path. A rename raises no error on Windows - the handle follows the
+    /// folder it was opened on - so nothing but the next Start() can notice, which is why
     /// IsArmed has to tell the truth. The creation time of the replacement is set explicitly
     /// because NTFS hands a name recreated in the same parent within about fifteen seconds its
     /// predecessor's creation time, and without that line this test would quietly stop
@@ -435,7 +435,7 @@ public class FileWatcherTests : IDisposable
     /// already differs will never fire for a change that happened before the new watcher
     /// existed, so without the re-check that change waits for an unrelated write. The path
     /// probe stands in for the replacement's contents, which is what makes this deterministic
-    /// on any platform — no real write happens, so no FileSystemWatcher event of any kind can
+    /// on any platform - no real write happens, so no FileSystemWatcher event of any kind can
     /// report the change for the wrong reason.
     /// </summary>
     [Fact]
@@ -560,8 +560,8 @@ public class FileWatcherTests : IDisposable
 
     /// <summary>
     /// A rebuild the cooldown holds back is owed, not dropped. If the error it answered came from
-    /// a dead handle — a folder deleted and recreated under the same name, which keeps its
-    /// creation time on NTFS, so the identity check cannot see it — dropping it would leave the
+    /// a dead handle - a folder deleted and recreated under the same name, which keeps its
+    /// creation time on NTFS, so the identity check cannot see it - dropping it would leave the
     /// watcher reporting itself armed while deaf for good. Two replacements of the same folder
     /// inside a second is enough, which a git rebase in a synced collection can do. C#-only: the
     /// Mac's watcher has no error event.
@@ -583,8 +583,8 @@ public class FileWatcherTests : IDisposable
     }
 
     /// <summary>
-    /// Only a rebuild that happened spends the cooldown. An attempt that found nothing armed —
-    /// a late error after Stop() — rebuilt nothing, and the next real error must still get its
+    /// Only a rebuild that happened spends the cooldown. An attempt that found nothing armed -
+    /// a late error after Stop() - rebuilt nothing, and the next real error must still get its
     /// rebuild rather than find the slot taken. C#-only: the Mac's watcher has no error event.
     /// </summary>
     [Fact]

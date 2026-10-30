@@ -15,7 +15,7 @@ public sealed record SignerIdentity(string Subject, string? Organization)
     }
 
     /// <summary>
-    /// The value of the O= (id-at-organizationName, 2.5.4.10) attribute — exactly one, or null. Two
+    /// The value of the O= (id-at-organizationName, 2.5.4.10) attribute - exactly one, or null. Two
     /// organizations is nobody's identity, and a subject that is not a distinguished name names none.
     /// </summary>
     internal static string? OrganizationOf(string subject)
@@ -45,7 +45,7 @@ public sealed record SignerIdentity(string Subject, string? Organization)
     }
 
     /// <summary>
-    /// Whether two subject DNs name the same signer: the same attributes, with the same values, in the same order —
+    /// Whether two subject DNs name the same signer: the same attributes, with the same values, in the same order -
     /// however each string spells or quotes them. Windows only in use: the update check holds every file that must be
     /// this app's own to the running app's whole subject, not just its O=, which another certificate could share.
     /// A subject that is not a distinguished name, or names nothing, matches nothing.

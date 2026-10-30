@@ -1,7 +1,7 @@
 namespace ConnectorControl.Core.State;
 
 /// <summary>
-/// One environment-variable row. The row object's own identity — not a stored id — is what keeps
+/// One environment-variable row. The row object's own identity - not a stored id - is what keeps
 /// it in place while the name is edited; values are masked unless <see cref="Revealed"/> (only
 /// freshly added rows start revealed).
 /// </summary>

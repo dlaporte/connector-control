@@ -6,7 +6,7 @@
   },
   "AppState.chooseClaude": "Choose the real Claude Desktop under Settings ▸ Claude.",
   "AppState.claudeConfigChangedBody": "Claude's config changed outside Connector Control.",
-  "AppState.claudeConfigRegeneratedBody": "Claude's config was changed outside Connector Control — regenerated from your connector list. Restart Claude to pick it up.",
+  "AppState.claudeConfigRegeneratedBody": "Claude's config was changed outside Connector Control - regenerated from your connector list. Restart Claude to pick it up.",
   "AppState.collectionDirCmdUnsafeCaution": {
     "win": "The folder ${COLLECTION_DIR} stands for must not contain & | < > ^ \" or spaces: on Windows the cmd /c launcher hands it to cmd.exe, which treats those as commands."
   },
@@ -28,8 +28,8 @@
     "format": "{0} changed at its source: {1}. Review it in Connector Control."
   },
   "AppState.collectionsNotSavedNote": "Collections could not be saved: the collections file is unreadable. Your change is not on disk and will be lost when the file is read again.",
-  "AppState.connectorListChangedBody.noRestart": "The connector list changed outside Connector Control — Claude's config was regenerated. Claude will use it the next time it starts.",
-  "AppState.connectorListChangedBody.restart": "The connector list changed outside Connector Control — Claude's config was regenerated. Restart Claude to pick it up.",
+  "AppState.connectorListChangedBody.noRestart": "The connector list changed outside Connector Control - Claude's config was regenerated. Claude will use it the next time it starts.",
+  "AppState.connectorListChangedBody.restart": "The connector list changed outside Connector Control - Claude's config was regenerated. Restart Claude to pick it up.",
   "AppState.defaultClaudeAppPath": {
     "mac": "/Applications/Claude.app"
   },
@@ -77,7 +77,7 @@
   },
   "AppState.quitButton": "Quit",
   "AppState.quitMessage": "Quit Connector Control?",
-  "AppState.regenerationFailedBody": "The connector configuration changed, but Claude's config could not be updated — open Connector Control to retry.",
+  "AppState.regenerationFailedBody": "The connector configuration changed, but Claude's config could not be updated - open Connector Control to retry.",
   "AppState.relaunchFailedMessage": {
     "win": "Claude didn’t come back after the restart. Start Claude yourself, then try again."
   },
@@ -94,7 +94,7 @@
   "AppState.sourceUnreadableError": {
     "format": "{0} couldn’t be read: {1}"
   },
-  "AppState.storeChangedBody": "The connector list changed outside Connector Control — review it before your next change is applied.",
+  "AppState.storeChangedBody": "The connector list changed outside Connector Control - review it before your next change is applied.",
   "AppState.targetMustBeLocalError": "Copies go into a local collection.",
   "AppState.unpublishedDirectoryCaution": {
     "mac": "${COLLECTION_DIR} has no folder until this collection is published from this Mac.",
@@ -335,7 +335,7 @@
   "ControlMasking.setText": "••• (set)",
   "ControlMasking.typeLabel": "type",
   "ControlMasking.urlLabel": "url",
-  "ControlRelay.restartedError": "Connector Control restarted — try again.",
+  "ControlRelay.restartedError": "Connector Control restarted - try again.",
   "ControlSettingKey.automaticUpdates": "automatic-updates",
   "ControlSettingKey.backupsToKeep": "backups-to-keep",
   "ControlSettingKey.claudeIntegration": "claude-integration",
@@ -767,7 +767,7 @@
   "EditorModel.addArgumentTitle": "＋ Add argument",
   "EditorModel.addVariableTitle": "＋ Add variable",
   "EditorModel.additionalTitle": {
-    "format": "{0} field(s) not editable here: {1} — switch to JSON to edit"
+    "format": "{0} field(s) not editable here: {1} - switch to JSON to edit"
   },
   "EditorModel.argumentLabel": {
     "format": "Argument {0}"
@@ -832,7 +832,7 @@
   },
   "EditorModel.invalidURLError": "Server URL must be a valid http(s) URL.",
   "EditorModel.jsonTab": "JSON",
-  "EditorModel.jsonTip": "Tip: paste a README snippet or an mcpServers stanza — a wrapper or a bare \"name\": {…} entry is unwrapped automatically, and the name filled in.",
+  "EditorModel.jsonTip": "Tip: paste a README snippet or an mcpServers stanza - a wrapper or a bare \"name\": {…} entry is unwrapped automatically, and the name filled in.",
   "EditorModel.localTypeTitle": "Local",
   "EditorModel.lockedFieldsNote": {
     "format": "Synced from {0} · read-only"
@@ -845,7 +845,7 @@
   "EditorModel.noTargetMessage": {
     "mac": "Choose a connector in the Collections window."
   },
-  "EditorModel.notValidJSON": "Not valid JSON — check for a stray brace, missing comma, or unquoted value.",
+  "EditorModel.notValidJSON": "Not valid JSON - check for a stray brace, missing comma, or unquoted value.",
   "EditorModel.oauthSecretCaption": {
     "mac": "Passed to mcp-remote on its command line, which other programs running on this Mac can read.",
     "win": "Passed to mcp-remote on its command line, which other programs running on this PC can read."
@@ -857,9 +857,9 @@
     "format": "Also apply this change to {0}, which have an identical {1}"
   },
   "EditorModel.publishedNote": {
-    "format": "Published to {0} — saving updates the file your team reads. Secrets stay here."
+    "format": "Published to {0} - saving updates the file your team reads. Secrets stay here."
   },
-  "EditorModel.remoteFooter": "Runs via npx mcp-remote — managed for you.",
+  "EditorModel.remoteFooter": "Runs via npx mcp-remote - managed for you.",
   "EditorModel.remoteTypeTitle": "Remote",
   "EditorModel.saveAnywayButton": "Save Anyway",
   "EditorModel.saveButton": "Save",
@@ -969,12 +969,12 @@
   },
   "PopoverModel.manageTitle": "Manage Collections",
   "PopoverModel.menuBarRetryLabel": {
-    "mac": "Connector Control: Apply Failed — Retry"
+    "mac": "Connector Control: Apply Failed - Retry"
   },
   "PopoverModel.pendingMenuMark": " · update available",
   "PopoverModel.quitTooltip": "Quit Connector Control",
   "PopoverModel.restartTitle": "Restart Required",
-  "PopoverModel.retryTitle": "Apply Failed — Retry",
+  "PopoverModel.retryTitle": "Apply Failed - Retry",
   "PopoverModel.reviewAndApplyButton": "Review & Apply…",
   "PopoverModel.settingsTooltip": "Settings",
   "PopoverModel.sourceTooltipFormat": {
@@ -1219,7 +1219,7 @@
   },
   "UpdateCoordinator.availableDetail": {
     "win": {
-      "format": "Connector Control {0} is now available — you have {1}. Would you like to install it now?"
+      "format": "Connector Control {0} is now available - you have {1}. Would you like to install it now?"
     }
   },
   "UpdateCoordinator.availableHeadline": {

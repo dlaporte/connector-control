@@ -92,7 +92,7 @@ final class PasteRecoveryTests: XCTestCase {
 
     func testValidStraightQuoteConfigIsUnaffectedByNormalization() {
         // A well-formed straight-quote paste must still recover exactly as
-        // before — normalization is only a fallback candidate.
+        // before - normalization is only a fallback candidate.
         let text = "{\"command\": \"npx\", \"args\": [\"-y\", \"pkg\"]}"
         let r = PasteRecovery.recover(text)
         XCTAssertNil(r?.name)

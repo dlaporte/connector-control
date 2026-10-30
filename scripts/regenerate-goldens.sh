@@ -7,7 +7,7 @@
 # Tests/Fixtures/control/ from a replay against this Mac's real control layer.
 # Run this after a change to JSONValue's encoding, editorText(), either
 # collection format, what the control tools say, or the golden inputs
-# themselves, then review the diff — a change outside the format you meant to
+# themselves, then review the diff - a change outside the format you meant to
 # touch is a bug, not a golden to bless. The C# mirrors compare against the
 # same files and never write them.
 #

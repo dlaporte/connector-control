@@ -22,7 +22,7 @@ public class StringCatalogTests
 
     /// <summary>
     /// This fixture entry's Windows-side resolution, or null when the key is
-    /// Mac-only (no "win" side, and not a bare shared value) — such a key
+    /// Mac-only (no "win" side, and not a bare shared value) - such a key
     /// must never appear in `actual` below.
     /// </summary>
     private static (ValueKind Kind, string Text)? WinValue(JsonNode? entry)
@@ -57,7 +57,7 @@ public class StringCatalogTests
         return null;
     }
 
-    /// <summary>Substitutes {0}, {1}, … with <paramref name="args"/>, in order — the same convention the Swift test's fixture resolution uses.</summary>
+    /// <summary>Substitutes {0}, {1}, … with <paramref name="args"/>, in order - the same convention the Swift test's fixture resolution uses.</summary>
     private static string Expand(string format, params string[] args)
     {
         for (var i = 0; i < args.Length; i++)
@@ -71,7 +71,7 @@ public class StringCatalogTests
     /// Fixed arguments, by key, for every fixture entry whose Windows value is
     /// a {n} template: "X"/"Y" for string parameters, "3"/"7" for int
     /// parameters, and the joined-keys rendering for a factory that takes a
-    /// list of keys — matching the convention the Swift test also follows.
+    /// list of keys - matching the convention the Swift test also follows.
     /// </summary>
     private static readonly Dictionary<string, string[]> ArgsByKey = new(StringComparer.Ordinal)
     {
@@ -712,7 +712,7 @@ public class StringCatalogTests
 
         // MARK: Dialogs / AlertDialogs
 
-        // IDialogs.Confirm's cancelTitle default parameter value — not a retrievable symbol.
+        // IDialogs.Confirm's cancelTitle default parameter value - not a retrievable symbol.
         actual["Dialogs.cancelTitle"] = "Cancel";
         // WpfDialogs.cs / NamePromptDialog.xaml live in ConnectorControl.App, which this
         // Core test project cannot reference; hardcoded here to match their "OK" literal.
@@ -837,7 +837,7 @@ public class StringCatalogTests
         actual["ImportModel.unknownAuthor"] = ImportModel.UnknownAuthor;
 
         // MARK: MasterStore
-        // Every message below is returned by a real mutation, not a bare constant —
+        // Every message below is returned by a real mutation, not a bare constant -
         // each store is set up so that mutation fails for exactly the reason this key names.
 
         var nameEmptyStore = MasterStore.Empty();
@@ -962,7 +962,7 @@ public class StringCatalogTests
         actual["SettingsModel.configPathLabel"] = SettingsModel.ConfigPathLabel;
         actual["SettingsModel.fewerBackupsLabel"] = SettingsModel.FewerBackupsLabel;
         actual["SettingsModel.generalTab"] = SettingsModel.GeneralTab;
-        // Inline literals inside InstallKindText's switch expression — not named constants.
+        // Inline literals inside InstallKindText's switch expression - not named constants.
         actual["SettingsModel.installKindLegacyText"] = "Legacy installer";
         actual["SettingsModel.installKindMsixText"] = "MSIX package";
         actual["SettingsModel.keepCountHelpText"] = SettingsModel.KeepCountHelpText(3);
@@ -1040,15 +1040,15 @@ public class StringCatalogTests
             Assert.Equal(expected, actual[key]);
         }
 
-        // An unpaired key — present in `actual` but missing (or Mac-only) in the
-        // fixture, or vice versa — fails here on whichever side lacks it.
+        // An unpaired key - present in `actual` but missing (or Mac-only) in the
+        // fixture, or vice versa - fails here on whichever side lacks it.
         var actualKeys = actual.Keys.Order(StringComparer.Ordinal).ToList();
         winKeys.Sort(StringComparer.Ordinal);
         Assert.Equal(winKeys, actualKeys);
     }
 
     /// <summary>
-    /// The comparison above only ever looks at keys WinValue resolves — a fixture entry resolving
+    /// The comparison above only ever looks at keys WinValue resolves - a fixture entry resolving
     /// on neither platform (both "mac" and "win" omitted, or an unrecognized value shape) is
     /// silently skipped here AND by the Swift mirror's equivalent loop, so such a mistake would be
     /// asserted nowhere. This pins the fixture-wide invariant directly: every root key must

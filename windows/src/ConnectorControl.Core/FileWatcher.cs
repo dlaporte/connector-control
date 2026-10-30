@@ -44,8 +44,8 @@ public sealed class FileWatcher : IDisposable
     /// error rebuilds. An attempt that rebuilt nothing does not move it.</summary>
     private long lastRebuildAt;
     /// <summary>An error warranted a rebuild that the cooldown held back. The watcher it kept may
-    /// be on a dead handle — a folder deleted and recreated under the same name keeps its creation
-    /// time on NTFS, so nothing else would ever notice — so the debt stands until it is paid:
+    /// be on a dead handle - a folder deleted and recreated under the same name keeps its creation
+    /// time on NTFS, so nothing else would ever notice - so the debt stands until it is paid:
     /// IsArmed says no, and the next Start() swaps and re-checks exactly as for a replacement.
     /// That bounds these rebuilds by the reload rate without a timer.</summary>
     private bool rebuildOwed;
@@ -66,8 +66,8 @@ public sealed class FileWatcher : IDisposable
     /// <summary>
     /// True while a FileSystemWatcher is active on the parent directory AND that directory is
     /// still the folder at the watched path. A FileSystemWatcher holds a handle on the folder it
-    /// was armed on, so a folder replaced wholesale — renamed away with another put in its place,
-    /// or deleted and recreated — leaves it watching something that is no longer at the path,
+    /// was armed on, so a folder replaced wholesale - renamed away with another put in its place,
+    /// or deleted and recreated - leaves it watching something that is no longer at the path,
     /// where it goes silent for good; calling that armed would make the caller's re-arm on the
     /// next reload a no-op forever. The same goes for a watcher owed a rebuild the cooldown held
     /// back. A parent that is simply missing stays armed until the error for it is handled, which
@@ -206,21 +206,21 @@ public sealed class FileWatcher : IDisposable
 
     /// <summary>
     /// A watcher error. When it might mean this FileSystemWatcher is holding the wrong
-    /// folder — a watched directory deleted or replaced leaves it on a handle that is no
-    /// longer at the path, where it stays permanently silent — a fresh watcher is built on
+    /// folder - a watched directory deleted or replaced leaves it on a handle that is no
+    /// longer at the path, where it stays permanently silent - a fresh watcher is built on
     /// the directory that is there and the file re-checked against it. That is what covers a
     /// folder deleted and recreated before this ran, the case a Directory.Exists check alone
     /// reads as a lost buffer. A lost buffer itself does not warrant one, because the handle
     /// is still on the right folder; it re-checks the file and keeps the watcher. A second
-    /// rebuild inside the cooldown is not done but owed — the watcher it kept may be the dead
-    /// one — so it re-checks too, and the next Start() pays the debt; a folder that keeps
+    /// rebuild inside the cooldown is not done but owed - the watcher it kept may be the dead
+    /// one - so it re-checks too, and the next Start() pays the debt; a folder that keeps
     /// erroring therefore costs re-checks and one rebuild per reload rather than a teardown
     /// apiece. Only a directory that is really gone disarms and reports, leaving the caller's
     /// next Start() (each reload re-arms it) to build a fresh one. The deletion is delivered
     /// directly rather than through Schedule(): Stop() disposes whatever debounce timer is
     /// pending, so a Schedule()-then-Stop() sequence would dispose the very timer meant to
     /// report this change and the deletion would never reach the caller. No generation guard
-    /// here — Stop() has already run, so this is a final, deliberate notification, not a stale
+    /// here - Stop() has already run, so this is a final, deliberate notification, not a stale
     /// check; only a Dispose() that raced the error handler suppresses it.
     /// Internal so the deleted-directory path is testable without provoking the OS.
     /// </summary>
@@ -395,7 +395,7 @@ public sealed class FileWatcher : IDisposable
 
     /// <summary>
     /// Whether the folder at the watched path is a different one from the folder armed on, told
-    /// by its creation time — the only folder identity managed code has on every platform, with
+    /// by its creation time - the only folder identity managed code has on every platform, with
     /// no handle and no inode to compare. It is a weaker test than the Mac's device and inode,
     /// in both directions, and both are accepted here rather than paying for a Windows-only
     /// handle comparison:
@@ -409,8 +409,8 @@ public sealed class FileWatcher : IDisposable
     /// deleted and recreated in the same parent within about fifteen seconds, and that case is
     /// caught instead by the rebuild in HandleError, since deleting the folder raises an error.
     /// What neither half catches is a folder renamed away and replaced by one whose creation
-    /// time was preserved — restored from a backup, copied with robocopy /DCOPY:T, or moved back
-    /// from elsewhere on the same volume — because a rename raises no error for the rebuild to
+    /// time was preserved - restored from a backup, copied with robocopy /DCOPY:T, or moved back
+    /// from elsewhere on the same volume - because a rename raises no error for the rebuild to
     /// act on. Nor does a file system that does not store a creation time, such as SMB to a
     /// Samba host, where both reads return the same constant and this check quietly does
     /// nothing.</para>

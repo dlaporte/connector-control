@@ -17,7 +17,7 @@ if [ -z "$RESOLVED_VERSION" ]; then
   exit 1
 fi
 if [ "$RESOLVED_VERSION" != "$SPARKLE_TOOLS_VERSION" ]; then
-  echo "::error::Sparkle tools are pinned to $SPARKLE_TOOLS_VERSION (scripts/mac/sparkle-tools.env) but Package.resolved has $RESOLVED_VERSION — bump the pin (and its SHA-256) in the same commit."
+  echo "::error::Sparkle tools are pinned to $SPARKLE_TOOLS_VERSION (scripts/mac/sparkle-tools.env) but Package.resolved has $RESOLVED_VERSION - bump the pin (and its SHA-256) in the same commit."
   exit 1
 fi
 echo "Sparkle tools pin $SPARKLE_TOOLS_VERSION matches Package.resolved"

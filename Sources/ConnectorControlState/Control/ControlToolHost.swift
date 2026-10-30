@@ -29,14 +29,14 @@ public final class ControlToolHost: McpToolHost {
     /// What the session's `serverInfo` says.
     public var version: String { tools.version }
 
-    /// Who is calling. A relay whose client gave no name — or whose session is gone — is still the
+    /// Who is calling. A relay whose client gave no name - or whose session is gone - is still the
     /// relay, and the gate guards it.
     public var caller: ControlCaller { isCLI ? .cli : .relay(clientName: session?.clientName ?? "") }
 
     public func listTools() -> [JSONValue] { ControlTools.mcpDescriptors }
 
-    /// A tool this app does not list. Asked for by a newer command-line tool or relay — an update
-    /// replaced the app on disk while this one still runs — it needs the newer app, which a restart
+    /// A tool this app does not list. Asked for by a newer command-line tool or relay - an update
+    /// replaced the app on disk while this one still runs - it needs the newer app, which a restart
     /// starts.
     public func unknownToolMessage(_ name: String) -> String {
         if let clientVersion, ControlVersion.isNewer(clientVersion, than: tools.version) {

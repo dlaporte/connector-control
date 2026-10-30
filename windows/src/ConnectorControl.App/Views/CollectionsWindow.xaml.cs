@@ -14,7 +14,7 @@ namespace ConnectorControl.App.Views;
 /// <summary>
 /// The Collections window: the collections in the left pane, the selected one's connectors in the
 /// right, the header menu and the selection bar that act on them, and the five dialogs it puts in
-/// front of itself — Import, Review, Publish, Export and Copy. Layout, bindings, the native
+/// front of itself - Import, Review, Publish, Export and Copy. Layout, bindings, the native
 /// pickers, the three menus and the two formatted captions; every rule and string is
 /// CollectionsModel's.
 /// <para>
@@ -32,8 +32,8 @@ public partial class CollectionsWindow : Window
     private readonly PropertyChangedEventHandler onStateChanged;
     /// <summary>
     /// Set the moment this window closes. What it guards is the deferred consume: a request
-    /// raised just before the close runs after it, and a dead window taking one would swallow it
-    /// — the next window to open would find nothing waiting.
+    /// raised just before the close runs after it, and a dead window taking one would swallow it -
+    /// the next window to open would find nothing waiting.
     /// </summary>
     private bool closed;
     /// <summary>
@@ -93,7 +93,7 @@ public partial class CollectionsWindow : Window
 
     /// <summary>
     /// What this window last took from <see cref="AppState.CollectionsWindowRequest"/>. The
-    /// consuming is otherwise invisible — the request is cleared as it is read — so this is how a
+    /// consuming is otherwise invisible - the request is cleared as it is read - so this is how a
     /// test sees that a request raised while the window was open reached it.
     /// </summary>
     internal CollectionsWindowRequest? LastRequest { get; private set; }
@@ -133,8 +133,8 @@ public partial class CollectionsWindow : Window
     internal Action<EditTarget> OpenEditor { get; set; }
 
     /// <summary>
-    /// The one caption built from a value rather than bound — the selection bar's ticked count, a
-    /// format — and whether the bar shows its actions, which follows that same count. Everything
+    /// The one caption built from a value rather than bound - the selection bar's ticked count, a
+    /// format - and whether the bar shows its actions, which follows that same count. Everything
     /// else on this window is a binding the model raises.
     /// </summary>
     private void Refresh()
@@ -152,7 +152,7 @@ public partial class CollectionsWindow : Window
     /// <summary>
     /// Puts the model's selection back on the sidebar once a raise has been delivered to
     /// everything listening. A raise that replaces the items with records no longer equal to the
-    /// selected one — making a collection active flips IsActive on all of them — clears the
+    /// selected one - making a collection active flips IsActive on all of them - clears the
     /// list's own selection, and whether the one-way binding has re-pushed by then depends on the
     /// order the notification reaches its listeners in. After it, the order no longer matters.
     /// <c>SetCurrentValue</c> keeps the binding, and the SelectionChanged it causes writes
@@ -311,8 +311,8 @@ public partial class CollectionsWindow : Window
 
     /// <summary>
     /// Copy to: every other collection, a synced one listed but dimmed with the reason under its
-    /// name — a read-only mirror cannot take copies, and the picker says so rather than the copy
-    /// refusing after the fact — then New Collection. Opens upward, from the bottom of the window.
+    /// name - a read-only mirror cannot take copies, and the picker says so rather than the copy
+    /// refusing after the fact - then New Collection. Opens upward, from the bottom of the window.
     /// Built without being shown, so a test can read it.
     /// </summary>
     internal ContextMenu BuildCopyMenu()
@@ -351,7 +351,7 @@ public partial class CollectionsWindow : Window
     }
 
     /// <summary>
-    /// Export writes only the ticked connectors — what the bar's count says. The More menu's
+    /// Export writes only the ticked connectors - what the bar's count says. The More menu's
     /// Export All takes the whole collection instead.
     /// </summary>
     private void OnExportChecked(object sender, RoutedEventArgs e)
@@ -431,7 +431,7 @@ public partial class CollectionsWindow : Window
 
     /// <summary>
     /// The same action, labelled: the context menu is what a keyboard and a screen reader reach,
-    /// and it acts on the collection it was raised over — which a right-click does not select.
+    /// and it acts on the collection it was raised over - which a right-click does not select.
     /// </summary>
     private void OnMakeActive(object sender, ExecutedRoutedEventArgs e)
     {
@@ -591,8 +591,8 @@ public partial class CollectionsWindow : Window
     /// <summary>
     /// The strip's one button. True says the news needs nothing from the file system and the
     /// Review dialog is the whole answer; false says this window owes something else, and what is
-    /// what the banner is: a file for a source to locate, a folder for a write that failed — the
-    /// model refuses anything that is not what it asked for — or, for a publish stopped for
+    /// what the banner is: a file for a source to locate, a folder for a write that failed - the
+    /// model refuses anything that is not what it asked for - or, for a publish stopped for
     /// review, the Publish dialog.
     /// </summary>
     private void OnBannerAction(object sender, RoutedEventArgs e)
@@ -646,7 +646,7 @@ public partial class CollectionsWindow : Window
 
     /// <summary>
     /// What the flyout asked for, taken so nothing can act on it twice. A dialog shown here is
-    /// app-modal — ShowDialog disables every window on this thread, the hidden flyout included —
+    /// app-modal - ShowDialog disables every window on this thread, the hidden flyout included -
     /// so no request can arrive while one is up, and nothing here replaces an open dialog. The Mac
     /// sheets are window-modal, and the popover stays live beside them, which is why the Mac
     /// window replaces a pending sheet and this one has nothing to replace.
@@ -666,7 +666,7 @@ public partial class CollectionsWindow : Window
                 Review(review.Collection);
                 break;
             case CollectionsWindowRequest.Publish publish:
-                // A publish the app stopped for review, for the collection it names — which need
+                // A publish the app stopped for review, for the collection it names - which need
                 // not be the one this window is showing. The dialog is where the author answers it.
                 Model.Selected = publish.Collection;
                 Surfaces.ShowPublish(this, new PublishModel(state, publish.Collection));

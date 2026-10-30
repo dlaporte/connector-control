@@ -5,14 +5,14 @@ import ConnectorControlCore
 ///
 /// The writes that change what a connector runs, or what Claude could run: connectors, deleting a
 /// collection, importing, subscribing, applying an update, restoring a backup, and the restart.
-/// Each is prepared in full before anyone is asked: every refusal, then the question — who is
-/// asking, for what, and exactly what would run, with secrets masked — then the change itself,
+/// Each is prepared in full before anyone is asked: every refusal, then the question - who is
+/// asking, for what, and exactly what would run, with secrets masked - then the change itself,
 /// which runs only on Allow (or with confirmations off, or for the command-line tool; never
 /// unasked for the restart Claude asks for) and is announced when nobody was asked.
 ///
 /// The question, the answer and the announcement name connectors, collections and the asker as
-/// others chose them — Claude names connectors, creates and renames collections without asking, and
-/// any client names itself — so every name goes through `ControlText.escapedName(_:)`, and the asker
+/// others chose them - Claude names connectors, creates and renames collections without asking, and
+/// any client names itself - so every name goes through `ControlText.escapedName(_:)`, and the asker
 /// arrives as `ControlCaller.shownAsker`, escaped and framed already: none can break a line, reorder
 /// or hide text, or close its own quotes.
 extension ControlTools {
@@ -314,9 +314,9 @@ extension ControlTools {
 
     public static func restartTitle(_ shownAsker: String) -> String { "\(shownAsker) wants to restart Claude Desktop" }
 
-    /// A connector as a question lists it: its name in quotes, through `ControlText.quotedList(_:)`
-    /// — so no name can close its quotes, break its line, or pass for a line of what a connector
-    /// runs, which are indented under it — then what becomes of it, when that is said.
+    /// A connector as a question lists it: its name in quotes, through `ControlText.quotedList(_:)` -
+    /// so no name can close its quotes, break its line, or pass for a line of what a connector
+    /// runs, which are indented under it - then what becomes of it, when that is said.
     static func connectorHeading(_ name: String, _ detail: String? = nil) -> String {
         let quoted = ControlText.quotedList([name])
         return detail.map { ControlTools.detail(quoted, ControlText.escaped($0)) } ?? quoted
@@ -358,7 +358,7 @@ extension ControlTools {
     }
 
     /// The collection's own Delete: the window's question, refused first for what the window
-    /// refuses. A subscribed collection's file is never touched, nor a published one's — the window
+    /// refuses. A subscribed collection's file is never touched, nor a published one's - the window
     /// asks whether that one goes too, and nothing here asks twice, so it stays, as Keep leaves it.
     func deleteCollection(_ arguments: ControlArguments, _ shownAsker: String) -> ControlStep {
         let collection = arguments.string("collection") ?? ""
@@ -397,7 +397,7 @@ extension ControlTools {
 
     /// Why the document at `url` is not read, or nil to read it, found with a stat before anything
     /// opens it, so no path can stall the app or reach what is not a file: it must be a regular
-    /// file, or a link to one — not a folder, a FIFO, a device, or a link to one — of at most
+    /// file, or a link to one - not a folder, a FIFO, a device, or a link to one - of at most
     /// `McpSession.maxMessageBytes`, the most a message carries. A path with nothing there is left
     /// to the read, which says so in the system's words.
     static func documentFileRefusal(_ url: URL) -> String? {
@@ -424,8 +424,8 @@ extension ControlTools {
         // Windows mirror first refuses a path .NET cannot make full.
         let url = URL(fileURLWithPath: path).standardizedFileURL
         // Platform idiom: the Windows mirror first refuses, by its form, a path that reaches another computer
-        // or a device: the relay any that starts with \\ or \??\ once made full — opening one has Windows
-        // sign in to that host as the user, with nothing asked — and every caller a \\.\ path or a
+        // or a device: the relay any that starts with \\ or \??\ once made full - opening one has Windows
+        // sign in to that host as the user, with nothing asked - and every caller a \\.\ path or a
         // \\?\ or \??\ path to anything but a drive or a share. A Mac path has no such form. A path under
         // /Volumes is a share the person mounted themselves; one under /net is mounted by autofs on first
         // access, but as an NFS mount that sends none of the person's credentials, so neither signs in

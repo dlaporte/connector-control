@@ -242,7 +242,7 @@ final class EditorModelCollectionsTests: XCTestCase {
         let published = rig.editor("scoutbook", in: "Team")
         XCTAssertEqual(published.headerState, .published(folder: folder.path))
         XCTAssertEqual(published.headerNote,
-                       "Published to \(folder.path) — saving updates the file your team reads. Secrets stay here.")
+                       "Published to \(folder.path) - saving updates the file your team reads. Secrets stay here.")
         XCTAssertFalse(published.isReadOnly)
     }
 
@@ -327,7 +327,7 @@ final class EditorModelCollectionsTests: XCTestCase {
 
         let editor = rig.editor("scoutbook", in: "Default")
         XCTAssertEqual(editor.propagateTargets, ["Backup"])
-        // A second window on the twin saved first — the checkbox's promise no longer holds for it.
+        // A second window on the twin saved first - the checkbox's promise no longer holds for it.
         let moved = MCPEntry(config: AppStateHarness.remote("https://scoutbook.example.com/mcp/other"))
         XCTAssertNil(state.upsert(name: "scoutbook", entry: moved, renamedFrom: "scoutbook", in: "Backup"))
 

@@ -30,7 +30,7 @@ public class AppStateWatcherTests
     }
 
     // Notify()'s settings.NotifyExternalChanges
-    // gate had no direct coverage — only that the reload/regeneration it would announce still happens.
+    // gate had no direct coverage - only that the reload/regeneration it would announce still happens.
     [Fact]
     public void ExternalEditIsSilentWhenNotifyExternalChangesIsDisabledButStillReloads()
     {
@@ -64,7 +64,7 @@ public class AppStateWatcherTests
 
     /// <summary>
     /// A synced list can add a command Claude will run. With Claude not running there is no restart
-    /// to offer, but the adoption still has to be announced — before, every branch of the
+    /// to offer, but the adoption still has to be announced - before, every branch of the
     /// notification chain missed this case and the new server simply started next launch.
     /// </summary>
     [Fact]
@@ -173,7 +173,7 @@ public class AppStateWatcherTests
     }
 
     /// <summary>A seed write that fails must not switch the store to a location with no
-    /// mcps.json — Reload would read that as empty and quietly wipe the connector list.</summary>
+    /// mcps.json - Reload would read that as empty and quietly wipe the connector list.</summary>
     [Fact]
     public void ARepointWhoseSeedCannotBeWrittenKeepsTheOldStore()
     {

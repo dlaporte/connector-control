@@ -39,7 +39,7 @@ public struct CollectionDiff: Equatable, Sendable {
         return normalized == current
     }
 
-    /// "adds a, b; deletes c; changes d" — same shape as `ServerDelta.summary`, kept as its own
+    /// "adds a, b; deletes c; changes d" - same shape as `ServerDelta.summary`, kept as its own
     /// copy here since Core does not depend on the State module that type lives in.
     public func summary(limit: Int = 4) -> String {
         var parts: [String] = []

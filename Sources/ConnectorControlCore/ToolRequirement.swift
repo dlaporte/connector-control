@@ -3,7 +3,7 @@ import Foundation
 /// Which of the four tools a connector's command needs: the first
 /// token by basename, case-insensitive, `.cmd`/`.exe` stripped, one `cmd /c`
 /// unwrapped. A command written as a path (`/usr/local/bin/npx`) is left
-/// alone — the user chose it deliberately and PATH lookup does not apply.
+/// alone - the user chose it deliberately and PATH lookup does not apply.
 public enum ToolRequirement {
     public static func requiredTool(command: String, args: [String]) -> Tool? {
         guard let first = normalized(command) else { return nil }
@@ -30,7 +30,7 @@ public enum ToolRequirement {
     }
 
     /// Every tool the given configs need, deduplicated and in `Tool.allCases`
-    /// order — what the popover must have probed before it can decide which rows
+    /// order - what the popover must have probed before it can decide which rows
     /// carry a warning.
     public static func requiredTools(for configs: [JSONValue]) -> [Tool] {
         let needed = Set(configs.compactMap { requiredTool(for: $0) })

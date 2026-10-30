@@ -14,7 +14,7 @@ public sealed class FakeUpdater : IUpdater
     public int AppliedOnQuit { get; private set; }
     public int AppliedAndRestarted { get; private set; }
 
-    /// <summary>When set, CheckAsync awaits this before returning — lets a test hold a
+    /// <summary>When set, CheckAsync awaits this before returning - lets a test hold a
     /// check in flight to race a second caller against it.</summary>
     public TaskCompletionSource<bool>? CheckGate { get; set; }
 

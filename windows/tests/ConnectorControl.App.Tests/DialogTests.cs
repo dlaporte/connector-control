@@ -94,7 +94,7 @@ public class DialogTests
         {
             var dialog = new UpdateDialog("1.3.0", "1.2.2", "## Fixes\n- one\n- two", () => Task.CompletedTask);
             Assert.Equal(UpdateCoordinator.AvailableHeadline, dialog.Headline.Text);
-            Assert.Equal("Connector Control 1.3.0 is now available — you have 1.2.2. Would you like to install it now?", dialog.Detail.Text);
+            Assert.Equal("Connector Control 1.3.0 is now available - you have 1.2.2. Would you like to install it now?", dialog.Detail.Text);
             Assert.NotNull(dialog.Notes.Document);
             Assert.True(dialog.Notes.Document.Blocks.Count >= 2);   // a heading and a list
             Assert.Equal("Install and Relaunch", dialog.InstallButton.Content);
@@ -115,7 +115,7 @@ public class DialogTests
     public void UpdateNotesNeverLoadAnImage()
     {
         // The notes come from the unsigned release feed and are shown before the package is checked: an
-        // image would be fetched as the dialog opens — an http beacon, or a file:// share that hands
+        // image would be fetched as the dialog opens - an http beacon, or a file:// share that hands
         // Windows' sign-in to whoever runs it. Images show as their alt text, and nothing is loaded.
         WpfApp.Invoke(() =>
         {
@@ -164,7 +164,7 @@ public class DialogTests
     /// <summary>
     /// The regression that made every secret on a NEW connector inert: the bridge used to hook
     /// PasswordChanged from the BoundPassword changed callback, which WPF never raises when the
-    /// first binding transfer equals the property's default — and a new connector's token,
+    /// first binding transfer equals the property's default - and a new connector's token,
     /// header value and client secret all start "". The subscription is a class handler now, so
     /// the empty first transfer is irrelevant.
     /// </summary>
@@ -213,7 +213,7 @@ public class DialogTests
             Assert.Null(dialogs.ResolveOwner());   // nothing of ours is up: centred on screen, topmost
 
             // The flyout hides itself the moment something takes the focus, which is exactly what
-            // showing a modal does — so Quit / Restart Required / the collection prompts must never
+            // showing a modal does - so Quit / Restart Required / the collection prompts must never
             // be owned by it, however visible and active it is when they are raised.
             using var model = new FlyoutModel(state, h.Settings);
             var flyout = new FlyoutWindow(model, new WindowRegistry(state, services, updates, h.Dialogs)) { TrayAnchor = () => null };

@@ -23,8 +23,8 @@ public class CollectionsWindowTests
     private static void Layout(Window window) => WindowTestSupport.Layout(window, new Size(720, 480));
 
     /// <summary>
-    /// Runs what the window queued below layout. It defers consuming a request — a picker must
-    /// not open inside Show() — and <see cref="WindowTestSupport.Layout"/> pumps only down to
+    /// Runs what the window queued below layout. It defers consuming a request - a picker must
+    /// not open inside Show() - and <see cref="WindowTestSupport.Layout"/> pumps only down to
     /// DataBind, which leaves a Background item sitting there.
     /// </summary>
     private static void Pump(Window window) => window.Dispatcher.Invoke(() => { }, DispatcherPriority.Background);
@@ -68,7 +68,7 @@ public class CollectionsWindowTests
 
     /// <summary>
     /// One Collections window with every picker and dialog recorded instead of shown, closed
-    /// however the body ends, and never both visible and active while it lives — the reason
+    /// however the body ends, and never both visible and active while it lives - the reason
     /// <see cref="EditorWindowTests"/>'s own helper shows and hides rather than staying up.
     /// <paramref name="select"/> is applied before the layout pass that generates the rows, so
     /// the body reads the collection it asked for rather than the active one.
@@ -100,7 +100,7 @@ public class CollectionsWindowTests
                 }
                 // Bindings settle first, while nothing of ours is on screen, because that is the
                 // step that pumps. Between Show and Hide there is no pump at all: UpdateLayout
-                // runs the real layout pass — the one that generates the rows — synchronously.
+                // runs the real layout pass - the one that generates the rows - synchronously.
                 Layout(window);
                 window.Show();
                 window.UpdateLayout();
@@ -143,7 +143,7 @@ public class CollectionsWindowTests
     /// <summary>
     /// What the Make Active item carries when the sidebar's context menu is raised over one row.
     /// The menu is opened for real, because the parameter comes from its PlacementTarget, which
-    /// WPF sets only as it opens — and it is closed again, so nothing is left behind in the
+    /// WPF sets only as it opens - and it is closed again, so nothing is left behind in the
     /// shared WPF host.
     /// </summary>
     private static object? MenuParameterFor(CollectionsWindow window, CollectionsModel.Item item)
@@ -176,7 +176,7 @@ public class CollectionsWindowTests
         RowElements.Find<T>(window.RowList, window.Model.Rows.Single(r => r.Name == connector), name);
 
     /// <summary>The separator's stand-in in <see cref="Entries"/>.</summary>
-    private const string Rule = "—";
+    private const string Rule = "-";
 
     /// <summary>
     /// A code-built menu read the way a screen reader hears it: a plain entry by its header, a
@@ -200,8 +200,8 @@ public class CollectionsWindowTests
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
 
     /// <summary>
-    /// A key pressed on an element as the keyboard delivers it — tunnelling first, then bubbling
-    /// unless something took it on the way down — then the rebuilt rows' pass. The window may be
+    /// A key pressed on an element as the keyboard delivers it - tunnelling first, then bubbling
+    /// unless something took it on the way down - then the rebuilt rows' pass. The window may be
     /// hidden, but it has been shown, so it still has its source.
     /// </summary>
     private static void Press(CollectionsWindow window, UIElement target, Key key)
@@ -283,7 +283,7 @@ public class CollectionsWindowTests
     /// The loop that overflowed the test process's stack: the sidebar's selection, bound two way,
     /// and the model's Selected setter feeding each other through the Items list every raise
     /// handed the sidebar. What that loop multiplied was raises of <c>Selected</c> with nothing
-    /// behind them and replacements of <c>Items</c>, so those are what is counted — by name, so the
+    /// behind them and replacements of <c>Items</c>, so those are what is counted - by name, so the
     /// bounds do not move with how many other properties one change announces. Bounded counts
     /// rather than a timeout: the unguarded loop never returned, so without the guard this test
     /// does not fail, it takes the process down.
@@ -314,8 +314,8 @@ public class CollectionsWindowTests
             state.PropertyChanged += (_, _) => stateRaises++;
             window.Sidebar.SelectionChanged += (_, _) => selections++;
 
-            // A user picking a row reaches the model — the markup binds one way now, so this is
-            // the handler's doing — and the raise it causes stops there. Picked by index, the way
+            // A user picking a row reaches the model - the markup binds one way now, so this is
+            // the handler's doing - and the raise it causes stops there. Picked by index, the way
             // a click picks: assigning SelectedValue would replace the very binding under test.
             // Exactly one Selected raise, and the collections list is left exactly as it was.
             window.Sidebar.SelectedIndex = window.Model.Items.ToList().FindIndex(i => i.Name == "Data team");
@@ -329,7 +329,7 @@ public class CollectionsWindowTests
             // Making that collection active rewrites every item, because IsActive moves: the
             // rebuild the two-way binding used to answer with a write of its own, and so on.
             // Items is replaced once, for that one change. Every Selected raise answers a change
-            // AppState announced — the model re-announces the collection on show after each —
+            // AppState announced - the model re-announces the collection on show after each -
             // and the sidebar adds none of its own: however many notifications one switch makes,
             // a loop is a Selected raise with no state change behind it.
             selectedRaises = 0;
@@ -449,7 +449,7 @@ public class CollectionsWindowTests
                 // sentence is both what the pointer uncovers and what a screen reader says.
                 Assert.Equal(CollectionsModel.LockedGlyphTooltip, lockGlyph.ToolTip);
                 Assert.Equal(CollectionsModel.LockedGlyphTooltip, AutomationProperties.GetName(lockGlyph));
-                // A synced collection's rows are the author's, so they cannot be ticked either —
+                // A synced collection's rows are the author's, so they cannot be ticked either -
                 // and with nothing to tick, the selection bar never offers Export or Remove.
                 Assert.Equal(Visibility.Collapsed, InRow<CheckBox>(window, row.Name, "RowTick").Visibility);
                 Assert.Equal(row.Target, InRow<TextBlock>(window, row.Name, "RowTargetText").Text);
@@ -648,7 +648,7 @@ public class CollectionsWindowTests
             Assert.Equal(Visibility.Visible, window.DeleteCheckedButton.Visibility);
 
             // What the bar's Export then exports is the ticked connectors, into the file name the
-            // collection's slug makes — the subset changes what travels, not what it is called.
+            // collection's slug makes - the subset changes what travels, not what it is called.
             Click(window.ExportCheckedButton);
             var (exported, mode) = Assert.Single(recorder.Publishes);
             Assert.Equal(PublishModel.Mode.Export, mode);
@@ -943,7 +943,7 @@ public class CollectionsWindowTests
         using var h = new AppStateHarness();
         using var state = h.Create();
         // A real document to point the picker at, and a collection the sidecar calls synced with
-        // nothing bound to it here — which is the Locate banner.
+        // nothing bound to it here - which is the Locate banner.
         var document = Path.GetFullPath(h.Dir.File(Path.Combine("shared", "data-team.json")));
         Directory.CreateDirectory(Path.GetDirectoryName(document)!);
         File.WriteAllBytes(document, CollectionDocumentSamples.DataTeam.Serialize());
@@ -976,7 +976,7 @@ public class CollectionsWindowTests
     /// <summary>
     /// A publish the app stopped for review, as the flyout's banner hands it over: the window,
     /// already open on another collection, moves to the one the request names and opens the
-    /// Publish dialog over the whole of it — never a picker.
+    /// Publish dialog over the whole of it - never a picker.
     /// </summary>
     [Fact]
     public void APublishRequestSelectsItsCollectionAndOpensThePublishDialog()
@@ -1007,7 +1007,7 @@ public class CollectionsWindowTests
 
     /// <summary>
     /// The window's own strip over a publish blocked for review: its button opens the Publish
-    /// dialog for the collection on show, and asks for no folder — another folder would re-bind
+    /// dialog for the collection on show, and asks for no folder - another folder would re-bind
     /// the collection, write nothing there and abandon the document the old one still holds.
     /// </summary>
     [Fact]
@@ -1041,7 +1041,7 @@ public class CollectionsWindowTests
         Showing(h, state, (window, recorder) =>
         {
             // The window is already open and showing another collection when the flyout asks for
-            // the active one's Publish dialog — the case a window that only reads on load strands.
+            // the active one's Publish dialog - the case a window that only reads on load strands.
             Assert.Equal("Data team", window.Model.Selected);
             Assert.Null(window.LastRequest);
             state.CollectionsWindowRequest = new CollectionsWindowRequest.Publish(state.ActiveCollection);

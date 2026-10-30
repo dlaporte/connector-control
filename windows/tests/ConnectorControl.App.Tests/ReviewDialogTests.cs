@@ -26,7 +26,7 @@ public class ReviewDialogTests
         File.WriteAllBytes(path, document.Serialize());
 
     /// <summary>
-    /// The sample with <paramref name="removed"/> gone and dbt's package changed — a removal and a
+    /// The sample with <paramref name="removed"/> gone and dbt's package changed - a removal and a
     /// change, which is two of the three kinds.
     /// </summary>
     private static CollectionDocument Changed(string dbtPackage, params string[] removed)
@@ -46,7 +46,7 @@ public class ReviewDialogTests
 
     /// <summary>
     /// Subscribes to the sample, then writes <paramref name="next"/> over it and reads that back
-    /// through Refresh — the same read the watcher would drive, without waiting for one.
+    /// through Refresh - the same read the watcher would drive, without waiting for one.
     /// </summary>
     private static string Pending(AppStateHarness h, AppState state, CollectionDocument next)
     {

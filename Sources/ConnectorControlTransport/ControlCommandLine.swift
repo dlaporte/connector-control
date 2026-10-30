@@ -19,7 +19,7 @@ public enum ControlInvocation: Equatable, Sendable {
 ///
 /// `connector-control`'s arguments, read into what to run: one command per tool, as `help` lists them,
 /// or `help`, `--version` and the relay. `--json` anywhere asks for the structure Claude receives
-/// instead of text — except in `add` and `edit`, where `--json` followed by a JSON object (its first
+/// instead of text - except in `add` and `edit`, where `--json` followed by a JSON object (its first
 /// character not a space is "{") is the connector's config. Words after `--` are names. Paths are made
 /// full here, against the directory the command runs in, because the app runs elsewhere.
 @MainActor
@@ -298,7 +298,7 @@ public struct ControlOutput: Equatable, Sendable {
     }
 
     /// The app's answer to the command's call. A refusal, or an error the session answered instead,
-    /// exits 1 with its sentence on stderr — or as `{"error": …}` on stdout under `json`.
+    /// exits 1 with its sentence on stderr - or as `{"error": …}` on stdout under `json`.
     public static func answer(_ response: JSONValue, json: Bool) -> ControlOutput {
         guard case .object(let fields) = response else { return refused(McpSession.internalErrorMessage, json: json) }
         if case .object(let result)? = fields["result"] {

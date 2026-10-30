@@ -131,7 +131,7 @@ public class ControlCommandRunnerTests
     }
 
     /// <summary>What the command line prints when the tool runs elevated and nothing answers: why it started
-    /// nothing, on stderr as text — under --json too — with exit 3, and no "Starting…" before it.</summary>
+    /// nothing, on stderr as text - under --json too - with exit 3, and no "Starting…" before it.</summary>
     [Fact]
     public void AnElevatedToolPrintsWhyItStartedNothingAndExitsThree()
     {

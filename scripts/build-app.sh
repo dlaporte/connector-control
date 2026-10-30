@@ -16,7 +16,7 @@ VERSION="${VERSION:-1.0}"
 SIGNING_IDENTITY="${SIGNING_IDENTITY:--}"
 
 # CFBundleVersion is Sparkle's update-comparison key, so it must be derived
-# from the semantic version, not a CI run counter — with a run counter, any
+# from the semantic version, not a CI run counter - with a run counter, any
 # later-built release of an OLDER version outranks newer ones in the feed
 # (e.g. re-tagging v1.2.2 after v1.3.0 shipped would auto-"update" users
 # backward). major*10000 + minor*100 + patch is monotonic across versions
@@ -38,7 +38,7 @@ fi
 
 # SUFeedURL: which appcast this build checks. A preview (X.Y.Z-preview.N) reads the preview
 # feed, the appcast.xml of the permanent preview-feed prerelease, which every published preview
-# and every stable release replaces (scripts/release/update-preview-feed.sh) — so a preview
+# and every stable release replaces (scripts/release/update-preview-feed.sh) - so a preview
 # install moves on to later previews and to the final release, as a Windows preview does.
 # Everything else reads the stable feed at releases/latest, which a prerelease never is. Decided
 # here, from the version alone, and not from BUILD_NUMBER, which a caller may preset; the plist
@@ -78,7 +78,7 @@ mkdir -p "$APP/Contents/Frameworks"
 cp -R "$SPARKLE_FRAMEWORK" "$APP/Contents/Frameworks/"
 # This rpath is load-bearing: Sparkle is linked as @rpath/Sparkle.framework
 # and no linker-emitted rpath resolves it in the installed bundle, so a
-# missing entry ships an app that dies at launch with "Library not loaded" —
+# missing entry ships an app that dies at launch with "Library not loaded" -
 # and nothing later in the pipeline (codesign, notarization, spctl) exercises
 # dyld. Fail loudly here, and verify the load command actually landed. (The
 # bundle is assembled fresh each run, so a benign "would duplicate path"
@@ -149,8 +149,8 @@ if [[ "$VERSION" != *-preview.* && "$WRITTEN_FEED" == *preview-feed* ]]; then
 fi
 
 # Every nested executable is signed before the app, the command-line tool included: codesign does not
-# sign other executables in Contents/MacOS along with the app, and strict verification — and
-# notarization — refuse one that is unsigned.
+# sign other executables in Contents/MacOS along with the app, and strict verification - and
+# notarization - refuse one that is unsigned.
 TOOL_ID="com.dlaporte.connector-control.cli"
 if [ "$SIGNING_IDENTITY" = "-" ]; then
     # Local dev: Sparkle keeps its own shipped signature; ad-hoc sign the tool, then the app.
