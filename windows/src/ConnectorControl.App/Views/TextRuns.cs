@@ -6,8 +6,8 @@ using ConnectorControl.Core.State;
 namespace ConnectorControl.App.Views;
 
 /// <summary>
-/// Windows only: the Mac draws TextRun with SwiftUI's Text (Sources/ConnectorControl/Text+Runs.swift) and,
-/// in its confirmation, an attributed string.
+/// Windows only: the Mac counterpart is Sources/ConnectorControl/Text+Runs.swift, which draws TextRun with
+/// SwiftUI's Text; its confirmation draws one as an attributed string (ConfirmationAccessory.swift).
 ///
 /// A sentence with pieces set apart drawn into a TextBlock: words in the block's own face, set-apart pieces
 /// in MonoFont, each as <see cref="TextRun.ShownText"/> spells it. <see cref="RunsProperty"/> binds it from
