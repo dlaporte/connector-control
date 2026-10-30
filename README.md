@@ -185,8 +185,8 @@ dimmed and marked "read-only", since its connectors are the author's — then
 collection to take the copies. Copies arrive switched off and record where
 they came from. The window stays on the collection you copied from, and the
 count under its name confirms the copy — "5 connectors · Copied 2 connectors
-to “Work”" — until you tick a row, do something else or choose another
-collection. When the destination already holds a name you ticked, the
+to “Work”" - until you tick a row, run another command in the window (Rename…,
+Duplicate…, Delete and the like) or choose another collection. When the destination already holds a name you ticked, the
 Copy sheet asks about each clash: **Replace**, **Keep both**, which lands the
 copy as `<name> 2` and is the default, or **Skip**; the rest are listed as
 "new · arrives off". Replacing a connector in the active collection applies
@@ -321,8 +321,8 @@ connector that arrives while the sheet is open waits until you open it
 again. Other edits, renames and deletions publish on their own as before.
 
 Export writes the same document once, wherever you choose, with the same
-preview and warnings. The **⋯** menu's **Export All** writes the whole
-selected collection; the selection bar's **Export** writes only the rows you
+preview and warnings. The **⋯** menu's **Export All…** writes the whole
+selected collection; the selection bar's **Export…** writes only the rows you
 tick. A subscribed collection is the author's document already, so Export
 All is dimmed on one and its rows can't be ticked.
 
