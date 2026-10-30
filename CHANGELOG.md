@@ -26,6 +26,7 @@ bullet once the section is about to ship.
   Windows uninstaller does both for you.
 - A preview install updates itself to each later preview and then to the final release, as on
   Windows; see Release pipeline for the one step to take by hand.
+- Sparkle, the updater, is 2.10.1, up from 2.10.0.
 - Claude's config, or a backup of it, is read as the Windows app reads it: one with a trailing
   comma, saved as UTF-16 or UTF-32, or nested more than 64 levels deep is reported as not valid
   JSON. Before, the Mac read it as if it were valid.
