@@ -69,6 +69,24 @@ public class ConfigServiceTests : IDisposable
     }
 
     /// <summary>
+    /// A name in Claude's file spelled another way (é decomposed where the collection composes it) is the
+    /// one the last-applied collection rendered, as on the Mac: it is not poured into the active one,
+    /// whether that collection is still here or only the names apply wrote stand in for it.
+    /// </summary>
+    [Fact]
+    public void ANameTheLastAppliedCollectionRenderedInAnotherSpellingIsNotIngested()
+    {
+        var store = MasterStore.Single([]);
+        store.Collections["Team"] = new Collection([new KeyValuePair<string, McpEntry>("caf\u00E9", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("t")))))]);
+        var servers = new Dictionary<string, JsonValue>(StringComparer.Ordinal)
+        {
+            ["cafe\u0301"] = JsonValue.Object(("command", JsonValue.String("t"))),
+        };
+        Assert.Empty(ConfigService.Ingestible(servers, "Team", null, false, store));
+        Assert.Empty(ConfigService.Ingestible(servers, "Gone", Set(["caf\u00E9"]), false, store));
+    }
+
+    /// <summary>
     /// A subscribed collection holds what its author published and nothing more, so what the file
     /// adds while one is active goes to a local collection: the one last applied when that is local,
     /// else the first local one by name, else a new one.

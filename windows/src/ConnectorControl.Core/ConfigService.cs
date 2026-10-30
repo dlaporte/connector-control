@@ -203,9 +203,9 @@ public sealed class ConfigService
             // that recorded the collection without the names.
             return lastAppliedNames is null
                 ? new Dictionary<string, JsonValue>(StringComparer.Ordinal)
-                : servers.Where(p => !lastAppliedNames.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+                : servers.Where(p => !lastAppliedNames.Contains(p.Key, Collection.NameComparer)).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
         }
-        var rendered = collection.Mcps.Where(p => p.Value.Enabled).Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
+        var rendered = collection.Mcps.Where(p => p.Value.Enabled).Select(p => p.Key).ToHashSet(Collection.NameComparer);
         return servers.Where(p => !rendered.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
     }
 

@@ -65,6 +65,16 @@ public class ReconcilerTests
         Assert.False(outcome.StoreChanged);
     }
 
+    /// <summary>A connector pending removal that Claude's file names in another spelling than the baseline
+    /// is still the one this app applied, as on the Mac: it is not taken back in.</summary>
+    [Fact]
+    public void APendingRemovalSpelledAnotherWayIsNotResurrected()
+    {
+        var outcome = Reconciler.Reconcile(MasterStore.Empty(), Servers(("cafe\u0301", ConfigA)), Servers(("caf\u00E9", ConfigA)));
+        Assert.Empty(outcome.Store.Mcps);
+        Assert.False(outcome.StoreChanged);
+    }
+
     [Fact]
     public void ExternalEditDoesNotChangeStore()
     {

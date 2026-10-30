@@ -27,6 +27,9 @@ public static class Reconciler
         bool changed = false;
         List<string> ingested = [];
         var destination = target ?? store.ActiveCollection;
+        // A name is one however its accents are composed, as on the Mac: a pending removal Claude's file
+        // spells another way is still the one this app applied.
+        baseline = baseline?.DistinctBy(p => p.Key, Collection.NameComparer).ToDictionary(p => p.Key, p => p.Value, Collection.NameComparer);
         foreach (var (name, config) in claudeServers)
         {
             // Connector Control's own entry is in Claude's file because the app put it there; taking it
