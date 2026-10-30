@@ -41,18 +41,11 @@ public sealed class TrayController : IDisposable
     internal static ContextMenu BuildMenu(Action open, Action settings, Action quit)
     {
         var menu = new ContextMenu();
-        menu.Items.Add(Item(FlyoutModel.TrayOpenTitle, open));
-        menu.Items.Add(Item(FlyoutModel.SettingsTooltip, settings));
+        menu.Items.Add(Menus.Item(FlyoutModel.TrayOpenTitle, open));
+        menu.Items.Add(Menus.Item(FlyoutModel.SettingsTooltip, settings));
         menu.Items.Add(new Separator());
-        menu.Items.Add(Item(FlyoutModel.QuitTooltip, quit));
+        menu.Items.Add(Menus.Item(FlyoutModel.QuitTooltip, quit));
         return menu;
-    }
-
-    private static MenuItem Item(string header, Action action)
-    {
-        var item = new MenuItem { Header = header };
-        item.Click += (_, _) => action();
-        return item;
     }
 
     private void OnStateChanged(object? sender, PropertyChangedEventArgs e)

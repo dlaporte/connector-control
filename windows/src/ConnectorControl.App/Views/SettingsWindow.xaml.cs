@@ -4,7 +4,6 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using ConnectorControl.Core;
 using ConnectorControl.Core.State;
-using Microsoft.Win32;
 using ConnectorControl.App.Services;
 
 namespace ConnectorControl.App.Views;
@@ -105,10 +104,9 @@ public partial class SettingsWindow : Window
 
     private void OnChooseClaudeConfig(object sender, RoutedEventArgs e)
     {
-        var picker = new OpenFileDialog { Title = SettingsModel.ChooseTitle, Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*", CheckFileExists = false };
-        if (picker.ShowDialog(this) == true)
+        if (Pickers.ClaudeConfig(this) is { } path)
         {
-            Model.ChooseClaudeConfig(picker.FileName);
+            Model.ChooseClaudeConfig(path);
         }
     }
 

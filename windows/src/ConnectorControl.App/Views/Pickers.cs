@@ -33,6 +33,13 @@ internal static class Pickers
         return Show(picker, owner) ? picker.FileName : null;
     }
 
+    /// <summary>The Claude config file Settings points the app at; it need not exist yet.</summary>
+    public static string? ClaudeConfig(Window owner)
+    {
+        var picker = new OpenFileDialog { Title = SettingsModel.ChooseTitle, Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*", CheckFileExists = false };
+        return Show(picker, owner) ? picker.FileName : null;
+    }
+
     /// <summary>Where an exported collection document goes, offering <paramref name="fileName"/> to start from.</summary>
     public static string? SaveCollection(Window owner, string fileName)
     {
