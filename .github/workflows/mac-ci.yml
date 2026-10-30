@@ -14,7 +14,13 @@ on:
       - 'Tests/**'
       - 'Package.swift'
       - 'Package.resolved'
-      - 'scripts/**'
+      # Only the scripts this workflow runs, directly or through build-app.sh: scripts/release/
+      # and the other scripts/tests/ run on ubuntu, in infra-ci.yml.
+      - 'scripts/*.sh'
+      - 'scripts/generate-icon.swift'
+      - 'scripts/lib/**'
+      - 'scripts/mac/**'
+      - 'scripts/tests/make-dmg-retry.sh'
       - 'README.md'
       - '.github/workflows/mac-ci.yml'
 
