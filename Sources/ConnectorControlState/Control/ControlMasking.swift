@@ -228,7 +228,7 @@ public enum ControlMasking {
         // one word hid nothing, and when both hid something different, which only a URL's rules
         // do (`https://u:p@h/x --token t`), the argument is hidden whole. Anything else the one
         // word hid (`--password=correct horse`, `Bearer x`) it hid whole.
-        if same(whole, arg) { return line }
+        if whole.hasSameScalars(as: arg) { return line }
         return isURL(arg) ? mask : whole
     }
 
@@ -268,7 +268,7 @@ public enum ControlMasking {
         switch value {
         case .object, .array:
             let shown = compactText(leaves(value, .masked, secret: false))
-            return same(shown, compactText(value)) ? arg : shown
+            return shown.hasSameScalars(as: compactText(value)) ? arg : shown
         default:
             return nil
         }
@@ -284,7 +284,7 @@ public enum ControlMasking {
         guard arg.unicodeScalars.contains(where: { $0.properties.isWhitespace }) else { return nil }
         let words = ConnectorTarget.shellWords(arg)
         let shown = arguments(words, exposure: .masked)
-        return zip(words, shown).allSatisfy({ same($0, $1) }) ? nil : ControlText.words(shown)
+        return zip(words, shown).allSatisfy({ $0.hasSameScalars(as: $1) }) ? nil : ControlText.words(shown)
     }
 
     /// An argument list: each through `argument(_:)`, and also the value after a flag named for a
@@ -533,11 +533,7 @@ public enum ControlMasking {
     // Platform idiom: values are compared scalar by scalar, as the Windows mirror compares them
     // ordinally; Swift's == holds canonically equivalent text equal, which would hide a change.
     static func same(_ one: (raw: String, shown: String), _ other: (raw: String, shown: String)) -> Bool {
-        same(one.raw, other.raw) && same(one.shown, other.shown)
-    }
-
-    static func same(_ one: String, _ other: String) -> Bool {
-        one.unicodeScalars.elementsEqual(other.unicodeScalars)
+        one.raw.hasSameScalars(as: other.raw) && one.shown.hasSameScalars(as: other.shown)
     }
 
     /// The fields the code lines and change lines show: the shape's own, then a field for each
@@ -598,7 +594,7 @@ public enum ControlMasking {
     static func remoteView(_ object: [String: JSONValue], _ remote: RemoteConfig,
                            _ exposure: Exposure) -> (fields: [Field], shown: Set<String>) {
         let args = strings(object["args"])
-        let bridge = args.firstIndex { same($0, remote.package) } ?? 0
+        let bridge = args.firstIndex { $0.hasSameScalars(as: remote.package) } ?? 0
         let launcher = [object["command"] ?? .null] + args[...bridge].map(JSONValue.string)
         var fields = [Field(label: typeLabel, values: [(raw(.array(launcher)), remoteBridgeType(remote.package))]),
                       Field(label: urlLabel, values: [(raw(.string(remote.url)), single(url(remote.url, reveal: exposure != .masked), exposure))])]
@@ -659,7 +655,7 @@ public enum ControlMasking {
         while index < args.count {
             if signInFlags.contains(args[index]), index + 1 < args.count {
                 let pair = [args[index], args[index + 1]]
-                if let match = expected.firstIndex(where: { $0.count == 2 && same($0[0], pair[0]) && same($0[1], pair[1]) }) {
+                if let match = expected.firstIndex(where: { $0.count == 2 && $0[0].hasSameScalars(as: pair[0]) && $0[1].hasSameScalars(as: pair[1]) }) {
                     expected.remove(at: match)
                     kept.append(nil)
                 } else {

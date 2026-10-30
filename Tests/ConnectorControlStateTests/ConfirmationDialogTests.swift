@@ -176,7 +176,7 @@ final class ConfirmationDialogTests: XCTestCase {
             XCTAssertEqual(ConfirmationDialog(question("t", code: [plain])).shownCode, [plain])
         }
         XCTAssertEqual(dialog.code, [line, "plain"])
-        XCTAssertTrue(TextRun.same(dialog.code[0], line))
+        XCTAssertTrue(dialog.code[0].hasSameScalars(as: line))
         XCTAssertEqual(request, question("t", code: [line, "plain"]))
         XCTAssertEqual(dialog, ConfirmationDialog(question("t", code: [line, "plain"])))
         XCTAssertEqual(ControlText.escaped("\u{202D}x\u{202C}"), #"\u{202D}x\u{202C}"#, "a line can hold neither, so none can end the wrapper early")

@@ -79,7 +79,7 @@ public final class SymlinkCommandLineTool: CommandLineTool {
 
     private var folder: String { (linkPath as NSString).deletingLastPathComponent }
 
-    private var isLink: Bool { (try? FileManager.default.destinationOfSymbolicLink(atPath: linkPath)) != nil }
+    private var isLink: Bool { destination != nil }
 
     public func install(completion: @escaping (String?) -> Void) {
         lastProblem = nil

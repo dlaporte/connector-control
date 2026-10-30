@@ -80,14 +80,14 @@ extension ControlTools {
     static func identical(_ one: JSONValue, _ other: JSONValue) -> Bool {
         switch (one, other) {
         case (.string(let a), .string(let b)):
-            return ControlMasking.same(a, b)
+            return a.hasSameScalars(as: b)
         case (.array(let a), .array(let b)):
             return a.count == b.count && zip(a, b).allSatisfy { identical($0, $1) }
         case (.object(let a), .object(let b)):
             let keys = a.keys.sorted { $0.ordinallyPrecedes($1) }
             let otherKeys = b.keys.sorted { $0.ordinallyPrecedes($1) }
             return keys.count == otherKeys.count && zip(keys, otherKeys).allSatisfy { key, otherKey in
-                guard ControlMasking.same(key, otherKey), let value = a[key], let otherValue = b[otherKey] else { return false }
+                guard key.hasSameScalars(as: otherKey), let value = a[key], let otherValue = b[otherKey] else { return false }
                 return identical(value, otherValue)
             }
         default:
@@ -612,7 +612,7 @@ extension ControlTools {
         }
         // Only an id the list gives: never a path, so nothing outside the backups folder is read.
         // Compared scalar by scalar, as the Windows mirror compares ordinally.
-        guard let backup = urls.first(where: { ControlMasking.same($0.lastPathComponent, id) }) else {
+        guard let backup = urls.first(where: { $0.lastPathComponent.hasSameScalars(as: id) }) else {
             return .refused(ControlTools.noBackupError(shownID))
         }
         // The backup's record, read once: the refusal, the question and the restore all follow it.

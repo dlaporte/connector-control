@@ -33,12 +33,7 @@ public struct TextRun: Equatable, Sendable {
     // ordinally by itself; Swift's == would hold canonically equivalent text equal, and a name composed
     // another way is another name.
     public static func == (one: TextRun, other: TextRun) -> Bool {
-        one.isSetApart == other.isSetApart && same(one.text, other.text)
-    }
-
-    /// The same text, scalar for scalar.
-    static func same(_ one: String, _ other: String) -> Bool {
-        one.unicodeScalars.elementsEqual(other.unicodeScalars)
+        one.isSetApart == other.isSetApart && one.text.hasSameScalars(as: other.text)
     }
 
     /// `sentence` with every occurrence of each of `pieces` set apart - at each place, the first of

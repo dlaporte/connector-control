@@ -206,18 +206,12 @@ public struct ConfirmationRequest: Equatable, Sendable {
         let footers: Bool
         switch (one.footer, other.footer) {
         case (nil, nil): footers = true
-        case (let a?, let b?): footers = same(a, b)
+        case (let a?, let b?): footers = a.hasSameScalars(as: b)
         default: footers = false
         }
-        return same(one.title, other.title) && same(one.message, other.message)
-            && one.code.count == other.code.count && zip(one.code, other.code).allSatisfy { same($0, $1) }
+        return one.title.hasSameScalars(as: other.title) && one.message.hasSameScalars(as: other.message)
+            && one.code.count == other.code.count && zip(one.code, other.code).allSatisfy { $0.hasSameScalars(as: $1) }
             && footers
-    }
-
-    /// The same text, scalar for scalar. A request is compared off the main actor, so this cannot
-    /// lean on ControlMasking's own.
-    private static func same(_ one: String, _ other: String) -> Bool {
-        one.unicodeScalars.elementsEqual(other.unicodeScalars)
     }
 }
 

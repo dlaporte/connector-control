@@ -91,7 +91,7 @@ public struct ConfirmationDialog: Equatable, Sendable {
     // equivalent text equal, and a name composed another way is another name.
     public static func == (one: ConfirmationDialog, other: ConfirmationDialog) -> Bool {
         one.title == other.title && one.message == other.message
-            && one.code.count == other.code.count && zip(one.code, other.code).allSatisfy { TextRun.same($0, $1) }
+            && one.code.count == other.code.count && zip(one.code, other.code).allSatisfy { $0.hasSameScalars(as: $1) }
             && one.codeKinds == other.codeKinds && one.footer == other.footer
     }
 

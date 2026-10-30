@@ -275,6 +275,13 @@ extension String {
     public func ordinallyPrecedes(_ other: String) -> Bool {
         utf16.lexicographicallyPrecedes(other.utf16)
     }
+
+    /// The same text, scalar for scalar: what C#'s ordinal equality compares. Swift's own `==`
+    /// holds canonically equivalent text equal, and a name composed another way is another name.
+    /// Nonisolated, so a value compared off the main actor can use it as well as the masking can.
+    public func hasSameScalars(as other: String) -> Bool {
+        unicodeScalars.elementsEqual(other.unicodeScalars)
+    }
 }
 
 /// One connector's path marks, placed on the arguments it holds now.
