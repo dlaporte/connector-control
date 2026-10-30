@@ -11,7 +11,7 @@ public class MasterStoreIOTests : IDisposable
     [Fact]
     public void SaveStoreReportsTheOutcome()
     {
-        var store = new MasterStore([]);
+        var store = MasterStore.Single([]);
         Assert.True(MasterStoreIO.Save(store, dir.File("mcps.json")).Protected);
     }
 }

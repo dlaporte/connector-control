@@ -76,7 +76,7 @@ public class ConfigServiceTests : IDisposable
     [Fact]
     public void TheIngestTargetIsNeverASubscribedCollection()
     {
-        var store = new MasterStore([]);
+        var store = MasterStore.Single([]);
         store.Collections["Team"] = new Collection();
         store.Collections["Beta"] = new Collection();
         store.ActiveCollection = "Team";
@@ -102,7 +102,7 @@ public class ConfigServiceTests : IDisposable
     [Fact]
     public void ALoadWithASubscribedCollectionActiveKeepsTheAdditionsElsewhere()
     {
-        var store = new MasterStore([new KeyValuePair<string, McpEntry>("scoutbook", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("old")))))]);
+        var store = MasterStore.Single([new KeyValuePair<string, McpEntry>("scoutbook", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("old")))))]);
         store.Collections["Team"] = new Collection([new KeyValuePair<string, McpEntry>("aws-mcp", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("t")))))]);
         store.ActiveCollection = "Team";
         service.SaveStore(store);

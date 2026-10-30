@@ -48,12 +48,6 @@ public sealed class MasterStore : IEquatable<MasterStore>
         }
     }
 
-    /// <summary>Swift <c>MasterStore(version:mcps:)</c>: a single "Default" collection; always v2.</summary>
-    public MasterStore(IEnumerable<KeyValuePair<string, McpEntry>> mcps)
-        : this(CurrentVersion, DefaultCollectionName, [new KeyValuePair<string, Collection>(DefaultCollectionName, new Collection(mcps))])
-    {
-    }
-
     /// <summary>Swift <c>.empty</c>. A fresh instance every call - this type is mutable.</summary>
     public static MasterStore Empty() =>
         new(CurrentVersion, DefaultCollectionName, [new KeyValuePair<string, Collection>(DefaultCollectionName, new Collection())]);

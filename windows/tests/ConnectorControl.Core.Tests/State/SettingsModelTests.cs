@@ -465,7 +465,7 @@ public class SettingsModelTests
     public void AClashDimsTheSwitchAndNamesIt()
     {
         using var rig = new Rig(h => MasterStoreIO.Save(
-            new MasterStore([new(ClaudeIntegration.EntryName, new McpEntry(true, JsonValue.Object(("command", JsonValue.String("x")))))]),
+            MasterStore.Single([new(ClaudeIntegration.EntryName, new McpEntry(true, JsonValue.Object(("command", JsonValue.String("x")))))]),
             h.MasterStorePath));
         Assert.False(rig.Model.CanChangeClaudeIntegration);
         Assert.Equal(ClaudeIntegration.ClashNote, rig.Model.ClaudeIntegrationNote);

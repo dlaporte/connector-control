@@ -149,7 +149,7 @@ public class SettingsWindowTests
     public void AClashDimsTheSwitchRowButNotItsNote()
     {
         using var h = new AppStateHarness();
-        MasterStoreIO.Save(new MasterStore([new(ClaudeIntegration.EntryName, new McpEntry(true, JsonValue.Object(("command", JsonValue.String("x")))))]),
+        MasterStoreIO.Save(MasterStore.Single([new(ClaudeIntegration.EntryName, new McpEntry(true, JsonValue.Object(("command", JsonValue.String("x")))))]),
             h.MasterStorePath);
         using var state = h.Create();
         var services = h.Services();
@@ -532,7 +532,7 @@ public class SettingsWindowTests
     public void NoTabScrollsAtTheWindowsOwnSize()
     {
         using var h = new AppStateHarness();
-        MasterStoreIO.Save(new MasterStore([new(ClaudeIntegration.EntryName, new McpEntry(true, JsonValue.Object(("command", JsonValue.String("x")))))]),
+        MasterStoreIO.Save(MasterStore.Single([new(ClaudeIntegration.EntryName, new McpEntry(true, JsonValue.Object(("command", JsonValue.String("x")))))]),
             h.MasterStorePath);
         h.ControlToolPath = @"C:\Users\me\AppData\Local\Connector Control\bin\connector-control.exe";
         h.Settings.ClaudeIntegrationEnabled = true;

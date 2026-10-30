@@ -16,7 +16,7 @@ public class MasterStoreTests : IDisposable
     [Fact]
     public void EnabledServersRendersEnabledSubset()
     {
-        var store = new MasterStore(new Dictionary<string, McpEntry>
+        var store = MasterStore.Single(new Dictionary<string, McpEntry>
         {
             ["on"] = new McpEntry(true, Cmd("a")),
             ["off"] = new McpEntry(false, Cmd("b")),
@@ -81,7 +81,7 @@ public class MasterStoreTests : IDisposable
     [Fact]
     public void EnabledCountCountsWithoutBuildingTheServerDictionary()
     {
-        var store = new MasterStore(new Dictionary<string, McpEntry>
+        var store = MasterStore.Single(new Dictionary<string, McpEntry>
         {
             ["on"] = new McpEntry(true, Cmd("a")),
             ["off"] = new McpEntry(false, Cmd("b")),

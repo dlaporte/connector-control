@@ -1,3 +1,5 @@
+using ConnectorControl.Core.Tests.TestSupport;
+
 namespace ConnectorControl.Core.Tests;
 
 /// <summary>Mirror: Tests/ConnectorControlCoreTests/ReconcilerTests.swift</summary>
@@ -7,7 +9,7 @@ public class ReconcilerTests
     private static readonly JsonValue ConfigB = JsonValue.Object(("command", JsonValue.String("b")));
 
     private static MasterStore Store(params (string Name, McpEntry Entry)[] mcps) =>
-        new(mcps.Select(m => new KeyValuePair<string, McpEntry>(m.Name, m.Entry)));
+        MasterStore.Single(mcps.Select(m => new KeyValuePair<string, McpEntry>(m.Name, m.Entry)));
 
     private static Dictionary<string, JsonValue> Servers(params (string Name, JsonValue Config)[] servers) =>
         servers.ToDictionary(s => s.Name, s => s.Config, StringComparer.Ordinal);

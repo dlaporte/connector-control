@@ -37,7 +37,7 @@ public class ClaudeIntegrationTests
     public void ALegacyConnectorHoldingTheNameCanBeEditedInPlaceOrRenamedAway()
     {
         using var h = new AppStateHarness();
-        MasterStoreIO.Save(new MasterStore([new(Reserved, new McpEntry(true, Config))]), h.MasterStorePath);
+        MasterStoreIO.Save(MasterStore.Single([new(Reserved, new McpEntry(true, Config))]), h.MasterStorePath);
         using var state = h.Create();
         var edited = JsonValue.Object(("command", JsonValue.String("node")), ("args", JsonValue.Array([JsonValue.String("y.js")])));
         Assert.Null(state.Upsert(Reserved, new McpEntry(true, edited), Reserved));
@@ -199,7 +199,7 @@ public class ClaudeIntegrationTests
     public void AClashKeepsTheEntryOutAndTheSwitchRefusesUntilItIsRenamed()
     {
         using var h = new AppStateHarness { ControlToolPath = ToolPath };
-        MasterStoreIO.Save(new MasterStore([new(Reserved, new McpEntry(true, Config))]), h.MasterStorePath);
+        MasterStoreIO.Save(MasterStore.Single([new(Reserved, new McpEntry(true, Config))]), h.MasterStorePath);
         using var state = h.Create();
         Assert.True(state.ClaudeIntegrationClash);
         Assert.False(state.ShowsClaudeIntegrationOffer);
