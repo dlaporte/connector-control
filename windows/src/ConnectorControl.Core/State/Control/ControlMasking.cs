@@ -125,12 +125,14 @@ public static class ControlMasking
     private static readonly string[] MaskWords = [SetState, NeedsValueState, SetText, EditorModel.NeedsValue];
 
     /// <summary>Why <paramref name="config"/> cannot be saved over <paramref name="stored"/> (null for a new connector), or
-    /// null when it can: it writes this app's own mask text where that would destroy a value. Text holding "•••"
-    /// is refused wherever it is, since no real config holds it. A value that is exactly a mask word - "set",
-    /// "needs value", "••• (set)" or "needs your value" - is refused where <paramref name="stored"/> holds another
-    /// value at the same place, object keys by name and arrays by index: a place <paramref name="stored"/> lacks
-    /// is a new value, which may be the word "set". The first such place, in key order, is named by its nearest
-    /// key - a variable's name, a header's, or the list an argument is in - through
+    /// null when it can: it writes this app's own mask text where that would destroy a value. Places are matched
+    /// object key by name and array item by index. Text holding "•••" is refused unless <paramref name="stored"/>
+    /// holds that very text at the same place: no real config holds it, so it is the mask written back, but where
+    /// it is already stored it is old damage left as it was, and refusing it would block every other change to
+    /// the connector. A value that is exactly a mask word - "set", "needs value", "••• (set)" or "needs your
+    /// value" - is refused where <paramref name="stored"/> holds another value at the same place: a place
+    /// <paramref name="stored"/> lacks is a new value, which may be the word "set". The first such place, in key
+    /// order, is named by its nearest key - a variable's name, a header's, or the list an argument is in - through
     /// <see cref="ControlText.EscapedName"/>, since Claude chooses it. Every add, change and environment change
     /// asks this before its question, which masks a secret's two sides alike and could not show it.</summary>
     public static string? MaskRefusal(JsonValue config, JsonValue? stored) => MaskRefusal(config, stored, "");
@@ -143,7 +145,7 @@ public static class ControlMasking
                 var text = value.StringValue;
                 if (text.Contains(Mask, StringComparison.Ordinal))
                 {
-                    return MaskedValueError(ControlText.EscapedName(name), Mask);
+                    return before == value ? null : MaskedValueError(ControlText.EscapedName(name), Mask);
                 }
                 var word = MaskWords.FirstOrDefault(candidate => string.Equals(text, candidate, StringComparison.Ordinal));
                 return word is not null && before is not null && before != value ? MaskedValueError(ControlText.EscapedName(name), word) : null;

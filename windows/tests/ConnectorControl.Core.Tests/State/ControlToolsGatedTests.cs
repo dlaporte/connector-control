@@ -348,6 +348,32 @@ public class ControlToolsGatedTests
         Assert.Equal(ChangedVault(("LEVEL", Text(ControlMasking.SetState))), rig.State.Store.Mcps["vault"].Config);
     }
 
+    /// <summary>A connector already holding the mask - damage from before the guard - can still have its
+    /// environment changed, the damage left as it was, and a damaged value can be overwritten. The mask
+    /// written anywhere new, or another text holding it in a damaged value's place, is refused.</summary>
+    [Fact]
+    public void AStoredMaskDoesNotBlockAChangeElsewhere()
+    {
+        using var rig = Rig();
+        var damaged = JsonValue.Object(
+            ("command", Text("npx")), ("args", JsonValue.Array([Text("-y"), Text("acme"), Text("--token"), Text("•••")])),
+            ("env", JsonValue.Object(("MODE", Text("fast")), ("API_KEY", Text(ControlMasking.SetText)))));
+        Assert.Null(rig.State.Upsert("damaged", new McpEntry(damaged), null));
+        Assert.False(rig.Call("set_connector_env", Args(("name", Text("damaged")),
+            ("set", JsonValue.Object(("MODE", Text("slow")), ("API_KEY", Text("${CC_NEEDS:API_KEY}"))))))?.IsError);
+        var changed = damaged.With("env", JsonValue.Object(("MODE", Text("slow")), ("API_KEY", Text("${CC_NEEDS:API_KEY}"))));
+        // The stored mask stays as it was.
+        Assert.Equal(changed, rig.State.Store.Mcps["damaged"].Config);
+        JsonValue WithArgs(params string[] args) => changed.With("args", JsonValue.Array(args.Select(Text)));
+        foreach (var config in new[] { WithArgs("-y", "acme", "--token", "•••", "--x", "•••"), WithArgs("-y", "acme", "--token", "••• (set)") })
+        {
+            Assert.Equal(ControlResult.Refusal(ControlMasking.MaskedValueError("args", ControlMasking.Mask)),
+                rig.Call("update_connector", Args(("name", Text("damaged")), ("config", config))));
+        }
+        Assert.Single(rig.Confirmer.Requests);
+        Assert.Equal(changed, rig.State.Store.Mcps["damaged"].Config);
+    }
+
     /// <summary>Claude's change asks, and Don't Allow leaves the connector as it was; the command line's is the
     /// user's own, and is made without asking.</summary>
     [Fact]

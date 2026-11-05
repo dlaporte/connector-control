@@ -297,6 +297,37 @@ final class ControlToolsGatedTests: XCTestCase {
         XCTAssertEqual(rig.state.store.mcps["vault"]?.config, changedVault(["LEVEL": .string(ControlMasking.setState)]))
     }
 
+    /// A connector already holding the mask - damage from before the guard - can still have its
+    /// environment changed, the damage left as it was, and a damaged value can be overwritten. The mask
+    /// written anywhere new, or another text holding it in a damaged value's place, is refused.
+    func testAStoredMaskDoesNotBlockAChangeElsewhere() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let damaged: JSONValue = .object([
+            "command": .string("npx"), "args": .array([.string("-y"), .string("acme"), .string("--token"), .string("•••")]),
+            "env": .object(["MODE": .string("fast"), "API_KEY": .string(ControlMasking.setText)]),
+        ])
+        XCTAssertNil(rig.state.upsert(name: "damaged", entry: MCPEntry(config: damaged), renamedFrom: nil))
+        XCTAssertFalse(try XCTUnwrap(rig.call("set_connector_env", [
+            "name": .string("damaged"), "set": .object(["MODE": .string("slow"), "API_KEY": .string("${CC_NEEDS:API_KEY}")]),
+        ])).isError)
+        let changed: JSONValue = .object([
+            "command": .string("npx"), "args": .array([.string("-y"), .string("acme"), .string("--token"), .string("•••")]),
+            "env": .object(["MODE": .string("slow"), "API_KEY": .string("${CC_NEEDS:API_KEY}")]),
+        ])
+        XCTAssertEqual(rig.state.store.mcps["damaged"]?.config, changed, "the stored mask stays as it was")
+        func withArgs(_ args: [String]) -> JSONValue {
+            guard case .object(var object) = changed else { return changed }
+            object["args"] = .array(args.map(JSONValue.string))
+            return .object(object)
+        }
+        for config in [withArgs(["-y", "acme", "--token", "•••", "--x", "•••"]), withArgs(["-y", "acme", "--token", "••• (set)"])] {
+            XCTAssertEqual(rig.call("update_connector", ["name": .string("damaged"), "config": config]),
+                           .refusal(ControlMasking.maskedValueError("args", ControlMasking.mask)))
+        }
+        XCTAssertEqual(rig.confirmer.requests.count, 1)
+        XCTAssertEqual(rig.state.store.mcps["damaged"]?.config, changed)
+    }
+
     /// Claude's change asks, and Don't Allow leaves the connector as it was; the command line's is the
     /// user's own, and is made without asking.
     func testSettingTheEnvironmentAsksClaudeButNotTheCommandLine() throws {

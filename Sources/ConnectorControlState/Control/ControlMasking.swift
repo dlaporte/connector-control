@@ -118,20 +118,25 @@ public enum ControlMasking {
     // MARK: The mask guard
 
     /// Why `config` cannot be saved over `stored` (nil for a new connector), or nil when it can: it
-    /// writes this app's own mask text where that would destroy a value. Text holding "•••" is refused
-    /// wherever it is, since no real config holds it. A value that is exactly a mask word - "set",
-    /// "needs value", "••• (set)" or "needs your value" - is refused where `stored` holds another value
-    /// at the same place, object keys by name and arrays by index: a place `stored` lacks is a new
-    /// value, which may be the word "set". The first such place, in key order, is named by its nearest
-    /// key - a variable's name, a header's, or the list an argument is in - through
-    /// `ControlText.escapedName(_:)`, since Claude chooses it. Every add, change and environment change
-    /// asks this before its question, which masks a secret's two sides alike and could not show it.
+    /// writes this app's own mask text where that would destroy a value. Places are matched object key
+    /// by name and array item by index. Text holding "•••" is refused unless `stored` holds that very
+    /// text at the same place: no real config holds it, so it is the mask written back, but where it
+    /// is already stored it is old damage left as it was, and refusing it would block every other
+    /// change to the connector. A value that is exactly a mask word - "set", "needs value", "••• (set)"
+    /// or "needs your value" - is refused where `stored` holds another value at the same place: a place
+    /// `stored` lacks is a new value, which may be the word "set". The first such place, in key order,
+    /// is named by its nearest key - a variable's name, a header's, or the list an argument is in -
+    /// through `ControlText.escapedName(_:)`, since Claude chooses it. Every add, change and environment
+    /// change asks this before its question, which masks a secret's two sides alike and could not show
+    /// it.
     public static func maskRefusal(_ config: JSONValue, over stored: JSONValue?) -> String? {
         let words = [setState, needsValueState, setText, EditorModel.needsValue]
         func refusal(_ value: JSONValue, _ before: JSONValue?, _ name: String) -> String? {
             switch value {
             case .string(let text):
-                if cut(text, at: mask) != nil { return maskedValueError(ControlText.escapedName(name), mask) }
+                if cut(text, at: mask) != nil {
+                    return before == value ? nil : maskedValueError(ControlText.escapedName(name), mask)
+                }
                 guard let word = words.first(where: { text.hasSameScalars(as: $0) }), let before, before != value else { return nil }
                 return maskedValueError(ControlText.escapedName(name), word)
             case .array(let items):

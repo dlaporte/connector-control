@@ -570,12 +570,12 @@ that needs a secret you haven't given it, it is told to write a
 Control. To add, change or remove environment variables, Claude uses Change
 environment, which names only those variables; the others keep their values,
 which Claude never sees. A change that would save `set`, `needs value` or
-`needs your value` over a different value, or any text holding `•••`, is
-refused, from the command line too: those are how Connector Control shows a
-hidden value, and saving one would replace the real value - a `bw://` or
-`op://` reference, say - in a way the confirmation, which masks a secret's
-before and after alike, couldn't show you. While the integration is off,
-Claude is refused everything.
+`needs your value` over a different value, or text holding `•••` where that
+text wasn't already, is refused, from the command line too: those are how
+Connector Control shows a hidden value, and saving one would replace the real
+value - a `bw://` or `op://` reference, say - in a way the confirmation, which
+masks a secret's before and after alike, couldn't show you. While the
+integration is off, Claude is refused everything.
 
 ### Confirming Claude's changes
 

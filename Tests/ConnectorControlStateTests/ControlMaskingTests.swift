@@ -960,6 +960,25 @@ final class ControlMaskingTests: XCTestCase {
         XCTAssertNil(ControlMasking.maskRefusal(env(["API_KEY": .string("set")]), over: nil), "nothing is stored to replace")
     }
 
+    /// Text holding "•••" that the stored config already holds, as it is and where it is, is old damage
+    /// left as it was, not a value replaced: it passes, and so does overwriting it with a real value.
+    /// The mask anywhere else, or another text holding it in its place, is refused.
+    func testTheMaskGuardLetsAStoredMaskStayWhereItIs() {
+        let stored = local("npx", ["-y", "acme", "--token", "•••"])
+        func args(_ values: [String]) -> JSONValue { local("npx", values) }
+        XCTAssertNil(ControlMasking.maskRefusal(adding("env", .object(["A": .string("1")]), to: stored), over: stored))
+        XCTAssertNil(ControlMasking.maskRefusal(args(["-y", "acme", "--token", "real"]), over: stored))
+        let refused: [(JSONValue, String, String)] = [
+            (args(["-y", "acme", "--token", "•••", "x•••"]), "args", "a new place"),
+            (args(["-y", "acme", "--token", "••• (set)"]), "args", "another text in its place"),
+            (args(["-y", "•••", "acme", "--token"]), "args", "moved to where another value was"),
+            (adding("env", .object(["A": .string("•••")]), to: stored), "A", "a new variable"),
+        ]
+        for (config, name, label) in refused {
+            XCTAssertEqual(ControlMasking.maskRefusal(config, over: stored), ControlMasking.maskedValueError(name, "•••"), label)
+        }
+    }
+
     /// A variable's name is Claude's to choose, so the refusal shows it as the app's sentences show a name.
     func testTheMaskGuardEscapesTheNameItShows() {
         let config: JSONValue = .object(["command": .string("x"), "env": .object(["A\n\u{202E}B": .string("•••")])])

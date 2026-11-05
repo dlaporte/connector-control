@@ -1154,6 +1154,33 @@ public class ControlMaskingTests
         Assert.Null(ControlMasking.MaskRefusal(Env(("API_KEY", S("set"))), null));
     }
 
+    /// <summary>Text holding "•••" that the stored config already holds, as it is and where it is, is old damage
+    /// left as it was, not a value replaced: it passes, and so does overwriting it with a real value.
+    /// The mask anywhere else, or another text holding it in its place, is refused.</summary>
+    [Fact]
+    public void TheMaskGuardLetsAStoredMaskStayWhereItIs()
+    {
+        var stored = Local("npx", ["-y", "acme", "--token", "•••"]);
+        JsonValue Args(params string[] values) => Local("npx", values);
+        Assert.Null(ControlMasking.MaskRefusal(Adding("env", JsonValue.Object(("A", S("1"))), stored), stored));
+        Assert.Null(ControlMasking.MaskRefusal(Args("-y", "acme", "--token", "real"), stored));
+        (JsonValue Config, string Name)[] refused =
+        [
+            // A new place.
+            (Args("-y", "acme", "--token", "•••", "x•••"), "args"),
+            // Another text in its place.
+            (Args("-y", "acme", "--token", "••• (set)"), "args"),
+            // Moved to where another value was.
+            (Args("-y", "•••", "acme", "--token"), "args"),
+            // A new variable.
+            (Adding("env", JsonValue.Object(("A", S("•••"))), stored), "A"),
+        ];
+        foreach (var (config, name) in refused)
+        {
+            Assert.Equal(ControlMasking.MaskedValueError(name, "•••"), ControlMasking.MaskRefusal(config, stored));
+        }
+    }
+
     /// <summary>A variable's name is Claude's to choose, so the refusal shows it as the app's sentences show a name.</summary>
     [Fact]
     public void TheMaskGuardEscapesTheNameItShows()
