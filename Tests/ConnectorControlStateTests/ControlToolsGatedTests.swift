@@ -253,10 +253,17 @@ final class ControlToolsGatedTests: XCTestCase {
             XCTAssertEqual(right.text, ControlTools.changedText(name, "Default") + " " + ControlTools.restartToApplyText, name)
             XCTAssertEqual(right.structured.value(at: JSONPointer(["restartRequired"])), .bool(true), name)
         }
-        // A rename with the config as it was is answered as the rename it is.
-        let renamed = try XCTUnwrap(rig.call("update_connector", ["name": .string("site"), "newName": .string("web"),
-                                                                  "config": siteWith("u")]))
-        XCTAssertEqual(renamed.text, ControlTools.renamedText("site", "web") + " " + ControlTools.restartToApplyText)
+        // A rename that sends a config is a change too, guessed right or wrong.
+        let asked = rig.confirmer.requests.count
+        let right = try XCTUnwrap(rig.call("update_connector", ["name": .string("site"), "newName": .string("web"), "config": siteWith("u")]))
+        XCTAssertNil(rig.state.upsert(name: "site", entry: MCPEntry(config: siteWith("u")), renamedFrom: "web"))
+        let wrong = try XCTUnwrap(rig.call("update_connector", ["name": .string("site"), "newName": .string("web"), "config": siteWith("v")]))
+        let requests = Array(rig.confirmer.requests.dropFirst(asked))
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(requests.first, requests.last, "the same question")
+        XCTAssertEqual(right, wrong, "the same answer")
+        XCTAssertEqual(right.text, [ControlTools.renamedText("site", "web"), ControlTools.changedText("web", "Default"),
+                                    ControlTools.restartToApplyText].joined(separator: "\n"))
     }
 
     /// The command line is the user, who sees every value: a config sent back as it is is refused as no change.
@@ -265,6 +272,8 @@ final class ControlToolsGatedTests: XCTestCase {
         let same = try XCTUnwrap(rig.state.store.mcps["scoutbook"]).config
         XCTAssertEqual(rig.call("update_connector", ["name": .string("scoutbook"), "config": same], as: .cli),
                        .refusal(ControlTools.unchangedError("scoutbook")))
+        XCTAssertEqual(rig.call("update_connector", ["name": .string("scoutbook"), "newName": .string("scouts"), "config": same], as: .cli)?.text,
+                       ControlTools.renamedText("scoutbook", "scouts"), "a rename and nothing else")
         XCTAssertTrue(rig.confirmer.requests.isEmpty)
     }
 

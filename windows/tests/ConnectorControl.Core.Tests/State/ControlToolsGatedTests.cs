@@ -301,9 +301,20 @@ public class ControlToolsGatedTests
             Assert.Equal(ControlTools.ChangedText(name, "Default") + " " + ControlTools.RestartToApplyText, right.Text);
             Assert.Equal(JsonValue.Bool(true), right.Structured.ValueAt(new JsonPointer(["restartRequired"])));
         }
-        // A rename with the config as it was is answered as the rename it is.
-        var renamed = rig.Call("update_connector", Args(("name", Text("site")), ("newName", Text("web")), ("config", SiteWith("u"))));
-        Assert.Equal(ControlTools.RenamedText("site", "web") + " " + ControlTools.RestartToApplyText, renamed?.Text);
+        // A rename that sends a config is a change too, guessed right or wrong.
+        var before = rig.Confirmer.Requests.Count;
+        var renamedRight = rig.Call("update_connector", Args(("name", Text("site")), ("newName", Text("web")), ("config", SiteWith("u"))));
+        Assert.Null(rig.State.Upsert("site", new McpEntry(SiteWith("u")), "web"));
+        var renamedWrong = rig.Call("update_connector", Args(("name", Text("site")), ("newName", Text("web")), ("config", SiteWith("v"))));
+        var renames = rig.Confirmer.Requests.Skip(before).ToList();
+        Assert.Equal(2, renames.Count);
+        // The same question.
+        Assert.Equal(renames[0], renames[1]);
+        // The same answer.
+        Assert.NotNull(renamedRight);
+        Assert.Equal(renamedRight, renamedWrong);
+        Assert.Equal(string.Join("\n", ControlTools.RenamedText("site", "web"), ControlTools.ChangedText("web", "Default"), ControlTools.RestartToApplyText),
+            renamedRight.Text);
     }
 
     /// <summary>The command line is the user, who sees every value: a config sent back as it is is refused as no change.</summary>
@@ -314,6 +325,9 @@ public class ControlToolsGatedTests
         var same = rig.State.Store.Mcps["scoutbook"].Config;
         Assert.Equal(ControlResult.Refusal(ControlTools.UnchangedError("scoutbook")),
             rig.Call("update_connector", Args(("name", Text("scoutbook")), ("config", same)), new ControlCaller.Cli()));
+        // A rename and nothing else.
+        Assert.Equal(ControlTools.RenamedText("scoutbook", "scouts"),
+            rig.Call("update_connector", Args(("name", Text("scoutbook")), ("newName", Text("scouts")), ("config", same)), new ControlCaller.Cli())?.Text);
         Assert.Empty(rig.Confirmer.Requests);
     }
 

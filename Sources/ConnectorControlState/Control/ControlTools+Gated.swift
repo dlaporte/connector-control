@@ -153,11 +153,12 @@ extension ControlTools {
         // change, whether or not a line can show it.
         let reconfigured = after != current.config
         // Claude never sees a secret, so a config sent back as it is, guessed values and all, is asked
-        // about and answered as a change, and its question lists every variable and header it sends, as
-        // set_connector_env's does: nothing tells Claude whether it guessed a value. The command line
-        // is the user, who can, and is told there is nothing to change.
-        let restated = config != nil && !renamed && !reconfigured
-        guard renamed || reconfigured || (restated && caller != .cli) else { return .refused(ControlTools.unchangedError(shownName)) }
+        // about and answered as a change, with a rename or without, and its question lists every
+        // variable and header it sends, as set_connector_env's does: nothing tells Claude whether it
+        // guessed a value. The command line is the user, who can, and is told there is nothing to
+        // change, or only a rename.
+        let restated = config != nil && !reconfigured && caller != .cli
+        guard renamed || reconfigured || restated else { return .refused(ControlTools.unchangedError(shownName)) }
         var sent: [String] = []
         if config != nil, case .object(let object) = after, case .object(let env)? = object["env"] { sent = Array(env.keys) }
         let changes = ControlMasking.changeLines(from: current.config, to: after, exposure: .dialog,

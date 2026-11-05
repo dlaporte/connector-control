@@ -230,11 +230,12 @@ public sealed partial class ControlTools
         // change, whether or not a line can show it.
         var reconfigured = after != current.Config;
         // Claude never sees a secret, so a config sent back as it is, guessed values and all, is asked
-        // about and answered as a change, and its question lists every variable and header it sends, as
-        // set_connector_env's does: nothing tells Claude whether it guessed a value. The command line
-        // is the user, who can, and is told there is nothing to change.
-        var restated = config is not null && !renamed && !reconfigured;
-        if (!renamed && !reconfigured && !(restated && caller is not ControlCaller.Cli))
+        // about and answered as a change, with a rename or without, and its question lists every
+        // variable and header it sends, as set_connector_env's does: nothing tells Claude whether it
+        // guessed a value. The command line is the user, who can, and is told there is nothing to
+        // change, or only a rename.
+        var restated = config is not null && !reconfigured && caller is not ControlCaller.Cli;
+        if (!renamed && !reconfigured && !restated)
         {
             return new ControlStep.Refused(UnchangedError(shownName));
         }
