@@ -116,6 +116,25 @@ public class ControlToolsGatedTests
         Assert.Empty(rig.Confirmer.Requests);
     }
 
+    /// <summary>A config copied from what Claude is shown carries the mask, which no real config holds. A mask
+    /// word alone replaces nothing in a new connector, so it can be a value.</summary>
+    [Fact]
+    public void AddingRefusesAConfigHoldingTheMask()
+    {
+        using var rig = Rig();
+        Assert.Equal(ControlResult.Refusal(ControlMasking.MaskedValueError("args", ControlMasking.Mask)),
+            rig.Call("add_connector", Args(("name", Text("acme")), ("config", ControlMasking.MaskedConfig(Secretive)))));
+        var shown = JsonValue.Object(("command", Text("node")), ("env", JsonValue.Object(("ACME_TOKEN", Text(ControlMasking.SetText)))));
+        Assert.Equal(ControlResult.Refusal(ControlMasking.MaskedValueError("ACME_TOKEN", ControlMasking.Mask)),
+            rig.Call("add_connector", Args(("name", Text("acme")), ("config", shown))));
+        Assert.Empty(rig.Confirmer.Requests);
+        var word = JsonValue.Object(("command", Text("node")), ("env", JsonValue.Object(("MODE", Text(ControlMasking.SetState)))));
+        var result = rig.Call("add_connector", Args(("name", Text("acme")), ("config", word)));
+        Assert.NotNull(result);
+        Assert.False(result.IsError, result.Text);
+        Assert.Equal(word, rig.State.Store.Mcps["acme"].Config);
+    }
+
     // MARK: update_connector
 
     [Fact]
@@ -199,6 +218,48 @@ public class ControlToolsGatedTests
             Assert.Equal(ControlResult.Refusal(refusal), rig.Call("update_connector", arguments));
         }
         Assert.Empty(rig.Confirmer.Requests);
+    }
+
+    /// <summary>A connector with a secret held elsewhere, a setting, and a value that is the word "set".</summary>
+    private static readonly JsonValue Vault = JsonValue.Object(
+        ("command", JsonValue.String("npx")), ("args", JsonValue.Array([JsonValue.String("-y"), JsonValue.String("vault-mcp")])),
+        ("env", JsonValue.Object(("API_KEY", JsonValue.String("bw://x")), ("MODE", JsonValue.String("fast")), ("STATE", JsonValue.String("set")))));
+
+    private static JsonValue ChangedVault(params (string Key, JsonValue Value)[] values) =>
+        Vault.With("env", values.Aggregate(Vault["env"]!, (env, item) => env.With(item.Key, item.Value)));
+
+    /// <summary>Sending back what get_connector showed would replace the real value with the mask word. The
+    /// question could not show it - a secret's name masks both sides alike - so it is refused before
+    /// anyone is asked. A word the stored config already holds, or a new variable's, replaces nothing.</summary>
+    [Fact]
+    public void ChangingRefusesAMaskWordOverARealValue()
+    {
+        using var rig = Rig();
+        Assert.Null(rig.State.Upsert("vault", new McpEntry(Vault), null));
+        var hidden = ChangedVault(("API_KEY", Text(ControlMasking.SetState)));
+        // The question shows no difference.
+        Assert.Equal(["env", "  − API_KEY = ••• (set)", "  + API_KEY = ••• (set)"],
+            ControlMasking.ChangeLines(Vault, hidden, ControlMasking.Exposure.Dialog));
+        (JsonValue Config, string Refusal)[] cases =
+        [
+            (hidden, ControlMasking.MaskedValueError("API_KEY", ControlMasking.SetState)),
+            (ChangedVault(("API_KEY", Text(ControlMasking.NeedsValueState))), ControlMasking.MaskedValueError("API_KEY", ControlMasking.NeedsValueState)),
+            (ChangedVault(("API_KEY", Text(EditorModel.NeedsValue))), ControlMasking.MaskedValueError("API_KEY", EditorModel.NeedsValue)),
+            (ChangedVault(("API_KEY", Text(ControlMasking.SetText))), ControlMasking.MaskedValueError("API_KEY", ControlMasking.Mask)),
+            (ChangedVault(("MODE", Text(ControlMasking.SetState))), ControlMasking.MaskedValueError("MODE", ControlMasking.SetState)),
+            (ControlMasking.MaskedConfig(Vault), ControlMasking.MaskedValueError("API_KEY", ControlMasking.SetState)),
+        ];
+        foreach (var (config, refusal) in cases)
+        {
+            Assert.Equal(ControlResult.Refusal(refusal), rig.Call("update_connector", Args(("name", Text("vault")), ("config", config))));
+        }
+        Assert.Empty(rig.Confirmer.Requests);
+        Assert.Equal(Vault, rig.State.Store.Mcps["vault"].Config);
+        var added = ChangedVault(("LEVEL", Text(ControlMasking.SetState)));
+        Assert.Equal(ControlTools.ChangedText("vault", "Default"),
+            rig.Call("update_connector", Args(("name", Text("vault")), ("config", added)))?.Text);
+        Assert.Equal(["env", "  + LEVEL = set"], Assert.Single(rig.Confirmer.Requests).Code);
+        Assert.Equal(added, rig.State.Store.Mcps["vault"].Config);
     }
 
     // MARK: delete_connectors

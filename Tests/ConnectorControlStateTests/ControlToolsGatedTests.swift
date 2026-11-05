@@ -89,6 +89,21 @@ final class ControlToolsGatedTests: XCTestCase {
     // The Windows mirror also refuses a cmd /c launcher with characters cmd.exe would act on; a Mac
     // never writes that launcher, so there is no such test here.
 
+    /// A config copied from what Claude is shown carries the mask, which no real config holds. A mask
+    /// word alone replaces nothing in a new connector, so it can be a value.
+    func testAddingRefusesAConfigHoldingTheMask() throws {
+        let rig = rig(); defer { rig.dispose() }
+        XCTAssertEqual(rig.call("add_connector", ["name": .string("acme"), "config": ControlMasking.maskedConfig(secretive)]),
+                       .refusal(ControlMasking.maskedValueError("args", ControlMasking.mask)))
+        let shown: JSONValue = .object(["command": .string("node"), "env": .object(["ACME_TOKEN": .string(ControlMasking.setText)])])
+        XCTAssertEqual(rig.call("add_connector", ["name": .string("acme"), "config": shown]),
+                       .refusal(ControlMasking.maskedValueError("ACME_TOKEN", ControlMasking.mask)))
+        XCTAssertTrue(rig.confirmer.requests.isEmpty)
+        let word: JSONValue = .object(["command": .string("node"), "env": .object(["MODE": .string(ControlMasking.setState)])])
+        XCTAssertFalse(try XCTUnwrap(rig.call("add_connector", ["name": .string("acme"), "config": word])).isError)
+        XCTAssertEqual(rig.state.store.mcps["acme"]?.config, word)
+    }
+
     // MARK: update_connector
 
     func testChangingShowsOnlyWhatDiffersAndKeepsTheSwitch() throws {
@@ -159,6 +174,47 @@ final class ControlToolsGatedTests: XCTestCase {
             XCTAssertEqual(rig.call("update_connector", arguments), .refusal(refusal), refusal)
         }
         XCTAssertTrue(rig.confirmer.requests.isEmpty)
+    }
+
+    /// A connector with a secret held elsewhere, a setting, and a value that is the word "set".
+    private let vault: JSONValue = .object([
+        "command": .string("npx"), "args": .array([.string("-y"), .string("vault-mcp")]),
+        "env": .object(["API_KEY": .string("bw://x"), "MODE": .string("fast"), "STATE": .string("set")]),
+    ])
+
+    private func changedVault(_ values: [String: JSONValue]) -> JSONValue {
+        guard case .object(var object) = vault, case .object(let env)? = object["env"] else { return vault }
+        object["env"] = .object(env.merging(values) { $1 })
+        return .object(object)
+    }
+
+    /// Sending back what get_connector showed would replace the real value with the mask word. The
+    /// question could not show it - a secret's name masks both sides alike - so it is refused before
+    /// anyone is asked. A word the stored config already holds, or a new variable's, replaces nothing.
+    func testChangingRefusesAMaskWordOverARealValue() throws {
+        let rig = rig(); defer { rig.dispose() }
+        XCTAssertNil(rig.state.upsert(name: "vault", entry: MCPEntry(config: vault), renamedFrom: nil))
+        let hidden = changedVault(["API_KEY": .string(ControlMasking.setState)])
+        XCTAssertEqual(ControlMasking.changeLines(from: vault, to: hidden, exposure: .dialog),
+                       ["env", "  − API_KEY = ••• (set)", "  + API_KEY = ••• (set)"], "the question shows no difference")
+        let cases: [(JSONValue, String)] = [
+            (hidden, ControlMasking.maskedValueError("API_KEY", ControlMasking.setState)),
+            (changedVault(["API_KEY": .string(ControlMasking.needsValueState)]), ControlMasking.maskedValueError("API_KEY", ControlMasking.needsValueState)),
+            (changedVault(["API_KEY": .string(EditorModel.needsValue)]), ControlMasking.maskedValueError("API_KEY", EditorModel.needsValue)),
+            (changedVault(["API_KEY": .string(ControlMasking.setText)]), ControlMasking.maskedValueError("API_KEY", ControlMasking.mask)),
+            (changedVault(["MODE": .string(ControlMasking.setState)]), ControlMasking.maskedValueError("MODE", ControlMasking.setState)),
+            (ControlMasking.maskedConfig(vault), ControlMasking.maskedValueError("API_KEY", ControlMasking.setState)),
+        ]
+        for (config, refusal) in cases {
+            XCTAssertEqual(rig.call("update_connector", ["name": .string("vault"), "config": config]), .refusal(refusal), refusal)
+        }
+        XCTAssertTrue(rig.confirmer.requests.isEmpty)
+        XCTAssertEqual(rig.state.store.mcps["vault"]?.config, vault)
+        let added = changedVault(["LEVEL": .string(ControlMasking.setState)])
+        XCTAssertEqual(try XCTUnwrap(rig.call("update_connector", ["name": .string("vault"), "config": added])).text,
+                       ControlTools.changedText("vault", "Default"))
+        XCTAssertEqual(rig.confirmer.requests.map(\.code), [["env", "  + LEVEL = set"]])
+        XCTAssertEqual(rig.state.store.mcps["vault"]?.config, added)
     }
 
     // MARK: delete_connectors

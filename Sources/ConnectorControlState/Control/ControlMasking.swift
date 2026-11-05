@@ -51,6 +51,12 @@ public enum ControlMasking {
 
     public static func assignment(_ name: String, _ value: String) -> String { "\(name) = \(value)" }
 
+    /// A config refused for writing the app's own mask text where it would replace a value: `name` is
+    /// where, as `maskRefusal(_:over:)` names it, and `shown` the mask text it holds.
+    public static func maskedValueError(_ name: String, _ shown: String) -> String {
+        "“\(name)” holds “\(shown)”, which is how Connector Control hides a value, so saving it would replace the real value. To change environment variables without the others, use set_connector_env; for a value you don’t have, write ${CC_NEEDS:NAME}."
+    }
+
     /// One value on a line as `exposure` shows it: in the dialog, quoted as an argument is when it is
     /// not plain (`ControlText.word(_:)`), so a newline and the two characters \n read apart and a run
     /// of spaces cannot pass for a row of its own; elsewhere as it is.
@@ -107,6 +113,49 @@ public enum ControlMasking {
     public static func secretText(_ value: String, reveal: Bool = false) -> String {
         if reveal { return value }
         return secretState(value) == setState ? setText : EditorModel.needsValue
+    }
+
+    // MARK: The mask guard
+
+    /// Why `config` cannot be saved over `stored` (nil for a new connector), or nil when it can: it
+    /// writes this app's own mask text where that would destroy a value. Text holding "•••" is refused
+    /// wherever it is, since no real config holds it. A value that is exactly a mask word - "set",
+    /// "needs value", "••• (set)" or "needs your value" - is refused where `stored` holds another value
+    /// at the same place, object keys by name and arrays by index: a place `stored` lacks is a new
+    /// value, which may be the word "set". The first such place, in key order, is named by its nearest
+    /// key - a variable's name, a header's, or the list an argument is in - through
+    /// `ControlText.escapedName(_:)`, since Claude chooses it. Every add, change and environment change
+    /// asks this before its question, which masks a secret's two sides alike and could not show it.
+    public static func maskRefusal(_ config: JSONValue, over stored: JSONValue?) -> String? {
+        let words = [setState, needsValueState, setText, EditorModel.needsValue]
+        func refusal(_ value: JSONValue, _ before: JSONValue?, _ name: String) -> String? {
+            switch value {
+            case .string(let text):
+                if cut(text, at: mask) != nil { return maskedValueError(ControlText.escapedName(name), mask) }
+                guard let word = words.first(where: { text.hasSameScalars(as: $0) }), let before, before != value else { return nil }
+                return maskedValueError(ControlText.escapedName(name), word)
+            case .array(let items):
+                var olds: [JSONValue] = []
+                if case .array(let held)? = before { olds = held }
+                for (index, item) in items.enumerated() {
+                    if let found = refusal(item, index < olds.count ? olds[index] : nil, name) { return found }
+                }
+                return nil
+            case .object(let object):
+                var olds: [String: JSONValue] = [:]
+                if case .object(let held)? = before { olds = held }
+                for key in object.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
+                    // Found scalar by scalar, as the Windows mirror's ordinal keys are: a Swift
+                    // dictionary would find a key composed another way.
+                    let old = olds.first { $0.key.hasSameScalars(as: key) }?.value
+                    if let item = object[key], let found = refusal(item, old, key) { return found }
+                }
+                return nil
+            case .null, .bool, .int, .double:
+                return nil
+            }
+        }
+        return refusal(config, stored, "")
     }
 
     // MARK: Cutting text

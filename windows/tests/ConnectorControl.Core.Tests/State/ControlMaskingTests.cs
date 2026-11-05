@@ -1105,4 +1105,60 @@ public class ControlMaskingTests
         Assert.Equal(["--password", "•••", "--", "hunter2"], ControlMasking.Arguments(["--password", "Basic", "--", "hunter2"]));
         Assert.Equal(["--auth", "•••", "•••", "def"], ControlMasking.Arguments(["--auth", "Token", "abc", "def"]));
     }
+
+    // MARK: The mask guard
+
+    /// <summary>Text with "•••" in it is refused wherever it is; a mask word only where the stored config holds
+    /// another value at the same place, keys by name and arrays by index. The first place, in key
+    /// order, is named by its nearest key: a variable's name, or the list an argument is in.</summary>
+    [Fact]
+    public void TheMaskGuardRefusesWhatWouldReplaceAValue()
+    {
+        var variables = JsonValue.Object(("API_KEY", S("bw://x")), ("MODE", S("set")), ("RETRIES", JsonValue.Int(3)), ("EMPTY", S("")));
+        var stored = JsonValue.Object(("command", S("npx")), ("args", JsonValue.Array([S("-y"), S("acme")])), ("env", variables));
+        JsonValue Env(params (string Key, JsonValue Value)[] values) =>
+            Adding("env", values.Aggregate(variables, (env, item) => env.With(item.Key, item.Value)), stored);
+        (JsonValue Config, string Name, string Shown)[] refused =
+        [
+            (Env(("API_KEY", S(ControlMasking.SetState))), "API_KEY", "set"),
+            (Env(("API_KEY", S(ControlMasking.NeedsValueState))), "API_KEY", "needs value"),
+            (Env(("API_KEY", S(EditorModel.NeedsValue))), "API_KEY", "needs your value"),
+            (Env(("API_KEY", S(ControlMasking.SetText))), "API_KEY", "•••"),
+            (Env(("RETRIES", S("set"))), "RETRIES", "set"),
+            (Env(("EMPTY", S("needs value"))), "EMPTY", "needs value"),
+            (Env(("NEW", S("https://h.example/mcp?token=•••"))), "NEW", "•••"),
+            (Adding("args", JsonValue.Array([S("set"), S("acme")]), stored), "args", "set"),
+            (Adding("headers", JsonValue.Object(("X-Key", S("•••"))), stored), "X-Key", "•••"),
+            // The first in key order is named: "API_KEY" sorts before "B".
+            (Env(("B", S("•••")), ("API_KEY", S("set"))), "API_KEY", "set"),
+        ];
+        foreach (var (config, name, shown) in refused)
+        {
+            Assert.Equal(ControlMasking.MaskedValueError(name, shown), ControlMasking.MaskRefusal(config, stored));
+        }
+        // A new config is refused text holding the mask.
+        Assert.Equal(ControlMasking.MaskedValueError("API_KEY", "•••"), ControlMasking.MaskRefusal(Env(("API_KEY", S("•••"))), null));
+        JsonValue[] allowed =
+        [
+            stored,
+            Env(("MODE", S("set"))),
+            Env(("NEW", S("set")), ("OTHER", S("needs value"))),
+            Adding("args", JsonValue.Array([S("-y"), S("acme"), S("set")]), stored),
+            Adding("headers", JsonValue.Object(("X-Mode", S("set"))), stored),
+        ];
+        foreach (var config in allowed)
+        {
+            Assert.Null(ControlMasking.MaskRefusal(config, stored));
+        }
+        // Nothing is stored to replace.
+        Assert.Null(ControlMasking.MaskRefusal(Env(("API_KEY", S("set"))), null));
+    }
+
+    /// <summary>A variable's name is Claude's to choose, so the refusal shows it as the app's sentences show a name.</summary>
+    [Fact]
+    public void TheMaskGuardEscapesTheNameItShows()
+    {
+        var config = JsonValue.Object(("command", S("x")), ("env", JsonValue.Object(("A\n\u202EB", S("•••")))));
+        Assert.Equal(ControlMasking.MaskedValueError("""A\n\u{202E}B""", "•••"), ControlMasking.MaskRefusal(config, null));
+    }
 }

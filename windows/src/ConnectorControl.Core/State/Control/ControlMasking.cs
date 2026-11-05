@@ -55,6 +55,11 @@ public static class ControlMasking
 
     public static string Assignment(string name, string value) => $"{name} = {value}";
 
+    /// <summary>A config refused for writing the app's own mask text where it would replace a value: <paramref name="name"/>
+    /// is where, as <see cref="MaskRefusal"/> names it, and <paramref name="shown"/> the mask text it holds.</summary>
+    public static string MaskedValueError(string name, string shown) =>
+        $"“{name}” holds “{shown}”, which is how Connector Control hides a value, so saving it would replace the real value. To change environment variables without the others, use set_connector_env; for a value you don’t have, write ${{CC_NEEDS:NAME}}.";
+
     /// <summary>One value on a line as <paramref name="exposure"/> shows it: in the dialog, quoted as an argument is when it is
     /// not plain (<see cref="ControlText.Word"/>), so a newline and the two characters \n read apart and a run
     /// of spaces cannot pass for a row of its own; elsewhere as it is.</summary>
@@ -112,6 +117,60 @@ public static class ControlMasking
             return value;
         }
         return SecretState(value) == SetState ? SetText : EditorModel.NeedsValue;
+    }
+
+    // MARK: The mask guard
+
+    /// <summary>The mask words: what a value reads as when it is not shown.</summary>
+    private static readonly string[] MaskWords = [SetState, NeedsValueState, SetText, EditorModel.NeedsValue];
+
+    /// <summary>Why <paramref name="config"/> cannot be saved over <paramref name="stored"/> (null for a new connector), or
+    /// null when it can: it writes this app's own mask text where that would destroy a value. Text holding "•••"
+    /// is refused wherever it is, since no real config holds it. A value that is exactly a mask word - "set",
+    /// "needs value", "••• (set)" or "needs your value" - is refused where <paramref name="stored"/> holds another
+    /// value at the same place, object keys by name and arrays by index: a place <paramref name="stored"/> lacks
+    /// is a new value, which may be the word "set". The first such place, in key order, is named by its nearest
+    /// key - a variable's name, a header's, or the list an argument is in - through
+    /// <see cref="ControlText.EscapedName"/>, since Claude chooses it. Every add, change and environment change
+    /// asks this before its question, which masks a secret's two sides alike and could not show it.</summary>
+    public static string? MaskRefusal(JsonValue config, JsonValue? stored) => MaskRefusal(config, stored, "");
+
+    private static string? MaskRefusal(JsonValue value, JsonValue? before, string name)
+    {
+        switch (value.Kind)
+        {
+            case JsonKind.String:
+                var text = value.StringValue;
+                if (text.Contains(Mask, StringComparison.Ordinal))
+                {
+                    return MaskedValueError(ControlText.EscapedName(name), Mask);
+                }
+                var word = MaskWords.FirstOrDefault(candidate => string.Equals(text, candidate, StringComparison.Ordinal));
+                return word is not null && before is not null && before != value ? MaskedValueError(ControlText.EscapedName(name), word) : null;
+            case JsonKind.Array:
+                var olds = before is { Kind: JsonKind.Array } ? before.ArrayItems : [];
+                for (var index = 0; index < value.ArrayItems.Length; index++)
+                {
+                    if (MaskRefusal(value.ArrayItems[index], index < olds.Length ? olds[index] : null, name) is { } found)
+                    {
+                        return found;
+                    }
+                }
+                return null;
+            case JsonKind.Object:
+                // In ordinal key order, as the Mac mirror sorts its keys; looked up ordinally, scalar by
+                // scalar, as it finds them.
+                foreach (var (key, item) in value.ObjectProperties)
+                {
+                    if (MaskRefusal(item, before?[key], key) is { } found)
+                    {
+                        return found;
+                    }
+                }
+                return null;
+            default:
+                return null;
+        }
     }
 
     // MARK: Cutting text

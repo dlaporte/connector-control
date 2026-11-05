@@ -123,6 +123,7 @@ final class StringCatalogTests: XCTestCase {
         "ControlCommandLine.usageError": ["X"],
         "ControlCommandLine.versionLine": ["X"],
         "ControlMasking.assignment": ["X", "Y"],
+        "ControlMasking.maskedValueError": ["X", "Y"],
         "ControlMasking.oauthClientText": ["X", "Y"],
         "ControlMasking.remoteBridgeType": ["X"],
         "ControlTools.addActiveMessage": ["X", "Y"],
@@ -483,6 +484,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlMasking.envLabel"] = ControlMasking.envLabel
         actual["ControlMasking.headersLabel"] = ControlMasking.headersLabel
         actual["ControlMasking.mask"] = ControlMasking.mask
+        actual["ControlMasking.maskedValueError"] = ControlMasking.maskedValueError("X", "Y")
         actual["ControlMasking.nameLabel"] = ControlMasking.nameLabel
         actual["ControlMasking.needsValueState"] = ControlMasking.needsValueState
         actual["ControlMasking.oauthClientText"] = ControlMasking.oauthClientText("X", "Y")

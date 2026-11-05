@@ -133,6 +133,10 @@ public sealed partial class ControlTools
         {
             return new ControlStep.Refused(error);
         }
+        if (ControlMasking.MaskRefusal(config, null) is { } masked)
+        {
+            return new ControlStep.Refused(masked);
+        }
         var on = arguments.Bool("enabled") ?? true;
         var word = on ? OnWord : OffWord;
         var active = collection == state.ActiveCollection;
@@ -204,6 +208,10 @@ public sealed partial class ControlTools
         if (config is not null && ConfigError(config) is { } error)
         {
             return new ControlStep.Refused(error);
+        }
+        if (config is not null && ControlMasking.MaskRefusal(config, current.Config) is { } masked)
+        {
+            return new ControlStep.Refused(masked);
         }
         var after = config ?? current.Config;
         // "Unchanged" compares the configs themselves, not the rendered lines: every difference is a

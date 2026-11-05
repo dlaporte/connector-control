@@ -128,6 +128,7 @@ public class StringCatalogTests
         ["ControlCommandLine.usageError"] = ["X"],
         ["ControlCommandLine.versionLine"] = ["X"],
         ["ControlMasking.assignment"] = ["X", "Y"],
+        ["ControlMasking.maskedValueError"] = ["X", "Y"],
         ["ControlMasking.oauthClientText"] = ["X", "Y"],
         ["ControlMasking.remoteBridgeType"] = ["X"],
         ["ControlTools.addActiveMessage"] = ["X", "Y"],
@@ -507,6 +508,7 @@ public class StringCatalogTests
         actual["ControlMasking.envLabel"] = ControlMasking.EnvLabel;
         actual["ControlMasking.headersLabel"] = ControlMasking.HeadersLabel;
         actual["ControlMasking.mask"] = ControlMasking.Mask;
+        actual["ControlMasking.maskedValueError"] = ControlMasking.MaskedValueError("X", "Y");
         actual["ControlMasking.nameLabel"] = ControlMasking.NameLabel;
         actual["ControlMasking.needsValueState"] = ControlMasking.NeedsValueState;
         actual["ControlMasking.oauthClientText"] = ControlMasking.OauthClientText("X", "Y");

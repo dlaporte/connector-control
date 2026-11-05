@@ -91,6 +91,7 @@ extension ControlTools {
         guard held.mcps[name] == nil else { return .refused(AppState.duplicateNameError(shownName)) }
         let config = arguments.object("config") ?? .object([:])
         if let error = ControlTools.configError(config) { return .refused(error) }
+        if let error = ControlMasking.maskRefusal(config, over: nil) { return .refused(error) }
         let on = arguments.bool("enabled") ?? true
         let word = on ? ControlTools.onWord : ControlTools.offWord
         let active = collection == state.activeCollection
@@ -134,6 +135,7 @@ extension ControlTools {
         if renamed, newName == ClaudeIntegration.entryName { return .refused(ClaudeIntegration.reservedNameError) }
         if renamed, held.mcps[newName] != nil { return .refused(AppState.duplicateNameError(shownNewName)) }
         if let config, let error = ControlTools.configError(config) { return .refused(error) }
+        if let config, let error = ControlMasking.maskRefusal(config, over: current.config) { return .refused(error) }
         let after = config ?? current.config
         // "Unchanged" compares the configs themselves, not the rendered lines: every difference is a
         // change, whether or not a line can show it.

@@ -324,6 +324,9 @@
   "ControlMasking.envLabel": "env",
   "ControlMasking.headersLabel": "headers",
   "ControlMasking.mask": "•••",
+  "ControlMasking.maskedValueError": {
+    "format": "“{0}” holds “{1}”, which is how Connector Control hides a value, so saving it would replace the real value. To change environment variables without the others, use set_connector_env; for a value you don’t have, write ${CC_NEEDS:NAME}."
+  },
   "ControlMasking.nameLabel": "name",
   "ControlMasking.needsValueState": "needs value",
   "ControlMasking.oauthClientText": {
