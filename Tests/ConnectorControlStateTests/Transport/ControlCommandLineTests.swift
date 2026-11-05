@@ -145,7 +145,7 @@ final class ControlCommandLineTests: XCTestCase {
                                                   "collection": .string("Team")]))
         XCTAssertEqual(parse("env", "x", "A=1", "A=2"), call("set_connector_env", ["name": .string("x"), "set": .object(["A": .string("2")])]))
         XCTAssertEqual(parse("env", "x", "--", "--A=1"), call("set_connector_env", ["name": .string("x"), "set": .object(["--A": .string("1")])]))
-        XCTAssertEqual(parse("env", "x"), call("set_connector_env", ["name": .string("x")]), "the app says there is nothing to change")
+        XCTAssertEqual(parse("env", "x"), call("set_connector_env", ["name": .string("x")]), "the app refuses it: nothing to set or remove")
         XCTAssertEqual(parse("env", "x", "A=1", "bare"), usage, "a word with no = is no setting")
         XCTAssertEqual(parse("env"), usage)
         XCTAssertEqual(parse("env", "x", "--unset"), .usage(ControlCommandLine.missingValueError("--unset")))

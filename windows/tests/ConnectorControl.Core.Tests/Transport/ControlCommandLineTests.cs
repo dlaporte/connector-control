@@ -167,7 +167,7 @@ public class ControlCommandLineTests
             Parse("env", "x", "--unset", "C", "--collection", "Team", "--unset", "D", "--unset", "C"));
         Assert.Equal(Call("set_connector_env", ("name", S("x")), ("set", JsonValue.Object(("A", S("2"))))), Parse("env", "x", "A=1", "A=2"));
         Assert.Equal(Call("set_connector_env", ("name", S("x")), ("set", JsonValue.Object(("--A", S("1"))))), Parse("env", "x", "--", "--A=1"));
-        // The app says there is nothing to change.
+        // The app refuses it: nothing to set or remove.
         Assert.Equal(Call("set_connector_env", ("name", S("x"))), Parse("env", "x"));
         // A word with no = is no setting.
         Assert.Equal(usage, Parse("env", "x", "A=1", "bare"));

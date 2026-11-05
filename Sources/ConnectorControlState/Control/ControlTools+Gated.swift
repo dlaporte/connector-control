@@ -19,6 +19,7 @@ extension ControlTools {
     public static let takesEffectFooter = "Takes effect when Claude restarts."
     public static let configShapeError = "A connector’s config needs a “command” or a “url”."
     public static let nothingToChangeError = "Give a new config, a new name, or both."
+    public static let nothingToSetError = "Give variables to set, to remove, or both."
 
     public static func addTitle(_ shownAsker: String, _ name: String) -> String { "\(shownAsker) wants to add “\(name)”" }
 
@@ -197,7 +198,7 @@ extension ControlTools {
         for variable in arguments.strings("unset") ?? [] where !unset.contains(where: { $0.hasSameScalars(as: variable) }) {
             unset.append(variable)
         }
-        guard !set.isEmpty || !unset.isEmpty else { return .refused(ControlTools.nothingToChangeError) }
+        guard !set.isEmpty || !unset.isEmpty else { return .refused(ControlTools.nothingToSetError) }
         for key in set.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
             let shownKey = ControlText.escapedName(key)
             guard case .string? = set[key] else { return .refused(ControlTools.wrongTypeError(shownKey, ControlTools.textKind)) }

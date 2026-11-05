@@ -649,6 +649,7 @@ public class StringCatalogTests
         actual["ControlTools.notSubscribedError"] = ControlTools.NotSubscribedError("X");
         actual["ControlTools.nothingToChangeError"] = ControlTools.NothingToChangeError;
         actual["ControlTools.nothingToImportError"] = ControlTools.NothingToImportError("X");
+        actual["ControlTools.nothingToSetError"] = ControlTools.NothingToSetError;
         actual["ControlTools.objectKind"] = ControlTools.ObjectKind;
         actual["ControlTools.offWord"] = ControlTools.OffWord;
         actual["ControlTools.onWord"] = ControlTools.OnWord;

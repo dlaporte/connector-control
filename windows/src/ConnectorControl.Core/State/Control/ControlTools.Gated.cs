@@ -23,6 +23,7 @@ public sealed partial class ControlTools
     public const string TakesEffectFooter = "Takes effect when Claude restarts.";
     public const string ConfigShapeError = "A connector’s config needs a “command” or a “url”.";
     public const string NothingToChangeError = "Give a new config, a new name, or both.";
+    public const string NothingToSetError = "Give variables to set, to remove, or both.";
 
     public static string AddTitle(string shownAsker, string name) => $"{shownAsker} wants to add “{name}”";
 
@@ -299,7 +300,7 @@ public sealed partial class ControlTools
         }
         if (set.Count == 0 && unset.Count == 0)
         {
-            return new ControlStep.Refused(NothingToChangeError);
+            return new ControlStep.Refused(NothingToSetError);
         }
         foreach (var (key, value) in set)
         {

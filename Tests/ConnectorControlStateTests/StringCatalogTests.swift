@@ -624,6 +624,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.notSubscribedError"] = ControlTools.notSubscribedError("X")
         actual["ControlTools.nothingToChangeError"] = ControlTools.nothingToChangeError
         actual["ControlTools.nothingToImportError"] = ControlTools.nothingToImportError("X")
+        actual["ControlTools.nothingToSetError"] = ControlTools.nothingToSetError
         actual["ControlTools.objectKind"] = ControlTools.objectKind
         actual["ControlTools.offWord"] = ControlTools.offWord
         actual["ControlTools.onWord"] = ControlTools.onWord

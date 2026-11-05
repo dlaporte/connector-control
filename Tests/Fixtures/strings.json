@@ -615,6 +615,7 @@
   "ControlTools.nothingToImportError": {
     "format": "Nothing in “{0}” would come across."
   },
+  "ControlTools.nothingToSetError": "Give variables to set, to remove, or both.",
   "ControlTools.objectKind": "a JSON object",
   "ControlTools.offWord": "off",
   "ControlTools.onWord": "on",
