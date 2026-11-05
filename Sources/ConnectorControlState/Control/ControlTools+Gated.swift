@@ -128,7 +128,8 @@ extension ControlTools {
         })
     }
 
-    func updateConnector(_ arguments: ControlArguments, _ shownAsker: String) -> ControlStep {
+    func updateConnector(_ arguments: ControlArguments, _ caller: ControlCaller) -> ControlStep {
+        let shownAsker = caller.shownAsker
         let collection = targetCollection(arguments)
         let shownCollection = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shownCollection)) }
@@ -151,8 +152,16 @@ extension ControlTools {
         // "Unchanged" compares the configs themselves, not the rendered lines: every difference is a
         // change, whether or not a line can show it.
         let reconfigured = after != current.config
-        guard renamed || reconfigured else { return .refused(ControlTools.unchangedError(shownName)) }
-        let changes = ControlMasking.changeLines(from: current.config, to: after, exposure: .dialog)
+        // Claude never sees a secret, so a config sent back as it is, guessed values and all, is asked
+        // about and answered as a change, and its question lists every variable and header it sends, as
+        // set_connector_env's does: nothing tells Claude whether it guessed a value. The command line
+        // is the user, who can, and is told there is nothing to change.
+        let restated = config != nil && !renamed && !reconfigured
+        guard renamed || reconfigured || (restated && caller != .cli) else { return .refused(ControlTools.unchangedError(shownName)) }
+        var sent: [String] = []
+        if config != nil, case .object(let object) = after, case .object(let env)? = object["env"] { sent = Array(env.keys) }
+        let changes = ControlMasking.changeLines(from: current.config, to: after, exposure: .dialog,
+                                                 restating: sent, restatingSignIn: config != nil)
         let active = collection == state.activeCollection
         let names = renamed ? [ControlMasking.nameLabel, ControlMasking.removedPrefix + shownName, ControlMasking.addedPrefix + shownNewName] : []
         let request = ConfirmationRequest(
@@ -167,15 +176,19 @@ extension ControlTools {
                                         renamedFrom: name, in: collection) {
                 return ControlTools.refused(error, naming: [newName, name, collection])
             }
-            state.applyInteractively()
+            // As set_connector_env's: a config sent back as it is has Claude's config written again
+            // when the connector is one Claude runs, as a change would.
+            let rewrite = restated && active && current.enabled
+            if rewrite { state.apply() } else { state.applyInteractively() }
             var lines: [String] = []
             if renamed { lines.append(ControlTools.renamedText(shownName, shownNewName)) }
-            if reconfigured { lines.append(ControlTools.changedText(shownNewName, shownCollection)) }
+            if reconfigured || restated { lines.append(ControlTools.changedText(shownNewName, shownCollection)) }
             return done(lines, ["collection": .string(collection), "name": .string(newName), "previousName": .string(name)],
                         touching: collection, since: mark, restart: ControlTools.restartToApplyText,
                         // A rename and nothing else is announced as one; any other change by what it changed.
-                        notification: reconfigured ? ControlTools.changedNotification(shownAsker, shownNewName, shownCollection)
-                                                   : ControlTools.renamedNotification(shownAsker, shownName, shownNewName))
+                        notification: reconfigured || restated ? ControlTools.changedNotification(shownAsker, shownNewName, shownCollection)
+                                                               : ControlTools.renamedNotification(shownAsker, shownName, shownNewName),
+                        rewrote: rewrite)
         })
     }
 

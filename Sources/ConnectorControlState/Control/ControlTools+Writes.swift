@@ -74,7 +74,7 @@ extension ControlTools {
         case "refresh_subscription": return refreshSubscription(arguments)
         case "set_setting": return setSetting(arguments, caller)
         case "add_connector": return addConnector(arguments, caller.shownAsker)
-        case "update_connector": return updateConnector(arguments, caller.shownAsker)
+        case "update_connector": return updateConnector(arguments, caller)
         case "set_connector_env": return setConnectorEnv(arguments, caller)
         case "delete_connectors": return deleteConnectors(arguments, caller.shownAsker)
         case "delete_collection": return deleteCollection(arguments, caller.shownAsker)

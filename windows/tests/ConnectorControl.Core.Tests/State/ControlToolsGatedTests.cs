@@ -201,12 +201,10 @@ public class ControlToolsGatedTests
     {
         using var rig = Rig();
         rig.H.Subscribe(rig.State, CollectionDocumentSamples.DataTeam);
-        var same = rig.State.Store.Mcps["scoutbook"].Config;
         (JsonValue Arguments, string Refusal)[] cases =
         [
             (Args(("name", Text("nope")), ("config", Notion)), ControlTools.NoConnectorError("nope", "Default")),
             (Args(("name", Text("scoutbook"))), ControlTools.NothingToChangeError),
-            (Args(("name", Text("scoutbook")), ("config", same)), ControlTools.UnchangedError("scoutbook")),
             (Args(("name", Text("scoutbook")), ("newName", Text("aws-mcp"))), AppState.DuplicateNameError("aws-mcp")),
             (Args(("name", Text("scoutbook")), ("newName", Text("connector-control"))), ClaudeIntegration.ReservedNameError),
             (Args(("name", Text("scoutbook")), ("newName", Text(" "))), AppState.NameEmptyError),
@@ -258,8 +256,65 @@ public class ControlToolsGatedTests
         var added = ChangedVault(("LEVEL", Text(ControlMasking.SetState)));
         Assert.Equal(ControlTools.ChangedText("vault", "Default"),
             rig.Call("update_connector", Args(("name", Text("vault")), ("config", added)))?.Text);
-        Assert.Equal(["env", "  + LEVEL = set"], Assert.Single(rig.Confirmer.Requests).Code);
+        Assert.Equal(["env", "  − API_KEY = ••• (set)", "  + API_KEY = ••• (set)", "  + LEVEL = set",
+                      "  = MODE = fast (unchanged)", "  = STATE = set (unchanged)"], Assert.Single(rig.Confirmer.Requests).Code);
         Assert.Equal(added, rig.State.Store.Mcps["vault"].Config);
+    }
+
+    /// <summary>Claude never sees a connector's secrets, so sending its config back as it is is asked about and
+    /// answered as a change, and the question lists every variable and header the config sends - one
+    /// whose value it hides on both sides, as a change would - so a right guess at a hidden value and a
+    /// wrong one raise the same question and get the same answer, restart and all.</summary>
+    [Fact]
+    public void AnUnchangedConfigIsAskedAndAnsweredAsAChange()
+    {
+        using var rig = Rig();
+        static JsonValue SiteWith(string token) => JsonValue.Object(("url", Text("https://h.example/mcp")),
+            ("headers", JsonValue.Object(("Authorization", Text("Bearer " + token)), ("X-Team", Text("a")))));
+        static JsonValue Bridge(string token) => RemotePattern.Encode(new RemoteConfig("https://h.example/mcp", new RemoteAuth.Bearer(token),
+            RemoteLaunchStyle.Npx, [], new Dictionary<string, string>(), RemotePattern.DefaultPackage));
+        (string Name, JsonValue Stored, JsonValue Guess, string[] Code)[] cases =
+        [
+            ("vault", Vault, ChangedVault(("API_KEY", Text("bw://y"))),
+             ["env", "  − API_KEY = ••• (set)", "  + API_KEY = ••• (set)", "  = MODE = fast (unchanged)", "  = STATE = set (unchanged)"]),
+            ("site", SiteWith("t"), SiteWith("u"),
+             ["headers", "  − Authorization = ••• (set)", "  − X-Team = ••• (set)", "  + Authorization = ••• (set)", "  + X-Team = ••• (set)"]),
+            ("bridge", Bridge("t"), Bridge("u"), ["headers", "  − Authorization = ••• (set)", "  + Authorization = ••• (set)"]),
+        ];
+        rig.H.ClaudeRunningSince(1);
+        foreach (var (name, stored, guess, code) in cases)
+        {
+            Assert.Null(rig.State.Upsert(name, new McpEntry(stored), null));
+            var asked = rig.Confirmer.Requests.Count;
+            var right = rig.Call("update_connector", Args(("name", Text(name)), ("config", stored)));
+            Assert.Equal(stored, rig.State.Store.Mcps[name].Config);
+            var wrong = rig.Call("update_connector", Args(("name", Text(name)), ("config", guess)));
+            Assert.Equal(guess, rig.State.Store.Mcps[name].Config);
+            var requests = rig.Confirmer.Requests.Skip(asked).ToList();
+            Assert.Equal(2, requests.Count);
+            // The same question.
+            Assert.Equal(requests[0], requests[1]);
+            Assert.Equal(code, requests[0].Code);
+            // The same answer.
+            Assert.NotNull(right);
+            Assert.Equal(right, wrong);
+            Assert.Equal(ControlTools.ChangedText(name, "Default") + " " + ControlTools.RestartToApplyText, right.Text);
+            Assert.Equal(JsonValue.Bool(true), right.Structured.ValueAt(new JsonPointer(["restartRequired"])));
+        }
+        // A rename with the config as it was is answered as the rename it is.
+        var renamed = rig.Call("update_connector", Args(("name", Text("site")), ("newName", Text("web")), ("config", SiteWith("u"))));
+        Assert.Equal(ControlTools.RenamedText("site", "web") + " " + ControlTools.RestartToApplyText, renamed?.Text);
+    }
+
+    /// <summary>The command line is the user, who sees every value: a config sent back as it is is refused as no change.</summary>
+    [Fact]
+    public void TheCommandLineIsToldAConfigIsUnchanged()
+    {
+        using var rig = Rig();
+        var same = rig.State.Store.Mcps["scoutbook"].Config;
+        Assert.Equal(ControlResult.Refusal(ControlTools.UnchangedError("scoutbook")),
+            rig.Call("update_connector", Args(("name", Text("scoutbook")), ("config", same)), new ControlCaller.Cli()));
+        Assert.Empty(rig.Confirmer.Requests);
     }
 
     // MARK: set_connector_env
@@ -498,8 +553,9 @@ public class ControlToolsGatedTests
     }
 
     /// <summary>The question shows an environment value as written, since a variable can change what runs,
-    /// unless its name reads as a secret's: an add lists it, and a change to it alone shows what it
-    /// was and what it becomes. The answers to the caller carry none of it.</summary>
+    /// unless its name reads as a secret's: an add lists it, and a change shows what it was and what
+    /// it becomes, beside the secret it sends again, hidden on both sides. The answers to the caller
+    /// carry none of it.</summary>
     [Fact]
     public void TheQuestionShowsAnEnvironmentValueAndTheAnswerNone()
     {
@@ -511,7 +567,8 @@ public class ControlToolsGatedTests
         Assert.Equal(2, rig.Confirmer.Requests.Count);
         Assert.Equal(["command   node", "args      server.js", "env       ACME_TOKEN = ••• (set)", "          NODE_OPTIONS = '--require ./a.js'"],
             rig.Confirmer.Requests[0].Code);
-        Assert.Equal(["env", "  − NODE_OPTIONS = '--require ./a.js'", "  + NODE_OPTIONS = '--require ./b.js'"],
+        Assert.Equal(["env", "  − ACME_TOKEN = ••• (set)", "  − NODE_OPTIONS = '--require ./a.js'",
+                      "  + ACME_TOKEN = ••• (set)", "  + NODE_OPTIONS = '--require ./b.js'"],
             rig.Confirmer.Requests[1].Code);
         foreach (var result in new[] { added, changed })
         {

@@ -159,11 +159,9 @@ final class ControlToolsGatedTests: XCTestCase {
     func testChangingIsRefusedBeforeAnyoneIsAsked() throws {
         let rig = rig(); defer { rig.dispose() }
         try rig.h.subscribe(rig.state, to: CollectionDocumentSamples.dataTeam)
-        let same = try XCTUnwrap(rig.state.store.mcps["scoutbook"]).config
         let cases: [([String: JSONValue], String)] = [
             (["name": .string("nope"), "config": notion], ControlTools.noConnectorError("nope", "Default")),
             (["name": .string("scoutbook")], ControlTools.nothingToChangeError),
-            (["name": .string("scoutbook"), "config": same], ControlTools.unchangedError("scoutbook")),
             (["name": .string("scoutbook"), "newName": .string("aws-mcp")], AppState.duplicateNameError("aws-mcp")),
             (["name": .string("scoutbook"), "newName": .string("connector-control")], ClaudeIntegration.reservedNameError),
             (["name": .string("scoutbook"), "newName": .string(" ")], AppState.nameEmptyError),
@@ -213,8 +211,61 @@ final class ControlToolsGatedTests: XCTestCase {
         let added = changedVault(["LEVEL": .string(ControlMasking.setState)])
         XCTAssertEqual(try XCTUnwrap(rig.call("update_connector", ["name": .string("vault"), "config": added])).text,
                        ControlTools.changedText("vault", "Default"))
-        XCTAssertEqual(rig.confirmer.requests.map(\.code), [["env", "  + LEVEL = set"]])
+        XCTAssertEqual(rig.confirmer.requests.map(\.code), [["env", "  − API_KEY = ••• (set)", "  + API_KEY = ••• (set)", "  + LEVEL = set",
+                                                             "  = MODE = fast (unchanged)", "  = STATE = set (unchanged)"]])
         XCTAssertEqual(rig.state.store.mcps["vault"]?.config, added)
+    }
+
+    /// Claude never sees a connector's secrets, so sending its config back as it is is asked about and
+    /// answered as a change, and the question lists every variable and header the config sends - one
+    /// whose value it hides on both sides, as a change would - so a right guess at a hidden value and a
+    /// wrong one raise the same question and get the same answer, restart and all.
+    func testAnUnchangedConfigIsAskedAndAnsweredAsAChange() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let site: JSONValue = .object(["url": .string("https://h.example/mcp"),
+                                       "headers": .object(["Authorization": .string("Bearer t"), "X-Team": .string("a")])])
+        func siteWith(_ token: String) -> JSONValue {
+            .object(["url": .string("https://h.example/mcp"),
+                     "headers": .object(["Authorization": .string("Bearer " + token), "X-Team": .string("a")])])
+        }
+        let bridge = RemotePattern.encode(RemoteConfig(url: "https://h.example/mcp", auth: .bearer(token: "t")))
+        let cases: [(String, JSONValue, JSONValue, [String])] = [
+            ("vault", vault, changedVault(["API_KEY": .string("bw://y")]),
+             ["env", "  − API_KEY = ••• (set)", "  + API_KEY = ••• (set)", "  = MODE = fast (unchanged)", "  = STATE = set (unchanged)"]),
+            ("site", site, siteWith("u"),
+             ["headers", "  − Authorization = ••• (set)", "  − X-Team = ••• (set)", "  + Authorization = ••• (set)", "  + X-Team = ••• (set)"]),
+            ("bridge", bridge, RemotePattern.encode(RemoteConfig(url: "https://h.example/mcp", auth: .bearer(token: "u"))),
+             ["headers", "  − Authorization = ••• (set)", "  + Authorization = ••• (set)"]),
+        ]
+        rig.h.claudeRunningSince(hours: 1)
+        for (name, stored, guess, code) in cases {
+            XCTAssertNil(rig.state.upsert(name: name, entry: MCPEntry(config: stored), renamedFrom: nil))
+            let asked = rig.confirmer.requests.count
+            let right = try XCTUnwrap(rig.call("update_connector", ["name": .string(name), "config": stored]))
+            XCTAssertEqual(rig.state.store.mcps[name]?.config, stored, name)
+            let wrong = try XCTUnwrap(rig.call("update_connector", ["name": .string(name), "config": guess]))
+            XCTAssertEqual(rig.state.store.mcps[name]?.config, guess, name)
+            let requests = Array(rig.confirmer.requests.dropFirst(asked))
+            XCTAssertEqual(requests.count, 2, name)
+            XCTAssertEqual(requests.first, requests.last, "\(name): the same question")
+            XCTAssertEqual(requests.first?.code, code, name)
+            XCTAssertEqual(right, wrong, "\(name): the same answer")
+            XCTAssertEqual(right.text, ControlTools.changedText(name, "Default") + " " + ControlTools.restartToApplyText, name)
+            XCTAssertEqual(right.structured.value(at: JSONPointer(["restartRequired"])), .bool(true), name)
+        }
+        // A rename with the config as it was is answered as the rename it is.
+        let renamed = try XCTUnwrap(rig.call("update_connector", ["name": .string("site"), "newName": .string("web"),
+                                                                  "config": siteWith("u")]))
+        XCTAssertEqual(renamed.text, ControlTools.renamedText("site", "web") + " " + ControlTools.restartToApplyText)
+    }
+
+    /// The command line is the user, who sees every value: a config sent back as it is is refused as no change.
+    func testTheCommandLineIsToldAConfigIsUnchanged() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let same = try XCTUnwrap(rig.state.store.mcps["scoutbook"]).config
+        XCTAssertEqual(rig.call("update_connector", ["name": .string("scoutbook"), "config": same], as: .cli),
+                       .refusal(ControlTools.unchangedError("scoutbook")))
+        XCTAssertTrue(rig.confirmer.requests.isEmpty)
     }
 
     // MARK: set_connector_env
@@ -428,8 +479,9 @@ final class ControlToolsGatedTests: XCTestCase {
     }
 
     /// The question shows an environment value as written, since a variable can change what runs,
-    /// unless its name reads as a secret's: an add lists it, and a change to it alone shows what it
-    /// was and what it becomes. The answers to the caller carry none of it.
+    /// unless its name reads as a secret's: an add lists it, and a change shows what it was and what
+    /// it becomes, beside the secret it sends again, hidden on both sides. The answers to the caller
+    /// carry none of it.
     func testTheQuestionShowsAnEnvironmentValueAndTheAnswerNone() throws {
         let rig = rig(); defer { rig.dispose() }
         func hooked(_ hook: String) -> JSONValue {
@@ -440,7 +492,8 @@ final class ControlToolsGatedTests: XCTestCase {
         let changed = try XCTUnwrap(rig.call("update_connector", ["name": .string("acme"), "config": hooked("./b.js")]))
         XCTAssertEqual(rig.confirmer.requests.map(\.code), [
             ["command   node", "args      server.js", "env       ACME_TOKEN = ••• (set)", "          NODE_OPTIONS = '--require ./a.js'"],
-            ["env", "  − NODE_OPTIONS = '--require ./a.js'", "  + NODE_OPTIONS = '--require ./b.js'"],
+            ["env", "  − ACME_TOKEN = ••• (set)", "  − NODE_OPTIONS = '--require ./a.js'",
+             "  + ACME_TOKEN = ••• (set)", "  + NODE_OPTIONS = '--require ./b.js'"],
         ])
         for result in [added, changed] {
             XCTAssertFalse(result.isError, result.text)

@@ -1021,16 +1021,21 @@ public static class ControlMasking
     /// shows, as every key shows on the code lines, and labels and values go through
     /// <see cref="ControlText.Escaped(string)"/> as the code lines' do.
     ///
-    /// <paramref name="variables"/>, environment variables a change names, show under <c>env</c> although they hold the
-    /// value they held - set_connector_env's, whose caller never sees a value, so its question must not
-    /// tell a value guessed right from one guessed wrong: one whose line hides its value as a change
-    /// would, "− " and "+ " alike, and one whose line shows it after "= ", marked unchanged.</summary>
+    /// <paramref name="variables"/>, environment variables a change sends, show under <c>env</c> although they hold the
+    /// value they held - set_connector_env's and update_connector's, whose caller never sees a value, so
+    /// their questions must not tell a value guessed right from one guessed wrong: one whose line hides
+    /// its value as a change would, "− " and "+ " alike, and one whose line shows it after "= ", marked
+    /// unchanged. mcp-remote's sign-in variable shows as the header it signs in with, and
+    /// <paramref name="restatingSignIn"/> - update_connector's, which sends every value again - shows every header and
+    /// OAuth client secret so too: the dialog hides each of those values.</summary>
     public static IReadOnlyList<string> ChangeLines(JsonValue before, JsonValue after, Exposure exposure = Exposure.Masked,
-                                                    IReadOnlyList<string>? variables = null)
+                                                    IReadOnlyList<string>? variables = null, bool restatingSignIn = false)
     {
         var old = Fields(before, exposure);
         var @new = Fields(after, exposure);
-        var again = Restated(variables ?? [], before, after, exposure);
+        var signInVariables = SignInVariables(after);
+        var signIn = restatingSignIn || (variables ?? []).Any(signInVariables.Contains);
+        var again = Restated((variables ?? []).Where(name => !signInVariables.Contains(name)).ToList(), before, after, exposure);
         var labels = new List<string>();
         foreach (var field in @new.Concat(old))
         {
@@ -1039,7 +1044,7 @@ public static class ControlMasking
                 labels.Add(field.Label);
             }
         }
-        // mcp-remote's sign-in variable shows as its header, not under `env`, which may then be missing.
+        // An environment shown elsewhere (a URL connector's, among the other keys) leaves `env` missing.
         if (again.Count > 0 && !labels.Contains(EnvLabel))
         {
             labels.Add(EnvLabel);
@@ -1049,12 +1054,18 @@ public static class ControlMasking
         {
             var was = old.Where(field => field.Label == label).SelectMany(field => field.Values).ToList();
             var now = @new.Where(field => field.Label == label).SelectMany(field => field.Values).ToList();
+            static bool Among(List<(string Raw, string Shown)> items, (string Raw, string Shown) item) => items.Any(other => Same(other, item));
             var here = label == EnvLabel ? again : [];
             var hidden = here.Where(entry => entry.Hidden).Select(entry => entry.Item).ToList();
-            static bool Among(List<(string Raw, string Shown)> items, (string Raw, string Shown) item) => items.Any(other => Same(other, item));
+            var kept = here.Where(entry => !entry.Hidden).Select(entry => entry.Item).ToList();
+            if (signIn && (label == HeadersLabel || label == OauthLabel))
+            {
+                // A header's value and the OAuth client secret show only when revealed.
+                var unchanged = now.Where(item => Among(was, item)).ToList();
+                (exposure == Exposure.Revealed ? kept : hidden).AddRange(unchanged);
+            }
             var lost = was.Where(item => !Among(now, item) || Among(hidden, item)).Concat(hidden.Where(item => !Among(was, item))).ToList();
             var gained = now.Where(item => !Among(was, item) || Among(hidden, item)).Concat(hidden.Where(item => !Among(now, item))).ToList();
-            var kept = here.Where(entry => !entry.Hidden).Select(entry => entry.Item).ToList();
             if (lost.Count == 0 && gained.Count == 0 && kept.Count == 0)
             {
                 continue;
@@ -1066,6 +1077,11 @@ public static class ControlMasking
         }
         return lines;
     }
+
+    /// <summary>The environment variables mcp-remote's sign-in in <paramref name="config"/> is written with, which its view
+    /// shows as the header they sign in with; none for anything else.</summary>
+    private static HashSet<string> SignInVariables(JsonValue config) =>
+        RemotePattern.Decode(config) is { } remote ? SignInArguments(remote.Auth).Variables : new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>Those of <paramref name="names"/> that <paramref name="after"/>'s environment holds just as
     /// <paramref name="before"/>'s does, in key order, each as the environment's line shows it, and whether that

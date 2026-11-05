@@ -455,8 +455,9 @@ final class ControlMaskingTests: XCTestCase {
     }
 
     /// Variables named again with the values they hold show as set again where the line hides their
-    /// value, and as unchanged where it shows it, beside what does change; one the view shows elsewhere
-    /// (mcp-remote's sign-in variable) still gets its environment line. Unnamed variables do not show.
+    /// value, and as unchanged where it shows it, beside what does change; mcp-remote's sign-in
+    /// variable shows as the header it signs in with. Unnamed variables do not show. Restating the sign-in
+    /// shows every header and OAuth client secret again, hidden on both sides.
     func testRestatedVariablesShowBesideTheChange() {
         let before = local("node", []), env: [String: JSONValue] = ["API_KEY": .string("k"), "MODE": .string("a"), "B": .string("b")]
         let after = adding("env", .object(env.merging(["MODE": .string("c")]) { $1 }), to: before)
@@ -470,7 +471,11 @@ final class ControlMaskingTests: XCTestCase {
         XCTAssertEqual(ControlMasking.changeLines(from: stored, to: stored, exposure: .dialog), [])
         let signedIn = RemotePattern.encode(RemoteConfig(url: "https://h.example/mcp", auth: .bearer(token: "t")))
         XCTAssertEqual(ControlMasking.changeLines(from: signedIn, to: signedIn, exposure: .dialog, restating: ["AUTH_HEADER"]),
-                       ["env", "  − AUTH_HEADER = ••• (set)", "  + AUTH_HEADER = ••• (set)"])
+                       ["headers", "  − Authorization = ••• (set)", "  + Authorization = ••• (set)"])
+        let client = RemotePattern.encode(RemoteConfig(url: "https://h.example/mcp", auth: .oauthClient(clientID: "c", clientSecret: "s", scopes: "")))
+        XCTAssertEqual(ControlMasking.changeLines(from: client, to: client, exposure: .dialog, restatingSignIn: true),
+                       ["oauth", "  − client c, secret ••• (set)", "  + client c, secret ••• (set)"])
+        XCTAssertEqual(ControlMasking.changeLines(from: client, to: client, exposure: .dialog), [])
     }
 
     /// A key no field models shows its value as one line of JSON, written the same on both platforms.

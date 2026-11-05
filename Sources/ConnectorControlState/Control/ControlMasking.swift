@@ -775,31 +775,43 @@ public enum ControlMasking {
     /// shows, as every key shows on the code lines, and labels and values go through
     /// `ControlText.escaped(_:)` as the code lines' do.
     ///
-    /// `variables`, environment variables a change names, show under `env` although they hold the
-    /// value they held - set_connector_env's, whose caller never sees a value, so its question must not
-    /// tell a value guessed right from one guessed wrong: one whose line hides its value as a change
-    /// would, "− " and "+ " alike, and one whose line shows it after "= ", marked unchanged.
+    /// `variables`, environment variables a change sends, show under `env` although they hold the
+    /// value they held - set_connector_env's and update_connector's, whose caller never sees a value, so
+    /// their questions must not tell a value guessed right from one guessed wrong: one whose line hides
+    /// its value as a change would, "− " and "+ " alike, and one whose line shows it after "= ", marked
+    /// unchanged. mcp-remote's sign-in variable shows as the header it signs in with, and
+    /// `restatingSignIn` - update_connector's, which sends every value again - shows every header and
+    /// OAuth client secret so too: the dialog hides each of those values.
     public static func changeLines(from before: JSONValue, to after: JSONValue, exposure: Exposure = .masked,
-                                   restating variables: [String] = []) -> [String] {
+                                   restating variables: [String] = [], restatingSignIn: Bool = false) -> [String] {
         let old = fields(before, exposure)
         let new = fields(after, exposure)
-        let again = restated(variables, from: before, to: after, exposure)
+        // Found scalar by scalar, as the Windows mirror's ordinal set finds them.
+        let signInVariables = signInVariables(of: after)
+        let signsIn = { (name: String) in signInVariables.contains { $0.hasSameScalars(as: name) } }
+        let signIn = restatingSignIn || variables.contains(where: signsIn)
+        let again = restated(variables.filter { !signsIn($0) }, from: before, to: after, exposure)
         var labels: [String] = []
         for field in new + old where !labels.contains(field.label) { labels.append(field.label) }
-        // mcp-remote's sign-in variable shows as its header, not under `env`, which may then be missing.
+        // An environment shown elsewhere (a URL connector's, among the other keys) leaves `env` missing.
         if !again.isEmpty, !labels.contains(envLabel) { labels.append(envLabel) }
         var lines: [String] = []
         for label in labels {
             let was = old.filter { $0.label == label }.flatMap(\.values)
             let now = new.filter { $0.label == label }.flatMap(\.values)
-            let here = label == envLabel ? again : []
-            let hidden = here.filter(\.hidden).map(\.item)
             func among(_ items: [(raw: String, shown: String)], _ item: (raw: String, shown: String)) -> Bool {
                 items.contains { same($0, item) }
             }
+            let here = label == envLabel ? again : []
+            var hidden = here.filter(\.hidden).map(\.item)
+            var kept = here.filter { !$0.hidden }.map(\.item)
+            if signIn, label == headersLabel || label == oauthLabel {
+                // A header's value and the OAuth client secret show only when revealed.
+                let unchanged = now.filter { among(was, $0) }
+                if exposure == .revealed { kept += unchanged } else { hidden += unchanged }
+            }
             let lost = was.filter { !among(now, $0) || among(hidden, $0) } + hidden.filter { !among(was, $0) }
             let gained = now.filter { !among(was, $0) || among(hidden, $0) } + hidden.filter { !among(now, $0) }
-            let kept = here.filter { !$0.hidden }.map(\.item)
             guard !lost.isEmpty || !gained.isEmpty || !kept.isEmpty else { continue }
             lines.append(ControlText.escaped(label))
             lines += lost.map { removedPrefix + ControlText.escaped($0.shown) }
@@ -807,6 +819,13 @@ public enum ControlMasking {
             lines += kept.map { samePrefix + unchangedText(ControlText.escaped($0.shown)) }
         }
         return lines
+    }
+
+    /// The environment variables mcp-remote's sign-in in `config` is written with, which its view shows
+    /// as the header they sign in with; none for anything else.
+    static func signInVariables(of config: JSONValue) -> Set<String> {
+        guard let remote = RemotePattern.decode(config) else { return [] }
+        return signInArguments(remote.auth).variables
     }
 
     /// Those of `names` that `after`'s environment holds just as `before`'s does, in key order, each as

@@ -177,8 +177,9 @@ public sealed partial class ControlTools
         });
     }
 
-    private ControlStep UpdateConnector(ControlArguments arguments, string shownAsker)
+    private ControlStep UpdateConnector(ControlArguments arguments, ControlCaller caller)
     {
+        var shownAsker = caller.ShownAsker;
         var collection = TargetCollection(arguments);
         var shownCollection = ControlText.EscapedName(collection);
         if (state.Store.Collections.GetValueOrDefault(collection) is not { } held)
@@ -228,11 +229,17 @@ public sealed partial class ControlTools
         // "Unchanged" compares the configs themselves, not the rendered lines: every difference is a
         // change, whether or not a line can show it.
         var reconfigured = after != current.Config;
-        if (!renamed && !reconfigured)
+        // Claude never sees a secret, so a config sent back as it is, guessed values and all, is asked
+        // about and answered as a change, and its question lists every variable and header it sends, as
+        // set_connector_env's does: nothing tells Claude whether it guessed a value. The command line
+        // is the user, who can, and is told there is nothing to change.
+        var restated = config is not null && !renamed && !reconfigured;
+        if (!renamed && !reconfigured && !(restated && caller is not ControlCaller.Cli))
         {
             return new ControlStep.Refused(UnchangedError(shownName));
         }
-        var changes = ControlMasking.ChangeLines(current.Config, after, ControlMasking.Exposure.Dialog);
+        IReadOnlyList<string> sent = config is not null && after["env"] is { Kind: JsonKind.Object } env ? [.. env.ObjectProperties.Keys] : [];
+        var changes = ControlMasking.ChangeLines(current.Config, after, ControlMasking.Exposure.Dialog, sent, restatingSignIn: config is not null);
         var active = collection == state.ActiveCollection;
         IReadOnlyList<string> names = renamed ? [ControlMasking.NameLabel, ControlMasking.RemovedPrefix + shownName, ControlMasking.AddedPrefix + shownNewName] : [];
         var request = new ConfirmationRequest(
@@ -248,21 +255,32 @@ public sealed partial class ControlTools
             {
                 return Refused(refusal, [newName, name, collection]);
             }
-            state.ApplyInteractively();
+            // As set_connector_env's: a config sent back as it is has Claude's config written again
+            // when the connector is one Claude runs, as a change would.
+            var rewrite = restated && active && current.Enabled;
+            if (rewrite)
+            {
+                state.Apply();
+            }
+            else
+            {
+                state.ApplyInteractively();
+            }
             var lines = new List<string>();
             if (renamed)
             {
                 lines.Add(RenamedText(shownName, shownNewName));
             }
-            if (reconfigured)
+            if (reconfigured || restated)
             {
                 lines.Add(ChangedText(shownNewName, shownCollection));
             }
             return Done(lines, [("collection", JsonValue.String(collection)), ("name", JsonValue.String(newName)), ("previousName", JsonValue.String(name))],
                 collection, mark, RestartToApplyText,
                 // A rename and nothing else is announced as one; any other change by what it changed.
-                notification: reconfigured ? ChangedNotification(shownAsker, shownNewName, shownCollection)
-                                           : RenamedNotification(shownAsker, shownName, shownNewName));
+                notification: reconfigured || restated ? ChangedNotification(shownAsker, shownNewName, shownCollection)
+                                                       : RenamedNotification(shownAsker, shownName, shownNewName),
+                rewrote: rewrite);
         });
     }
 

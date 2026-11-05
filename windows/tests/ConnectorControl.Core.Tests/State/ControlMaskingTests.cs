@@ -542,8 +542,9 @@ public class ControlMaskingTests
     }
 
     /// <summary>Variables named again with the values they hold show as set again where the line hides their
-    /// value, and as unchanged where it shows it, beside what does change; one the view shows elsewhere
-    /// (mcp-remote's sign-in variable) still gets its environment line. Unnamed variables do not show.</summary>
+    /// value, and as unchanged where it shows it, beside what does change; mcp-remote's sign-in
+    /// variable shows as the header it signs in with. Unnamed variables do not show. Restating the sign-in
+    /// shows every header and OAuth client secret again, hidden on both sides.</summary>
     [Fact]
     public void RestatedVariablesShowBesideTheChange()
     {
@@ -559,8 +560,13 @@ public class ControlMaskingTests
         Assert.Equal([], ControlMasking.ChangeLines(stored, stored, ControlMasking.Exposure.Dialog));
         var signedIn = RemotePattern.Encode(new RemoteConfig("https://h.example/mcp", new RemoteAuth.Bearer("t"), RemoteLaunchStyle.Npx, [],
             new Dictionary<string, string>(), RemotePattern.DefaultPackage));
-        Assert.Equal(["env", "  − AUTH_HEADER = ••• (set)", "  + AUTH_HEADER = ••• (set)"],
+        Assert.Equal(["headers", "  − Authorization = ••• (set)", "  + Authorization = ••• (set)"],
             ControlMasking.ChangeLines(signedIn, signedIn, ControlMasking.Exposure.Dialog, ["AUTH_HEADER"]));
+        var client = RemotePattern.Encode(new RemoteConfig("https://h.example/mcp", new RemoteAuth.OAuthClient("c", "s", ""), RemoteLaunchStyle.Npx, [],
+            new Dictionary<string, string>(), RemotePattern.DefaultPackage));
+        Assert.Equal(["oauth", "  − client c, secret ••• (set)", "  + client c, secret ••• (set)"],
+            ControlMasking.ChangeLines(client, client, ControlMasking.Exposure.Dialog, restatingSignIn: true));
+        Assert.Equal([], ControlMasking.ChangeLines(client, client, ControlMasking.Exposure.Dialog));
     }
 
     /// <summary>A key no field models shows its value as one line of JSON, written the same on both platforms.</summary>
