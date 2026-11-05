@@ -38,8 +38,8 @@ extension ControlTools {
     static let subscribedName = "A subscribed collection's name."
     static let connectorName = "The connector's name."
     static let filePath = "The collection file's full path."
-    public static let envSetProperty = "Variables to add or change, as NAME: value."
-    public static let envUnsetProperty = "Names of variables to remove."
+    static let envSetProperty = "Variables to add or change, as NAME: value."
+    static let envUnsetProperty = "Names of variables to remove."
     static let clashChoices = ["replace", "keep-both", "skip"]
 
     public static let catalog: [ControlToolDefinition] = [

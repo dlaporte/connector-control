@@ -43,8 +43,8 @@ public sealed partial class ControlTools
     internal const string SubscribedName = "A subscribed collection's name.";
     internal const string ConnectorName = "The connector's name.";
     internal const string FilePath = "The collection file's full path.";
-    public const string EnvSetProperty = "Variables to add or change, as NAME: value.";
-    public const string EnvUnsetProperty = "Names of variables to remove.";
+    internal const string EnvSetProperty = "Variables to add or change, as NAME: value.";
+    internal const string EnvUnsetProperty = "Names of variables to remove.";
     internal static readonly IReadOnlyList<string> ClashChoices = ["replace", "keep-both", "skip"];
 
     public static readonly IReadOnlyList<ControlToolDefinition> Catalog =
