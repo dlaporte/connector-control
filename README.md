@@ -608,15 +608,17 @@ full, so you see what would run before you allow it: `GIT_SSH`,
 `_JAVA_OPTIONS`, in any case. Claude's own reads still mask them. Header
 values, the OAuth client secret and any value under a key named like a
 secret stay masked. An edit shows the lines before and after, marked − and
-+. Change environment also lists each variable it sets to the value it
-already holds: as `= NAME = value (unchanged)` where the dialog shows the
-value, and marked − and + like any change where it hides it. Claude never
-sees a value, so a value it guessed right is asked about, and answered, just
-as one it guessed wrong: for a connector Claude runs, Claude's config is
-written again and **Restart Required** appears while Claude runs, as after
-any change. An import or a subscription names its file and lists what it
-brings; a restore lists the connectors it would put back. Each line of what
-would run is selected and copied one line at a time.
++. Change connector also lists every environment variable and header in the
+config Claude sends, and Change environment each variable it sets, including
+any whose value stays as it was: as `= NAME = value (unchanged)` where the
+dialog shows the value, and marked − and + like any change where it hides it
+(a secret's value, a header's, or an OAuth client secret). Claude never sees
+those values, so a config or a value it guessed right is asked about, and
+answered, just as one it guessed wrong: for a connector Claude runs, Claude's
+config is written again and **Restart Required** appears while Claude runs,
+as after any change. An import or a subscription names its file and lists
+what it brings; a restore lists the connectors it would put back. Each line
+of what would run is selected and copied one line at a time.
 
 **Don’t Allow** is the default, and Return answers it, as Escape does. One
 question is asked at a time; Claude's other changes wait their turn. After
@@ -765,7 +767,8 @@ usage error), and `--unset` is given once per variable, as in
 Removing the last variable leaves the connector with no `env` at all, as
 deleting the last row in the editor does. An `--unset` naming a variable the
 connector doesn't have refuses the whole command, and so does a command that
-would change nothing: unlike Claude, you can see the values. The command
+would change nothing, as it does for `edit`: unlike Claude, you can see the
+values. The command
 line's refusals come from the same tools as Claude's, so one that names a
 tool names Claude's: `set_connector_env` is `env` here, and
 `update_connector` is `edit`.
