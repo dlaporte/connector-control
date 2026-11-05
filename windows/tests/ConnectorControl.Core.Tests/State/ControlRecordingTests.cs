@@ -90,6 +90,19 @@ public class ControlRecordingTests
         Assert.Equal([ControlTools.AddedNotification(ControlCaller.ClaudeName, "notion", "Default")], rig.H.Notifier.Sent.Select(sent => sent.Body));
     }
 
+    /// <summary>One variable added beside a secret: the question shows that variable alone, the answer no value,
+    /// and the secret stays as it was. Sending back the masked config is refused before anyone is asked.</summary>
+    [Fact]
+    public void SetEnv()
+    {
+        using var rig = Check("set-env").Rig;
+        Assert.Equal([ControlTools.ChangeTitle(ControlCaller.ClaudeName, "github")], rig.Confirmer.Requests.Select(request => request.Title));
+        Assert.Equal(["env", "  + GITHUB_TOOLSETS = repos,issues"], Assert.Single(rig.Confirmer.Requests).Code);
+        Assert.Equal(JsonValue.Object(("GITHUB_PERSONAL_ACCESS_TOKEN", JsonValue.String("ghp_0123456789abcdefghijklmnopqrstuvwxyzAB")),
+            ("GITHUB_TOOLSETS", JsonValue.String("repos,issues"))), rig.State.Store.Mcps["github"].Config["env"]);
+        Assert.DoesNotContain("ghp_0123456789abcdefghijklmnopqrstuvwxyzAB", Fixtures.Text("control/set-env.transcript"), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void IntegrationOff() => Check("integration-off").Rig.Dispose();
 

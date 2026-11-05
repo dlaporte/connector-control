@@ -1,0 +1,9 @@
+# One environment variable added beside a secret: the answer carries no value, and sending back the masked config is refused.
+#! answer allow
+> {"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"claude-ai","version":"0.1.0"}}}
+< {"id":0,"jsonrpc":"2.0","result":{"capabilities":{"tools":{}},"protocolVersion":"2025-11-25","serverInfo":{"name":"connector-control","version":"1.2.2"}}}
+> {"jsonrpc":"2.0","method":"notifications/initialized"}
+> {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"set_connector_env","arguments":{"name":"github","set":{"GITHUB_TOOLSETS":"repos,issues"}}}}
+< {"id":1,"jsonrpc":"2.0","result":{"content":[{"text":"Changed “github” in “Default”.","type":"text"}],"isError":false,"structuredContent":{"applied":true,"collection":"Default","name":"github","restartRequired":false}}}
+> {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"update_connector","arguments":{"name":"github","config":{"command":"npx","args":["-y","@modelcontextprotocol/server-github"],"env":{"GITHUB_PERSONAL_ACCESS_TOKEN":"set","GITHUB_TOOLSETS":"repos,issues"}}}}}
+< {"id":2,"jsonrpc":"2.0","result":{"content":[{"text":"“GITHUB_PERSONAL_ACCESS_TOKEN” holds “set”, which is how Connector Control hides a value, so saving it would replace the real value. To change environment variables without the others, use set_connector_env; for a value you don’t have, write ${CC_NEEDS:NAME}.","type":"text"}],"isError":true,"structuredContent":{"error":"“GITHUB_PERSONAL_ACCESS_TOKEN” holds “set”, which is how Connector Control hides a value, so saving it would replace the real value. To change environment variables without the others, use set_connector_env; for a value you don’t have, write ${CC_NEEDS:NAME}."}}}
