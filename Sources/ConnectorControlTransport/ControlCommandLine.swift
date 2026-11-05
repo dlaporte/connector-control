@@ -20,8 +20,9 @@ public enum ControlInvocation: Equatable, Sendable {
 /// `connector-control`'s arguments, read into what to run: one command per tool, as `help` lists them,
 /// or `help`, `--version` and the relay. `--json` anywhere asks for the structure Claude receives
 /// instead of text - except in `add` and `edit`, where `--json` followed by a JSON object (its first
-/// character not a space is "{") is the connector's config. Words after `--` are names. Paths are made
-/// full here, against the directory the command runs in, because the app runs elsewhere.
+/// character not a space is "{") is the connector's config. Words after `--` are names, and `env`'s
+/// settings. Paths are made full here, against the directory the command runs in, because the app runs
+/// elsewhere.
 @MainActor
 public enum ControlCommandLine {
     public static let jsonFlag = "--json"
@@ -37,6 +38,7 @@ public enum ControlCommandLine {
     static let nameOption = "--name"
     static let reveal = "--reveal"
     static let off = "--off"
+    static let unset = "--unset"
 
     public static func unknownCommandError(_ command: String) -> String { "There’s no command named “\(command)”. Run connector-control help to see them all." }
 
@@ -92,6 +94,8 @@ public enum ControlCommandLine {
     struct Words {
         var positionals: [String] = []
         var options: [String: String] = [:]
+        /// The values of an option that may be given more than once, in the order given.
+        var repeated: [String: [String]] = [:]
         var flags: Set<String> = []
         var json = false
         /// `add` and `edit`'s config, given after `--json`.
@@ -127,6 +131,11 @@ public enum ControlCommandLine {
             return try call("update_connector", rest, options: [collection, file, rename], takesConfig: true, count: 1...1) {
                 ["name": .string($0.positionals[0]), "config": try configValue($0, required: false, tool: "update_connector"),
                  "newName": text($0.options[rename]), "collection": text($0.options[collection])]
+            }
+        case "env":
+            return try call("set_connector_env", rest, options: [collection], repeatable: [unset], count: 1...Int.max) { read in
+                ["name": .string(read.positionals[0]), "set": try settings(read.positionals.dropFirst()),
+                 "unset": read.repeated[unset].map { .array($0.map(JSONValue.string)) }, "collection": text(read.options[collection])]
             }
         case "delete":
             return try call("delete_connectors", rest, options: [collection], count: 1...Int.max) {
@@ -183,10 +192,10 @@ public enum ControlCommandLine {
 
     /// One command: the tool it runs, what it takes, and how its words become the tool's arguments
     /// (an argument left nil is left out).
-    static func call(_ tool: String, _ words: ArraySlice<String>, options: Set<String> = [], flags: Set<String> = [],
-                     takesConfig: Bool = false, count: ClosedRange<Int> = 0...0,
+    static func call(_ tool: String, _ words: ArraySlice<String>, options: Set<String> = [], repeatable: Set<String> = [],
+                     flags: Set<String> = [], takesConfig: Bool = false, count: ClosedRange<Int> = 0...0,
                      _ build: (Words) throws -> [String: JSONValue?] = { _ in [:] }) throws -> ControlInvocation {
-        let read = try read(words, options: options, flags: flags, takesConfig: takesConfig)
+        let read = try read(words, options: options, repeatable: repeatable, flags: flags, takesConfig: takesConfig)
         guard count.contains(read.positionals.count) else { throw UsageError(message: usageError(usage(of: tool))) }
         var arguments: [String: JSONValue] = [:]
         for (key, value) in try build(read) {
@@ -195,7 +204,8 @@ public enum ControlCommandLine {
         return .call(tool: tool, arguments: .object(arguments), json: read.json)
     }
 
-    static func read(_ words: ArraySlice<String>, options: Set<String>, flags: Set<String>, takesConfig: Bool) throws -> Words {
+    static func read(_ words: ArraySlice<String>, options: Set<String>, repeatable: Set<String> = [], flags: Set<String>,
+                     takesConfig: Bool) throws -> Words {
         var read = Words()
         var index = words.startIndex
         var namesOnly = false
@@ -220,6 +230,10 @@ public enum ControlCommandLine {
             } else if options.contains(word) {
                 guard index < words.endIndex else { throw UsageError(message: missingValueError(word)) }
                 read.options[word] = words[index]
+                index += 1
+            } else if repeatable.contains(word) {
+                guard index < words.endIndex else { throw UsageError(message: missingValueError(word)) }
+                read.repeated[word, default: []].append(words[index])
                 index += 1
             } else {
                 throw UsageError(message: unknownOptionError(word))
@@ -253,6 +267,20 @@ public enum ControlCommandLine {
         }
         if required { throw UsageError(message: usageError(usage(of: tool))) }
         return nil
+    }
+
+    /// `env`'s `KEY=value` words as an object, each split at its first "=" (a value may hold more), a
+    /// later setting of the same name winning; nil for none. A word with no "=" is a usage error.
+    static func settings(_ words: ArraySlice<String>) throws -> JSONValue? {
+        guard !words.isEmpty else { return nil }
+        var values: [String: JSONValue] = [:]
+        for word in words {
+            // Split scalar by scalar, as the Windows mirror splits by UTF-16 unit, at the same place.
+            let scalars = word.unicodeScalars
+            guard let equals = scalars.firstIndex(of: "=") else { throw UsageError(message: usageError(usage(of: "set_connector_env"))) }
+            values[String(scalars[..<equals])] = .string(String(scalars[scalars.index(after: equals)...]))
+        }
+        return .object(values)
     }
 
     static func parseConfig(_ data: Data) throws -> JSONValue {

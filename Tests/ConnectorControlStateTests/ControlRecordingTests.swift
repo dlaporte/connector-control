@@ -66,6 +66,18 @@ final class ControlRecordingTests: XCTestCase {
         XCTAssertEqual(rig.h.notifier.sent.map(\.body), [ControlTools.addedNotification(ControlCaller.claudeName, "notion", "Default")])
     }
 
+    /// One variable added beside a secret: the question shows that variable alone, the answer no value,
+    /// and the secret stays as it was. Sending back the masked config is refused before anyone is asked.
+    func testSetEnv() throws {
+        let rig = try check("set-env").rig; defer { rig.dispose() }
+        XCTAssertEqual(rig.confirmer.requests.map(\.title), [ControlTools.changeTitle(ControlCaller.claudeName, "github")])
+        XCTAssertEqual(rig.confirmer.requests.map(\.code), [["env", "  + GITHUB_TOOLSETS = repos,issues"]])
+        XCTAssertEqual(rig.state.store.mcps["github"]?.config.value(at: JSONPointer(["env"])), .object([
+            "GITHUB_PERSONAL_ACCESS_TOKEN": .string("ghp_0123456789abcdefghijklmnopqrstuvwxyzAB"), "GITHUB_TOOLSETS": .string("repos,issues"),
+        ]))
+        XCTAssertFalse(Fixtures.text("control/set-env.transcript").contains("ghp_0123456789abcdefghijklmnopqrstuvwxyzAB"))
+    }
+
     func testIntegrationOff() throws { try check("integration-off").rig.dispose() }
 
     func testReservedName() throws {

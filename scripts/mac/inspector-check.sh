@@ -57,8 +57,8 @@ inspect() {
 
 echo "== tools/list, with the Inspector's strict schema check"
 inspect --method tools/list --strict > "$SANDBOX/tools.json"
-jq -e '(.tools // .result.tools) | length == 24' "$SANDBOX/tools.json" > /dev/null \
-    || { echo "::error::expected 24 tools" >&2; cat "$SANDBOX/tools.json" >&2; exit 1; }
+jq -e '(.tools // .result.tools) | length == 25' "$SANDBOX/tools.json" > /dev/null \
+    || { echo "::error::expected 25 tools" >&2; cat "$SANDBOX/tools.json" >&2; exit 1; }
 jq -e '[(.tools // .result.tools)[] | select(.annotations.readOnlyHint == true)] | length == 8' "$SANDBOX/tools.json" > /dev/null \
     || { echo "::error::expected 8 read-only tools" >&2; exit 1; }
 

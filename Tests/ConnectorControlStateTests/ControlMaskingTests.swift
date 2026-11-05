@@ -454,6 +454,30 @@ final class ControlMaskingTests: XCTestCase {
         XCTAssertEqual(ControlMasking.changeLines(from: edits[4].1, to: edits[4].2, exposure: .revealed), ["env", "  − API_KEY = one", "  + API_KEY = two"])
     }
 
+    /// Variables named again with the values they hold show as set again where the line hides their
+    /// value, and as unchanged where it shows it, beside what does change; mcp-remote's sign-in
+    /// variable shows as the header it signs in with. Unnamed variables do not show. Restating the sign-in
+    /// shows every header and OAuth client secret again, hidden on both sides.
+    func testRestatedVariablesShowBesideTheChange() {
+        let before = local("node", []), env: [String: JSONValue] = ["API_KEY": .string("k"), "MODE": .string("a"), "B": .string("b")]
+        let after = adding("env", .object(env.merging(["MODE": .string("c")]) { $1 }), to: before)
+        let stored = adding("env", .object(env), to: before)
+        XCTAssertEqual(ControlMasking.changeLines(from: stored, to: after, exposure: .dialog, restating: ["MODE", "API_KEY"]),
+                       ["env", "  − API_KEY = ••• (set)", "  − MODE = a", "  + API_KEY = ••• (set)", "  + MODE = c"])
+        XCTAssertEqual(ControlMasking.changeLines(from: stored, to: stored, exposure: .dialog, restating: ["B"]),
+                       ["env", "  = B = b (unchanged)"])
+        XCTAssertEqual(ControlMasking.changeLines(from: stored, to: stored, exposure: .masked, restating: ["B"]),
+                       ["env", "  − B = ••• (set)", "  + B = ••• (set)"], "Claude's own view hides every value")
+        XCTAssertEqual(ControlMasking.changeLines(from: stored, to: stored, exposure: .dialog), [])
+        let signedIn = RemotePattern.encode(RemoteConfig(url: "https://h.example/mcp", auth: .bearer(token: "t")))
+        XCTAssertEqual(ControlMasking.changeLines(from: signedIn, to: signedIn, exposure: .dialog, restating: ["AUTH_HEADER"]),
+                       ["headers", "  − Authorization = ••• (set)", "  + Authorization = ••• (set)"])
+        let client = RemotePattern.encode(RemoteConfig(url: "https://h.example/mcp", auth: .oauthClient(clientID: "c", clientSecret: "s", scopes: "")))
+        XCTAssertEqual(ControlMasking.changeLines(from: client, to: client, exposure: .dialog, restatingSignIn: true),
+                       ["oauth", "  − client c, secret ••• (set)", "  + client c, secret ••• (set)"])
+        XCTAssertEqual(ControlMasking.changeLines(from: client, to: client, exposure: .dialog), [])
+    }
+
     /// A key no field models shows its value as one line of JSON, written the same on both platforms.
     func testAnUnmodelledKeyShowsItsValueAsJSON() {
         let metadata: JSONValue = .object(["n": .int(1), "name": .string("café"), "redirect": .string("https://a.example/cb")])
@@ -918,5 +942,70 @@ final class ControlMaskingTests: XCTestCase {
         try assertHidden(["hunter2"], in: local("sh", ["--auth", "Token", "Token", "hunter2"]))
         XCTAssertEqual(ControlMasking.arguments(["--password", "Basic", "--", "hunter2"]), ["--password", "•••", "--", "hunter2"])
         XCTAssertEqual(ControlMasking.arguments(["--auth", "Token", "abc", "def"]), ["--auth", "•••", "•••", "def"])
+    }
+
+    // MARK: The mask guard
+
+    /// Text with "•••" in it is refused wherever it is; a mask word only where the stored config holds
+    /// another value at the same place, keys by name and arrays by index. The first place, in key
+    /// order, is named by its nearest key: a variable's name, or the list an argument is in.
+    func testTheMaskGuardRefusesWhatWouldReplaceAValue() {
+        let variables: [String: JSONValue] = ["API_KEY": .string("bw://x"), "MODE": .string("set"), "RETRIES": .int(3), "EMPTY": .string("")]
+        let stored: JSONValue = .object(["command": .string("npx"), "args": .array([.string("-y"), .string("acme")]), "env": .object(variables)])
+        func env(_ values: [String: JSONValue]) -> JSONValue {
+            adding("env", .object(variables.merging(values) { $1 }), to: stored)
+        }
+        let refused: [(JSONValue, String, String)] = [
+            (env(["API_KEY": .string(ControlMasking.setState)]), "API_KEY", "set"),
+            (env(["API_KEY": .string(ControlMasking.needsValueState)]), "API_KEY", "needs value"),
+            (env(["API_KEY": .string(EditorModel.needsValue)]), "API_KEY", "needs your value"),
+            (env(["API_KEY": .string(ControlMasking.setText)]), "API_KEY", "•••"),
+            (env(["RETRIES": .string("set")]), "RETRIES", "set"),
+            (env(["EMPTY": .string("needs value")]), "EMPTY", "needs value"),
+            (env(["NEW": .string("https://h.example/mcp?token=•••")]), "NEW", "•••"),
+            (adding("args", .array([.string("set"), .string("acme")]), to: stored), "args", "set"),
+            (adding("headers", .object(["X-Key": .string("•••")]), to: stored), "X-Key", "•••"),
+            // The first in key order is named: "API_KEY" sorts before "B".
+            (env(["B": .string("•••"), "API_KEY": .string("set")]), "API_KEY", "set"),
+        ]
+        for (config, name, shown) in refused {
+            XCTAssertEqual(ControlMasking.maskRefusal(config, over: stored), ControlMasking.maskedValueError(name, shown), "\(name) \(shown)")
+        }
+        XCTAssertEqual(ControlMasking.maskRefusal(env(["API_KEY": .string("•••")]), over: nil), ControlMasking.maskedValueError("API_KEY", "•••"),
+                       "a new config is refused text holding the mask")
+        let allowed: [JSONValue] = [
+            stored,
+            env(["MODE": .string("set")]),
+            env(["NEW": .string("set"), "OTHER": .string("needs value")]),
+            adding("args", .array([.string("-y"), .string("acme"), .string("set")]), to: stored),
+            adding("headers", .object(["X-Mode": .string("set")]), to: stored),
+        ]
+        for config in allowed { XCTAssertNil(ControlMasking.maskRefusal(config, over: stored), config.compactLine()) }
+        XCTAssertNil(ControlMasking.maskRefusal(env(["API_KEY": .string("set")]), over: nil), "nothing is stored to replace")
+    }
+
+    /// Text holding "•••" that the stored config already holds, as it is and where it is, is old damage
+    /// left as it was, not a value replaced: it passes, and so does overwriting it with a real value.
+    /// The mask anywhere else, or another text holding it in its place, is refused.
+    func testTheMaskGuardLetsAStoredMaskStayWhereItIs() {
+        let stored = local("npx", ["-y", "acme", "--token", "•••"])
+        func args(_ values: [String]) -> JSONValue { local("npx", values) }
+        XCTAssertNil(ControlMasking.maskRefusal(adding("env", .object(["A": .string("1")]), to: stored), over: stored))
+        XCTAssertNil(ControlMasking.maskRefusal(args(["-y", "acme", "--token", "real"]), over: stored))
+        let refused: [(JSONValue, String, String)] = [
+            (args(["-y", "acme", "--token", "•••", "x•••"]), "args", "a new place"),
+            (args(["-y", "acme", "--token", "••• (set)"]), "args", "another text in its place"),
+            (args(["-y", "•••", "acme", "--token"]), "args", "moved to where another value was"),
+            (adding("env", .object(["A": .string("•••")]), to: stored), "A", "a new variable"),
+        ]
+        for (config, name, label) in refused {
+            XCTAssertEqual(ControlMasking.maskRefusal(config, over: stored), ControlMasking.maskedValueError(name, "•••"), label)
+        }
+    }
+
+    /// A variable's name is Claude's to choose, so the refusal shows it as the app's sentences show a name.
+    func testTheMaskGuardEscapesTheNameItShows() {
+        let config: JSONValue = .object(["command": .string("x"), "env": .object(["A\n\u{202E}B": .string("•••")])])
+        XCTAssertEqual(ControlMasking.maskRefusal(config, over: nil), ControlMasking.maskedValueError(#"A\n\u{202E}B"#, "•••"))
     }
 }

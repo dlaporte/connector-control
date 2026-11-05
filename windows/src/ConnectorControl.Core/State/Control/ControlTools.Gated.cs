@@ -23,6 +23,7 @@ public sealed partial class ControlTools
     public const string TakesEffectFooter = "Takes effect when Claude restarts.";
     public const string ConfigShapeError = "A connector’s config needs a “command” or a “url”.";
     public const string NothingToChangeError = "Give a new config, a new name, or both.";
+    public const string NothingToSetError = "Give variables to set, to remove, or both.";
 
     public static string AddTitle(string shownAsker, string name) => $"{shownAsker} wants to add “{name}”";
 
@@ -53,6 +54,16 @@ public sealed partial class ControlTools
     public static string DeletedText(string names, string collection) => $"Deleted {names} from “{collection}”.";
 
     public static string UnchangedError(string name) => $"“{name}” already has that config.";
+
+    /// <summary>set_connector_env's refusals: a variable's name the environment cannot hold, one given both to
+    /// set and to remove, one to remove that is not there, and an <c>env</c> that is not a set of variables.</summary>
+    public static string EnvNameError(string variable) => $"“{variable}” can’t name an environment variable: it holds “=” or a null character.";
+
+    public static string EnvSetAndUnsetError(string variable) => $"“{variable}” can’t be both set and unset.";
+
+    public static string NoVariableError(string variable, string name) => $"There’s no environment variable named “{variable}” in “{name}”.";
+
+    public static string EnvShapeError(string name) => $"“{name}” has an “env” that isn’t a JSON object; change its config with update_connector.";
 
     public static string AddedNotification(string shownAsker, string name, string collection) => $"{shownAsker} added “{name}” to “{collection}”.";
 
@@ -133,6 +144,10 @@ public sealed partial class ControlTools
         {
             return new ControlStep.Refused(error);
         }
+        if (ControlMasking.MaskRefusal(config, null) is { } masked)
+        {
+            return new ControlStep.Refused(masked);
+        }
         var on = arguments.Bool("enabled") ?? true;
         var word = on ? OnWord : OffWord;
         var active = collection == state.ActiveCollection;
@@ -162,8 +177,9 @@ public sealed partial class ControlTools
         });
     }
 
-    private ControlStep UpdateConnector(ControlArguments arguments, string shownAsker)
+    private ControlStep UpdateConnector(ControlArguments arguments, ControlCaller caller)
     {
+        var shownAsker = caller.ShownAsker;
         var collection = TargetCollection(arguments);
         var shownCollection = ControlText.EscapedName(collection);
         if (state.Store.Collections.GetValueOrDefault(collection) is not { } held)
@@ -205,15 +221,26 @@ public sealed partial class ControlTools
         {
             return new ControlStep.Refused(error);
         }
+        if (config is not null && ControlMasking.MaskRefusal(config, current.Config) is { } masked)
+        {
+            return new ControlStep.Refused(masked);
+        }
         var after = config ?? current.Config;
         // "Unchanged" compares the configs themselves, not the rendered lines: every difference is a
         // change, whether or not a line can show it.
         var reconfigured = after != current.Config;
-        if (!renamed && !reconfigured)
+        // Claude never sees a secret, so a config sent back as it is, guessed values and all, is asked
+        // about and answered as a change, with a rename or without, and its question lists every
+        // variable and header it sends, as set_connector_env's does: nothing tells Claude whether it
+        // guessed a value. The command line is the user, who can, and is told there is nothing to
+        // change, or only a rename.
+        var restated = config is not null && !reconfigured && caller is not ControlCaller.Cli;
+        if (!renamed && !reconfigured && !restated)
         {
             return new ControlStep.Refused(UnchangedError(shownName));
         }
-        var changes = ControlMasking.ChangeLines(current.Config, after, ControlMasking.Exposure.Dialog);
+        IReadOnlyList<string> sent = config is not null && after["env"] is { Kind: JsonKind.Object } env ? [.. env.ObjectProperties.Keys] : [];
+        var changes = ControlMasking.ChangeLines(current.Config, after, ControlMasking.Exposure.Dialog, sent, restatingSignIn: config is not null);
         var active = collection == state.ActiveCollection;
         IReadOnlyList<string> names = renamed ? [ControlMasking.NameLabel, ControlMasking.RemovedPrefix + shownName, ControlMasking.AddedPrefix + shownNewName] : [];
         var request = new ConfirmationRequest(
@@ -229,21 +256,160 @@ public sealed partial class ControlTools
             {
                 return Refused(refusal, [newName, name, collection]);
             }
-            state.ApplyInteractively();
+            // As set_connector_env's: a config sent back as it is has Claude's config written again
+            // when the connector is one Claude runs, as a change would.
+            var rewrite = restated && active && current.Enabled;
+            if (rewrite)
+            {
+                state.Apply();
+            }
+            else
+            {
+                state.ApplyInteractively();
+            }
             var lines = new List<string>();
             if (renamed)
             {
                 lines.Add(RenamedText(shownName, shownNewName));
             }
-            if (reconfigured)
+            if (reconfigured || restated)
             {
                 lines.Add(ChangedText(shownNewName, shownCollection));
             }
             return Done(lines, [("collection", JsonValue.String(collection)), ("name", JsonValue.String(newName)), ("previousName", JsonValue.String(name))],
                 collection, mark, RestartToApplyText,
                 // A rename and nothing else is announced as one; any other change by what it changed.
-                notification: reconfigured ? ChangedNotification(shownAsker, shownNewName, shownCollection)
-                                           : RenamedNotification(shownAsker, shownName, shownNewName));
+                notification: reconfigured || restated ? ChangedNotification(shownAsker, shownNewName, shownCollection)
+                                                       : RenamedNotification(shownAsker, shownName, shownNewName),
+                rewrote: rewrite);
+        });
+    }
+
+    /// <summary>Some of a connector's environment variables set or removed, and every other one, whose value
+    /// Claude is never shown, left as it is: update_connector's question, showing the variables that
+    /// change and every one it sets, and its change. A name to set follows the editor's rule for a row
+    /// with a value, and must be one the environment can hold; a name to remove must be there, all or
+    /// nothing, as delete_connectors' names must.
+    ///
+    /// Claude cannot see a value, so a value set to what it already holds is asked about and answered
+    /// as a change - nothing tells it whether it guessed the value. The command line is the user, who
+    /// can, and is told there is nothing to change.</summary>
+    private ControlStep SetConnectorEnv(ControlArguments arguments, ControlCaller caller)
+    {
+        var shownAsker = caller.ShownAsker;
+        var collection = TargetCollection(arguments);
+        var shownCollection = ControlText.EscapedName(collection);
+        if (state.Store.Collections.GetValueOrDefault(collection) is not { } held)
+        {
+            return new ControlStep.Refused(MasterStore.NoCollectionError(shownCollection));
+        }
+        if (state.IsSynced(collection))
+        {
+            return new ControlStep.Refused(SubscribedChangeError(shownCollection));
+        }
+        var name = arguments.String("name") ?? "";
+        var shownName = ControlText.EscapedName(name);
+        if (held.Mcps.GetValueOrDefault(name) is not { } current)
+        {
+            return new ControlStep.Refused(NoConnectorError(shownName, shownCollection));
+        }
+        var set = arguments.Object("set")?.ObjectProperties ?? JsonValue.Object().ObjectProperties;
+        var unset = new List<string>();
+        foreach (var variable in arguments.Strings("unset") ?? [])
+        {
+            if (!unset.Contains(variable, StringComparer.Ordinal))
+            {
+                unset.Add(variable);
+            }
+        }
+        if (set.Count == 0 && unset.Count == 0)
+        {
+            return new ControlStep.Refused(NothingToSetError);
+        }
+        foreach (var (key, value) in set)
+        {
+            var shownKey = ControlText.EscapedName(key);
+            if (value.Kind != JsonKind.String)
+            {
+                return new ControlStep.Refused(WrongTypeError(shownKey, TextKind));
+            }
+            if (key.TrimSpaces().Length == 0)
+            {
+                return new ControlStep.Refused(EditorModel.EnvNamelessError);
+            }
+            if (key.Contains('=') || key.Contains('\0'))
+            {
+                return new ControlStep.Refused(EnvNameError(shownKey));
+            }
+            if (unset.Contains(key, StringComparer.Ordinal))
+            {
+                return new ControlStep.Refused(EnvSetAndUnsetError(shownKey));
+            }
+        }
+        if (current.Config.Kind != JsonKind.Object)
+        {
+            return new ControlStep.Refused(ConfigShapeError);
+        }
+        var env = JsonValue.Object();
+        switch (current.Config["env"])
+        {
+            case { Kind: JsonKind.Object } variables:
+                env = variables;
+                break;
+            case null:
+                break;
+            default:
+                return new ControlStep.Refused(EnvShapeError(shownName));
+        }
+        // All or nothing: a list with one wrong name is a mistake, not a request for the rest.
+        if (unset.FirstOrDefault(variable => env[variable] is null) is { } missing)
+        {
+            return new ControlStep.Refused(NoVariableError(ControlText.EscapedName(missing), shownName));
+        }
+        env = unset.Aggregate(env, (variables, variable) => variables.Without(variable));
+        env = set.Aggregate(env, (variables, item) => variables.With(item.Key, item.Value));
+        // An environment left with no variables goes, as the editor's form leaves it.
+        var after = env.ObjectProperties.Count == 0 ? current.Config.Without("env") : current.Config.With("env", env);
+        if (ControlMasking.MaskRefusal(after, current.Config) is { } masked)
+        {
+            return new ControlStep.Refused(masked);
+        }
+        var unchanged = after == current.Config;
+        if (unchanged && caller is ControlCaller.Cli)
+        {
+            return new ControlStep.Refused(UnchangedError(shownName));
+        }
+        var active = collection == state.ActiveCollection;
+        var request = new ConfirmationRequest(
+            ChangeTitle(shownAsker, shownName),
+            active ? ChangeActiveMessage(shownCollection) : ChangeMessage(shownCollection),
+            ControlMasking.ChangeLines(current.Config, after, ControlMasking.Exposure.Dialog, [.. set.Keys]),
+            active && current.Enabled ? TakesEffectFooter : null);
+        return new ControlStep.Ready(request, () =>
+        {
+            var mark = state.AppliedServers;
+            if (state.Upsert(name, new McpEntry(current.Enabled, after, current.LastEditView), renamedFrom: name, collection: collection)
+                is { } refusal)
+            {
+                return Refused(refusal, [name, collection]);
+            }
+            // Values set to what they held change nothing, but a connector Claude runs has Claude's
+            // config written again, as a change would - a restart due, a backup taken - and the answer
+            // is a change's, so none of it tells Claude it guessed a value right.
+            var rewrite = unchanged && active && current.Enabled;
+            if (rewrite)
+            {
+                state.Apply();
+            }
+            else
+            {
+                state.ApplyInteractively();
+            }
+            // update_connector's answer, without a previous name: nothing in it is a value.
+            return Done([ChangedText(shownName, shownCollection)],
+                [("collection", JsonValue.String(collection)), ("name", JsonValue.String(name))],
+                collection, mark, RestartToApplyText,
+                notification: ChangedNotification(shownAsker, shownName, shownCollection), rewrote: rewrite);
         });
     }
 

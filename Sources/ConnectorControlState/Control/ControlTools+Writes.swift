@@ -74,7 +74,8 @@ extension ControlTools {
         case "refresh_subscription": return refreshSubscription(arguments)
         case "set_setting": return setSetting(arguments, caller)
         case "add_connector": return addConnector(arguments, caller.shownAsker)
-        case "update_connector": return updateConnector(arguments, caller.shownAsker)
+        case "update_connector": return updateConnector(arguments, caller)
+        case "set_connector_env": return setConnectorEnv(arguments, caller)
         case "delete_connectors": return deleteConnectors(arguments, caller.shownAsker)
         case "delete_collection": return deleteCollection(arguments, caller.shownAsker)
         case "import_document": return importDocument(arguments, caller)
@@ -110,17 +111,19 @@ extension ControlTools {
     /// the change was saved and gives the app's own message. `collection` nil is a write that
     /// reaches Claude whatever is active; `touchesClaude` false is one that cannot reach it at all. The notification, for a change nobody was asked about,
     /// carries the same restart sentence. `announcing`: a direct change that is announced, with its
-    /// notification, when it moved what Claude runs, and carries none when it did not.
+    /// notification, when it moved what Claude runs, and carries none when it did not. `rewrote`: a
+    /// write that left Claude's config as it was but wrote it again, to be answered as one that
+    /// changed it (set_connector_env setting values Claude cannot see to what they already are).
     func done(_ lines: [String], _ fields: [String: JSONValue], touching collection: String?,
               since mark: [String: JSONValue], restart: String, notification: String? = nil,
-              announcing: Bool = false, touchesClaude: Bool = true) -> ControlOutcome {
+              announcing: Bool = false, touchesClaude: Bool = true, rewrote: Bool = false) -> ControlOutcome {
         var text = lines
         // A write that never touches Claude's config (a window's setting) must not report a retry
         // an earlier, unrelated write left pending.
         let reachesClaude = touchesClaude && (collection == nil || collection == state.activeCollection)
         // Compared scalar by scalar (`JSONValue.identical`), keys too, so a change only in how a
         // character is composed counts.
-        let applied = !JSONValue.identical(state.appliedServers, mark)
+        let applied = rewrote || !JSONValue.identical(state.appliedServers, mark)
         var then: String?
         if reachesClaude, state.applyRetryNeeded {
             text.append(ControlTools.savedNotAppliedText(state.lastError ?? ""))

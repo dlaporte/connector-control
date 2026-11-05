@@ -128,8 +128,10 @@ public class StringCatalogTests
         ["ControlCommandLine.usageError"] = ["X"],
         ["ControlCommandLine.versionLine"] = ["X"],
         ["ControlMasking.assignment"] = ["X", "Y"],
+        ["ControlMasking.maskedValueError"] = ["X", "Y"],
         ["ControlMasking.oauthClientText"] = ["X", "Y"],
         ["ControlMasking.remoteBridgeType"] = ["X"],
+        ["ControlMasking.unchangedText"] = ["X"],
         ["ControlTools.addActiveMessage"] = ["X", "Y"],
         ["ControlTools.addMessage"] = ["X", "Y"],
         ["ControlTools.addTitle"] = ["X", "Y"],
@@ -164,6 +166,9 @@ public class StringCatalogTests
         ["ControlTools.duplicateSubscribedError"] = ["X"],
         ["ControlTools.duplicatedText"] = ["X", "Y"],
         ["ControlTools.emptyCollectionText"] = ["X"],
+        ["ControlTools.envNameError"] = ["X"],
+        ["ControlTools.envSetAndUnsetError"] = ["X"],
+        ["ControlTools.envShapeError"] = ["X"],
         ["ControlTools.fromFooter"] = ["X"],
         ["ControlTools.importMessage.many"] = ["3", "X"],
         ["ControlTools.importMessage.one"] = ["1", "X"],
@@ -186,6 +191,7 @@ public class StringCatalogTests
         ["ControlTools.noBackupError"] = ["X"],
         ["ControlTools.noConnectorError"] = ["X", "Y"],
         ["ControlTools.noUpdateError"] = ["X"],
+        ["ControlTools.noVariableError"] = ["X", "Y"],
         ["ControlTools.notAFileError"] = ["X"],
         ["ControlTools.notOneOfError"] = ["X", "Y"],
         ["ControlTools.notSubscribedError"] = ["X"],
@@ -507,6 +513,7 @@ public class StringCatalogTests
         actual["ControlMasking.envLabel"] = ControlMasking.EnvLabel;
         actual["ControlMasking.headersLabel"] = ControlMasking.HeadersLabel;
         actual["ControlMasking.mask"] = ControlMasking.Mask;
+        actual["ControlMasking.maskedValueError"] = ControlMasking.MaskedValueError("X", "Y");
         actual["ControlMasking.nameLabel"] = ControlMasking.NameLabel;
         actual["ControlMasking.needsValueState"] = ControlMasking.NeedsValueState;
         actual["ControlMasking.oauthClientText"] = ControlMasking.OauthClientText("X", "Y");
@@ -514,10 +521,12 @@ public class StringCatalogTests
         actual["ControlMasking.otherLabel"] = ControlMasking.OtherLabel;
         actual["ControlMasking.remoteBridgeType"] = ControlMasking.RemoteBridgeType("X");
         actual["ControlMasking.removedPrefix"] = ControlMasking.RemovedPrefix;
+        actual["ControlMasking.samePrefix"] = ControlMasking.SamePrefix;
         actual["ControlMasking.scopesLabel"] = ControlMasking.ScopesLabel;
         actual["ControlMasking.setState"] = ControlMasking.SetState;
         actual["ControlMasking.setText"] = ControlMasking.SetText;
         actual["ControlMasking.typeLabel"] = ControlMasking.TypeLabel;
+        actual["ControlMasking.unchangedText"] = ControlMasking.UnchangedText("X");
         actual["ControlMasking.urlLabel"] = ControlMasking.UrlLabel;
         actual["ControlRelay.restartedError"] = ControlRelay.RestartedError;
         actual["ControlText.listAnd"] = ControlText.ListAnd;
@@ -592,6 +601,11 @@ public class StringCatalogTests
         actual["ControlTools.duplicateSubscribedError"] = ControlTools.DuplicateSubscribedError("X");
         actual["ControlTools.duplicatedText"] = ControlTools.DuplicatedText("X", "Y");
         actual["ControlTools.emptyCollectionText"] = ControlTools.EmptyCollectionText("X");
+        actual["ControlTools.envNameError"] = ControlTools.EnvNameError("X");
+        actual["ControlTools.envSetAndUnsetError"] = ControlTools.EnvSetAndUnsetError("X");
+        actual["ControlTools.envSetProperty"] = ControlTools.EnvSetProperty;
+        actual["ControlTools.envShapeError"] = ControlTools.EnvShapeError("X");
+        actual["ControlTools.envUnsetProperty"] = ControlTools.EnvUnsetProperty;
         actual["ControlTools.fromFooter"] = ControlTools.FromFooter("X");
         actual["ControlTools.helpOptions"] = ControlTools.HelpOptions;
         actual["ControlTools.helpUsage"] = ControlTools.HelpUsage;
@@ -632,11 +646,13 @@ public class StringCatalogTests
         actual["ControlTools.noConnectorError"] = ControlTools.NoConnectorError("X", "Y");
         actual["ControlTools.noQuestionError"] = ControlTools.NoQuestionError;
         actual["ControlTools.noUpdateError"] = ControlTools.NoUpdateError("X");
+        actual["ControlTools.noVariableError"] = ControlTools.NoVariableError("X", "Y");
         actual["ControlTools.notAFileError"] = ControlTools.NotAFileError("X");
         actual["ControlTools.notOneOfError"] = ControlTools.NotOneOfError("X", "Y");
         actual["ControlTools.notSubscribedError"] = ControlTools.NotSubscribedError("X");
         actual["ControlTools.nothingToChangeError"] = ControlTools.NothingToChangeError;
         actual["ControlTools.nothingToImportError"] = ControlTools.NothingToImportError("X");
+        actual["ControlTools.nothingToSetError"] = ControlTools.NothingToSetError;
         actual["ControlTools.objectKind"] = ControlTools.ObjectKind;
         actual["ControlTools.offWord"] = ControlTools.OffWord;
         actual["ControlTools.onWord"] = ControlTools.OnWord;

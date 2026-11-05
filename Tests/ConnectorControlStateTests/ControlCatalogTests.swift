@@ -26,6 +26,7 @@ final class ControlCatalogTests: XCTestCase {
         "subscribe": (false, false, false, .gated, "subscribe <file>"),
         "restart_claude": (false, false, false, .alwaysConfirm, "restart-claude"),
         "update_connector": (false, true, false, .gated, "edit <name>"),
+        "set_connector_env": (false, true, false, .gated, "env <name>"),
         "delete_connectors": (false, true, false, .gated, "delete <name>…"),
         "delete_collection": (false, true, false, .gated, "collection delete <name>"),
         "import_document": (false, true, false, .gated, "import <file>"),

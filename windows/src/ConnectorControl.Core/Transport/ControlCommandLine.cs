@@ -34,8 +34,8 @@ public abstract record ControlInvocation
 /// them, or <c>help</c>, <c>--version</c> and the relay. <c>--json</c> anywhere asks for the structure
 /// Claude receives instead of text - except in <c>add</c> and <c>edit</c>, where <c>--json</c> followed by
 /// a JSON object (its first character not a space is "{") is the connector's config. Words after
-/// <c>--</c> are names. Paths are made full here, against the directory the command runs in, because the
-/// app runs elsewhere.
+/// <c>--</c> are names, and <c>env</c>'s settings. Paths are made full here, against the directory the
+/// command runs in, because the app runs elsewhere.
 /// </summary>
 public static class ControlCommandLine
 {
@@ -52,6 +52,7 @@ public static class ControlCommandLine
     private const string NameOption = "--name";
     private const string Reveal = "--reveal";
     private const string Off = "--off";
+    private const string Unset = "--unset";
 
     public static string UnknownCommandError(string command) => $"There’s no command named “{command}”. Run connector-control help to see them all.";
 
@@ -118,6 +119,8 @@ public static class ControlCommandLine
     {
         public List<string> Positionals { get; } = [];
         public Dictionary<string, string> Options { get; } = [];
+        /// <summary>The values of an option that may be given more than once, in the order given.</summary>
+        public Dictionary<string, List<string>> Repeated { get; } = [];
         public HashSet<string> Flags { get; } = [];
         public bool Json { get; set; }
         /// <summary><c>add</c> and <c>edit</c>'s config, given after <c>--json</c>.</summary>
@@ -156,6 +159,13 @@ public static class ControlCommandLine
                 [
                     ("name", JsonValue.String(w.Positionals[0])), ("config", ConfigValue(w, false, "update_connector")),
                     ("newName", Text(w.Options.GetValueOrDefault(Rename))), ("collection", Text(w.Options.GetValueOrDefault(Collection))),
+                ]);
+            case "env":
+                return Call("set_connector_env", rest, options: [Collection], repeatable: [Unset], min: 1, max: int.MaxValue, build: w =>
+                [
+                    ("name", JsonValue.String(w.Positionals[0])), ("set", Settings(w.Positionals.Skip(1).ToList())),
+                    ("unset", w.Repeated.GetValueOrDefault(Unset) is { } names ? JsonValue.Array(names.Select(JsonValue.String)) : null),
+                    ("collection", Text(w.Options.GetValueOrDefault(Collection))),
                 ]);
             case "delete":
                 return Call("delete_connectors", rest, options: [Collection], min: 1, max: int.MaxValue, build: w =>
@@ -218,10 +228,10 @@ public static class ControlCommandLine
     /// <summary>One command: the tool it runs, what it takes, and how its words become the tool's arguments
     /// (an argument left null is left out).</summary>
     private static ControlInvocation Call(string tool, IReadOnlyList<string> words, HashSet<string>? options = null,
-        HashSet<string>? flags = null, bool takesConfig = false, int min = 0, int max = 0,
+        HashSet<string>? repeatable = null, HashSet<string>? flags = null, bool takesConfig = false, int min = 0, int max = 0,
         Func<Words, IReadOnlyList<(string Key, JsonValue? Value)>>? build = null)
     {
-        var read = Read(words, options ?? [], flags ?? [], takesConfig);
+        var read = Read(words, options ?? [], repeatable ?? [], flags ?? [], takesConfig);
         if (read.Positionals.Count < min || read.Positionals.Count > max)
         {
             throw new UsageException(UsageError(UsageOf(tool)));
@@ -237,7 +247,8 @@ public static class ControlCommandLine
         return new ControlInvocation.Call(tool, JsonValue.Object(arguments), read.Json);
     }
 
-    private static Words Read(IReadOnlyList<string> words, HashSet<string> options, HashSet<string> flags, bool takesConfig)
+    private static Words Read(IReadOnlyList<string> words, HashSet<string> options, HashSet<string> repeatable, HashSet<string> flags,
+        bool takesConfig)
     {
         var read = new Words();
         var index = 0;
@@ -281,6 +292,19 @@ public static class ControlCommandLine
                 read.Options[word] = words[index];
                 index++;
             }
+            else if (repeatable.Contains(word))
+            {
+                if (index >= words.Count)
+                {
+                    throw new UsageException(MissingValueError(word));
+                }
+                if (!read.Repeated.TryGetValue(word, out var values))
+                {
+                    read.Repeated[word] = values = [];
+                }
+                values.Add(words[index]);
+                index++;
+            }
             else
             {
                 throw new UsageException(UnknownOptionError(word));
@@ -320,6 +344,29 @@ public static class ControlCommandLine
             return ParseConfig(data);
         }
         return required ? throw new UsageException(UsageError(UsageOf(tool))) : null;
+    }
+
+    /// <summary><c>env</c>'s <c>KEY=value</c> words as an object, each split at its first "=" (a value may hold more), a
+    /// later setting of the same name winning; null for none. A word with no "=" is a usage error.</summary>
+    private static JsonValue? Settings(IReadOnlyList<string> words)
+    {
+        if (words.Count == 0)
+        {
+            return null;
+        }
+        var values = new List<KeyValuePair<string, JsonValue>>();
+        foreach (var word in words)
+        {
+            // Split by UTF-16 unit, as the Mac mirror splits scalar by scalar, at the same place.
+            var equals = word.IndexOf('=', StringComparison.Ordinal);
+            if (equals < 0)
+            {
+                throw new UsageException(UsageError(UsageOf("set_connector_env")));
+            }
+            values.Add(new(word[..equals], JsonValue.String(word[(equals + 1)..])));
+        }
+        // JsonValue.Object keeps the last value given for a key.
+        return JsonValue.Object(values);
     }
 
     private static JsonValue ParseConfig(byte[] data)

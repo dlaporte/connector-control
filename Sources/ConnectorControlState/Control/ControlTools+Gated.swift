@@ -19,6 +19,7 @@ extension ControlTools {
     public static let takesEffectFooter = "Takes effect when Claude restarts."
     public static let configShapeError = "A connector’s config needs a “command” or a “url”."
     public static let nothingToChangeError = "Give a new config, a new name, or both."
+    public static let nothingToSetError = "Give variables to set, to remove, or both."
 
     public static func addTitle(_ shownAsker: String, _ name: String) -> String { "\(shownAsker) wants to add “\(name)”" }
 
@@ -49,6 +50,16 @@ extension ControlTools {
     public static func deletedText(_ names: String, _ collection: String) -> String { "Deleted \(names) from “\(collection)”." }
 
     public static func unchangedError(_ name: String) -> String { "“\(name)” already has that config." }
+
+    /// set_connector_env's refusals: a variable's name the environment cannot hold, one given both to
+    /// set and to remove, one to remove that is not there, and an `env` that is not a set of variables.
+    public static func envNameError(_ variable: String) -> String { "“\(variable)” can’t name an environment variable: it holds “=” or a null character." }
+
+    public static func envSetAndUnsetError(_ variable: String) -> String { "“\(variable)” can’t be both set and unset." }
+
+    public static func noVariableError(_ variable: String, _ name: String) -> String { "There’s no environment variable named “\(variable)” in “\(name)”." }
+
+    public static func envShapeError(_ name: String) -> String { "“\(name)” has an “env” that isn’t a JSON object; change its config with update_connector." }
 
     public static func addedNotification(_ shownAsker: String, _ name: String, _ collection: String) -> String { "\(shownAsker) added “\(name)” to “\(collection)”." }
 
@@ -91,6 +102,7 @@ extension ControlTools {
         guard held.mcps[name] == nil else { return .refused(AppState.duplicateNameError(shownName)) }
         let config = arguments.object("config") ?? .object([:])
         if let error = ControlTools.configError(config) { return .refused(error) }
+        if let error = ControlMasking.maskRefusal(config, over: nil) { return .refused(error) }
         let on = arguments.bool("enabled") ?? true
         let word = on ? ControlTools.onWord : ControlTools.offWord
         let active = collection == state.activeCollection
@@ -116,7 +128,8 @@ extension ControlTools {
         })
     }
 
-    func updateConnector(_ arguments: ControlArguments, _ shownAsker: String) -> ControlStep {
+    func updateConnector(_ arguments: ControlArguments, _ caller: ControlCaller) -> ControlStep {
+        let shownAsker = caller.shownAsker
         let collection = targetCollection(arguments)
         let shownCollection = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shownCollection)) }
@@ -134,12 +147,22 @@ extension ControlTools {
         if renamed, newName == ClaudeIntegration.entryName { return .refused(ClaudeIntegration.reservedNameError) }
         if renamed, held.mcps[newName] != nil { return .refused(AppState.duplicateNameError(shownNewName)) }
         if let config, let error = ControlTools.configError(config) { return .refused(error) }
+        if let config, let error = ControlMasking.maskRefusal(config, over: current.config) { return .refused(error) }
         let after = config ?? current.config
         // "Unchanged" compares the configs themselves, not the rendered lines: every difference is a
         // change, whether or not a line can show it.
         let reconfigured = after != current.config
-        guard renamed || reconfigured else { return .refused(ControlTools.unchangedError(shownName)) }
-        let changes = ControlMasking.changeLines(from: current.config, to: after, exposure: .dialog)
+        // Claude never sees a secret, so a config sent back as it is, guessed values and all, is asked
+        // about and answered as a change, with a rename or without, and its question lists every
+        // variable and header it sends, as set_connector_env's does: nothing tells Claude whether it
+        // guessed a value. The command line is the user, who can, and is told there is nothing to
+        // change, or only a rename.
+        let restated = config != nil && !reconfigured && caller != .cli
+        guard renamed || reconfigured || restated else { return .refused(ControlTools.unchangedError(shownName)) }
+        var sent: [String] = []
+        if config != nil, case .object(let object) = after, case .object(let env)? = object["env"] { sent = Array(env.keys) }
+        let changes = ControlMasking.changeLines(from: current.config, to: after, exposure: .dialog,
+                                                 restating: sent, restatingSignIn: config != nil)
         let active = collection == state.activeCollection
         let names = renamed ? [ControlMasking.nameLabel, ControlMasking.removedPrefix + shownName, ControlMasking.addedPrefix + shownNewName] : []
         let request = ConfirmationRequest(
@@ -154,15 +177,97 @@ extension ControlTools {
                                         renamedFrom: name, in: collection) {
                 return ControlTools.refused(error, naming: [newName, name, collection])
             }
-            state.applyInteractively()
+            // As set_connector_env's: a config sent back as it is has Claude's config written again
+            // when the connector is one Claude runs, as a change would.
+            let rewrite = restated && active && current.enabled
+            if rewrite { state.apply() } else { state.applyInteractively() }
             var lines: [String] = []
             if renamed { lines.append(ControlTools.renamedText(shownName, shownNewName)) }
-            if reconfigured { lines.append(ControlTools.changedText(shownNewName, shownCollection)) }
+            if reconfigured || restated { lines.append(ControlTools.changedText(shownNewName, shownCollection)) }
             return done(lines, ["collection": .string(collection), "name": .string(newName), "previousName": .string(name)],
                         touching: collection, since: mark, restart: ControlTools.restartToApplyText,
                         // A rename and nothing else is announced as one; any other change by what it changed.
-                        notification: reconfigured ? ControlTools.changedNotification(shownAsker, shownNewName, shownCollection)
-                                                   : ControlTools.renamedNotification(shownAsker, shownName, shownNewName))
+                        notification: reconfigured || restated ? ControlTools.changedNotification(shownAsker, shownNewName, shownCollection)
+                                                               : ControlTools.renamedNotification(shownAsker, shownName, shownNewName),
+                        rewrote: rewrite)
+        })
+    }
+
+    /// Some of a connector's environment variables set or removed, and every other one, whose value
+    /// Claude is never shown, left as it is: update_connector's question, showing the variables that
+    /// change and every one it sets, and its change. A name to set follows the editor's rule for a row
+    /// with a value, and must be one the environment can hold; a name to remove must be there, all or
+    /// nothing, as delete_connectors' names must.
+    ///
+    /// Claude cannot see a value, so a value set to what it already holds is asked about and answered
+    /// as a change - nothing tells it whether it guessed the value. The command line is the user, who
+    /// can, and is told there is nothing to change.
+    func setConnectorEnv(_ arguments: ControlArguments, _ caller: ControlCaller) -> ControlStep {
+        let shownAsker = caller.shownAsker
+        let collection = targetCollection(arguments)
+        let shownCollection = ControlText.escapedName(collection)
+        guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shownCollection)) }
+        guard !state.isSynced(collection) else { return .refused(ControlTools.subscribedChangeError(shownCollection)) }
+        let name = arguments.string("name") ?? ""
+        let shownName = ControlText.escapedName(name)
+        guard let current = held.mcps[name] else { return .refused(ControlTools.noConnectorError(shownName, shownCollection)) }
+        var set: [String: JSONValue] = [:]
+        if case .object(let given)? = arguments.object("set") { set = given }
+        var unset: [String] = []
+        for variable in arguments.strings("unset") ?? [] where !unset.contains(where: { $0.hasSameScalars(as: variable) }) {
+            unset.append(variable)
+        }
+        guard !set.isEmpty || !unset.isEmpty else { return .refused(ControlTools.nothingToSetError) }
+        for key in set.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
+            let shownKey = ControlText.escapedName(key)
+            guard case .string? = set[key] else { return .refused(ControlTools.wrongTypeError(shownKey, ControlTools.textKind)) }
+            if key.trimmingCharacters(in: .whitespaces).isEmpty { return .refused(EditorModel.envNamelessError) }
+            if key.unicodeScalars.contains(where: { $0 == "=" || $0 == "\u{0}" }) { return .refused(ControlTools.envNameError(shownKey)) }
+            if unset.contains(where: { $0.hasSameScalars(as: key) }) { return .refused(ControlTools.envSetAndUnsetError(shownKey)) }
+        }
+        guard case .object(var config) = current.config else { return .refused(ControlTools.configShapeError) }
+        var env: [String: JSONValue] = [:]
+        switch config["env"] {
+        case .object(let variables)?: env = variables
+        case nil: break
+        case _?: return .refused(ControlTools.envShapeError(shownName))
+        }
+        // All or nothing: a list with one wrong name is a mistake, not a request for the rest. Found
+        // scalar by scalar, as the Windows mirror's ordinal keys are.
+        if let missing = unset.first(where: { variable in !env.keys.contains { $0.hasSameScalars(as: variable) } }) {
+            return .refused(ControlTools.noVariableError(ControlText.escapedName(missing), shownName))
+        }
+        for variable in unset { env.removeValue(forKey: variable) }
+        for (key, value) in set { env[key] = value }
+        // An environment left with no variables goes, as the editor's form leaves it.
+        if env.isEmpty { config.removeValue(forKey: "env") } else { config["env"] = .object(env) }
+        let after = JSONValue.object(config)
+        if let error = ControlMasking.maskRefusal(after, over: current.config) { return .refused(error) }
+        let unchanged = after == current.config
+        if unchanged, caller == .cli { return .refused(ControlTools.unchangedError(shownName)) }
+        let active = collection == state.activeCollection
+        let request = ConfirmationRequest(
+            title: ControlTools.changeTitle(shownAsker, shownName),
+            message: active ? ControlTools.changeActiveMessage(shownCollection) : ControlTools.changeMessage(shownCollection),
+            code: ControlMasking.changeLines(from: current.config, to: after, exposure: .dialog, restating: Array(set.keys)),
+            footer: active && current.enabled ? ControlTools.takesEffectFooter : nil)
+        return .ready(request, perform: { [self] in
+            let mark = state.appliedServers
+            if let error = state.upsert(name: name,
+                                        entry: MCPEntry(enabled: current.enabled, config: after, lastEditView: current.lastEditView),
+                                        renamedFrom: name, in: collection) {
+                return ControlTools.refused(error, naming: [name, collection])
+            }
+            // Values set to what they held change nothing, but a connector Claude runs has Claude's
+            // config written again, as a change would - a restart due, a backup taken - and the answer
+            // is a change's, so none of it tells Claude it guessed a value right.
+            let rewrite = unchanged && active && current.enabled
+            if rewrite { state.apply() } else { state.applyInteractively() }
+            // update_connector's answer, without a previous name: nothing in it is a value.
+            return done([ControlTools.changedText(shownName, shownCollection)],
+                        ["collection": .string(collection), "name": .string(name)],
+                        touching: collection, since: mark, restart: ControlTools.restartToApplyText,
+                        notification: ControlTools.changedNotification(shownAsker, shownName, shownCollection), rewrote: rewrite)
         })
     }
 

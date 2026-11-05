@@ -123,8 +123,10 @@ final class StringCatalogTests: XCTestCase {
         "ControlCommandLine.usageError": ["X"],
         "ControlCommandLine.versionLine": ["X"],
         "ControlMasking.assignment": ["X", "Y"],
+        "ControlMasking.maskedValueError": ["X", "Y"],
         "ControlMasking.oauthClientText": ["X", "Y"],
         "ControlMasking.remoteBridgeType": ["X"],
+        "ControlMasking.unchangedText": ["X"],
         "ControlTools.addActiveMessage": ["X", "Y"],
         "ControlTools.addMessage": ["X", "Y"],
         "ControlTools.addTitle": ["X", "Y"],
@@ -159,6 +161,9 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.duplicateSubscribedError": ["X"],
         "ControlTools.duplicatedText": ["X", "Y"],
         "ControlTools.emptyCollectionText": ["X"],
+        "ControlTools.envNameError": ["X"],
+        "ControlTools.envSetAndUnsetError": ["X"],
+        "ControlTools.envShapeError": ["X"],
         "ControlTools.fromFooter": ["X"],
         "ControlTools.importMessage.many": ["3", "X"],
         "ControlTools.importMessage.one": ["1", "X"],
@@ -181,6 +186,7 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.noBackupError": ["X"],
         "ControlTools.noConnectorError": ["X", "Y"],
         "ControlTools.noUpdateError": ["X"],
+        "ControlTools.noVariableError": ["X", "Y"],
         "ControlTools.notAFileError": ["X"],
         "ControlTools.notOneOfError": ["X", "Y"],
         "ControlTools.notSubscribedError": ["X"],
@@ -483,6 +489,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlMasking.envLabel"] = ControlMasking.envLabel
         actual["ControlMasking.headersLabel"] = ControlMasking.headersLabel
         actual["ControlMasking.mask"] = ControlMasking.mask
+        actual["ControlMasking.maskedValueError"] = ControlMasking.maskedValueError("X", "Y")
         actual["ControlMasking.nameLabel"] = ControlMasking.nameLabel
         actual["ControlMasking.needsValueState"] = ControlMasking.needsValueState
         actual["ControlMasking.oauthClientText"] = ControlMasking.oauthClientText("X", "Y")
@@ -490,10 +497,12 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlMasking.otherLabel"] = ControlMasking.otherLabel
         actual["ControlMasking.remoteBridgeType"] = ControlMasking.remoteBridgeType("X")
         actual["ControlMasking.removedPrefix"] = ControlMasking.removedPrefix
+        actual["ControlMasking.samePrefix"] = ControlMasking.samePrefix
         actual["ControlMasking.scopesLabel"] = ControlMasking.scopesLabel
         actual["ControlMasking.setState"] = ControlMasking.setState
         actual["ControlMasking.setText"] = ControlMasking.setText
         actual["ControlMasking.typeLabel"] = ControlMasking.typeLabel
+        actual["ControlMasking.unchangedText"] = ControlMasking.unchangedText("X")
         actual["ControlMasking.urlLabel"] = ControlMasking.urlLabel
         actual["ControlRelay.restartedError"] = ControlRelay.restartedError
         actual["ControlText.listAnd"] = ControlText.listAnd
@@ -568,6 +577,11 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.duplicateSubscribedError"] = ControlTools.duplicateSubscribedError("X")
         actual["ControlTools.duplicatedText"] = ControlTools.duplicatedText("X", "Y")
         actual["ControlTools.emptyCollectionText"] = ControlTools.emptyCollectionText("X")
+        actual["ControlTools.envNameError"] = ControlTools.envNameError("X")
+        actual["ControlTools.envSetAndUnsetError"] = ControlTools.envSetAndUnsetError("X")
+        actual["ControlTools.envSetProperty"] = ControlTools.envSetProperty
+        actual["ControlTools.envShapeError"] = ControlTools.envShapeError("X")
+        actual["ControlTools.envUnsetProperty"] = ControlTools.envUnsetProperty
         actual["ControlTools.fromFooter"] = ControlTools.fromFooter("X")
         actual["ControlTools.helpOptions"] = ControlTools.helpOptions
         actual["ControlTools.helpUsage"] = ControlTools.helpUsage
@@ -607,11 +621,13 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.noConnectorError"] = ControlTools.noConnectorError("X", "Y")
         actual["ControlTools.noQuestionError"] = ControlTools.noQuestionError
         actual["ControlTools.noUpdateError"] = ControlTools.noUpdateError("X")
+        actual["ControlTools.noVariableError"] = ControlTools.noVariableError("X", "Y")
         actual["ControlTools.notAFileError"] = ControlTools.notAFileError("X")
         actual["ControlTools.notOneOfError"] = ControlTools.notOneOfError("X", "Y")
         actual["ControlTools.notSubscribedError"] = ControlTools.notSubscribedError("X")
         actual["ControlTools.nothingToChangeError"] = ControlTools.nothingToChangeError
         actual["ControlTools.nothingToImportError"] = ControlTools.nothingToImportError("X")
+        actual["ControlTools.nothingToSetError"] = ControlTools.nothingToSetError
         actual["ControlTools.objectKind"] = ControlTools.objectKind
         actual["ControlTools.offWord"] = ControlTools.offWord
         actual["ControlTools.onWord"] = ControlTools.onWord

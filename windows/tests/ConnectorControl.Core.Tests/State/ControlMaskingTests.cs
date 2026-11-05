@@ -541,6 +541,34 @@ public class ControlMaskingTests
         Assert.Equal(["env", "  − API_KEY = one", "  + API_KEY = two"], ControlMasking.ChangeLines(edits[4].Before, edits[4].After, ControlMasking.Exposure.Revealed));
     }
 
+    /// <summary>Variables named again with the values they hold show as set again where the line hides their
+    /// value, and as unchanged where it shows it, beside what does change; mcp-remote's sign-in
+    /// variable shows as the header it signs in with. Unnamed variables do not show. Restating the sign-in
+    /// shows every header and OAuth client secret again, hidden on both sides.</summary>
+    [Fact]
+    public void RestatedVariablesShowBesideTheChange()
+    {
+        var before = Local("node", []);
+        var env = JsonValue.Object(("API_KEY", S("k")), ("MODE", S("a")), ("B", S("b")));
+        var after = Adding("env", env.With("MODE", S("c")), before);
+        var stored = Adding("env", env, before);
+        Assert.Equal(["env", "  − API_KEY = ••• (set)", "  − MODE = a", "  + API_KEY = ••• (set)", "  + MODE = c"],
+            ControlMasking.ChangeLines(stored, after, ControlMasking.Exposure.Dialog, ["MODE", "API_KEY"]));
+        Assert.Equal(["env", "  = B = b (unchanged)"], ControlMasking.ChangeLines(stored, stored, ControlMasking.Exposure.Dialog, ["B"]));
+        // Claude's own view hides every value.
+        Assert.Equal(["env", "  − B = ••• (set)", "  + B = ••• (set)"], ControlMasking.ChangeLines(stored, stored, ControlMasking.Exposure.Masked, ["B"]));
+        Assert.Equal([], ControlMasking.ChangeLines(stored, stored, ControlMasking.Exposure.Dialog));
+        var signedIn = RemotePattern.Encode(new RemoteConfig("https://h.example/mcp", new RemoteAuth.Bearer("t"), RemoteLaunchStyle.Npx, [],
+            new Dictionary<string, string>(), RemotePattern.DefaultPackage));
+        Assert.Equal(["headers", "  − Authorization = ••• (set)", "  + Authorization = ••• (set)"],
+            ControlMasking.ChangeLines(signedIn, signedIn, ControlMasking.Exposure.Dialog, ["AUTH_HEADER"]));
+        var client = RemotePattern.Encode(new RemoteConfig("https://h.example/mcp", new RemoteAuth.OAuthClient("c", "s", ""), RemoteLaunchStyle.Npx, [],
+            new Dictionary<string, string>(), RemotePattern.DefaultPackage));
+        Assert.Equal(["oauth", "  − client c, secret ••• (set)", "  + client c, secret ••• (set)"],
+            ControlMasking.ChangeLines(client, client, ControlMasking.Exposure.Dialog, restatingSignIn: true));
+        Assert.Equal([], ControlMasking.ChangeLines(client, client, ControlMasking.Exposure.Dialog));
+    }
+
     /// <summary>A key no field models shows its value as one line of JSON, written the same on both platforms.</summary>
     [Fact]
     public void AnUnmodelledKeyShowsItsValueAsJson()
@@ -1104,5 +1132,88 @@ public class ControlMaskingTests
         AssertHidden(["hunter2"], Local("sh", ["--auth", "Token", "Token", "hunter2"]));
         Assert.Equal(["--password", "•••", "--", "hunter2"], ControlMasking.Arguments(["--password", "Basic", "--", "hunter2"]));
         Assert.Equal(["--auth", "•••", "•••", "def"], ControlMasking.Arguments(["--auth", "Token", "abc", "def"]));
+    }
+
+    // MARK: The mask guard
+
+    /// <summary>Text with "•••" in it is refused wherever it is; a mask word only where the stored config holds
+    /// another value at the same place, keys by name and arrays by index. The first place, in key
+    /// order, is named by its nearest key: a variable's name, or the list an argument is in.</summary>
+    [Fact]
+    public void TheMaskGuardRefusesWhatWouldReplaceAValue()
+    {
+        var variables = JsonValue.Object(("API_KEY", S("bw://x")), ("MODE", S("set")), ("RETRIES", JsonValue.Int(3)), ("EMPTY", S("")));
+        var stored = JsonValue.Object(("command", S("npx")), ("args", JsonValue.Array([S("-y"), S("acme")])), ("env", variables));
+        JsonValue Env(params (string Key, JsonValue Value)[] values) =>
+            Adding("env", values.Aggregate(variables, (env, item) => env.With(item.Key, item.Value)), stored);
+        (JsonValue Config, string Name, string Shown)[] refused =
+        [
+            (Env(("API_KEY", S(ControlMasking.SetState))), "API_KEY", "set"),
+            (Env(("API_KEY", S(ControlMasking.NeedsValueState))), "API_KEY", "needs value"),
+            (Env(("API_KEY", S(EditorModel.NeedsValue))), "API_KEY", "needs your value"),
+            (Env(("API_KEY", S(ControlMasking.SetText))), "API_KEY", "•••"),
+            (Env(("RETRIES", S("set"))), "RETRIES", "set"),
+            (Env(("EMPTY", S("needs value"))), "EMPTY", "needs value"),
+            (Env(("NEW", S("https://h.example/mcp?token=•••"))), "NEW", "•••"),
+            (Adding("args", JsonValue.Array([S("set"), S("acme")]), stored), "args", "set"),
+            (Adding("headers", JsonValue.Object(("X-Key", S("•••"))), stored), "X-Key", "•••"),
+            // The first in key order is named: "API_KEY" sorts before "B".
+            (Env(("B", S("•••")), ("API_KEY", S("set"))), "API_KEY", "set"),
+        ];
+        foreach (var (config, name, shown) in refused)
+        {
+            Assert.Equal(ControlMasking.MaskedValueError(name, shown), ControlMasking.MaskRefusal(config, stored));
+        }
+        // A new config is refused text holding the mask.
+        Assert.Equal(ControlMasking.MaskedValueError("API_KEY", "•••"), ControlMasking.MaskRefusal(Env(("API_KEY", S("•••"))), null));
+        JsonValue[] allowed =
+        [
+            stored,
+            Env(("MODE", S("set"))),
+            Env(("NEW", S("set")), ("OTHER", S("needs value"))),
+            Adding("args", JsonValue.Array([S("-y"), S("acme"), S("set")]), stored),
+            Adding("headers", JsonValue.Object(("X-Mode", S("set"))), stored),
+        ];
+        foreach (var config in allowed)
+        {
+            Assert.Null(ControlMasking.MaskRefusal(config, stored));
+        }
+        // Nothing is stored to replace.
+        Assert.Null(ControlMasking.MaskRefusal(Env(("API_KEY", S("set"))), null));
+    }
+
+    /// <summary>Text holding "•••" that the stored config already holds, as it is and where it is, is old damage
+    /// left as it was, not a value replaced: it passes, and so does overwriting it with a real value.
+    /// The mask anywhere else, or another text holding it in its place, is refused.</summary>
+    [Fact]
+    public void TheMaskGuardLetsAStoredMaskStayWhereItIs()
+    {
+        var stored = Local("npx", ["-y", "acme", "--token", "•••"]);
+        JsonValue Args(params string[] values) => Local("npx", values);
+        Assert.Null(ControlMasking.MaskRefusal(Adding("env", JsonValue.Object(("A", S("1"))), stored), stored));
+        Assert.Null(ControlMasking.MaskRefusal(Args("-y", "acme", "--token", "real"), stored));
+        (JsonValue Config, string Name)[] refused =
+        [
+            // A new place.
+            (Args("-y", "acme", "--token", "•••", "x•••"), "args"),
+            // Another text in its place.
+            (Args("-y", "acme", "--token", "••• (set)"), "args"),
+            // Moved to where another value was.
+            (Args("-y", "•••", "acme", "--token"), "args"),
+            // A new variable.
+            (Adding("env", JsonValue.Object(("A", S("•••"))), stored), "A"),
+        ];
+        foreach (var (config, name) in refused)
+        {
+            Assert.Equal(ControlMasking.MaskedValueError(name, "•••"), ControlMasking.MaskRefusal(config, stored));
+        }
+    }
+
+    /// <summary>A variable's name is Claude's to choose, so the refusal shows it as the app's sentences show a name.</summary>
+    [Fact]
+    public void TheMaskGuardEscapesTheNameItShows()
+    {
+        var config = JsonValue.Object(("command", S("x")), ("env", JsonValue.Object(("A\n\u202EB", S("•••")))));
+        Assert.Equal(ControlMasking.MaskedValueError("""A\n\u{202E}B""", "•••"), ControlMasking.MaskRefusal(config, null));
     }
 }

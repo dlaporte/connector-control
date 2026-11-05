@@ -39,6 +39,8 @@ final class ControlCommandLineTests: XCTestCase {
             (["add", "gh", "--json", "{}", "--off"],
              call("add_connector", ["name": .string("gh"), "config": .object([:]), "enabled": .bool(false)])),
             (["edit", "gh", "--rename", "hub"], call("update_connector", ["name": .string("gh"), "newName": .string("hub")])),
+            (["env", "gh", "A=1", "B=2", "--unset", "C"],
+             call("set_connector_env", ["name": .string("gh"), "set": .object(["A": .string("1"), "B": .string("2")]), "unset": .array([.string("C")])])),
             (["delete", "a", "b", "--collection", "Team"],
              call("delete_connectors", ["names": .array([.string("a"), .string("b")]), "collection": .string("Team")])),
             (["collections"], call("list_collections")),
@@ -130,6 +132,24 @@ final class ControlCommandLineTests: XCTestCase {
                        "a combining mark after the dashes does not make the word a name")
         XCTAssertEqual(parse("mcp", "extra"), .usage(ControlCommandLine.unknownOptionError("extra")))
         XCTAssertEqual(parse("help", "status"), .usage(ControlCommandLine.helpTakesNoArgumentsError))
+    }
+
+    /// `env` takes `KEY=value` words, each split at its first "=", and `--unset KEY` as often as it
+    /// is given; a word with no "=" is a usage error. A later setting of the same name wins.
+    func testEnvTakesSettingsAndRemovals() {
+        let usage = ControlInvocation.usage(ControlCommandLine.usageError("env <name> [KEY=value…] [--unset KEY…]"))
+        XCTAssertEqual(parse("env", "x", "A==b", "B=", "=c"),
+                       call("set_connector_env", ["name": .string("x"), "set": .object(["A": .string("=b"), "B": .string(""), "": .string("c")])]))
+        XCTAssertEqual(parse("env", "x", "--unset", "C", "--collection", "Team", "--unset", "D", "--unset", "C"),
+                       call("set_connector_env", ["name": .string("x"), "unset": .array([.string("C"), .string("D"), .string("C")]),
+                                                  "collection": .string("Team")]))
+        XCTAssertEqual(parse("env", "x", "A=1", "A=2"), call("set_connector_env", ["name": .string("x"), "set": .object(["A": .string("2")])]))
+        XCTAssertEqual(parse("env", "x", "--", "--A=1"), call("set_connector_env", ["name": .string("x"), "set": .object(["--A": .string("1")])]))
+        XCTAssertEqual(parse("env", "x"), call("set_connector_env", ["name": .string("x")]), "the app refuses it: nothing to set or remove")
+        XCTAssertEqual(parse("env", "x", "A=1", "bare"), usage, "a word with no = is no setting")
+        XCTAssertEqual(parse("env"), usage)
+        XCTAssertEqual(parse("env", "x", "--unset"), .usage(ControlCommandLine.missingValueError("--unset")))
+        XCTAssertEqual(parse("show", "x", "--unset", "C"), .usage(ControlCommandLine.unknownOptionError("--unset")))
     }
 
     func testAfterTwoDashesEveryWordIsAName() {

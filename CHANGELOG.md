@@ -22,7 +22,13 @@ has one.
 
 ### Both platforms
 
+- Claude can now add, change or remove some of a connector’s environment variables and leave the others, whose values it never sees, as they are, with a new Change environment tool (`set_connector_env`). From the command line, `connector-control env <name> KEY=value --unset OTHER` does the same. Before, Claude had to send back the connector’s whole config, including values it was only ever shown as hidden.
+- When Claude sets a variable to the value it already holds, or sends a connector’s config back unchanged, Connector Control now asks and answers exactly as for a real change, so Claude can’t use the reply to check a guess at a value it can’t see. For a connector Claude runs, this writes Claude’s config again and shows Restart Required. Change connector’s question now lists every environment variable and header Claude sent: a value it shows reads `= NAME = value (unchanged)` when it didn’t change, and a hidden one reads − and + as a change does. `connector-control env` and `connector-control edit` still refuse a command that changes nothing.
+- Claude and the command line can no longer save the hidden placeholder `set` (or `needs value`, `needs your value`, or anything containing `•••`) over a connector’s real value, such as a `bw://` or `op://` reference; the change is refused and says what to do instead. Before, sending back a connector as Claude was shown it replaced its secrets with the placeholder, and the confirmation, which hides a secret’s old and new values alike, couldn’t show it. A connector that already holds the placeholder can still be changed; type its real value back in the editor.
+
 ### Release pipeline
+
+- The Windows build uses actions/setup-dotnet 6.1.0, up from 6.0.0.
 
 ## v1.5.1
 

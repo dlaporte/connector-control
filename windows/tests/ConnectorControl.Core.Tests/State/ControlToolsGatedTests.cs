@@ -116,6 +116,25 @@ public class ControlToolsGatedTests
         Assert.Empty(rig.Confirmer.Requests);
     }
 
+    /// <summary>A config copied from what Claude is shown carries the mask, which no real config holds. A mask
+    /// word alone replaces nothing in a new connector, so it can be a value.</summary>
+    [Fact]
+    public void AddingRefusesAConfigHoldingTheMask()
+    {
+        using var rig = Rig();
+        Assert.Equal(ControlResult.Refusal(ControlMasking.MaskedValueError("args", ControlMasking.Mask)),
+            rig.Call("add_connector", Args(("name", Text("acme")), ("config", ControlMasking.MaskedConfig(Secretive)))));
+        var shown = JsonValue.Object(("command", Text("node")), ("env", JsonValue.Object(("ACME_TOKEN", Text(ControlMasking.SetText)))));
+        Assert.Equal(ControlResult.Refusal(ControlMasking.MaskedValueError("ACME_TOKEN", ControlMasking.Mask)),
+            rig.Call("add_connector", Args(("name", Text("acme")), ("config", shown))));
+        Assert.Empty(rig.Confirmer.Requests);
+        var word = JsonValue.Object(("command", Text("node")), ("env", JsonValue.Object(("MODE", Text(ControlMasking.SetState)))));
+        var result = rig.Call("add_connector", Args(("name", Text("acme")), ("config", word)));
+        Assert.NotNull(result);
+        Assert.False(result.IsError, result.Text);
+        Assert.Equal(word, rig.State.Store.Mcps["acme"].Config);
+    }
+
     // MARK: update_connector
 
     [Fact]
@@ -182,12 +201,10 @@ public class ControlToolsGatedTests
     {
         using var rig = Rig();
         rig.H.Subscribe(rig.State, CollectionDocumentSamples.DataTeam);
-        var same = rig.State.Store.Mcps["scoutbook"].Config;
         (JsonValue Arguments, string Refusal)[] cases =
         [
             (Args(("name", Text("nope")), ("config", Notion)), ControlTools.NoConnectorError("nope", "Default")),
             (Args(("name", Text("scoutbook"))), ControlTools.NothingToChangeError),
-            (Args(("name", Text("scoutbook")), ("config", same)), ControlTools.UnchangedError("scoutbook")),
             (Args(("name", Text("scoutbook")), ("newName", Text("aws-mcp"))), AppState.DuplicateNameError("aws-mcp")),
             (Args(("name", Text("scoutbook")), ("newName", Text("connector-control"))), ClaudeIntegration.ReservedNameError),
             (Args(("name", Text("scoutbook")), ("newName", Text(" "))), AppState.NameEmptyError),
@@ -199,6 +216,289 @@ public class ControlToolsGatedTests
             Assert.Equal(ControlResult.Refusal(refusal), rig.Call("update_connector", arguments));
         }
         Assert.Empty(rig.Confirmer.Requests);
+    }
+
+    /// <summary>A connector with a secret held elsewhere, a setting, and a value that is the word "set".</summary>
+    private static readonly JsonValue Vault = JsonValue.Object(
+        ("command", JsonValue.String("npx")), ("args", JsonValue.Array([JsonValue.String("-y"), JsonValue.String("vault-mcp")])),
+        ("env", JsonValue.Object(("API_KEY", JsonValue.String("bw://x")), ("MODE", JsonValue.String("fast")), ("STATE", JsonValue.String("set")))));
+
+    private static JsonValue ChangedVault(params (string Key, JsonValue Value)[] values) =>
+        Vault.With("env", values.Aggregate(Vault["env"]!, (env, item) => env.With(item.Key, item.Value)));
+
+    /// <summary>Sending back what get_connector showed would replace the real value with the mask word. The
+    /// question could not show it - a secret's name masks both sides alike - so it is refused before
+    /// anyone is asked. A word the stored config already holds, or a new variable's, replaces nothing.</summary>
+    [Fact]
+    public void ChangingRefusesAMaskWordOverARealValue()
+    {
+        using var rig = Rig();
+        Assert.Null(rig.State.Upsert("vault", new McpEntry(Vault), null));
+        var hidden = ChangedVault(("API_KEY", Text(ControlMasking.SetState)));
+        // The question shows no difference.
+        Assert.Equal(["env", "  − API_KEY = ••• (set)", "  + API_KEY = ••• (set)"],
+            ControlMasking.ChangeLines(Vault, hidden, ControlMasking.Exposure.Dialog));
+        (JsonValue Config, string Refusal)[] cases =
+        [
+            (hidden, ControlMasking.MaskedValueError("API_KEY", ControlMasking.SetState)),
+            (ChangedVault(("API_KEY", Text(ControlMasking.NeedsValueState))), ControlMasking.MaskedValueError("API_KEY", ControlMasking.NeedsValueState)),
+            (ChangedVault(("API_KEY", Text(EditorModel.NeedsValue))), ControlMasking.MaskedValueError("API_KEY", EditorModel.NeedsValue)),
+            (ChangedVault(("API_KEY", Text(ControlMasking.SetText))), ControlMasking.MaskedValueError("API_KEY", ControlMasking.Mask)),
+            (ChangedVault(("MODE", Text(ControlMasking.SetState))), ControlMasking.MaskedValueError("MODE", ControlMasking.SetState)),
+            (ControlMasking.MaskedConfig(Vault), ControlMasking.MaskedValueError("API_KEY", ControlMasking.SetState)),
+        ];
+        foreach (var (config, refusal) in cases)
+        {
+            Assert.Equal(ControlResult.Refusal(refusal), rig.Call("update_connector", Args(("name", Text("vault")), ("config", config))));
+        }
+        Assert.Empty(rig.Confirmer.Requests);
+        Assert.Equal(Vault, rig.State.Store.Mcps["vault"].Config);
+        var added = ChangedVault(("LEVEL", Text(ControlMasking.SetState)));
+        Assert.Equal(ControlTools.ChangedText("vault", "Default"),
+            rig.Call("update_connector", Args(("name", Text("vault")), ("config", added)))?.Text);
+        Assert.Equal(["env", "  − API_KEY = ••• (set)", "  + API_KEY = ••• (set)", "  + LEVEL = set",
+                      "  = MODE = fast (unchanged)", "  = STATE = set (unchanged)"], Assert.Single(rig.Confirmer.Requests).Code);
+        Assert.Equal(added, rig.State.Store.Mcps["vault"].Config);
+    }
+
+    /// <summary>Claude never sees a connector's secrets, so sending its config back as it is is asked about and
+    /// answered as a change, and the question lists every variable and header the config sends - one
+    /// whose value it hides on both sides, as a change would - so a right guess at a hidden value and a
+    /// wrong one raise the same question and get the same answer, restart and all.</summary>
+    [Fact]
+    public void AnUnchangedConfigIsAskedAndAnsweredAsAChange()
+    {
+        using var rig = Rig();
+        static JsonValue SiteWith(string token) => JsonValue.Object(("url", Text("https://h.example/mcp")),
+            ("headers", JsonValue.Object(("Authorization", Text("Bearer " + token)), ("X-Team", Text("a")))));
+        static JsonValue Bridge(string token) => RemotePattern.Encode(new RemoteConfig("https://h.example/mcp", new RemoteAuth.Bearer(token),
+            RemoteLaunchStyle.Npx, [], new Dictionary<string, string>(), RemotePattern.DefaultPackage));
+        (string Name, JsonValue Stored, JsonValue Guess, string[] Code)[] cases =
+        [
+            ("vault", Vault, ChangedVault(("API_KEY", Text("bw://y"))),
+             ["env", "  − API_KEY = ••• (set)", "  + API_KEY = ••• (set)", "  = MODE = fast (unchanged)", "  = STATE = set (unchanged)"]),
+            ("site", SiteWith("t"), SiteWith("u"),
+             ["headers", "  − Authorization = ••• (set)", "  − X-Team = ••• (set)", "  + Authorization = ••• (set)", "  + X-Team = ••• (set)"]),
+            ("bridge", Bridge("t"), Bridge("u"), ["headers", "  − Authorization = ••• (set)", "  + Authorization = ••• (set)"]),
+        ];
+        rig.H.ClaudeRunningSince(1);
+        foreach (var (name, stored, guess, code) in cases)
+        {
+            Assert.Null(rig.State.Upsert(name, new McpEntry(stored), null));
+            var asked = rig.Confirmer.Requests.Count;
+            var right = rig.Call("update_connector", Args(("name", Text(name)), ("config", stored)));
+            Assert.Equal(stored, rig.State.Store.Mcps[name].Config);
+            var wrong = rig.Call("update_connector", Args(("name", Text(name)), ("config", guess)));
+            Assert.Equal(guess, rig.State.Store.Mcps[name].Config);
+            var requests = rig.Confirmer.Requests.Skip(asked).ToList();
+            Assert.Equal(2, requests.Count);
+            // The same question.
+            Assert.Equal(requests[0], requests[1]);
+            Assert.Equal(code, requests[0].Code);
+            // The same answer.
+            Assert.NotNull(right);
+            Assert.Equal(right, wrong);
+            Assert.Equal(ControlTools.ChangedText(name, "Default") + " " + ControlTools.RestartToApplyText, right.Text);
+            Assert.Equal(JsonValue.Bool(true), right.Structured.ValueAt(new JsonPointer(["restartRequired"])));
+        }
+        // A rename that sends a config is a change too, guessed right or wrong.
+        var before = rig.Confirmer.Requests.Count;
+        var renamedRight = rig.Call("update_connector", Args(("name", Text("site")), ("newName", Text("web")), ("config", SiteWith("u"))));
+        Assert.Null(rig.State.Upsert("site", new McpEntry(SiteWith("u")), "web"));
+        var renamedWrong = rig.Call("update_connector", Args(("name", Text("site")), ("newName", Text("web")), ("config", SiteWith("v"))));
+        var renames = rig.Confirmer.Requests.Skip(before).ToList();
+        Assert.Equal(2, renames.Count);
+        // The same question.
+        Assert.Equal(renames[0], renames[1]);
+        // The same answer.
+        Assert.NotNull(renamedRight);
+        Assert.Equal(renamedRight, renamedWrong);
+        Assert.Equal(string.Join("\n", ControlTools.RenamedText("site", "web"), ControlTools.ChangedText("web", "Default"), ControlTools.RestartToApplyText),
+            renamedRight.Text);
+    }
+
+    /// <summary>The command line is the user, who sees every value: a config sent back as it is is refused as no change.</summary>
+    [Fact]
+    public void TheCommandLineIsToldAConfigIsUnchanged()
+    {
+        using var rig = Rig();
+        var same = rig.State.Store.Mcps["scoutbook"].Config;
+        Assert.Equal(ControlResult.Refusal(ControlTools.UnchangedError("scoutbook")),
+            rig.Call("update_connector", Args(("name", Text("scoutbook")), ("config", same)), new ControlCaller.Cli()));
+        // A rename and nothing else.
+        Assert.Equal(ControlTools.RenamedText("scoutbook", "scouts"),
+            rig.Call("update_connector", Args(("name", Text("scoutbook")), ("newName", Text("scouts")), ("config", same)), new ControlCaller.Cli())?.Text);
+        Assert.Empty(rig.Confirmer.Requests);
+    }
+
+    // MARK: set_connector_env
+
+    /// <summary>The question is a change's, showing only the variables that change - a setting in full, as
+    /// any variable not named for a secret shows - and the variables it does not name keep their
+    /// values, byte for byte. The answer carries none of them.</summary>
+    [Fact]
+    public void SettingTheEnvironmentChangesOnlyTheVariablesItNames()
+    {
+        using var rig = Rig();
+        Assert.Null(rig.State.Upsert("vault", new McpEntry(Vault), null));
+        var result = rig.Call("set_connector_env", Args(("name", Text("vault")),
+            ("set", JsonValue.Object(("PROXMOX_ACCESS_LEVEL", Text("config")), ("MODE", Text("slow")))), ("unset", Names("STATE"))));
+        var after = JsonValue.Object(
+            ("command", Text("npx")), ("args", JsonValue.Array([Text("-y"), Text("vault-mcp")])),
+            ("env", JsonValue.Object(("API_KEY", Text("bw://x")), ("MODE", Text("slow")), ("PROXMOX_ACCESS_LEVEL", Text("config")))));
+        Assert.Equal([new ConfirmationRequest(
+            "Claude wants to change “vault”",
+            "In “Default”, the collection Claude is running:",
+            ["env", "  − MODE = fast", "  − STATE = set", "  + MODE = slow", "  + PROXMOX_ACCESS_LEVEL = config"],
+            ControlTools.TakesEffectFooter)], rig.Confirmer.Requests);
+        Assert.Equal(new ControlResult(
+            JsonValue.Object(("collection", Text("Default")), ("name", Text("vault")), ("applied", JsonValue.Bool(true)), ("restartRequired", JsonValue.Bool(false))),
+            ControlTools.ChangedText("vault", "Default"), false), result);
+        Assert.Equal(new McpEntry(after), rig.State.Store.Mcps["vault"]);
+        Assert.Equal(after, rig.H.ClaudeServers()["vault"]);
+    }
+
+    /// <summary>A connector with no environment gets one; one whose last variable goes is left with none, as
+    /// the editor leaves it when its last row is deleted.</summary>
+    [Fact]
+    public void SettingTheEnvironmentAddsOrDropsTheWholeEnv()
+    {
+        using var rig = Rig();
+        var scoutbook = rig.State.Store.Mcps["scoutbook"].Config;
+        rig.Call("set_connector_env", Args(("name", Text("scoutbook")), ("set", JsonValue.Object(("DEBUG", Text("1"))))));
+        Assert.Equal(scoutbook.With("env", JsonValue.Object(("DEBUG", Text("1")))), rig.State.Store.Mcps["scoutbook"].Config);
+        rig.Call("set_connector_env", Args(("name", Text("scoutbook")), ("unset", Names("DEBUG", "DEBUG"))));
+        Assert.Equal(scoutbook, rig.State.Store.Mcps["scoutbook"].Config);
+        Assert.Equal(2, rig.Confirmer.Requests.Count);
+        Assert.Equal(["env", "  + DEBUG = 1"], rig.Confirmer.Requests[0].Code);
+        Assert.Equal(["env", "  − DEBUG = 1"], rig.Confirmer.Requests[1].Code);
+    }
+
+    [Fact]
+    public void SettingTheEnvironmentIsRefusedBeforeAnyoneIsAsked()
+    {
+        using var rig = Rig();
+        rig.H.Subscribe(rig.State, CollectionDocumentSamples.DataTeam);
+        Assert.Null(rig.State.Upsert("vault", new McpEntry(Vault), null));
+        var odd = JsonValue.Object(("command", Text("node")), ("env", JsonValue.Array([Text("A=1")])));
+        Assert.Null(rig.State.Upsert("odd", new McpEntry(odd), null));
+        static JsonValue Setting(params (string Key, JsonValue Value)[] values) =>
+            Args(("name", Text("vault")), ("set", JsonValue.Object(values)));
+        (JsonValue Arguments, string Refusal)[] cases =
+        [
+            (Args(("name", Text("vault")), ("set", JsonValue.Object(("A", Text("1")))), ("collection", Text("Nope"))), MasterStore.NoCollectionError("Nope")),
+            (Args(("name", Text("dbt")), ("set", JsonValue.Object(("A", Text("1")))), ("collection", Text("Data team"))),
+             ControlTools.SubscribedChangeError("Data team")),
+            (Args(("name", Text("nope")), ("set", JsonValue.Object(("A", Text("1"))))), ControlTools.NoConnectorError("nope", "Default")),
+            (Args(("name", Text("vault"))), ControlTools.NothingToSetError),
+            (Args(("name", Text("vault")), ("set", JsonValue.Object()), ("unset", Names())), ControlTools.NothingToSetError),
+            (Setting(("A", JsonValue.Int(1))), ControlTools.WrongTypeError("A", ControlTools.TextKind)),
+            (Setting(("", Text("1"))), EditorModel.EnvNamelessError),
+            (Setting((" ", Text("1"))), EditorModel.EnvNamelessError),
+            (Setting(("A=B", Text("1"))), ControlTools.EnvNameError("A=B")),
+            (Setting(("A\0B", Text("1"))), ControlTools.EnvNameError("""A\u{0000}B""")),
+            (Args(("name", Text("vault")), ("set", JsonValue.Object(("MODE", Text("slow")))), ("unset", Names("MODE"))),
+             ControlTools.EnvSetAndUnsetError("MODE")),
+            (Args(("name", Text("vault")), ("unset", Names("STATE", "NOPE"))), ControlTools.NoVariableError("NOPE", "vault")),
+            (Args(("name", Text("scoutbook")), ("unset", Names("A"))), ControlTools.NoVariableError("A", "scoutbook")),
+            (Args(("name", Text("odd")), ("set", JsonValue.Object(("A", Text("1"))))), ControlTools.EnvShapeError("odd")),
+            (Setting(("API_KEY", Text(ControlMasking.SetState))), ControlMasking.MaskedValueError("API_KEY", ControlMasking.SetState)),
+            (Setting(("NEW", Text(ControlMasking.SetText))), ControlMasking.MaskedValueError("NEW", ControlMasking.Mask)),
+        ];
+        foreach (var (arguments, refusal) in cases)
+        {
+            Assert.Equal(ControlResult.Refusal(refusal), rig.Call("set_connector_env", arguments));
+        }
+        Assert.Empty(rig.Confirmer.Requests);
+        Assert.Equal(Vault, rig.State.Store.Mcps["vault"].Config);
+        // A new variable may hold the word "set": it replaces nothing.
+        Assert.False(rig.Call("set_connector_env", Setting(("LEVEL", Text(ControlMasking.SetState))))?.IsError);
+        Assert.Equal(ChangedVault(("LEVEL", Text(ControlMasking.SetState))), rig.State.Store.Mcps["vault"].Config);
+    }
+
+    /// <summary>Claude never sees a variable's value, so setting one to what it already holds is asked about as a
+    /// change and answered as one: a right guess and a wrong one raise the same question for a secret's
+    /// name, and get the same answer, restart and all. A value the question may show reads as unchanged.</summary>
+    [Fact]
+    public void AGuessAtAValueIsAskedAndAnsweredAsAChange()
+    {
+        using var rig = Rig();
+        Assert.Null(rig.State.Upsert("vault", new McpEntry(Vault), null));
+        rig.H.ClaudeRunningSince(1);
+        var right = rig.Call("set_connector_env", Args(("name", Text("vault")), ("set", JsonValue.Object(("API_KEY", Text("bw://x"))))));
+        Assert.Equal(Vault, rig.State.Store.Mcps["vault"].Config);
+        var wrong = rig.Call("set_connector_env", Args(("name", Text("vault")), ("set", JsonValue.Object(("API_KEY", Text("bw://y"))))));
+        Assert.Equal(ChangedVault(("API_KEY", Text("bw://y"))), rig.State.Store.Mcps["vault"].Config);
+        Assert.Equal(2, rig.Confirmer.Requests.Count);
+        // The same question.
+        Assert.Equal(rig.Confirmer.Requests[0], rig.Confirmer.Requests[1]);
+        Assert.Equal(["env", "  − API_KEY = ••• (set)", "  + API_KEY = ••• (set)"], rig.Confirmer.Requests[0].Code);
+        // The same answer.
+        Assert.NotNull(right);
+        Assert.Equal(right, wrong);
+        Assert.Equal(ControlTools.ChangedText("vault", "Default") + " " + ControlTools.RestartToApplyText, right.Text);
+        Assert.Equal(JsonValue.Bool(true), right.Structured.ValueAt(new JsonPointer(["restartRequired"])));
+        rig.Call("set_connector_env", Args(("name", Text("vault")), ("set", JsonValue.Object(("MODE", Text("fast")), ("LEVEL", Text("1"))))));
+        Assert.Equal(["env", "  + LEVEL = 1", ControlMasking.SamePrefix + ControlMasking.UnchangedText("MODE = fast")],
+            rig.Confirmer.Requests[^1].Code);
+    }
+
+    /// <summary>The command line is the user, who sees every value: setting one to what it holds is refused as no change.</summary>
+    [Fact]
+    public void TheCommandLineIsToldAValueIsUnchanged()
+    {
+        using var rig = Rig();
+        Assert.Null(rig.State.Upsert("vault", new McpEntry(Vault), null));
+        Assert.Equal(ControlResult.Refusal(ControlTools.UnchangedError("vault")),
+            rig.Call("set_connector_env", Args(("name", Text("vault")), ("set", JsonValue.Object(("MODE", Text("fast"))))), new ControlCaller.Cli()));
+        Assert.Equal(ControlResult.Refusal(ControlTools.UnchangedError("vault")),
+            rig.Call("set_connector_env", Args(("name", Text("vault")), ("set", JsonValue.Object(("API_KEY", Text("bw://x"))))), new ControlCaller.Cli()));
+        Assert.Empty(rig.Confirmer.Requests);
+    }
+
+    /// <summary>A connector already holding the mask - damage from before the guard - can still have its
+    /// environment changed, the damage left as it was, and a damaged value can be overwritten. The mask
+    /// written anywhere new, or another text holding it in a damaged value's place, is refused.</summary>
+    [Fact]
+    public void AStoredMaskDoesNotBlockAChangeElsewhere()
+    {
+        using var rig = Rig();
+        var damaged = JsonValue.Object(
+            ("command", Text("npx")), ("args", JsonValue.Array([Text("-y"), Text("acme"), Text("--token"), Text("•••")])),
+            ("env", JsonValue.Object(("MODE", Text("fast")), ("API_KEY", Text(ControlMasking.SetText)))));
+        Assert.Null(rig.State.Upsert("damaged", new McpEntry(damaged), null));
+        Assert.False(rig.Call("set_connector_env", Args(("name", Text("damaged")),
+            ("set", JsonValue.Object(("MODE", Text("slow")), ("API_KEY", Text("${CC_NEEDS:API_KEY}"))))))?.IsError);
+        var changed = damaged.With("env", JsonValue.Object(("MODE", Text("slow")), ("API_KEY", Text("${CC_NEEDS:API_KEY}"))));
+        // The stored mask stays as it was.
+        Assert.Equal(changed, rig.State.Store.Mcps["damaged"].Config);
+        JsonValue WithArgs(params string[] args) => changed.With("args", JsonValue.Array(args.Select(Text)));
+        foreach (var config in new[] { WithArgs("-y", "acme", "--token", "•••", "--x", "•••"), WithArgs("-y", "acme", "--token", "••• (set)") })
+        {
+            Assert.Equal(ControlResult.Refusal(ControlMasking.MaskedValueError("args", ControlMasking.Mask)),
+                rig.Call("update_connector", Args(("name", Text("damaged")), ("config", config))));
+        }
+        Assert.Single(rig.Confirmer.Requests);
+        Assert.Equal(changed, rig.State.Store.Mcps["damaged"].Config);
+    }
+
+    /// <summary>Claude's change asks, and Don't Allow leaves the connector as it was; the command line's is the
+    /// user's own, and is made without asking.</summary>
+    [Fact]
+    public void SettingTheEnvironmentAsksClaudeButNotTheCommandLine()
+    {
+        using var rig = Rig(answer: false);
+        Assert.Null(rig.State.Upsert("vault", new McpEntry(Vault), null));
+        var servers = rig.H.ClaudeServers();
+        var arguments = Args(("name", Text("vault")), ("set", JsonValue.Object(("MODE", Text("slow")))));
+        Assert.Equal(ControlResult.Refusal(ControlTools.DeclinedError), rig.Call("set_connector_env", arguments));
+        Assert.Single(rig.Confirmer.Requests);
+        Assert.Equal(Vault, rig.State.Store.Mcps["vault"].Config);
+        Assert.Equal(servers, rig.H.ClaudeServers());
+        Assert.False(rig.Call("set_connector_env", arguments, new ControlCaller.Cli())?.IsError);
+        // The command line is not asked.
+        Assert.Single(rig.Confirmer.Requests);
+        Assert.Equal(ChangedVault(("MODE", Text("slow"))), rig.State.Store.Mcps["vault"].Config);
     }
 
     // MARK: delete_connectors
@@ -267,8 +567,9 @@ public class ControlToolsGatedTests
     }
 
     /// <summary>The question shows an environment value as written, since a variable can change what runs,
-    /// unless its name reads as a secret's: an add lists it, and a change to it alone shows what it
-    /// was and what it becomes. The answers to the caller carry none of it.</summary>
+    /// unless its name reads as a secret's: an add lists it, and a change shows what it was and what
+    /// it becomes, beside the secret it sends again, hidden on both sides. The answers to the caller
+    /// carry none of it.</summary>
     [Fact]
     public void TheQuestionShowsAnEnvironmentValueAndTheAnswerNone()
     {
@@ -280,7 +581,8 @@ public class ControlToolsGatedTests
         Assert.Equal(2, rig.Confirmer.Requests.Count);
         Assert.Equal(["command   node", "args      server.js", "env       ACME_TOKEN = ••• (set)", "          NODE_OPTIONS = '--require ./a.js'"],
             rig.Confirmer.Requests[0].Code);
-        Assert.Equal(["env", "  − NODE_OPTIONS = '--require ./a.js'", "  + NODE_OPTIONS = '--require ./b.js'"],
+        Assert.Equal(["env", "  − ACME_TOKEN = ••• (set)", "  − NODE_OPTIONS = '--require ./a.js'",
+                      "  + ACME_TOKEN = ••• (set)", "  + NODE_OPTIONS = '--require ./b.js'"],
             rig.Confirmer.Requests[1].Code);
         foreach (var result in new[] { added, changed })
         {

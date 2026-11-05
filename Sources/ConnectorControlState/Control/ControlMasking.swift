@@ -44,12 +44,22 @@ public enum ControlMasking {
     public static let nameLabel = "name"
     public static let removedPrefix = "  − "
     public static let addedPrefix = "  + "
+    /// Before a variable an environment change names again with the value it holds, where the question shows it.
+    public static let samePrefix = "  = "
 
     public static func remoteBridgeType(_ package: String) -> String { "remote, through \(package)" }
 
     public static func oauthClientText(_ clientID: String, _ secret: String) -> String { "client \(clientID), secret \(secret)" }
 
     public static func assignment(_ name: String, _ value: String) -> String { "\(name) = \(value)" }
+
+    public static func unchangedText(_ line: String) -> String { "\(line) (unchanged)" }
+
+    /// A config refused for writing the app's own mask text where it would replace a value: `name` is
+    /// where, as `maskRefusal(_:over:)` names it, and `shown` the mask text it holds.
+    public static func maskedValueError(_ name: String, _ shown: String) -> String {
+        "“\(name)” holds “\(shown)”, which is how Connector Control hides a value, so saving it would replace the real value. To change environment variables without the others, use set_connector_env; for a value you don’t have, write ${CC_NEEDS:NAME}."
+    }
 
     /// One value on a line as `exposure` shows it: in the dialog, quoted as an argument is when it is
     /// not plain (`ControlText.word(_:)`), so a newline and the two characters \n read apart and a run
@@ -107,6 +117,54 @@ public enum ControlMasking {
     public static func secretText(_ value: String, reveal: Bool = false) -> String {
         if reveal { return value }
         return secretState(value) == setState ? setText : EditorModel.needsValue
+    }
+
+    // MARK: The mask guard
+
+    /// Why `config` cannot be saved over `stored` (nil for a new connector), or nil when it can: it
+    /// writes this app's own mask text where that would destroy a value. Places are matched object key
+    /// by name and array item by index. Text holding "•••" is refused unless `stored` holds that very
+    /// text at the same place: no real config holds it, so it is the mask written back, but where it
+    /// is already stored it is old damage left as it was, and refusing it would block every other
+    /// change to the connector. A value that is exactly a mask word - "set", "needs value", "••• (set)"
+    /// or "needs your value" - is refused where `stored` holds another value at the same place: a place
+    /// `stored` lacks is a new value, which may be the word "set". The first such place, in key order,
+    /// is named by its nearest key - a variable's name, a header's, or the list an argument is in -
+    /// through `ControlText.escapedName(_:)`, since Claude chooses it. Every add, change and environment
+    /// change asks this before its question, which masks a secret's two sides alike and could not show
+    /// it.
+    public static func maskRefusal(_ config: JSONValue, over stored: JSONValue?) -> String? {
+        let words = [setState, needsValueState, setText, EditorModel.needsValue]
+        func refusal(_ value: JSONValue, _ before: JSONValue?, _ name: String) -> String? {
+            switch value {
+            case .string(let text):
+                if cut(text, at: mask) != nil {
+                    return before == value ? nil : maskedValueError(ControlText.escapedName(name), mask)
+                }
+                guard let word = words.first(where: { text.hasSameScalars(as: $0) }), let before, before != value else { return nil }
+                return maskedValueError(ControlText.escapedName(name), word)
+            case .array(let items):
+                var olds: [JSONValue] = []
+                if case .array(let held)? = before { olds = held }
+                for (index, item) in items.enumerated() {
+                    if let found = refusal(item, index < olds.count ? olds[index] : nil, name) { return found }
+                }
+                return nil
+            case .object(let object):
+                var olds: [String: JSONValue] = [:]
+                if case .object(let held)? = before { olds = held }
+                for key in object.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
+                    // Found scalar by scalar, as the Windows mirror's ordinal keys are: a Swift
+                    // dictionary would find a key composed another way.
+                    let old = olds.first { $0.key.hasSameScalars(as: key) }?.value
+                    if let item = object[key], let found = refusal(item, old, key) { return found }
+                }
+                return nil
+            case .null, .bool, .int, .double:
+                return nil
+            }
+        }
+        return refusal(config, stored, "")
     }
 
     // MARK: Cutting text
@@ -716,23 +774,74 @@ public enum ControlMasking {
     /// as changed although both sides read "••• (set)". Every difference between the two configs
     /// shows, as every key shows on the code lines, and labels and values go through
     /// `ControlText.escaped(_:)` as the code lines' do.
-    public static func changeLines(from before: JSONValue, to after: JSONValue, exposure: Exposure = .masked) -> [String] {
+    ///
+    /// `variables`, environment variables a change sends, show under `env` although they hold the
+    /// value they held - set_connector_env's and update_connector's, whose caller never sees a value, so
+    /// their questions must not tell a value guessed right from one guessed wrong: one whose line hides
+    /// its value as a change would, "− " and "+ " alike, and one whose line shows it after "= ", marked
+    /// unchanged. mcp-remote's sign-in variable shows as the header it signs in with, and
+    /// `restatingSignIn` - update_connector's, which sends every value again - shows every header and
+    /// OAuth client secret so too: the dialog hides each of those values.
+    public static func changeLines(from before: JSONValue, to after: JSONValue, exposure: Exposure = .masked,
+                                   restating variables: [String] = [], restatingSignIn: Bool = false) -> [String] {
         let old = fields(before, exposure)
         let new = fields(after, exposure)
+        // Found scalar by scalar, as the Windows mirror's ordinal set finds them.
+        let signInVariables = signInVariables(of: after)
+        let signsIn = { (name: String) in signInVariables.contains { $0.hasSameScalars(as: name) } }
+        let signIn = restatingSignIn || variables.contains(where: signsIn)
+        let again = restated(variables.filter { !signsIn($0) }, from: before, to: after, exposure)
         var labels: [String] = []
         for field in new + old where !labels.contains(field.label) { labels.append(field.label) }
+        // An environment shown elsewhere (a URL connector's, among the other keys) leaves `env` missing.
+        if !again.isEmpty, !labels.contains(envLabel) { labels.append(envLabel) }
         var lines: [String] = []
         for label in labels {
             let was = old.filter { $0.label == label }.flatMap(\.values)
             let now = new.filter { $0.label == label }.flatMap(\.values)
-            let lost = was.filter { item in !now.contains { same($0, item) } }
-            let gained = now.filter { item in !was.contains { same($0, item) } }
-            guard !lost.isEmpty || !gained.isEmpty else { continue }
+            func among(_ items: [(raw: String, shown: String)], _ item: (raw: String, shown: String)) -> Bool {
+                items.contains { same($0, item) }
+            }
+            let here = label == envLabel ? again : []
+            var hidden = here.filter(\.hidden).map(\.item)
+            var kept = here.filter { !$0.hidden }.map(\.item)
+            if signIn, label == headersLabel || label == oauthLabel {
+                // A header's value and the OAuth client secret show only when revealed.
+                let unchanged = now.filter { among(was, $0) }
+                if exposure == .revealed { kept += unchanged } else { hidden += unchanged }
+            }
+            let lost = was.filter { !among(now, $0) || among(hidden, $0) } + hidden.filter { !among(was, $0) }
+            let gained = now.filter { !among(was, $0) || among(hidden, $0) } + hidden.filter { !among(now, $0) }
+            guard !lost.isEmpty || !gained.isEmpty || !kept.isEmpty else { continue }
             lines.append(ControlText.escaped(label))
             lines += lost.map { removedPrefix + ControlText.escaped($0.shown) }
             lines += gained.map { addedPrefix + ControlText.escaped($0.shown) }
+            lines += kept.map { samePrefix + unchangedText(ControlText.escaped($0.shown)) }
         }
         return lines
+    }
+
+    /// The environment variables mcp-remote's sign-in in `config` is written with, which its view shows
+    /// as the header they sign in with; none for anything else.
+    static func signInVariables(of config: JSONValue) -> Set<String> {
+        guard let remote = RemotePattern.decode(config) else { return [] }
+        return signInArguments(remote.auth).variables
+    }
+
+    /// Those of `names` that `after`'s environment holds just as `before`'s does, in key order, each as
+    /// the environment's line shows it, and whether that line hides its value.
+    static func restated(_ names: [String], from before: JSONValue, to after: JSONValue,
+                         _ exposure: Exposure) -> [(item: (raw: String, shown: String), hidden: Bool)] {
+        guard case .object(let now) = after, case .object(let env)? = now["env"],
+              case .object(let then) = before, case .object(let held)? = then["env"] else { return [] }
+        // Found scalar by scalar, as the Windows mirror's ordinal keys are.
+        return names.sorted { $0.ordinallyPrecedes($1) }.compactMap { name in
+            guard let value = env.first(where: { $0.key.hasSameScalars(as: name) })?.value,
+                  held.first(where: { $0.key.hasSameScalars(as: name) })?.value == value,
+                  let item = secretField(envLabel, [name: value], exposure, shownInDialog: true).values.first else { return nil }
+            let shows = exposure == .revealed || (exposure == .dialog && dialogShows(name))
+            return (item, !shows)
+        }
     }
 
     // Platform idiom: values are compared scalar by scalar, as the Windows mirror compares them
@@ -922,15 +1031,19 @@ public enum ControlMasking {
             let value = values[name] ?? .null
             var shown = exposure == .revealed ? compactText(value) : setText
             if case .string(let text) = value { shown = secretText(text, reveal: exposure == .revealed) }
-            // A variable that names code to run shows although its name reads as a secret's
-            // (`GIT_ASKPASS` holds "pass"): the person allowing must see what would run.
-            if exposure == .dialog, shownInDialog,
-               !CredentialHeuristics.namesASecret(name) || CredentialHeuristics.namesAProgramToRun(name) {
+            if exposure == .dialog, shownInDialog, dialogShows(name) {
                 shown = compactText(value)
                 if case .string(let text) = value { shown = ControlText.word(text) }
             }
             return (raw(.array([.string(name), value])), assignment(single(name, exposure), shown))
         })
+    }
+
+    /// Whether the dialog shows the value of the environment variable `name`: unless its name reads as a
+    /// secret's - and even then when it names code to run (`GIT_ASKPASS` holds "pass"), since the person
+    /// allowing must see what would run.
+    static func dialogShows(_ name: String) -> Bool {
+        !CredentialHeuristics.namesASecret(name) || CredentialHeuristics.namesAProgramToRun(name)
     }
 
     /// The strings of an array value; nothing else.
