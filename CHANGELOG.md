@@ -22,6 +22,9 @@ has one.
 
 ### Both platforms
 
+- Claude can now add, change or remove one of a connector’s environment variables without touching the others or seeing their values, with a new Change environment tool (`set_connector_env`). From the command line, `connector-control env <name> KEY=value --unset KEY` does the same. Before, Claude had to send back the connector’s whole config, including values it was only ever shown as hidden.
+- Claude and the command line can no longer save the hidden placeholder `set` (or `needs value`, `needs your value`, or anything containing `•••`) over a connector’s real value, such as a `bw://` or `op://` reference; the change is refused and says what to do instead. Before, sending back a connector as Claude was shown it replaced its secrets with the placeholder, and the confirmation, which hides a secret’s old and new values alike, couldn’t show it.
+
 ### Release pipeline
 
 ## v1.5.1

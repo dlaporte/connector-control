@@ -541,9 +541,9 @@ commands:
 
 - **Status** - Get status, Check launchers.
 - **Connectors** - List connectors, Show connector, Turn connector on or off,
-  Add connector, Change connector, Delete connectors. Turning a connector on
-  or off acts on the active collection; the others work there unless Claude
-  names another collection.
+  Add connector, Change connector, Change environment, Delete connectors.
+  Turning a connector on or off acts on the active collection; the others
+  work there unless Claude names another collection.
 - **Collections** - List collections, Switch collection, Create collection,
   Rename collection, Duplicate collection, Delete collection.
 - **Sharing** - Import collection, Subscribe to collection, Show pending
@@ -567,7 +567,15 @@ pair, a header written as `Name: value`, a shell default such as
 caveats](#scope-and-caveats) lists shapes it misses. When Claude adds a connector
 that needs a secret you haven't given it, it is told to write a
 `${CC_NEEDS:<name>}` placeholder, and you fill the value in in Connector
-Control. While the integration is off, Claude is refused everything.
+Control. To add, change or remove environment variables, Claude uses Change
+environment, which names only those variables; the others keep their values,
+which Claude never sees. A change that would save `set`, `needs value` or
+`needs your value` over a different value, or any text holding `•••`, is
+refused, from the command line too: those are how Connector Control shows a
+hidden value, and saving one would replace the real value - a `bw://` or
+`op://` reference, say - in a way the confirmation, which masks a secret's
+before and after alike, couldn't show you. While the integration is off,
+Claude is refused everything.
 
 ### Confirming Claude's changes
 
@@ -740,6 +748,14 @@ change `claude-integration`, `confirm-claude-changes`,
 
 `show <name> --reveal` shows a connector with its secrets as written. Only
 the command line can reveal; Claude always sees them masked.
+
+`env <name> KEY=value… --unset KEY…` sets and removes a connector's
+environment variables and leaves the others as they are. Each `KEY=value`
+splits at its first `=`, so a value can hold more, and `--unset` is given
+once per variable, as in
+`connector-control env proxmox PROXMOX_ACCESS_LEVEL=config --unset OLD_FLAG`.
+Removing the last variable leaves the connector with no `env` at all, as
+deleting the last row in the editor does.
 
 `restart-claude` from the command line doesn't ask: the typed command is the
 confirmation.
