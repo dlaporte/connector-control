@@ -160,7 +160,7 @@ public class ControlCommandLineTests
     [Fact]
     public void EnvTakesSettingsAndRemovals()
     {
-        var usage = new ControlInvocation.Usage(ControlCommandLine.UsageError("env <name> [KEY=value…] [--unset KEY…] [--collection <name>]"));
+        var usage = new ControlInvocation.Usage(ControlCommandLine.UsageError("env <name> [KEY=value…] [--unset KEY…]"));
         Assert.Equal(Call("set_connector_env", ("name", S("x")), ("set", JsonValue.Object(("A", S("=b")), ("B", S("")), ("", S("c"))))),
             Parse("env", "x", "A==b", "B=", "=c"));
         Assert.Equal(Call("set_connector_env", ("name", S("x")), ("unset", JsonValue.Array([S("C"), S("D"), S("C")])), ("collection", S("Team"))),

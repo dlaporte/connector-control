@@ -709,7 +709,7 @@ Connectors (in the active collection; connectors --collection <name> lists anoth
                                      Add a connector
   edit <name> --json <config> | --file <path> [--rename <new>]
                                      Change a connector's config, its name, or both
-  env <name> [KEY=value…] [--unset KEY…] [--collection <name>]
+  env <name> [KEY=value…] [--unset KEY…]
                                      Set or remove a connector's environment variables, leaving the others as they are
   delete <name>…                     Delete connectors
 Collections

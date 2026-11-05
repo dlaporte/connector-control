@@ -137,7 +137,7 @@ final class ControlCommandLineTests: XCTestCase {
     /// `env` takes `KEY=value` words, each split at its first "=", and `--unset KEY` as often as it
     /// is given; a word with no "=" is a usage error. A later setting of the same name wins.
     func testEnvTakesSettingsAndRemovals() {
-        let usage = ControlInvocation.usage(ControlCommandLine.usageError("env <name> [KEY=value…] [--unset KEY…] [--collection <name>]"))
+        let usage = ControlInvocation.usage(ControlCommandLine.usageError("env <name> [KEY=value…] [--unset KEY…]"))
         XCTAssertEqual(parse("env", "x", "A==b", "B=", "=c"),
                        call("set_connector_env", ["name": .string("x"), "set": .object(["A": .string("=b"), "B": .string(""), "": .string("c")])]))
         XCTAssertEqual(parse("env", "x", "--unset", "C", "--collection", "Team", "--unset", "D", "--unset", "C"),
