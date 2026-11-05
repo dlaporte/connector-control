@@ -48,12 +48,16 @@ public static class ControlMasking
     public const string NameLabel = "name";
     public const string RemovedPrefix = "  − ";
     public const string AddedPrefix = "  + ";
+    /// <summary>Before a variable an environment change names again with the value it holds, where the question shows it.</summary>
+    public const string SamePrefix = "  = ";
 
     public static string RemoteBridgeType(string package) => $"remote, through {package}";
 
     public static string OauthClientText(string clientId, string secret) => $"client {clientId}, secret {secret}";
 
     public static string Assignment(string name, string value) => $"{name} = {value}";
+
+    public static string UnchangedText(string line) => $"{line} (unchanged)";
 
     /// <summary>A config refused for writing the app's own mask text where it would replace a value: <paramref name="name"/>
     /// is where, as <see cref="MaskRefusal"/> names it, and <paramref name="shown"/> the mask text it holds.</summary>
@@ -1015,11 +1019,18 @@ public static class ControlMasking
     /// "− " before each value it loses and "+ " before each it gains. A secret that changed shows
     /// as changed although both sides read "••• (set)". Every difference between the two configs
     /// shows, as every key shows on the code lines, and labels and values go through
-    /// <see cref="ControlText.Escaped(string)"/> as the code lines' do.</summary>
-    public static IReadOnlyList<string> ChangeLines(JsonValue before, JsonValue after, Exposure exposure = Exposure.Masked)
+    /// <see cref="ControlText.Escaped(string)"/> as the code lines' do.
+    ///
+    /// <paramref name="variables"/>, environment variables a change names, show under <c>env</c> although they hold the
+    /// value they held - set_connector_env's, whose caller never sees a value, so its question must not
+    /// tell a value guessed right from one guessed wrong: one whose line hides its value as a change
+    /// would, "− " and "+ " alike, and one whose line shows it after "= ", marked unchanged.</summary>
+    public static IReadOnlyList<string> ChangeLines(JsonValue before, JsonValue after, Exposure exposure = Exposure.Masked,
+                                                    IReadOnlyList<string>? variables = null)
     {
         var old = Fields(before, exposure);
         var @new = Fields(after, exposure);
+        var again = Restated(variables ?? [], before, after, exposure);
         var labels = new List<string>();
         foreach (var field in @new.Concat(old))
         {
@@ -1028,22 +1039,57 @@ public static class ControlMasking
                 labels.Add(field.Label);
             }
         }
+        // mcp-remote's sign-in variable shows as its header, not under `env`, which may then be missing.
+        if (again.Count > 0 && !labels.Contains(EnvLabel))
+        {
+            labels.Add(EnvLabel);
+        }
         var lines = new List<string>();
         foreach (var label in labels)
         {
             var was = old.Where(field => field.Label == label).SelectMany(field => field.Values).ToList();
             var now = @new.Where(field => field.Label == label).SelectMany(field => field.Values).ToList();
-            var lost = was.Where(item => !now.Any(other => Same(other, item))).ToList();
-            var gained = now.Where(item => !was.Any(other => Same(other, item))).ToList();
-            if (lost.Count == 0 && gained.Count == 0)
+            var here = label == EnvLabel ? again : [];
+            var hidden = here.Where(entry => entry.Hidden).Select(entry => entry.Item).ToList();
+            static bool Among(List<(string Raw, string Shown)> items, (string Raw, string Shown) item) => items.Any(other => Same(other, item));
+            var lost = was.Where(item => !Among(now, item) || Among(hidden, item)).Concat(hidden.Where(item => !Among(was, item))).ToList();
+            var gained = now.Where(item => !Among(was, item) || Among(hidden, item)).Concat(hidden.Where(item => !Among(now, item))).ToList();
+            var kept = here.Where(entry => !entry.Hidden).Select(entry => entry.Item).ToList();
+            if (lost.Count == 0 && gained.Count == 0 && kept.Count == 0)
             {
                 continue;
             }
             lines.Add(ControlText.Escaped(label));
             lines.AddRange(lost.Select(item => RemovedPrefix + ControlText.Escaped(item.Shown)));
             lines.AddRange(gained.Select(item => AddedPrefix + ControlText.Escaped(item.Shown)));
+            lines.AddRange(kept.Select(item => SamePrefix + UnchangedText(ControlText.Escaped(item.Shown))));
         }
         return lines;
+    }
+
+    /// <summary>Those of <paramref name="names"/> that <paramref name="after"/>'s environment holds just as
+    /// <paramref name="before"/>'s does, in key order, each as the environment's line shows it, and whether that
+    /// line hides its value.</summary>
+    private static List<((string Raw, string Shown) Item, bool Hidden)> Restated(IReadOnlyList<string> names, JsonValue before,
+                                                                                 JsonValue after, Exposure exposure)
+    {
+        if (after["env"] is not { Kind: JsonKind.Object } env || before["env"] is not { Kind: JsonKind.Object } held)
+        {
+            return [];
+        }
+        var restated = new List<((string Raw, string Shown) Item, bool Hidden)>();
+        foreach (var name in names.Order(StringComparer.Ordinal))
+        {
+            if (env[name] is not { } value || held[name] != value)
+            {
+                continue;
+            }
+            var item = SecretField(EnvLabel, new Dictionary<string, JsonValue>(StringComparer.Ordinal) { [name] = value }, exposure,
+                shownInDialog: true).Values[0];
+            var shows = exposure == Exposure.Revealed || (exposure == Exposure.Dialog && DialogShows(name));
+            restated.Add((item, !shows));
+        }
+        return restated;
     }
 
     // Platform idiom: values are compared scalar by scalar on the Mac, as they are compared
@@ -1299,10 +1345,7 @@ public static class ControlMasking
             {
                 shown = SecretText(value.StringValue, exposure == Exposure.Revealed);
             }
-            // A variable that names code to run shows although its name reads as a secret's
-            // (`GIT_ASKPASS` holds "pass"): the person allowing must see what would run.
-            if (exposure == Exposure.Dialog && shownInDialog
-                && (!CredentialHeuristics.NamesASecret(name) || CredentialHeuristics.NamesAProgramToRun(name)))
+            if (exposure == Exposure.Dialog && shownInDialog && DialogShows(name))
             {
                 shown = CompactText(value);
                 if (value.Kind == JsonKind.String)
@@ -1312,6 +1355,12 @@ public static class ControlMasking
             }
             return (Raw(JsonValue.Array([JsonValue.String(name), value])), Assignment(Single(name, exposure), shown));
         }).ToList());
+
+    /// <summary>Whether the dialog shows the value of the environment variable <paramref name="name"/>: unless its name
+    /// reads as a secret's - and even then when it names code to run (<c>GIT_ASKPASS</c> holds "pass"), since the
+    /// person allowing must see what would run.</summary>
+    private static bool DialogShows(string name) =>
+        !CredentialHeuristics.NamesASecret(name) || CredentialHeuristics.NamesAProgramToRun(name);
 
     /// <summary>The strings of an array value; nothing else.</summary>
     private static List<string> Strings(JsonValue? value) =>

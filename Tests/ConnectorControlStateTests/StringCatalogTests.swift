@@ -126,6 +126,7 @@ final class StringCatalogTests: XCTestCase {
         "ControlMasking.maskedValueError": ["X", "Y"],
         "ControlMasking.oauthClientText": ["X", "Y"],
         "ControlMasking.remoteBridgeType": ["X"],
+        "ControlMasking.unchangedText": ["X"],
         "ControlTools.addActiveMessage": ["X", "Y"],
         "ControlTools.addMessage": ["X", "Y"],
         "ControlTools.addTitle": ["X", "Y"],
@@ -496,10 +497,12 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlMasking.otherLabel"] = ControlMasking.otherLabel
         actual["ControlMasking.remoteBridgeType"] = ControlMasking.remoteBridgeType("X")
         actual["ControlMasking.removedPrefix"] = ControlMasking.removedPrefix
+        actual["ControlMasking.samePrefix"] = ControlMasking.samePrefix
         actual["ControlMasking.scopesLabel"] = ControlMasking.scopesLabel
         actual["ControlMasking.setState"] = ControlMasking.setState
         actual["ControlMasking.setText"] = ControlMasking.setText
         actual["ControlMasking.typeLabel"] = ControlMasking.typeLabel
+        actual["ControlMasking.unchangedText"] = ControlMasking.unchangedText("X")
         actual["ControlMasking.urlLabel"] = ControlMasking.urlLabel
         actual["ControlRelay.restartedError"] = ControlRelay.restartedError
         actual["ControlText.listAnd"] = ControlText.listAnd

@@ -541,6 +541,28 @@ public class ControlMaskingTests
         Assert.Equal(["env", "  − API_KEY = one", "  + API_KEY = two"], ControlMasking.ChangeLines(edits[4].Before, edits[4].After, ControlMasking.Exposure.Revealed));
     }
 
+    /// <summary>Variables named again with the values they hold show as set again where the line hides their
+    /// value, and as unchanged where it shows it, beside what does change; one the view shows elsewhere
+    /// (mcp-remote's sign-in variable) still gets its environment line. Unnamed variables do not show.</summary>
+    [Fact]
+    public void RestatedVariablesShowBesideTheChange()
+    {
+        var before = Local("node", []);
+        var env = JsonValue.Object(("API_KEY", S("k")), ("MODE", S("a")), ("B", S("b")));
+        var after = Adding("env", env.With("MODE", S("c")), before);
+        var stored = Adding("env", env, before);
+        Assert.Equal(["env", "  − API_KEY = ••• (set)", "  − MODE = a", "  + API_KEY = ••• (set)", "  + MODE = c"],
+            ControlMasking.ChangeLines(stored, after, ControlMasking.Exposure.Dialog, ["MODE", "API_KEY"]));
+        Assert.Equal(["env", "  = B = b (unchanged)"], ControlMasking.ChangeLines(stored, stored, ControlMasking.Exposure.Dialog, ["B"]));
+        // Claude's own view hides every value.
+        Assert.Equal(["env", "  − B = ••• (set)", "  + B = ••• (set)"], ControlMasking.ChangeLines(stored, stored, ControlMasking.Exposure.Masked, ["B"]));
+        Assert.Equal([], ControlMasking.ChangeLines(stored, stored, ControlMasking.Exposure.Dialog));
+        var signedIn = RemotePattern.Encode(new RemoteConfig("https://h.example/mcp", new RemoteAuth.Bearer("t"), RemoteLaunchStyle.Npx, [],
+            new Dictionary<string, string>(), RemotePattern.DefaultPackage));
+        Assert.Equal(["env", "  − AUTH_HEADER = ••• (set)", "  + AUTH_HEADER = ••• (set)"],
+            ControlMasking.ChangeLines(signedIn, signedIn, ControlMasking.Exposure.Dialog, ["AUTH_HEADER"]));
+    }
+
     /// <summary>A key no field models shows its value as one line of JSON, written the same on both platforms.</summary>
     [Fact]
     public void AnUnmodelledKeyShowsItsValueAsJson()

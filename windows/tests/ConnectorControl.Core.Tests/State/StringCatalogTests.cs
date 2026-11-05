@@ -131,6 +131,7 @@ public class StringCatalogTests
         ["ControlMasking.maskedValueError"] = ["X", "Y"],
         ["ControlMasking.oauthClientText"] = ["X", "Y"],
         ["ControlMasking.remoteBridgeType"] = ["X"],
+        ["ControlMasking.unchangedText"] = ["X"],
         ["ControlTools.addActiveMessage"] = ["X", "Y"],
         ["ControlTools.addMessage"] = ["X", "Y"],
         ["ControlTools.addTitle"] = ["X", "Y"],
@@ -520,10 +521,12 @@ public class StringCatalogTests
         actual["ControlMasking.otherLabel"] = ControlMasking.OtherLabel;
         actual["ControlMasking.remoteBridgeType"] = ControlMasking.RemoteBridgeType("X");
         actual["ControlMasking.removedPrefix"] = ControlMasking.RemovedPrefix;
+        actual["ControlMasking.samePrefix"] = ControlMasking.SamePrefix;
         actual["ControlMasking.scopesLabel"] = ControlMasking.ScopesLabel;
         actual["ControlMasking.setState"] = ControlMasking.SetState;
         actual["ControlMasking.setText"] = ControlMasking.SetText;
         actual["ControlMasking.typeLabel"] = ControlMasking.TypeLabel;
+        actual["ControlMasking.unchangedText"] = ControlMasking.UnchangedText("X");
         actual["ControlMasking.urlLabel"] = ControlMasking.UrlLabel;
         actual["ControlRelay.restartedError"] = ControlRelay.RestartedError;
         actual["ControlText.listAnd"] = ControlText.ListAnd;

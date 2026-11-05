@@ -267,12 +267,17 @@ public sealed partial class ControlTools
     }
 
     /// <summary>Some of a connector's environment variables set or removed, and every other one, whose value
-    /// Claude is never shown, left as it is: update_connector's question, showing only the variables
-    /// that change, and its change. A name to set follows the editor's rule for a row with a value, and
-    /// must be one the environment can hold; a name to remove must be there, all or nothing, as
-    /// delete_connectors' names must.</summary>
-    private ControlStep SetConnectorEnv(ControlArguments arguments, string shownAsker)
+    /// Claude is never shown, left as it is: update_connector's question, showing the variables that
+    /// change and every one it sets, and its change. A name to set follows the editor's rule for a row
+    /// with a value, and must be one the environment can hold; a name to remove must be there, all or
+    /// nothing, as delete_connectors' names must.
+    ///
+    /// Claude cannot see a value, so a value set to what it already holds is asked about and answered
+    /// as a change - nothing tells it whether it guessed the value. The command line is the user, who
+    /// can, and is told there is nothing to change.</summary>
+    private ControlStep SetConnectorEnv(ControlArguments arguments, ControlCaller caller)
     {
+        var shownAsker = caller.ShownAsker;
         var collection = TargetCollection(arguments);
         var shownCollection = ControlText.EscapedName(collection);
         if (state.Store.Collections.GetValueOrDefault(collection) is not { } held)
@@ -350,7 +355,8 @@ public sealed partial class ControlTools
         {
             return new ControlStep.Refused(masked);
         }
-        if (after == current.Config)
+        var unchanged = after == current.Config;
+        if (unchanged && caller is ControlCaller.Cli)
         {
             return new ControlStep.Refused(UnchangedError(shownName));
         }
@@ -358,7 +364,7 @@ public sealed partial class ControlTools
         var request = new ConfirmationRequest(
             ChangeTitle(shownAsker, shownName),
             active ? ChangeActiveMessage(shownCollection) : ChangeMessage(shownCollection),
-            ControlMasking.ChangeLines(current.Config, after, ControlMasking.Exposure.Dialog),
+            ControlMasking.ChangeLines(current.Config, after, ControlMasking.Exposure.Dialog, [.. set.Keys]),
             active && current.Enabled ? TakesEffectFooter : null);
         return new ControlStep.Ready(request, () =>
         {
@@ -368,12 +374,23 @@ public sealed partial class ControlTools
             {
                 return Refused(refusal, [name, collection]);
             }
-            state.ApplyInteractively();
+            // Values set to what they held change nothing, but a connector Claude runs has Claude's
+            // config written again, as a change would - a restart due, a backup taken - and the answer
+            // is a change's, so none of it tells Claude it guessed a value right.
+            var rewrite = unchanged && active && current.Enabled;
+            if (rewrite)
+            {
+                state.Apply();
+            }
+            else
+            {
+                state.ApplyInteractively();
+            }
             // update_connector's answer, without a previous name: nothing in it is a value.
             return Done([ChangedText(shownName, shownCollection)],
                 [("collection", JsonValue.String(collection)), ("name", JsonValue.String(name))],
                 collection, mark, RestartToApplyText,
-                notification: ChangedNotification(shownAsker, shownName, shownCollection));
+                notification: ChangedNotification(shownAsker, shownName, shownCollection), rewrote: rewrite);
         });
     }
 

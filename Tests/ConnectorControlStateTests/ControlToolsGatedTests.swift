@@ -285,7 +285,6 @@ final class ControlToolsGatedTests: XCTestCase {
             (["name": .string("odd"), "set": .object(["A": .string("1")])], ControlTools.envShapeError("odd")),
             (setting(["API_KEY": .string(ControlMasking.setState)]), ControlMasking.maskedValueError("API_KEY", ControlMasking.setState)),
             (setting(["NEW": .string(ControlMasking.setText)]), ControlMasking.maskedValueError("NEW", ControlMasking.mask)),
-            (setting(["MODE": .string("fast")]), ControlTools.unchangedError("vault")),
         ]
         for (arguments, refusal) in cases {
             XCTAssertEqual(rig.call("set_connector_env", arguments), .refusal(refusal), refusal)
@@ -295,6 +294,39 @@ final class ControlToolsGatedTests: XCTestCase {
         // A new variable may hold the word "set": it replaces nothing.
         XCTAssertFalse(try XCTUnwrap(rig.call("set_connector_env", setting(["LEVEL": .string(ControlMasking.setState)]))).isError)
         XCTAssertEqual(rig.state.store.mcps["vault"]?.config, changedVault(["LEVEL": .string(ControlMasking.setState)]))
+    }
+
+    /// Claude never sees a variable's value, so setting one to what it already holds is asked about as a
+    /// change and answered as one: a right guess and a wrong one raise the same question for a secret's
+    /// name, and get the same answer, restart and all. A value the question may show reads as unchanged.
+    func testAGuessAtAValueIsAskedAndAnsweredAsAChange() throws {
+        let rig = rig(); defer { rig.dispose() }
+        XCTAssertNil(rig.state.upsert(name: "vault", entry: MCPEntry(config: vault), renamedFrom: nil))
+        rig.h.claudeRunningSince(hours: 1)
+        let right = try XCTUnwrap(rig.call("set_connector_env", ["name": .string("vault"), "set": .object(["API_KEY": .string("bw://x")])]))
+        XCTAssertEqual(rig.state.store.mcps["vault"]?.config, vault)
+        let wrong = try XCTUnwrap(rig.call("set_connector_env", ["name": .string("vault"), "set": .object(["API_KEY": .string("bw://y")])]))
+        XCTAssertEqual(rig.state.store.mcps["vault"]?.config, changedVault(["API_KEY": .string("bw://y")]))
+        XCTAssertEqual(rig.confirmer.requests.count, 2)
+        XCTAssertEqual(rig.confirmer.requests.first, rig.confirmer.requests.last, "the same question")
+        XCTAssertEqual(rig.confirmer.requests.first?.code, ["env", "  − API_KEY = ••• (set)", "  + API_KEY = ••• (set)"])
+        XCTAssertEqual(right, wrong, "the same answer")
+        XCTAssertEqual(right.text, ControlTools.changedText("vault", "Default") + " " + ControlTools.restartToApplyText)
+        XCTAssertEqual(right.structured.value(at: JSONPointer(["restartRequired"])), .bool(true))
+        _ = rig.call("set_connector_env", ["name": .string("vault"), "set": .object(["MODE": .string("fast"), "LEVEL": .string("1")])])
+        XCTAssertEqual(rig.confirmer.requests.last?.code,
+                       ["env", "  + LEVEL = 1", ControlMasking.samePrefix + ControlMasking.unchangedText("MODE = fast")])
+    }
+
+    /// The command line is the user, who sees every value: setting one to what it holds is refused as no change.
+    func testTheCommandLineIsToldAValueIsUnchanged() throws {
+        let rig = rig(); defer { rig.dispose() }
+        XCTAssertNil(rig.state.upsert(name: "vault", entry: MCPEntry(config: vault), renamedFrom: nil))
+        XCTAssertEqual(rig.call("set_connector_env", ["name": .string("vault"), "set": .object(["MODE": .string("fast")])], as: .cli),
+                       .refusal(ControlTools.unchangedError("vault")))
+        XCTAssertEqual(rig.call("set_connector_env", ["name": .string("vault"), "set": .object(["API_KEY": .string("bw://x")])], as: .cli),
+                       .refusal(ControlTools.unchangedError("vault")))
+        XCTAssertTrue(rig.confirmer.requests.isEmpty)
     }
 
     /// A connector already holding the mask - damage from before the guard - can still have its

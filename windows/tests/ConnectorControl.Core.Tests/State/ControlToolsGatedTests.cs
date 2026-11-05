@@ -335,7 +335,6 @@ public class ControlToolsGatedTests
             (Args(("name", Text("odd")), ("set", JsonValue.Object(("A", Text("1"))))), ControlTools.EnvShapeError("odd")),
             (Setting(("API_KEY", Text(ControlMasking.SetState))), ControlMasking.MaskedValueError("API_KEY", ControlMasking.SetState)),
             (Setting(("NEW", Text(ControlMasking.SetText))), ControlMasking.MaskedValueError("NEW", ControlMasking.Mask)),
-            (Setting(("MODE", Text("fast"))), ControlTools.UnchangedError("vault")),
         ];
         foreach (var (arguments, refusal) in cases)
         {
@@ -346,6 +345,46 @@ public class ControlToolsGatedTests
         // A new variable may hold the word "set": it replaces nothing.
         Assert.False(rig.Call("set_connector_env", Setting(("LEVEL", Text(ControlMasking.SetState))))?.IsError);
         Assert.Equal(ChangedVault(("LEVEL", Text(ControlMasking.SetState))), rig.State.Store.Mcps["vault"].Config);
+    }
+
+    /// <summary>Claude never sees a variable's value, so setting one to what it already holds is asked about as a
+    /// change and answered as one: a right guess and a wrong one raise the same question for a secret's
+    /// name, and get the same answer, restart and all. A value the question may show reads as unchanged.</summary>
+    [Fact]
+    public void AGuessAtAValueIsAskedAndAnsweredAsAChange()
+    {
+        using var rig = Rig();
+        Assert.Null(rig.State.Upsert("vault", new McpEntry(Vault), null));
+        rig.H.ClaudeRunningSince(1);
+        var right = rig.Call("set_connector_env", Args(("name", Text("vault")), ("set", JsonValue.Object(("API_KEY", Text("bw://x"))))));
+        Assert.Equal(Vault, rig.State.Store.Mcps["vault"].Config);
+        var wrong = rig.Call("set_connector_env", Args(("name", Text("vault")), ("set", JsonValue.Object(("API_KEY", Text("bw://y"))))));
+        Assert.Equal(ChangedVault(("API_KEY", Text("bw://y"))), rig.State.Store.Mcps["vault"].Config);
+        Assert.Equal(2, rig.Confirmer.Requests.Count);
+        // The same question.
+        Assert.Equal(rig.Confirmer.Requests[0], rig.Confirmer.Requests[1]);
+        Assert.Equal(["env", "  − API_KEY = ••• (set)", "  + API_KEY = ••• (set)"], rig.Confirmer.Requests[0].Code);
+        // The same answer.
+        Assert.NotNull(right);
+        Assert.Equal(right, wrong);
+        Assert.Equal(ControlTools.ChangedText("vault", "Default") + " " + ControlTools.RestartToApplyText, right.Text);
+        Assert.Equal(JsonValue.Bool(true), right.Structured.ValueAt(new JsonPointer(["restartRequired"])));
+        rig.Call("set_connector_env", Args(("name", Text("vault")), ("set", JsonValue.Object(("MODE", Text("fast")), ("LEVEL", Text("1"))))));
+        Assert.Equal(["env", "  + LEVEL = 1", ControlMasking.SamePrefix + ControlMasking.UnchangedText("MODE = fast")],
+            rig.Confirmer.Requests[^1].Code);
+    }
+
+    /// <summary>The command line is the user, who sees every value: setting one to what it holds is refused as no change.</summary>
+    [Fact]
+    public void TheCommandLineIsToldAValueIsUnchanged()
+    {
+        using var rig = Rig();
+        Assert.Null(rig.State.Upsert("vault", new McpEntry(Vault), null));
+        Assert.Equal(ControlResult.Refusal(ControlTools.UnchangedError("vault")),
+            rig.Call("set_connector_env", Args(("name", Text("vault")), ("set", JsonValue.Object(("MODE", Text("fast"))))), new ControlCaller.Cli()));
+        Assert.Equal(ControlResult.Refusal(ControlTools.UnchangedError("vault")),
+            rig.Call("set_connector_env", Args(("name", Text("vault")), ("set", JsonValue.Object(("API_KEY", Text("bw://x"))))), new ControlCaller.Cli()));
+        Assert.Empty(rig.Confirmer.Requests);
     }
 
     /// <summary>A connector already holding the mask - damage from before the guard - can still have its

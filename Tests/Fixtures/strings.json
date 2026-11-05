@@ -338,10 +338,14 @@
     "format": "remote, through {0}"
   },
   "ControlMasking.removedPrefix": "  − ",
+  "ControlMasking.samePrefix": "  = ",
   "ControlMasking.scopesLabel": "scopes",
   "ControlMasking.setState": "set",
   "ControlMasking.setText": "••• (set)",
   "ControlMasking.typeLabel": "type",
+  "ControlMasking.unchangedText": {
+    "format": "{0} (unchanged)"
+  },
   "ControlMasking.urlLabel": "url",
   "ControlRelay.restartedError": "Connector Control restarted - try again.",
   "ControlSettingKey.automaticUpdates": "automatic-updates",

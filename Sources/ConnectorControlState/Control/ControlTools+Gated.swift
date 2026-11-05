@@ -180,11 +180,16 @@ extension ControlTools {
     }
 
     /// Some of a connector's environment variables set or removed, and every other one, whose value
-    /// Claude is never shown, left as it is: update_connector's question, showing only the variables
-    /// that change, and its change. A name to set follows the editor's rule for a row with a value, and
-    /// must be one the environment can hold; a name to remove must be there, all or nothing, as
-    /// delete_connectors' names must.
-    func setConnectorEnv(_ arguments: ControlArguments, _ shownAsker: String) -> ControlStep {
+    /// Claude is never shown, left as it is: update_connector's question, showing the variables that
+    /// change and every one it sets, and its change. A name to set follows the editor's rule for a row
+    /// with a value, and must be one the environment can hold; a name to remove must be there, all or
+    /// nothing, as delete_connectors' names must.
+    ///
+    /// Claude cannot see a value, so a value set to what it already holds is asked about and answered
+    /// as a change - nothing tells it whether it guessed the value. The command line is the user, who
+    /// can, and is told there is nothing to change.
+    func setConnectorEnv(_ arguments: ControlArguments, _ caller: ControlCaller) -> ControlStep {
+        let shownAsker = caller.shownAsker
         let collection = targetCollection(arguments)
         let shownCollection = ControlText.escapedName(collection)
         guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shownCollection)) }
@@ -224,12 +229,13 @@ extension ControlTools {
         if env.isEmpty { config.removeValue(forKey: "env") } else { config["env"] = .object(env) }
         let after = JSONValue.object(config)
         if let error = ControlMasking.maskRefusal(after, over: current.config) { return .refused(error) }
-        guard after != current.config else { return .refused(ControlTools.unchangedError(shownName)) }
+        let unchanged = after == current.config
+        if unchanged, caller == .cli { return .refused(ControlTools.unchangedError(shownName)) }
         let active = collection == state.activeCollection
         let request = ConfirmationRequest(
             title: ControlTools.changeTitle(shownAsker, shownName),
             message: active ? ControlTools.changeActiveMessage(shownCollection) : ControlTools.changeMessage(shownCollection),
-            code: ControlMasking.changeLines(from: current.config, to: after, exposure: .dialog),
+            code: ControlMasking.changeLines(from: current.config, to: after, exposure: .dialog, restating: Array(set.keys)),
             footer: active && current.enabled ? ControlTools.takesEffectFooter : nil)
         return .ready(request, perform: { [self] in
             let mark = state.appliedServers
@@ -238,12 +244,16 @@ extension ControlTools {
                                         renamedFrom: name, in: collection) {
                 return ControlTools.refused(error, naming: [name, collection])
             }
-            state.applyInteractively()
+            // Values set to what they held change nothing, but a connector Claude runs has Claude's
+            // config written again, as a change would - a restart due, a backup taken - and the answer
+            // is a change's, so none of it tells Claude it guessed a value right.
+            let rewrite = unchanged && active && current.enabled
+            if rewrite { state.apply() } else { state.applyInteractively() }
             // update_connector's answer, without a previous name: nothing in it is a value.
             return done([ControlTools.changedText(shownName, shownCollection)],
                         ["collection": .string(collection), "name": .string(name)],
                         touching: collection, since: mark, restart: ControlTools.restartToApplyText,
-                        notification: ControlTools.changedNotification(shownAsker, shownName, shownCollection))
+                        notification: ControlTools.changedNotification(shownAsker, shownName, shownCollection), rewrote: rewrite)
         })
     }
 

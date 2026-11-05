@@ -606,8 +606,12 @@ full, so you see what would run before you allow it: `GIT_SSH`,
 `_JAVA_OPTIONS`, in any case. Claude's own reads still mask them. Header
 values, the OAuth client secret and any value under a key named like a
 secret stay masked. An edit shows the lines before and after, marked − and
-+; an import or a subscription names its file and lists what it brings; a
-restore lists the connectors it would put back. Each line of what would run is
++. Change environment also lists each variable it sets to the value it
+already holds, marked = and "(unchanged)", or − and + like any change when
+the value is hidden: Claude never sees a value, so a value it guessed right
+is asked about, and answered, just as one it guessed wrong. An import or a
+subscription names its file and lists what it brings; a restore lists the
+connectors it would put back. Each line of what would run is
 selected and copied one line at a time.
 
 **Don’t Allow** is the default, and Return answers it, as Escape does. One

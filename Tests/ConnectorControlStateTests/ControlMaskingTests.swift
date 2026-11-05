@@ -454,6 +454,25 @@ final class ControlMaskingTests: XCTestCase {
         XCTAssertEqual(ControlMasking.changeLines(from: edits[4].1, to: edits[4].2, exposure: .revealed), ["env", "  − API_KEY = one", "  + API_KEY = two"])
     }
 
+    /// Variables named again with the values they hold show as set again where the line hides their
+    /// value, and as unchanged where it shows it, beside what does change; one the view shows elsewhere
+    /// (mcp-remote's sign-in variable) still gets its environment line. Unnamed variables do not show.
+    func testRestatedVariablesShowBesideTheChange() {
+        let before = local("node", []), env: [String: JSONValue] = ["API_KEY": .string("k"), "MODE": .string("a"), "B": .string("b")]
+        let after = adding("env", .object(env.merging(["MODE": .string("c")]) { $1 }), to: before)
+        let stored = adding("env", .object(env), to: before)
+        XCTAssertEqual(ControlMasking.changeLines(from: stored, to: after, exposure: .dialog, restating: ["MODE", "API_KEY"]),
+                       ["env", "  − API_KEY = ••• (set)", "  − MODE = a", "  + API_KEY = ••• (set)", "  + MODE = c"])
+        XCTAssertEqual(ControlMasking.changeLines(from: stored, to: stored, exposure: .dialog, restating: ["B"]),
+                       ["env", "  = B = b (unchanged)"])
+        XCTAssertEqual(ControlMasking.changeLines(from: stored, to: stored, exposure: .masked, restating: ["B"]),
+                       ["env", "  − B = ••• (set)", "  + B = ••• (set)"], "Claude's own view hides every value")
+        XCTAssertEqual(ControlMasking.changeLines(from: stored, to: stored, exposure: .dialog), [])
+        let signedIn = RemotePattern.encode(RemoteConfig(url: "https://h.example/mcp", auth: .bearer(token: "t")))
+        XCTAssertEqual(ControlMasking.changeLines(from: signedIn, to: signedIn, exposure: .dialog, restating: ["AUTH_HEADER"]),
+                       ["env", "  − AUTH_HEADER = ••• (set)", "  + AUTH_HEADER = ••• (set)"])
+    }
+
     /// A key no field models shows its value as one line of JSON, written the same on both platforms.
     func testAnUnmodelledKeyShowsItsValueAsJSON() {
         let metadata: JSONValue = .object(["n": .int(1), "name": .string("café"), "redirect": .string("https://a.example/cb")])

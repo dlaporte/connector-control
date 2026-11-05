@@ -86,7 +86,7 @@ public sealed partial class ControlTools
             case "set_setting": return SetSetting(arguments, caller);
             case "add_connector": return AddConnector(arguments, caller.ShownAsker);
             case "update_connector": return UpdateConnector(arguments, caller.ShownAsker);
-            case "set_connector_env": return SetConnectorEnv(arguments, caller.ShownAsker);
+            case "set_connector_env": return SetConnectorEnv(arguments, caller);
             case "delete_connectors": return DeleteConnectors(arguments, caller.ShownAsker);
             case "delete_collection": return DeleteCollection(arguments, caller.ShownAsker);
             case "import_document": return ImportDocument(arguments, caller);
@@ -125,10 +125,12 @@ public sealed partial class ControlTools
     /// the change was saved and gives the app's own message. <paramref name="collection"/> null is a write that
     /// reaches Claude whatever is active; <paramref name="touchesClaude"/> false is one that cannot reach it at all. The notification, for a change nobody was asked about,
     /// carries the same restart sentence. <paramref name="announcing"/>: a direct change that is announced, with its
-    /// notification, when it moved what Claude runs, and carries none when it did not.</summary>
+    /// notification, when it moved what Claude runs, and carries none when it did not. <paramref name="rewrote"/>: a
+    /// write that left Claude's config as it was but wrote it again, to be answered as one that changed it
+    /// (set_connector_env setting values Claude cannot see to what they already are).</summary>
     internal ControlOutcome Done(List<string> lines, IReadOnlyList<(string Key, JsonValue Value)> fields, string? collection,
                                  IReadOnlyDictionary<string, JsonValue> mark, string restart, string? notification = null,
-                                 bool announcing = false, bool touchesClaude = true)
+                                 bool announcing = false, bool touchesClaude = true, bool rewrote = false)
     {
         var text = lines.ToList();
         // A write that never touches Claude's config (a window's setting) must not report a retry
@@ -137,7 +139,7 @@ public sealed partial class ControlTools
         // Compared by value: the harness clock stands still, so a timestamp could not tell a write from none.
         // Platform idiom: compared ordinally, as the Mac mirror compares scalar by scalar; Swift's == would
         // hold canonically equivalent text equal, and miss a change only in how a character is composed.
-        var applied = !DictionaryEquality.Equal(state.AppliedServers, mark);
+        var applied = rewrote || !DictionaryEquality.Equal(state.AppliedServers, mark);
         string? then = null;
         if (reachesClaude && state.ApplyRetryNeeded)
         {
