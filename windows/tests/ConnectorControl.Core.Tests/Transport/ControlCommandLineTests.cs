@@ -46,6 +46,8 @@ public class ControlCommandLineTests
             (["add", "gh", "--json", "{}", "--off"],
                 Call("add_connector", ("name", S("gh")), ("config", JsonValue.Object()), ("enabled", JsonValue.Bool(false)))),
             (["edit", "gh", "--rename", "hub"], Call("update_connector", ("name", S("gh")), ("newName", S("hub")))),
+            (["env", "gh", "A=1", "B=2", "--unset", "C"],
+                Call("set_connector_env", ("name", S("gh")), ("set", JsonValue.Object(("A", S("1")), ("B", S("2")))), ("unset", JsonValue.Array([S("C")])))),
             (["delete", "a", "b", "--collection", "Team"],
                 Call("delete_connectors", ("names", JsonValue.Array([S("a"), S("b")])), ("collection", S("Team")))),
             (["collections"], Call("list_collections")),
@@ -151,6 +153,27 @@ public class ControlCommandLineTests
         Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UnknownOptionError("--\u0301x")), Parse("connectors", "--\u0301x"));
         Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UnknownOptionError("extra")), Parse("mcp", "extra"));
         Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.HelpTakesNoArgumentsError), Parse("help", "status"));
+    }
+
+    /// <summary><c>env</c> takes <c>KEY=value</c> words, each split at its first "=", and <c>--unset KEY</c> as often as it
+    /// is given; a word with no "=" is a usage error. A later setting of the same name wins.</summary>
+    [Fact]
+    public void EnvTakesSettingsAndRemovals()
+    {
+        var usage = new ControlInvocation.Usage(ControlCommandLine.UsageError("env <name> [KEY=value…] [--unset KEY…] [--collection <name>]"));
+        Assert.Equal(Call("set_connector_env", ("name", S("x")), ("set", JsonValue.Object(("A", S("=b")), ("B", S("")), ("", S("c"))))),
+            Parse("env", "x", "A==b", "B=", "=c"));
+        Assert.Equal(Call("set_connector_env", ("name", S("x")), ("unset", JsonValue.Array([S("C"), S("D"), S("C")])), ("collection", S("Team"))),
+            Parse("env", "x", "--unset", "C", "--collection", "Team", "--unset", "D", "--unset", "C"));
+        Assert.Equal(Call("set_connector_env", ("name", S("x")), ("set", JsonValue.Object(("A", S("2"))))), Parse("env", "x", "A=1", "A=2"));
+        Assert.Equal(Call("set_connector_env", ("name", S("x")), ("set", JsonValue.Object(("--A", S("1"))))), Parse("env", "x", "--", "--A=1"));
+        // The app says there is nothing to change.
+        Assert.Equal(Call("set_connector_env", ("name", S("x"))), Parse("env", "x"));
+        // A word with no = is no setting.
+        Assert.Equal(usage, Parse("env", "x", "A=1", "bare"));
+        Assert.Equal(usage, Parse("env"));
+        Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.MissingValueError("--unset")), Parse("env", "x", "--unset"));
+        Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UnknownOptionError("--unset")), Parse("show", "x", "--unset", "C"));
     }
 
     [Fact]
