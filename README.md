@@ -567,15 +567,17 @@ pair, a header written as `Name: value`, a shell default such as
 caveats](#scope-and-caveats) lists shapes it misses. When Claude adds a connector
 that needs a secret you haven't given it, it is told to write a
 `${CC_NEEDS:<name>}` placeholder, and you fill the value in in Connector
-Control. To add, change or remove environment variables, Claude uses Change
-environment, which names only those variables; the others keep their values,
-which Claude never sees. A change that would save `set`, `needs value` or
-`needs your value` over a different value, or text holding `•••` where that
-text wasn't already, is refused, from the command line too: those are how
-Connector Control shows a hidden value, and saving one would replace the real
-value - a `bw://` or `op://` reference, say - in a way the confirmation, which
-masks a secret's before and after alike, couldn't show you. While the
-integration is off, Claude is refused everything.
+Control. To add, change or remove environment variables, Claude is told to
+use Change environment, which names only those variables; the others keep
+their values, which Claude never sees. A change that would save `set`,
+`needs value` or `needs your value` over a different value, or text holding
+`•••` where that text wasn't already, is refused, from the command line too:
+those are how Connector Control shows a hidden value, and saving one would
+replace the real value - a `bw://` or `op://` reference, say - in a way the
+confirmation, which masks a secret's before and after alike, couldn't show
+you. That stops a hidden value going back as it was shown, not another value
+written over it on purpose: [Scope and caveats](#scope-and-caveats) says
+more. While the integration is off, Claude is refused everything.
 
 ### Confirming Claude's changes
 
@@ -607,12 +609,14 @@ full, so you see what would run before you allow it: `GIT_SSH`,
 values, the OAuth client secret and any value under a key named like a
 secret stay masked. An edit shows the lines before and after, marked − and
 +. Change environment also lists each variable it sets to the value it
-already holds, marked = and "(unchanged)", or − and + like any change when
-the value is hidden: Claude never sees a value, so a value it guessed right
-is asked about, and answered, just as one it guessed wrong. An import or a
-subscription names its file and lists what it brings; a restore lists the
-connectors it would put back. Each line of what would run is
-selected and copied one line at a time.
+already holds: as `= NAME = value (unchanged)` where the dialog shows the
+value, and marked − and + like any change where it hides it. Claude never
+sees a value, so a value it guessed right is asked about, and answered, just
+as one it guessed wrong: for a connector Claude runs, Claude's config is
+written again and **Restart Required** appears while Claude runs, as after
+any change. An import or a subscription names its file and lists what it
+brings; a restore lists the connectors it would put back. Each line of what
+would run is selected and copied one line at a time.
 
 **Don’t Allow** is the default, and Return answers it, as Escape does. One
 question is asked at a time; Claude's other changes wait their turn. After
@@ -755,11 +759,16 @@ the command line can reveal; Claude always sees them masked.
 
 `env <name> KEY=value… --unset KEY…` sets and removes a connector's
 environment variables and leaves the others as they are. Each `KEY=value`
-splits at its first `=`, so a value can hold more, and `--unset` is given
-once per variable, as in
+splits at its first `=`, so a value can hold more (a word with no `=` is a
+usage error), and `--unset` is given once per variable, as in
 `connector-control env proxmox PROXMOX_ACCESS_LEVEL=config --unset OLD_FLAG`.
 Removing the last variable leaves the connector with no `env` at all, as
-deleting the last row in the editor does.
+deleting the last row in the editor does. An `--unset` naming a variable the
+connector doesn't have refuses the whole command, and so does a command that
+would change nothing: unlike Claude, you can see the values. The command
+line's refusals come from the same tools as Claude's, so one that names a
+tool names Claude's: `set_connector_env` is `env` here, and
+`update_connector` is `edit`.
 
 `restart-claude` from the command line doesn't ask: the typed command is the
 confirmation.
@@ -1258,6 +1267,13 @@ that no file in the repository contains an em-dash.
   `-user=admin:pw` also shows, since it reads as a flag named `-user`. A
   name such as `auth0:` reads as a header named `auth`, so its value is
   hidden.
+- Refusing Connector Control's own mask text (`set`, `needs value`,
+  `••• (set)`, `needs your value`, or anything holding `•••`) stops a hidden
+  value being sent back as it was shown. It can't stop Claude writing another
+  value over a secret on purpose: where the confirmation hides a value, it
+  then shows the line as changed, both − and + reading `••• (set)`, and
+  neither value. A value that really is one of those words can still be typed
+  in the editor.
 - A restore asks with the names of the connectors it would put back. A
   backup someone else planted in your backups folder could carry commands
   the question doesn't show; doing that needs write access to your own
