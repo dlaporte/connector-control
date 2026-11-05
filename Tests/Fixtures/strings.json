@@ -486,6 +486,17 @@
   "ControlTools.emptyCollectionText": {
     "format": "“{0}” has no connectors."
   },
+  "ControlTools.envNameError": {
+    "format": "“{0}” can’t name an environment variable: it holds “=” or a null character."
+  },
+  "ControlTools.envSetAndUnsetError": {
+    "format": "“{0}” can’t be both set and unset."
+  },
+  "ControlTools.envSetProperty": "Variables to add or change, as NAME: value.",
+  "ControlTools.envShapeError": {
+    "format": "“{0}” has an “env” that isn’t a JSON object; change its config with update_connector."
+  },
+  "ControlTools.envUnsetProperty": "Names of variables to remove.",
   "ControlTools.fromFooter": {
     "format": "From “{0}”"
   },
@@ -588,6 +599,9 @@
   "ControlTools.noUpdateError": {
     "format": "“{0}” has no update waiting."
   },
+  "ControlTools.noVariableError": {
+    "format": "There’s no environment variable named “{0}” in “{1}”."
+  },
   "ControlTools.notAFileError": {
     "format": "“{0}” isn’t a file."
   },
@@ -659,6 +673,8 @@
   },
   "ControlTools.set_connector_enabled.cliUsage": "enable <name> | disable <name>",
   "ControlTools.set_connector_enabled.description": "Turn a connector on or off. Acts on the active collection, the one Claude runs, as Connector Control's own switches do; Claude picks the change up when it restarts.",
+  "ControlTools.set_connector_env.cliUsage": "env <name> [KEY=value…] [--unset KEY…] [--collection <name>]",
+  "ControlTools.set_connector_env.description": "Set or remove a connector's environment variables, leaving the others as they are. Variables it doesn't name keep their values, which are never sent to Claude. Never write a secret the user has not given you: put ${CC_NEEDS:NAME} in its place, and the user fills it in in Connector Control. Looks in the active collection unless collection names another; subscribed collections are read-only.",
   "ControlTools.set_setting.cliUsage": "settings set <key> <value>",
   "ControlTools.set_setting.description": "Change a setting. Takes a key from get_settings and on or off, or a number from 5 to 100 for backups-to-keep. Only the user can change claude-integration, confirm-claude-changes, notify-external-changes and automatic-updates.",
   "ControlTools.settingChangedText": {
@@ -730,6 +746,7 @@
   "ControlTools.titles.restart_claude": "Restart Claude",
   "ControlTools.titles.restore_backup": "Restore backup",
   "ControlTools.titles.set_connector_enabled": "Turn connector on or off",
+  "ControlTools.titles.set_connector_env": "Change environment",
   "ControlTools.titles.set_setting": "Change setting",
   "ControlTools.titles.subscribe": "Subscribe to collection",
   "ControlTools.titles.switch_collection": "Switch collection",
@@ -758,7 +775,7 @@
   },
   "ControlTools.updateAvailableKind": "update available",
   "ControlTools.update_connector.cliUsage": "edit <name> --json <config> | --file <path> [--rename <new>]",
-  "ControlTools.update_connector.description": "Change a connector's config, its name, or both. config replaces the whole config; write ${CC_NEEDS:NAME} for any secret the user has not given you. Subscribed collections are read-only.",
+  "ControlTools.update_connector.description": "Change a connector's config, its name, or both. config replaces the whole config; write ${CC_NEEDS:NAME} for any secret the user has not given you. Subscribed collections are read-only. To add, change or remove environment variables, use set_connector_env. Never send back a value get_connector showed as set or needs value: it replaces the real one.",
   "ControlTools.waitingText": "Waiting for your answer in Connector Control.",
   "ControlTools.wrongTypeError": {
     "format": "“{0}” must be {1}."

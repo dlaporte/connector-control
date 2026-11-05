@@ -86,6 +86,7 @@ public sealed partial class ControlTools
             case "set_setting": return SetSetting(arguments, caller);
             case "add_connector": return AddConnector(arguments, caller.ShownAsker);
             case "update_connector": return UpdateConnector(arguments, caller.ShownAsker);
+            case "set_connector_env": return SetConnectorEnv(arguments, caller.ShownAsker);
             case "delete_connectors": return DeleteConnectors(arguments, caller.ShownAsker);
             case "delete_collection": return DeleteCollection(arguments, caller.ShownAsker);
             case "import_document": return ImportDocument(arguments, caller);

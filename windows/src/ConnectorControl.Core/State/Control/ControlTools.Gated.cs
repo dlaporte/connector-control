@@ -54,6 +54,16 @@ public sealed partial class ControlTools
 
     public static string UnchangedError(string name) => $"“{name}” already has that config.";
 
+    /// <summary>set_connector_env's refusals: a variable's name the environment cannot hold, one given both to
+    /// set and to remove, one to remove that is not there, and an <c>env</c> that is not a set of variables.</summary>
+    public static string EnvNameError(string variable) => $"“{variable}” can’t name an environment variable: it holds “=” or a null character.";
+
+    public static string EnvSetAndUnsetError(string variable) => $"“{variable}” can’t be both set and unset.";
+
+    public static string NoVariableError(string variable, string name) => $"There’s no environment variable named “{variable}” in “{name}”.";
+
+    public static string EnvShapeError(string name) => $"“{name}” has an “env” that isn’t a JSON object; change its config with update_connector.";
+
     public static string AddedNotification(string shownAsker, string name, string collection) => $"{shownAsker} added “{name}” to “{collection}”.";
 
     public static string ChangedNotification(string shownAsker, string name, string collection) => $"{shownAsker} changed “{name}” in “{collection}”.";
@@ -252,6 +262,117 @@ public sealed partial class ControlTools
                 // A rename and nothing else is announced as one; any other change by what it changed.
                 notification: reconfigured ? ChangedNotification(shownAsker, shownNewName, shownCollection)
                                            : RenamedNotification(shownAsker, shownName, shownNewName));
+        });
+    }
+
+    /// <summary>Some of a connector's environment variables set or removed, and every other one, whose value
+    /// Claude is never shown, left as it is: update_connector's question, showing only the variables
+    /// that change, and its change. A name to set follows the editor's rule for a row with a value, and
+    /// must be one the environment can hold; a name to remove must be there, all or nothing, as
+    /// delete_connectors' names must.</summary>
+    private ControlStep SetConnectorEnv(ControlArguments arguments, string shownAsker)
+    {
+        var collection = TargetCollection(arguments);
+        var shownCollection = ControlText.EscapedName(collection);
+        if (state.Store.Collections.GetValueOrDefault(collection) is not { } held)
+        {
+            return new ControlStep.Refused(MasterStore.NoCollectionError(shownCollection));
+        }
+        if (state.IsSynced(collection))
+        {
+            return new ControlStep.Refused(SubscribedChangeError(shownCollection));
+        }
+        var name = arguments.String("name") ?? "";
+        var shownName = ControlText.EscapedName(name);
+        if (held.Mcps.GetValueOrDefault(name) is not { } current)
+        {
+            return new ControlStep.Refused(NoConnectorError(shownName, shownCollection));
+        }
+        var set = arguments.Object("set")?.ObjectProperties ?? JsonValue.Object().ObjectProperties;
+        var unset = new List<string>();
+        foreach (var variable in arguments.Strings("unset") ?? [])
+        {
+            if (!unset.Contains(variable, StringComparer.Ordinal))
+            {
+                unset.Add(variable);
+            }
+        }
+        if (set.Count == 0 && unset.Count == 0)
+        {
+            return new ControlStep.Refused(NothingToChangeError);
+        }
+        foreach (var (key, value) in set)
+        {
+            var shownKey = ControlText.EscapedName(key);
+            if (value.Kind != JsonKind.String)
+            {
+                return new ControlStep.Refused(WrongTypeError(shownKey, TextKind));
+            }
+            if (key.TrimSpaces().Length == 0)
+            {
+                return new ControlStep.Refused(EditorModel.EnvNamelessError);
+            }
+            if (key.Contains('=') || key.Contains('\0'))
+            {
+                return new ControlStep.Refused(EnvNameError(shownKey));
+            }
+            if (unset.Contains(key, StringComparer.Ordinal))
+            {
+                return new ControlStep.Refused(EnvSetAndUnsetError(shownKey));
+            }
+        }
+        if (current.Config.Kind != JsonKind.Object)
+        {
+            return new ControlStep.Refused(ConfigShapeError);
+        }
+        var env = JsonValue.Object();
+        switch (current.Config["env"])
+        {
+            case { Kind: JsonKind.Object } variables:
+                env = variables;
+                break;
+            case null:
+                break;
+            default:
+                return new ControlStep.Refused(EnvShapeError(shownName));
+        }
+        // All or nothing: a list with one wrong name is a mistake, not a request for the rest.
+        if (unset.FirstOrDefault(variable => env[variable] is null) is { } missing)
+        {
+            return new ControlStep.Refused(NoVariableError(ControlText.EscapedName(missing), shownName));
+        }
+        env = unset.Aggregate(env, (variables, variable) => variables.Without(variable));
+        env = set.Aggregate(env, (variables, item) => variables.With(item.Key, item.Value));
+        // An environment left with no variables goes, as the editor's form leaves it.
+        var after = env.ObjectProperties.Count == 0 ? current.Config.Without("env") : current.Config.With("env", env);
+        if (ControlMasking.MaskRefusal(after, current.Config) is { } masked)
+        {
+            return new ControlStep.Refused(masked);
+        }
+        if (after == current.Config)
+        {
+            return new ControlStep.Refused(UnchangedError(shownName));
+        }
+        var active = collection == state.ActiveCollection;
+        var request = new ConfirmationRequest(
+            ChangeTitle(shownAsker, shownName),
+            active ? ChangeActiveMessage(shownCollection) : ChangeMessage(shownCollection),
+            ControlMasking.ChangeLines(current.Config, after, ControlMasking.Exposure.Dialog),
+            active && current.Enabled ? TakesEffectFooter : null);
+        return new ControlStep.Ready(request, () =>
+        {
+            var mark = state.AppliedServers;
+            if (state.Upsert(name, new McpEntry(current.Enabled, after, current.LastEditView), renamedFrom: name, collection: collection)
+                is { } refusal)
+            {
+                return Refused(refusal, [name, collection]);
+            }
+            state.ApplyInteractively();
+            // update_connector's answer, without a previous name: nothing in it is a value.
+            return Done([ChangedText(shownName, shownCollection)],
+                [("collection", JsonValue.String(collection)), ("name", JsonValue.String(name))],
+                collection, mark, RestartToApplyText,
+                notification: ChangedNotification(shownAsker, shownName, shownCollection));
         });
     }
 

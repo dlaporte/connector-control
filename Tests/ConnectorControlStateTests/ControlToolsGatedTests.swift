@@ -217,6 +217,102 @@ final class ControlToolsGatedTests: XCTestCase {
         XCTAssertEqual(rig.state.store.mcps["vault"]?.config, added)
     }
 
+    // MARK: set_connector_env
+
+    /// The question is a change's, showing only the variables that change - a setting in full, as
+    /// any variable not named for a secret shows - and the variables it does not name keep their
+    /// values, byte for byte. The answer carries none of them.
+    func testSettingTheEnvironmentChangesOnlyTheVariablesItNames() throws {
+        let rig = rig(); defer { rig.dispose() }
+        XCTAssertNil(rig.state.upsert(name: "vault", entry: MCPEntry(config: vault), renamedFrom: nil))
+        let result = try XCTUnwrap(rig.call("set_connector_env", [
+            "name": .string("vault"), "set": .object(["PROXMOX_ACCESS_LEVEL": .string("config"), "MODE": .string("slow")]),
+            "unset": .array([.string("STATE")]),
+        ]))
+        let after: JSONValue = .object([
+            "command": .string("npx"), "args": .array([.string("-y"), .string("vault-mcp")]),
+            "env": .object(["API_KEY": .string("bw://x"), "MODE": .string("slow"), "PROXMOX_ACCESS_LEVEL": .string("config")]),
+        ])
+        XCTAssertEqual(rig.confirmer.requests, [ConfirmationRequest(
+            title: "Claude wants to change “vault”",
+            message: "In “Default”, the collection Claude is running:",
+            code: ["env", "  − MODE = fast", "  − STATE = set", "  + MODE = slow", "  + PROXMOX_ACCESS_LEVEL = config"],
+            footer: ControlTools.takesEffectFooter)])
+        XCTAssertEqual(result, ControlResult(
+            structured: .object(["collection": .string("Default"), "name": .string("vault"), "applied": .bool(true), "restartRequired": .bool(false)]),
+            text: ControlTools.changedText("vault", "Default"), isError: false))
+        XCTAssertEqual(rig.state.store.mcps["vault"], MCPEntry(config: after))
+        XCTAssertEqual(try rig.h.claudeServers()["vault"], after)
+    }
+
+    /// A connector with no environment gets one; one whose last variable goes is left with none, as
+    /// the editor leaves it when its last row is deleted.
+    func testSettingTheEnvironmentAddsOrDropsTheWholeEnv() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let scoutbook = try XCTUnwrap(rig.state.store.mcps["scoutbook"]).config
+        _ = rig.call("set_connector_env", ["name": .string("scoutbook"), "set": .object(["DEBUG": .string("1")])])
+        guard case .object(var object) = scoutbook else { return XCTFail("scoutbook is an object") }
+        object["env"] = .object(["DEBUG": .string("1")])
+        XCTAssertEqual(rig.state.store.mcps["scoutbook"]?.config, .object(object))
+        _ = rig.call("set_connector_env", ["name": .string("scoutbook"), "unset": .array([.string("DEBUG"), .string("DEBUG")])])
+        XCTAssertEqual(rig.state.store.mcps["scoutbook"]?.config, scoutbook)
+        XCTAssertEqual(rig.confirmer.requests.map(\.code), [["env", "  + DEBUG = 1"], ["env", "  − DEBUG = 1"]])
+    }
+
+    func testSettingTheEnvironmentIsRefusedBeforeAnyoneIsAsked() throws {
+        let rig = rig(); defer { rig.dispose() }
+        try rig.h.subscribe(rig.state, to: CollectionDocumentSamples.dataTeam)
+        XCTAssertNil(rig.state.upsert(name: "vault", entry: MCPEntry(config: vault), renamedFrom: nil))
+        let odd: JSONValue = .object(["command": .string("node"), "env": .array([.string("A=1")])])
+        XCTAssertNil(rig.state.upsert(name: "odd", entry: MCPEntry(config: odd), renamedFrom: nil))
+        func setting(_ values: [String: JSONValue]) -> [String: JSONValue] { ["name": .string("vault"), "set": .object(values)] }
+        let cases: [([String: JSONValue], String)] = [
+            (["name": .string("vault"), "set": .object(["A": .string("1")]), "collection": .string("Nope")], MasterStore.noCollectionError("Nope")),
+            (["name": .string("dbt"), "set": .object(["A": .string("1")]), "collection": .string("Data team")],
+             ControlTools.subscribedChangeError("Data team")),
+            (["name": .string("nope"), "set": .object(["A": .string("1")])], ControlTools.noConnectorError("nope", "Default")),
+            (["name": .string("vault")], ControlTools.nothingToChangeError),
+            (["name": .string("vault"), "set": .object([:]), "unset": .array([])], ControlTools.nothingToChangeError),
+            (setting(["A": .int(1)]), ControlTools.wrongTypeError("A", ControlTools.textKind)),
+            (setting(["": .string("1")]), EditorModel.envNamelessError),
+            (setting([" ": .string("1")]), EditorModel.envNamelessError),
+            (setting(["A=B": .string("1")]), ControlTools.envNameError("A=B")),
+            (setting(["A\u{0}B": .string("1")]), ControlTools.envNameError(#"A\u{0000}B"#)),
+            (["name": .string("vault"), "set": .object(["MODE": .string("slow")]), "unset": .array([.string("MODE")])],
+             ControlTools.envSetAndUnsetError("MODE")),
+            (["name": .string("vault"), "unset": .array([.string("STATE"), .string("NOPE")])], ControlTools.noVariableError("NOPE", "vault")),
+            (["name": .string("scoutbook"), "unset": .array([.string("A")])], ControlTools.noVariableError("A", "scoutbook")),
+            (["name": .string("odd"), "set": .object(["A": .string("1")])], ControlTools.envShapeError("odd")),
+            (setting(["API_KEY": .string(ControlMasking.setState)]), ControlMasking.maskedValueError("API_KEY", ControlMasking.setState)),
+            (setting(["NEW": .string(ControlMasking.setText)]), ControlMasking.maskedValueError("NEW", ControlMasking.mask)),
+            (setting(["MODE": .string("fast")]), ControlTools.unchangedError("vault")),
+        ]
+        for (arguments, refusal) in cases {
+            XCTAssertEqual(rig.call("set_connector_env", arguments), .refusal(refusal), refusal)
+        }
+        XCTAssertTrue(rig.confirmer.requests.isEmpty)
+        XCTAssertEqual(rig.state.store.mcps["vault"]?.config, vault)
+        // A new variable may hold the word "set": it replaces nothing.
+        XCTAssertFalse(try XCTUnwrap(rig.call("set_connector_env", setting(["LEVEL": .string(ControlMasking.setState)]))).isError)
+        XCTAssertEqual(rig.state.store.mcps["vault"]?.config, changedVault(["LEVEL": .string(ControlMasking.setState)]))
+    }
+
+    /// Claude's change asks, and Don't Allow leaves the connector as it was; the command line's is the
+    /// user's own, and is made without asking.
+    func testSettingTheEnvironmentAsksClaudeButNotTheCommandLine() throws {
+        let rig = rig(answer: false); defer { rig.dispose() }
+        XCTAssertNil(rig.state.upsert(name: "vault", entry: MCPEntry(config: vault), renamedFrom: nil))
+        let servers = try rig.h.claudeServers()
+        let arguments: [String: JSONValue] = ["name": .string("vault"), "set": .object(["MODE": .string("slow")])]
+        XCTAssertEqual(rig.call("set_connector_env", arguments), .refusal(ControlTools.declinedError))
+        XCTAssertEqual(rig.confirmer.requests.count, 1)
+        XCTAssertEqual(rig.state.store.mcps["vault"]?.config, vault)
+        XCTAssertEqual(try rig.h.claudeServers(), servers)
+        XCTAssertFalse(try XCTUnwrap(rig.call("set_connector_env", arguments, as: .cli)).isError)
+        XCTAssertEqual(rig.confirmer.requests.count, 1, "the command line is not asked")
+        XCTAssertEqual(rig.state.store.mcps["vault"]?.config, changedVault(["MODE": .string("slow")]))
+    }
+
     // MARK: delete_connectors
 
     func testDeletingAsksThenDeletes() throws {

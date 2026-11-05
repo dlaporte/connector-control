@@ -29,6 +29,7 @@ public class ControlCatalogTests
             ["subscribe"] = (false, false, false, ControlGateClass.Gated, "subscribe <file>"),
             ["restart_claude"] = (false, false, false, ControlGateClass.AlwaysConfirm, "restart-claude"),
             ["update_connector"] = (false, true, false, ControlGateClass.Gated, "edit <name>"),
+            ["set_connector_env"] = (false, true, false, ControlGateClass.Gated, "env <name>"),
             ["delete_connectors"] = (false, true, false, ControlGateClass.Gated, "delete <name>…"),
             ["delete_collection"] = (false, true, false, ControlGateClass.Gated, "collection delete <name>"),
             ["import_document"] = (false, true, false, ControlGateClass.Gated, "import <file>"),

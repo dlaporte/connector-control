@@ -33,7 +33,7 @@ public sealed partial class ControlTools
         ["create_collection"] = "Create collection", ["rename_collection"] = "Rename collection",
         ["duplicate_collection"] = "Duplicate collection", ["refresh_subscription"] = "Refresh subscription",
         ["set_setting"] = "Change setting", ["add_connector"] = "Add connector", ["subscribe"] = "Subscribe to collection",
-        ["restart_claude"] = "Restart Claude", ["update_connector"] = "Change connector",
+        ["restart_claude"] = "Restart Claude", ["update_connector"] = "Change connector", ["set_connector_env"] = "Change environment",
         ["delete_connectors"] = "Delete connectors", ["delete_collection"] = "Delete collection",
         ["import_document"] = "Import collection", ["apply_update"] = "Apply update", ["restore_backup"] = "Restore backup",
     };
@@ -43,6 +43,8 @@ public sealed partial class ControlTools
     internal const string SubscribedName = "A subscribed collection's name.";
     internal const string ConnectorName = "The connector's name.";
     internal const string FilePath = "The collection file's full path.";
+    public const string EnvSetProperty = "Variables to add or change, as NAME: value.";
+    public const string EnvUnsetProperty = "Names of variables to remove.";
     internal static readonly IReadOnlyList<string> ClashChoices = ["replace", "keep-both", "skip"];
 
     public static readonly IReadOnlyList<ControlToolDefinition> Catalog =
@@ -70,9 +72,15 @@ public sealed partial class ControlTools
                           ("collection", Text(CollectionOrActive)), ("enabled", Flag("false to add it switched off."))],
              required: ["name", "config"]),
         Tool("update_connector", ControlGateClass.Gated, destructive: true, usage: "edit <name> --json <config> | --file <path> [--rename <new>]", group: ConnectorsGroup,
-             description: "Change a connector's config, its name, or both. config replaces the whole config; write ${CC_NEEDS:NAME} for any secret the user has not given you. Subscribed collections are read-only.",
+             description: "Change a connector's config, its name, or both. config replaces the whole config; write ${CC_NEEDS:NAME} for any secret the user has not given you. Subscribed collections are read-only. To add, change or remove environment variables, use set_connector_env. Never send back a value get_connector showed as set or needs value: it replaces the real one.",
              properties: [("name", Text(ConnectorName)), ("config", Object("Its new config, replacing the old one whole.")),
                           ("newName", Text("A new name for it.")), ("collection", Text(CollectionOrActive))],
+             required: ["name"]),
+        Tool("set_connector_env", ControlGateClass.Gated, destructive: true, usage: "env <name> [KEY=value…] [--unset KEY…] [--collection <name>]",
+             group: ConnectorsGroup,
+             description: "Set or remove a connector's environment variables, leaving the others as they are. Variables it doesn't name keep their values, which are never sent to Claude. Never write a secret the user has not given you: put ${CC_NEEDS:NAME} in its place, and the user fills it in in Connector Control. Looks in the active collection unless collection names another; subscribed collections are read-only.",
+             properties: [("name", Text(ConnectorName)), ("set", Object(EnvSetProperty)), ("unset", Names(EnvUnsetProperty)),
+                          ("collection", Text(CollectionOrActive))],
              required: ["name"]),
         Tool("delete_connectors", ControlGateClass.Gated, destructive: true, usage: "delete <name>…", group: ConnectorsGroup,
              description: "Delete connectors. A copy remains in Connector Control's backups.",

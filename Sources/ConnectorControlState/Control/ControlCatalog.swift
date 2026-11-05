@@ -28,7 +28,7 @@ extension ControlTools {
         "create_collection": "Create collection", "rename_collection": "Rename collection",
         "duplicate_collection": "Duplicate collection", "refresh_subscription": "Refresh subscription",
         "set_setting": "Change setting", "add_connector": "Add connector", "subscribe": "Subscribe to collection",
-        "restart_claude": "Restart Claude", "update_connector": "Change connector",
+        "restart_claude": "Restart Claude", "update_connector": "Change connector", "set_connector_env": "Change environment",
         "delete_connectors": "Delete connectors", "delete_collection": "Delete collection",
         "import_document": "Import collection", "apply_update": "Apply update", "restore_backup": "Restore backup",
     ]
@@ -38,6 +38,8 @@ extension ControlTools {
     static let subscribedName = "A subscribed collection's name."
     static let connectorName = "The connector's name."
     static let filePath = "The collection file's full path."
+    public static let envSetProperty = "Variables to add or change, as NAME: value."
+    public static let envUnsetProperty = "Names of variables to remove."
     static let clashChoices = ["replace", "keep-both", "skip"]
 
     public static let catalog: [ControlToolDefinition] = [
@@ -64,9 +66,15 @@ extension ControlTools {
                           "collection": text(collectionOrActive), "enabled": flag("false to add it switched off.")],
              required: ["name", "config"]),
         tool("update_connector", .gated, destructive: true, usage: "edit <name> --json <config> | --file <path> [--rename <new>]", group: connectorsGroup,
-             description: "Change a connector's config, its name, or both. config replaces the whole config; write ${CC_NEEDS:NAME} for any secret the user has not given you. Subscribed collections are read-only.",
+             description: "Change a connector's config, its name, or both. config replaces the whole config; write ${CC_NEEDS:NAME} for any secret the user has not given you. Subscribed collections are read-only. To add, change or remove environment variables, use set_connector_env. Never send back a value get_connector showed as set or needs value: it replaces the real one.",
              properties: ["name": text(connectorName), "config": object("Its new config, replacing the old one whole."),
                           "newName": text("A new name for it."), "collection": text(collectionOrActive)],
+             required: ["name"]),
+        tool("set_connector_env", .gated, destructive: true, usage: "env <name> [KEY=value…] [--unset KEY…] [--collection <name>]",
+             group: connectorsGroup,
+             description: "Set or remove a connector's environment variables, leaving the others as they are. Variables it doesn't name keep their values, which are never sent to Claude. Never write a secret the user has not given you: put ${CC_NEEDS:NAME} in its place, and the user fills it in in Connector Control. Looks in the active collection unless collection names another; subscribed collections are read-only.",
+             properties: ["name": text(connectorName), "set": object(envSetProperty), "unset": names(envUnsetProperty),
+                          "collection": text(collectionOrActive)],
              required: ["name"]),
         tool("delete_connectors", .gated, destructive: true, usage: "delete <name>…", group: connectorsGroup,
              description: "Delete connectors. A copy remains in Connector Control's backups.",

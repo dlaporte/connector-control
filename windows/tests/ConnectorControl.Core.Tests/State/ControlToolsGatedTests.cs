@@ -262,6 +262,111 @@ public class ControlToolsGatedTests
         Assert.Equal(added, rig.State.Store.Mcps["vault"].Config);
     }
 
+    // MARK: set_connector_env
+
+    /// <summary>The question is a change's, showing only the variables that change - a setting in full, as
+    /// any variable not named for a secret shows - and the variables it does not name keep their
+    /// values, byte for byte. The answer carries none of them.</summary>
+    [Fact]
+    public void SettingTheEnvironmentChangesOnlyTheVariablesItNames()
+    {
+        using var rig = Rig();
+        Assert.Null(rig.State.Upsert("vault", new McpEntry(Vault), null));
+        var result = rig.Call("set_connector_env", Args(("name", Text("vault")),
+            ("set", JsonValue.Object(("PROXMOX_ACCESS_LEVEL", Text("config")), ("MODE", Text("slow")))), ("unset", Names("STATE"))));
+        var after = JsonValue.Object(
+            ("command", Text("npx")), ("args", JsonValue.Array([Text("-y"), Text("vault-mcp")])),
+            ("env", JsonValue.Object(("API_KEY", Text("bw://x")), ("MODE", Text("slow")), ("PROXMOX_ACCESS_LEVEL", Text("config")))));
+        Assert.Equal([new ConfirmationRequest(
+            "Claude wants to change “vault”",
+            "In “Default”, the collection Claude is running:",
+            ["env", "  − MODE = fast", "  − STATE = set", "  + MODE = slow", "  + PROXMOX_ACCESS_LEVEL = config"],
+            ControlTools.TakesEffectFooter)], rig.Confirmer.Requests);
+        Assert.Equal(new ControlResult(
+            JsonValue.Object(("collection", Text("Default")), ("name", Text("vault")), ("applied", JsonValue.Bool(true)), ("restartRequired", JsonValue.Bool(false))),
+            ControlTools.ChangedText("vault", "Default"), false), result);
+        Assert.Equal(new McpEntry(after), rig.State.Store.Mcps["vault"]);
+        Assert.Equal(after, rig.H.ClaudeServers()["vault"]);
+    }
+
+    /// <summary>A connector with no environment gets one; one whose last variable goes is left with none, as
+    /// the editor leaves it when its last row is deleted.</summary>
+    [Fact]
+    public void SettingTheEnvironmentAddsOrDropsTheWholeEnv()
+    {
+        using var rig = Rig();
+        var scoutbook = rig.State.Store.Mcps["scoutbook"].Config;
+        rig.Call("set_connector_env", Args(("name", Text("scoutbook")), ("set", JsonValue.Object(("DEBUG", Text("1"))))));
+        Assert.Equal(scoutbook.With("env", JsonValue.Object(("DEBUG", Text("1")))), rig.State.Store.Mcps["scoutbook"].Config);
+        rig.Call("set_connector_env", Args(("name", Text("scoutbook")), ("unset", Names("DEBUG", "DEBUG"))));
+        Assert.Equal(scoutbook, rig.State.Store.Mcps["scoutbook"].Config);
+        Assert.Equal(2, rig.Confirmer.Requests.Count);
+        Assert.Equal(["env", "  + DEBUG = 1"], rig.Confirmer.Requests[0].Code);
+        Assert.Equal(["env", "  − DEBUG = 1"], rig.Confirmer.Requests[1].Code);
+    }
+
+    [Fact]
+    public void SettingTheEnvironmentIsRefusedBeforeAnyoneIsAsked()
+    {
+        using var rig = Rig();
+        rig.H.Subscribe(rig.State, CollectionDocumentSamples.DataTeam);
+        Assert.Null(rig.State.Upsert("vault", new McpEntry(Vault), null));
+        var odd = JsonValue.Object(("command", Text("node")), ("env", JsonValue.Array([Text("A=1")])));
+        Assert.Null(rig.State.Upsert("odd", new McpEntry(odd), null));
+        static JsonValue Setting(params (string Key, JsonValue Value)[] values) =>
+            Args(("name", Text("vault")), ("set", JsonValue.Object(values)));
+        (JsonValue Arguments, string Refusal)[] cases =
+        [
+            (Args(("name", Text("vault")), ("set", JsonValue.Object(("A", Text("1")))), ("collection", Text("Nope"))), MasterStore.NoCollectionError("Nope")),
+            (Args(("name", Text("dbt")), ("set", JsonValue.Object(("A", Text("1")))), ("collection", Text("Data team"))),
+             ControlTools.SubscribedChangeError("Data team")),
+            (Args(("name", Text("nope")), ("set", JsonValue.Object(("A", Text("1"))))), ControlTools.NoConnectorError("nope", "Default")),
+            (Args(("name", Text("vault"))), ControlTools.NothingToChangeError),
+            (Args(("name", Text("vault")), ("set", JsonValue.Object()), ("unset", Names())), ControlTools.NothingToChangeError),
+            (Setting(("A", JsonValue.Int(1))), ControlTools.WrongTypeError("A", ControlTools.TextKind)),
+            (Setting(("", Text("1"))), EditorModel.EnvNamelessError),
+            (Setting((" ", Text("1"))), EditorModel.EnvNamelessError),
+            (Setting(("A=B", Text("1"))), ControlTools.EnvNameError("A=B")),
+            (Setting(("A\0B", Text("1"))), ControlTools.EnvNameError("""A\u{0000}B""")),
+            (Args(("name", Text("vault")), ("set", JsonValue.Object(("MODE", Text("slow")))), ("unset", Names("MODE"))),
+             ControlTools.EnvSetAndUnsetError("MODE")),
+            (Args(("name", Text("vault")), ("unset", Names("STATE", "NOPE"))), ControlTools.NoVariableError("NOPE", "vault")),
+            (Args(("name", Text("scoutbook")), ("unset", Names("A"))), ControlTools.NoVariableError("A", "scoutbook")),
+            (Args(("name", Text("odd")), ("set", JsonValue.Object(("A", Text("1"))))), ControlTools.EnvShapeError("odd")),
+            (Setting(("API_KEY", Text(ControlMasking.SetState))), ControlMasking.MaskedValueError("API_KEY", ControlMasking.SetState)),
+            (Setting(("NEW", Text(ControlMasking.SetText))), ControlMasking.MaskedValueError("NEW", ControlMasking.Mask)),
+            (Setting(("MODE", Text("fast"))), ControlTools.UnchangedError("vault")),
+        ];
+        foreach (var (arguments, refusal) in cases)
+        {
+            Assert.Equal(ControlResult.Refusal(refusal), rig.Call("set_connector_env", arguments));
+        }
+        Assert.Empty(rig.Confirmer.Requests);
+        Assert.Equal(Vault, rig.State.Store.Mcps["vault"].Config);
+        // A new variable may hold the word "set": it replaces nothing.
+        Assert.False(rig.Call("set_connector_env", Setting(("LEVEL", Text(ControlMasking.SetState))))?.IsError);
+        Assert.Equal(ChangedVault(("LEVEL", Text(ControlMasking.SetState))), rig.State.Store.Mcps["vault"].Config);
+    }
+
+    /// <summary>Claude's change asks, and Don't Allow leaves the connector as it was; the command line's is the
+    /// user's own, and is made without asking.</summary>
+    [Fact]
+    public void SettingTheEnvironmentAsksClaudeButNotTheCommandLine()
+    {
+        using var rig = Rig(answer: false);
+        Assert.Null(rig.State.Upsert("vault", new McpEntry(Vault), null));
+        var servers = rig.H.ClaudeServers();
+        var arguments = Args(("name", Text("vault")), ("set", JsonValue.Object(("MODE", Text("slow")))));
+        Assert.Equal(ControlResult.Refusal(ControlTools.DeclinedError), rig.Call("set_connector_env", arguments));
+        Assert.Single(rig.Confirmer.Requests);
+        Assert.Equal(Vault, rig.State.Store.Mcps["vault"].Config);
+        Assert.Equal(servers, rig.H.ClaudeServers());
+        Assert.False(rig.Call("set_connector_env", arguments, new ControlCaller.Cli())?.IsError);
+        // The command line is not asked.
+        Assert.Single(rig.Confirmer.Requests);
+        Assert.Equal(ChangedVault(("MODE", Text("slow"))), rig.State.Store.Mcps["vault"].Config);
+    }
+
     // MARK: delete_connectors
 
     [Fact]

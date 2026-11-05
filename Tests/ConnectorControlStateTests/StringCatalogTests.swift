@@ -160,6 +160,9 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.duplicateSubscribedError": ["X"],
         "ControlTools.duplicatedText": ["X", "Y"],
         "ControlTools.emptyCollectionText": ["X"],
+        "ControlTools.envNameError": ["X"],
+        "ControlTools.envSetAndUnsetError": ["X"],
+        "ControlTools.envShapeError": ["X"],
         "ControlTools.fromFooter": ["X"],
         "ControlTools.importMessage.many": ["3", "X"],
         "ControlTools.importMessage.one": ["1", "X"],
@@ -182,6 +185,7 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.noBackupError": ["X"],
         "ControlTools.noConnectorError": ["X", "Y"],
         "ControlTools.noUpdateError": ["X"],
+        "ControlTools.noVariableError": ["X", "Y"],
         "ControlTools.notAFileError": ["X"],
         "ControlTools.notOneOfError": ["X", "Y"],
         "ControlTools.notSubscribedError": ["X"],
@@ -570,6 +574,11 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.duplicateSubscribedError"] = ControlTools.duplicateSubscribedError("X")
         actual["ControlTools.duplicatedText"] = ControlTools.duplicatedText("X", "Y")
         actual["ControlTools.emptyCollectionText"] = ControlTools.emptyCollectionText("X")
+        actual["ControlTools.envNameError"] = ControlTools.envNameError("X")
+        actual["ControlTools.envSetAndUnsetError"] = ControlTools.envSetAndUnsetError("X")
+        actual["ControlTools.envSetProperty"] = ControlTools.envSetProperty
+        actual["ControlTools.envShapeError"] = ControlTools.envShapeError("X")
+        actual["ControlTools.envUnsetProperty"] = ControlTools.envUnsetProperty
         actual["ControlTools.fromFooter"] = ControlTools.fromFooter("X")
         actual["ControlTools.helpOptions"] = ControlTools.helpOptions
         actual["ControlTools.helpUsage"] = ControlTools.helpUsage
@@ -609,6 +618,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.noConnectorError"] = ControlTools.noConnectorError("X", "Y")
         actual["ControlTools.noQuestionError"] = ControlTools.noQuestionError
         actual["ControlTools.noUpdateError"] = ControlTools.noUpdateError("X")
+        actual["ControlTools.noVariableError"] = ControlTools.noVariableError("X", "Y")
         actual["ControlTools.notAFileError"] = ControlTools.notAFileError("X")
         actual["ControlTools.notOneOfError"] = ControlTools.notOneOfError("X", "Y")
         actual["ControlTools.notSubscribedError"] = ControlTools.notSubscribedError("X")

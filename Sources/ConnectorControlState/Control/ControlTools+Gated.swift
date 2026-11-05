@@ -50,6 +50,16 @@ extension ControlTools {
 
     public static func unchangedError(_ name: String) -> String { "“\(name)” already has that config." }
 
+    /// set_connector_env's refusals: a variable's name the environment cannot hold, one given both to
+    /// set and to remove, one to remove that is not there, and an `env` that is not a set of variables.
+    public static func envNameError(_ variable: String) -> String { "“\(variable)” can’t name an environment variable: it holds “=” or a null character." }
+
+    public static func envSetAndUnsetError(_ variable: String) -> String { "“\(variable)” can’t be both set and unset." }
+
+    public static func noVariableError(_ variable: String, _ name: String) -> String { "There’s no environment variable named “\(variable)” in “\(name)”." }
+
+    public static func envShapeError(_ name: String) -> String { "“\(name)” has an “env” that isn’t a JSON object; change its config with update_connector." }
+
     public static func addedNotification(_ shownAsker: String, _ name: String, _ collection: String) -> String { "\(shownAsker) added “\(name)” to “\(collection)”." }
 
     public static func changedNotification(_ shownAsker: String, _ name: String, _ collection: String) -> String { "\(shownAsker) changed “\(name)” in “\(collection)”." }
@@ -165,6 +175,74 @@ extension ControlTools {
                         // A rename and nothing else is announced as one; any other change by what it changed.
                         notification: reconfigured ? ControlTools.changedNotification(shownAsker, shownNewName, shownCollection)
                                                    : ControlTools.renamedNotification(shownAsker, shownName, shownNewName))
+        })
+    }
+
+    /// Some of a connector's environment variables set or removed, and every other one, whose value
+    /// Claude is never shown, left as it is: update_connector's question, showing only the variables
+    /// that change, and its change. A name to set follows the editor's rule for a row with a value, and
+    /// must be one the environment can hold; a name to remove must be there, all or nothing, as
+    /// delete_connectors' names must.
+    func setConnectorEnv(_ arguments: ControlArguments, _ shownAsker: String) -> ControlStep {
+        let collection = targetCollection(arguments)
+        let shownCollection = ControlText.escapedName(collection)
+        guard let held = state.store.collections[collection] else { return .refused(MasterStore.noCollectionError(shownCollection)) }
+        guard !state.isSynced(collection) else { return .refused(ControlTools.subscribedChangeError(shownCollection)) }
+        let name = arguments.string("name") ?? ""
+        let shownName = ControlText.escapedName(name)
+        guard let current = held.mcps[name] else { return .refused(ControlTools.noConnectorError(shownName, shownCollection)) }
+        var set: [String: JSONValue] = [:]
+        if case .object(let given)? = arguments.object("set") { set = given }
+        var unset: [String] = []
+        for variable in arguments.strings("unset") ?? [] where !unset.contains(where: { $0.hasSameScalars(as: variable) }) {
+            unset.append(variable)
+        }
+        guard !set.isEmpty || !unset.isEmpty else { return .refused(ControlTools.nothingToChangeError) }
+        for key in set.keys.sorted(by: { $0.ordinallyPrecedes($1) }) {
+            let shownKey = ControlText.escapedName(key)
+            guard case .string? = set[key] else { return .refused(ControlTools.wrongTypeError(shownKey, ControlTools.textKind)) }
+            if key.trimmingCharacters(in: .whitespaces).isEmpty { return .refused(EditorModel.envNamelessError) }
+            if key.unicodeScalars.contains(where: { $0 == "=" || $0 == "\u{0}" }) { return .refused(ControlTools.envNameError(shownKey)) }
+            if unset.contains(where: { $0.hasSameScalars(as: key) }) { return .refused(ControlTools.envSetAndUnsetError(shownKey)) }
+        }
+        guard case .object(var config) = current.config else { return .refused(ControlTools.configShapeError) }
+        var env: [String: JSONValue] = [:]
+        switch config["env"] {
+        case .object(let variables)?: env = variables
+        case nil: break
+        case _?: return .refused(ControlTools.envShapeError(shownName))
+        }
+        // All or nothing: a list with one wrong name is a mistake, not a request for the rest. Found
+        // scalar by scalar, as the Windows mirror's ordinal keys are.
+        if let missing = unset.first(where: { variable in !env.keys.contains { $0.hasSameScalars(as: variable) } }) {
+            return .refused(ControlTools.noVariableError(ControlText.escapedName(missing), shownName))
+        }
+        for variable in unset { env.removeValue(forKey: variable) }
+        for (key, value) in set { env[key] = value }
+        // An environment left with no variables goes, as the editor's form leaves it.
+        if env.isEmpty { config.removeValue(forKey: "env") } else { config["env"] = .object(env) }
+        let after = JSONValue.object(config)
+        if let error = ControlMasking.maskRefusal(after, over: current.config) { return .refused(error) }
+        guard after != current.config else { return .refused(ControlTools.unchangedError(shownName)) }
+        let active = collection == state.activeCollection
+        let request = ConfirmationRequest(
+            title: ControlTools.changeTitle(shownAsker, shownName),
+            message: active ? ControlTools.changeActiveMessage(shownCollection) : ControlTools.changeMessage(shownCollection),
+            code: ControlMasking.changeLines(from: current.config, to: after, exposure: .dialog),
+            footer: active && current.enabled ? ControlTools.takesEffectFooter : nil)
+        return .ready(request, perform: { [self] in
+            let mark = state.appliedServers
+            if let error = state.upsert(name: name,
+                                        entry: MCPEntry(enabled: current.enabled, config: after, lastEditView: current.lastEditView),
+                                        renamedFrom: name, in: collection) {
+                return ControlTools.refused(error, naming: [name, collection])
+            }
+            state.applyInteractively()
+            // update_connector's answer, without a previous name: nothing in it is a value.
+            return done([ControlTools.changedText(shownName, shownCollection)],
+                        ["collection": .string(collection), "name": .string(name)],
+                        touching: collection, since: mark, restart: ControlTools.restartToApplyText,
+                        notification: ControlTools.changedNotification(shownAsker, shownName, shownCollection))
         })
     }
 
