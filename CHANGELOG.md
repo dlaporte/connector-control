@@ -23,9 +23,9 @@ has one.
 ### Both platforms
 
 - Restore… can bring back a whole collection as it was: every connector, its settings and its switch, even one you deleted. The Restore sheet now has two tabs: Collections, which does this and leaves your other collections alone, and Claude’s config, which restores Claude’s config as before and so brings back only the connectors that were on.
-- The backup taken before you delete a collection or connectors is now kept for 30 days, whatever “Backups to keep” is set to. Before, it was rotated out with the rest, often within a day. The delete confirmations and the Delete tools now say “A copy stays in Backups for 30 days.”
+- The backup taken before you delete a collection or connectors is now kept for 30 days, however many backups Settings keeps. Before, it was rotated out with the rest, often within a day. The delete confirmations and the Delete tools now say “A copy stays in Backups for 30 days.”
 - Restoring Claude’s config into a collection you deleted creates it again, instead of asking you to. It holds only the connectors Claude was running, and the confirmation says so.
-- Claude can restore a collection too, after you allow it, with a new Restore collection tool (`restore_collection`); from the command line, `connector-control backups restore-collection <id> <collection>` does the same. List backups (`connector-control backups`) now also lists the collections each backup of your collections holds, with the id to restore one from.
+- Claude can restore a collection too, after you allow it, with a new Restore collection tool (`restore_collection`); from the command line, `connector-control backups restore-collection <id> <collection>` does the same. List backups (`connector-control backups`) now lists the backups of your collections too, with the collections each one holds.
 
 ### Release pipeline
 
