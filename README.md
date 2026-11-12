@@ -621,8 +621,8 @@ answered, just as one it guessed wrong: for a connector Claude runs, Claude's
 config is written again and **Restart Required** appears while Claude runs,
 as after any change. An import or a subscription names its file and lists
 what it brings; a restore lists the connectors it would put back, and a
-collection restore marks each one + (comes back), ~ (changes) or − (goes),
-with its switch. Each line
+collection restore marks each connector + (comes back) or ~ (changes), with
+its switch, or − (goes), and counts the rest as unchanged. Each line
 of what would run is selected and copied one line at a time.
 
 **Don’t Allow** is the default, and Return answers it, as Escape does. One
@@ -1290,6 +1290,10 @@ that no file in the repository contains an em-dash.
   then shows the line as changed, both − and + reading `••• (set)`, and
   neither value. A value that really is one of those words can still be typed
   in the editor.
+- Claude can't tell from a collection restore's question or reply whether a
+  value it can't see differs from the backup: a restore with nothing to change
+  is asked and answered like any other. It can still tell from the backups
+  listed afterwards whether a restore you allowed changed anything.
 - A restore asks with the names of the connectors it would put back, and a
   collection restore with their names and switches, never their settings. A
   backup someone else planted in your backups folder could carry commands
