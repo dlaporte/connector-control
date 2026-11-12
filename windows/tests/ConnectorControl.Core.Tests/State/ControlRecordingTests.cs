@@ -111,7 +111,10 @@ public class ControlRecordingTests
     {
         using var rig = Check("restore-collection").Rig;
         const string id = "mcps.2026-09-04T12-00-00-000Z.json";
-        var time = BackupManager.Labels(rig.State.Service.Backups.Backups(CollectionRestoreModel.Series))[id];
+        // The one backup the replay seeded, which is all the question listed: the restore's own backup
+        // is listed by now, and the question never named it.
+        var listed = rig.State.Service.Backups.Backups(CollectionRestoreModel.Series).Where(path => Path.GetFileName(path) == id).ToList();
+        var time = BackupManager.Labels(listed)[id];
         Assert.Equal([new ConfirmationRequest(
             ControlTools.RestoreTitle(ControlCaller.ClaudeName, "Personal"),
             ControlTools.RestoreCollectionCreatedText("Personal", time),

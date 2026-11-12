@@ -186,10 +186,12 @@ final class ControlToolsCollectionRestoreTests: XCTestCase {
         rig.h.claudeRunningSince(hours: 1)
         rig.state.refreshRestartState()
         let restart = JSONPointer(["restartRequired"])
+        // Before the call: the restore's own backup is listed after it, and the question never named it.
+        let workLabel = try label(rig, id)
         let work = try XCTUnwrap(rig.call("restore_collection", arguments(id, "Work")))
         XCTAssertEqual(rig.confirmer.requests.last?.code, ["− extra"])
         XCTAssertNil(rig.confirmer.requests.last?.footer)
-        XCTAssertEqual(rig.confirmer.requests.last?.message, ControlTools.restoreCollectionText("Work", try label(rig, id)))
+        XCTAssertEqual(rig.confirmer.requests.last?.message, ControlTools.restoreCollectionText("Work", workLabel))
         XCTAssertEqual(work.text, ControlTools.restoredText("Work"))
         XCTAssertEqual(work.structured.value(at: restart), .bool(false))
         let active = try XCTUnwrap(rig.call("restore_collection", arguments(id, "Default")))
@@ -197,5 +199,39 @@ final class ControlToolsCollectionRestoreTests: XCTestCase {
         XCTAssertEqual(active.text, ControlTools.restoredText("Default") + " " + ControlTools.restartToApplyText)
         XCTAssertEqual(active.structured.value(at: restart), .bool(true))
         XCTAssertNil(try rig.h.claudeServers()["extra"])
+    }
+
+    /// Two backups of one second: the question names the one asked about with its milliseconds, so
+    /// its label is worked out over every backup listed, as `list_backups` and the sheet list them.
+    func testTheQuestionLabelsTheBackupAmongAllListedOnes() throws {
+        let rig = rig(); defer { rig.dispose() }
+        XCTAssertNil(rig.state.addEmptyCollection(named: "Work"))
+        let first = try backup(rig, of: rig.state.store, named: "mcps.2026-09-04T12-00-00-000Z.json")
+        _ = try backup(rig, of: rig.state.store, named: "mcps.2026-09-04T12-00-00-500Z.json")
+        XCTAssertNil(rig.state.upsert(name: "extra", entry: MCPEntry(config: config("x")), renamedFrom: nil, in: "Work"))
+        let listed = try label(rig, first)
+        XCTAssertTrue(listed.hasSuffix(".000"), listed)
+        XCTAssertNotEqual(listed, BackupManager.labels(for: try backups(rig).filter { $0.lastPathComponent == first })[first])
+        XCTAssertNotNil(rig.call("restore_collection", arguments(first, "Work")))
+        XCTAssertEqual(rig.confirmer.requests.last?.message, ControlTools.restoreCollectionText("Work", listed))
+    }
+
+    /// A deleted collection and one of its connectors, each named with a quote and a newline: the
+    /// question's title, message and code lines show both as escapes, the way every control text does.
+    func testTheQuestionEscapesTheNamesItShows() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let odd = "Odd\"\nname", connector = "con\"\nnector"
+        XCTAssertNil(rig.state.addEmptyCollection(named: odd))
+        XCTAssertNil(rig.state.upsert(name: connector, entry: MCPEntry(config: config("x")), renamedFrom: nil, in: odd))
+        let id = try backup(rig, of: rig.state.store)
+        XCTAssertNil(rig.state.deleteCollection(named: odd))
+        let time = try label(rig, id)
+        XCTAssertNotNil(rig.call("restore_collection", arguments(id, odd)))
+        let shown = ControlText.escapedName(odd)
+        XCTAssertFalse(shown.contains("\n"))
+        XCTAssertEqual(rig.confirmer.requests, [ConfirmationRequest(
+            title: ControlTools.restoreTitle("Claude", shown),
+            message: ControlTools.restoreCollectionCreatedText(shown, time),
+            code: ["+ \(ControlText.escapedName(connector)) (on)"], footer: nil)])
     }
 }

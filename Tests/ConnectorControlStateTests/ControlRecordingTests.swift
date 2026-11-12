@@ -84,7 +84,9 @@ final class ControlRecordingTests: XCTestCase {
     func testRestoreCollection() throws {
         let rig = try check("restore-collection").rig; defer { rig.dispose() }
         let id = "mcps.2026-09-04T12-00-00-000Z.json"
-        let listed = try rig.state.service.backups.backups(series: CollectionRestoreModel.series)
+        // The one backup the replay seeded, which is all the question listed: the restore's own backup
+        // is listed by now, and the question never named it.
+        let listed = try rig.state.service.backups.backups(series: CollectionRestoreModel.series).filter { $0.lastPathComponent == id }
         let time = try XCTUnwrap(BackupManager.labels(for: listed)[id])
         XCTAssertEqual(rig.confirmer.requests, [ConfirmationRequest(
             title: ControlTools.restoreTitle(ControlCaller.claudeName, "Personal"),

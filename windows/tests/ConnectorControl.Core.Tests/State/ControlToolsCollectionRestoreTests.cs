@@ -208,11 +208,13 @@ public class ControlToolsCollectionRestoreTests
         Assert.Null(rig.State.Upsert("extra", new McpEntry(Config("x")), null, "Work"));
         rig.H.ClaudeRunningSince(hours: 1);
         rig.State.RefreshRestartState();
+        // Before the call: the restore's own backup is listed after it, and the question never named it.
+        var workLabel = Label(rig, id);
         var work = rig.Call("restore_collection", Arguments(id, "Work"));
         Assert.NotNull(work);
         Assert.Equal(["− extra"], rig.Confirmer.Requests[^1].Code);
         Assert.Null(rig.Confirmer.Requests[^1].Footer);
-        Assert.Equal(ControlTools.RestoreCollectionText("Work", Label(rig, id)), rig.Confirmer.Requests[^1].Message);
+        Assert.Equal(ControlTools.RestoreCollectionText("Work", workLabel), rig.Confirmer.Requests[^1].Message);
         Assert.Equal(ControlTools.RestoredText("Work"), work.Text);
         Assert.Equal(JsonValue.Bool(false), work.Structured.ValueAt(new JsonPointer(["restartRequired"])));
         var active = rig.Call("restore_collection", Arguments(id, "Default"));
@@ -221,5 +223,44 @@ public class ControlToolsCollectionRestoreTests
         Assert.Equal(ControlTools.RestoredText("Default") + " " + ControlTools.RestartToApplyText, active.Text);
         Assert.Equal(JsonValue.Bool(true), active.Structured.ValueAt(new JsonPointer(["restartRequired"])));
         Assert.False(rig.H.ClaudeServers().ContainsKey("extra"));
+    }
+
+    /// <summary>Two backups of one second: the question names the one asked about with its milliseconds, so its
+    /// label is worked out over every backup listed, as <c>list_backups</c> and the dialog list them.</summary>
+    [Fact]
+    public void TheQuestionLabelsTheBackupAmongAllListedOnes()
+    {
+        using var rig = Rig();
+        Assert.Null(rig.State.AddEmptyCollection("Work"));
+        var first = Backup(rig, rig.State.Store, "mcps.2026-09-04T12-00-00-000Z.json");
+        Backup(rig, rig.State.Store, "mcps.2026-09-04T12-00-00-500Z.json");
+        Assert.Null(rig.State.Upsert("extra", new McpEntry(Config("x")), null, "Work"));
+        var listed = Label(rig, first);
+        Assert.EndsWith(".000", listed, StringComparison.Ordinal);
+        Assert.NotEqual(listed, BackupManager.Labels(Backups(rig).Where(path => Path.GetFileName(path) == first).ToList())[first]);
+        Assert.NotNull(rig.Call("restore_collection", Arguments(first, "Work")));
+        Assert.Equal(ControlTools.RestoreCollectionText("Work", listed), rig.Confirmer.Requests[^1].Message);
+    }
+
+    /// <summary>A deleted collection and one of its connectors, each named with a quote and a newline: the
+    /// question's title, message and code lines show both as escapes, the way every control text does.</summary>
+    [Fact]
+    public void TheQuestionEscapesTheNamesItShows()
+    {
+        using var rig = Rig();
+        const string odd = "Odd\"\nname";
+        const string connector = "con\"\nnector";
+        Assert.Null(rig.State.AddEmptyCollection(odd));
+        Assert.Null(rig.State.Upsert(connector, new McpEntry(Config("x")), null, odd));
+        var id = Backup(rig, rig.State.Store);
+        Assert.Null(rig.State.DeleteCollection(odd));
+        var time = Label(rig, id);
+        Assert.NotNull(rig.Call("restore_collection", Arguments(id, odd)));
+        var shown = ControlText.EscapedName(odd);
+        Assert.DoesNotContain("\n", shown, StringComparison.Ordinal);
+        Assert.Equal([new ConfirmationRequest(
+            ControlTools.RestoreTitle("Claude", shown),
+            ControlTools.RestoreCollectionCreatedText(shown, time),
+            [$"+ {ControlText.EscapedName(connector)} (on)"], null)], rig.Confirmer.Requests);
     }
 }
