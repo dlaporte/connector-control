@@ -19,6 +19,9 @@ public sealed class RestoreModel : ObservableObject
 
     public static string ConfirmMessage(string fileName) => $"Replace Claude's config with {fileName}?";
 
+    /// <summary>The confirmation's informative text when the backup's collection is gone.</summary>
+    public static string RecreateInformative(string collection) => $"“{collection}” no longer exists, so it is created again with only the connectors Claude was running. To bring back all of its connectors, restore it from Collections.";
+
     private readonly AppState state;
     private readonly IDialogs dialogs;
     private IReadOnlyList<string> backups = [];
@@ -105,7 +108,10 @@ public sealed class RestoreModel : ObservableObject
             RestoreError = ex.Message;
             return false;
         }
-        if (!dialogs.Confirm(ConfirmMessage(Path.GetFileName(backup)), null, RestoreButton, destructive: true))
+        // Under the message: when the collection the backup records is gone, that the restore creates it
+        // again with only what Claude was running.
+        var informative = recorded is not null && state.Store.StoredCollectionName(recorded) is null ? RecreateInformative(recorded) : null;
+        if (!dialogs.Confirm(ConfirmMessage(Path.GetFileName(backup)), informative, RestoreButton, destructive: true))
         {
             return false;
         }
@@ -115,7 +121,7 @@ public sealed class RestoreModel : ObservableObject
             CloseRequested?.Invoke();
             return true;
         }
-        catch (Exception ex) when (ex is RestoreCollectionGoneException or RestoreSubscribedException)
+        catch (RestoreSubscribedException ex)
         {
             // A refusal is the dialog's alone, as the one before the confirmation is: nothing was
             // restored, so there is nothing for the banner to say. It arrives here only when the

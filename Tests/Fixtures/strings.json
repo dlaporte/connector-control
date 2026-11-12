@@ -91,9 +91,6 @@
   "AppState.restartButton": "Restart",
   "AppState.restartInformative": "Any in-progress Claude conversation will be interrupted.",
   "AppState.restartMessage": "Restart Claude Desktop now?",
-  "AppState.restoreCollectionGoneError": {
-    "format": "This backup was taken from “{0}”, which no longer exists. Nothing was restored. Create a collection named “{0}” again, and this backup goes back into it."
-  },
   "AppState.restoreCollectionSubscribedError": {
     "format": "“{0}” is subscribed, so its connectors are the author’s. Nothing was restored."
   },
@@ -691,6 +688,9 @@
   "ControlTools.restoreIntoText": {
     "format": "Its connectors go back into “{0}”:"
   },
+  "ControlTools.restoreRecreatingText": {
+    "format": "“{0}” no longer exists, so it is created again with only the connectors Claude was running, and becomes the active collection:"
+  },
   "ControlTools.restoreTitle": {
     "format": "{0} wants to restore “{1}”"
   },
@@ -1132,6 +1132,9 @@
     "format": "Replace Claude's config with {0}?"
   },
   "RestoreModel.headline": "Restore Claude config from a backup",
+  "RestoreModel.recreateInformative": {
+    "format": "“{0}” no longer exists, so it is created again with only the connectors Claude was running. To bring back all of its connectors, restore it from Collections."
+  },
   "RestoreModel.restoreButton": "Restore",
   "RestoreModel.restoreTitle": "Restore",
   "ReviewModel.addedLabel": "Added",

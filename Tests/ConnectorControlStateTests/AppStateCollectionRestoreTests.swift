@@ -22,6 +22,52 @@ final class AppStateCollectionRestoreTests: XCTestCase {
 
     private func mcpsBackups(_ state: AppState) throws -> [URL] { try state.service.backups.backups(series: "mcps") }
 
+    /// The reported sequence. Personal, with 11 connectors and 2 on, is deleted. A Claude's config restore of
+    /// a backup recorded against it, holding the one connector Claude was running, creates Personal again
+    /// with that one, active. Restoring Personal from the master-list backup taken before the delete then
+    /// brings back all 11 with the same 2 on, and leaves Harvard alone.
+    func testTheReportedSequenceBringsPersonalBackWhole() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.addEmptyCollection(named: "Personal"))
+        for index in 1...11 {
+            let name = String(format: "p%02d", index)
+            XCTAssertNil(state.upsert(name: name, entry: MCPEntry(enabled: index <= 2, config: config(name)),
+                                      renamedFrom: nil, in: "Personal"))
+        }
+        XCTAssertNil(state.addEmptyCollection(named: "Harvard"))
+        XCTAssertNil(state.upsert(name: "canvas", entry: MCPEntry(config: config("canvas")), renamedFrom: nil, in: "Harvard"))
+        state.switchCollection(to: "Harvard")
+        let personal = try XCTUnwrap(state.store.collections["Personal"])
+        let harvard = try XCTUnwrap(state.store.collections["Harvard"])
+        // What Claude ran from Personal once: one connector, recorded against Personal.
+        try FileManager.default.createDirectory(at: h.backupsDir, withIntermediateDirectories: true)
+        let claudeBackup = h.backupsDir.appendingPathComponent("claude_desktop_config.2026-11-01T00-00-00-000Z.json")
+        try Data(#"{"mcpServers": {"p01": {"command": "p01"}}}"#.utf8).write(to: claudeBackup)
+        try BackupCollections.record("Personal", for: claudeBackup, in: h.backupsDir, staging: nil)
+
+        XCTAssertNil(state.deleteCollection(named: "Personal"))
+        try state.restoreClaudeConfig(from: claudeBackup)
+        XCTAssertEqual(state.activeCollection, "Personal")
+        XCTAssertEqual(state.store.collections["Personal"]?.mcps.keys.sorted(), ["p01"])
+
+        // Newest first, the first backup holding all 11 is the one the delete took, and pinned.
+        let before = try XCTUnwrap(try mcpsBackups(state).first { MasterStoreIO.read(from: $0)?.collections["Personal"]?.mcps.count == 11 })
+        XCTAssertTrue(BackupPins.pinned(in: h.backupsDir).contains(before.lastPathComponent))
+        let data = try BoundedRead.data(at: before, limit: ConfigService.maxBackupBytes)
+        let plan = try state.collectionRestorePlan("Personal", id: before.lastPathComponent, data: data)
+        XCTAssertFalse(plan.created)
+        XCTAssertTrue(plan.active)
+        XCTAssertEqual(plan.lines(), ["+ p02 (on)"] + (3...11).map { String(format: "+ p%02d (off)", $0) } + ["= 1 unchanged"])
+
+        try state.restoreCollection("Personal", from: before, data: data)
+        XCTAssertEqual(state.store.collections["Personal"], personal)
+        XCTAssertEqual(state.store.collections["Personal"]?.mcps.values.filter(\.enabled).count, 2)
+        XCTAssertEqual(state.store.collections["Harvard"], harvard)
+        XCTAssertEqual(state.activeCollection, "Personal")
+        XCTAssertEqual(Set(try h.claudeServers().keys), ["p01", "p02"])
+    }
+
     /// Exactly as it was: a connector added since goes, a changed config and a changed switch go back, and
     /// one deleted since comes back. The lines run by name, whatever each one does.
     func testACollectionGoesBackExactlyAsItWas() throws {

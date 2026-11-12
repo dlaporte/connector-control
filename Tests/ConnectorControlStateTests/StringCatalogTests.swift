@@ -86,7 +86,6 @@ final class StringCatalogTests: XCTestCase {
         "AppState.pathMarkMovedError": ["X"],
         "AppState.publishFolderCarriedError": ["X", "Y"],
         "AppState.publishSlugTakenError": ["X"],
-        "AppState.restoreCollectionGoneError": ["X"],
         "AppState.restoreCollectionSubscribedError": ["X"],
         "AppState.restoreCollectionUnchangedError": ["X"],
         "AppState.restoreSubscribedError": ["X"],
@@ -208,6 +207,7 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.restartTitle": ["X"],
         "ControlTools.restoreActivatingText": ["X"],
         "ControlTools.restoreIntoText": ["X"],
+        "ControlTools.restoreRecreatingText": ["X"],
         "ControlTools.restoreTitle": ["X", "Y"],
         "ControlTools.restoredNotification": ["X", "Y"],
         "ControlTools.restoredText": ["X"],
@@ -286,6 +286,7 @@ final class StringCatalogTests: XCTestCase {
         "PublishModel.unresolvedMarkNote": ["X", "Y"],
         "PublishModel.warningLine": ["X", "Y"],
         "RestoreModel.confirmMessage": ["X"],
+        "RestoreModel.recreateInformative": ["X"],
         "ReviewModel.title": ["X"],
         "SettingsModel.loginItemFailureNote": ["X"],
         "SettingsModel.versionText": ["X"],
@@ -342,7 +343,6 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.restartButton"] = AppState.restartButton
         actual["AppState.restartInformative"] = AppState.restartInformative
         actual["AppState.restartMessage"] = AppState.restartMessage
-        actual["AppState.restoreCollectionGoneError"] = AppState.restoreCollectionGoneError("X")
         actual["AppState.restoreCollectionSubscribedError"] = AppState.restoreCollectionSubscribedError("X")
         actual["AppState.restoreCollectionUnchangedError"] = AppState.restoreCollectionUnchangedError("X")
         actual["AppState.restoreSubscribedError"] = AppState.restoreSubscribedError("X")
@@ -672,6 +672,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.restartingText"] = ControlTools.restartingText
         actual["ControlTools.restoreActivatingText"] = ControlTools.restoreActivatingText("X")
         actual["ControlTools.restoreIntoText"] = ControlTools.restoreIntoText("X")
+        actual["ControlTools.restoreRecreatingText"] = ControlTools.restoreRecreatingText("X")
         actual["ControlTools.restoreTitle"] = ControlTools.restoreTitle("X", "Y")
         actual["ControlTools.restoredNotification"] = ControlTools.restoredNotification("X", "Y")
         actual["ControlTools.restoredText"] = ControlTools.restoredText("X")
@@ -917,6 +918,7 @@ final class StringCatalogTests: XCTestCase {
         actual["RestoreModel.caption"] = RestoreModel.caption
         actual["RestoreModel.confirmMessage"] = RestoreModel.confirmMessage(fileName: "X")
         actual["RestoreModel.headline"] = RestoreModel.headline
+        actual["RestoreModel.recreateInformative"] = RestoreModel.recreateInformative("X")
         actual["RestoreModel.restoreButton"] = RestoreModel.restoreButton
         actual["RestoreModel.restoreTitle"] = RestoreModel.restoreTitle
 

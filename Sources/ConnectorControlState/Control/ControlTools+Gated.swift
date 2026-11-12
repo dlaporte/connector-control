@@ -390,6 +390,8 @@ extension ControlTools {
 
     public static func restoreActivatingText(_ collection: String) -> String { "Its connectors go back into “\(collection)”, which becomes the active collection:" }
 
+    public static func restoreRecreatingText(_ collection: String) -> String { "“\(collection)” no longer exists, so it is created again with only the connectors Claude was running, and becomes the active collection:" }
+
     public static func restoredText(_ id: String) -> String { "Restored “\(id)”." }
 
     public static func restoredNotification(_ shownAsker: String, _ id: String) -> String { "\(shownAsker) restored “\(id)”." }
@@ -678,7 +680,6 @@ extension ControlTools {
     /// `ControlText.escapedName(_:)`: Claude names collections.
     static func restoreRefusalText(_ refusal: RestoreError) -> String {
         switch refusal {
-        case .collectionGone(let collection): return AppState.restoreCollectionGoneError(ControlText.escapedName(collection))
         case .subscribedActive(let collection): return AppState.restoreSubscribedError(ControlText.escapedName(collection))
         }
     }
@@ -718,10 +719,13 @@ extension ControlTools {
             return .refused(ControlText.escaped(error.localizedDescription, naming: [id]))
         }
         let fingerprint = ContentHash.sha256(bytes)
-        // AppState's rule: back into the collection the backup was taken from, else the active one.
-        let target = recorded ?? state.activeCollection
+        // AppState's rule: back into the collection the backup was taken from, as the store holds its
+        // name, created again when it is gone; else the active one.
+        let held = recorded.flatMap { state.store.storedCollectionName($0) }
+        let target = held ?? recorded ?? state.activeCollection
         let shownTarget = ControlText.escapedName(target)
-        let into = target == state.activeCollection ? ControlTools.restoreIntoText(shownTarget) : ControlTools.restoreActivatingText(shownTarget)
+        let into = recorded != nil && held == nil ? ControlTools.restoreRecreatingText(shownTarget)
+            : target == state.activeCollection ? ControlTools.restoreIntoText(shownTarget) : ControlTools.restoreActivatingText(shownTarget)
         // Connector Control's own entry is the app's, not a connector the backup brings back.
         let names = servers.keys.filter { $0 != ClaudeIntegration.entryName }.sorted { $0.ordinallyPrecedes($1) }
         let request = ConfirmationRequest(title: ControlTools.restoreTitle(shownAsker, shownID),

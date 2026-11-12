@@ -25,6 +25,54 @@ public class AppStateCollectionRestoreTests
 
     private static IReadOnlyList<string> McpsBackups(AppState state) => state.Service.Backups.Backups("mcps");
 
+    /// <summary>The reported sequence. Personal, with 11 connectors and 2 on, is deleted. A Claude's config restore
+    /// of a backup recorded against it, holding the one connector Claude was running, creates Personal again with
+    /// that one, active. Restoring Personal from the master-list backup taken before the delete then brings back
+    /// all 11 with the same 2 on, and leaves Harvard alone.</summary>
+    [Fact]
+    public void TheReportedSequenceBringsPersonalBackWhole()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.AddEmptyCollection("Personal"));
+        for (var index = 1; index <= 11; index++)
+        {
+            var name = $"p{index:D2}";
+            Assert.Null(state.Upsert(name, new McpEntry(index <= 2, Config(name)), null, "Personal"));
+        }
+        Assert.Null(state.AddEmptyCollection("Harvard"));
+        Assert.Null(state.Upsert("canvas", new McpEntry(Config("canvas")), null, "Harvard"));
+        state.SwitchCollection("Harvard");
+        var personal = state.Store.Collections["Personal"].Clone();
+        var harvard = state.Store.Collections["Harvard"].Clone();
+        // What Claude ran from Personal once: one connector, recorded against Personal.
+        Directory.CreateDirectory(h.BackupsDir);
+        var claudeBackup = Path.Combine(h.BackupsDir, "claude_desktop_config.2026-11-01T00-00-00-000Z.json");
+        File.WriteAllText(claudeBackup, """{"mcpServers": {"p01": {"command": "p01"}}}""");
+        BackupCollections.Record("Personal", claudeBackup, h.BackupsDir);
+
+        Assert.Null(state.DeleteCollection("Personal"));
+        state.RestoreClaudeConfig(claudeBackup);
+        Assert.Equal("Personal", state.ActiveCollection);
+        Assert.Equal(["p01"], AppStateHarness.Keys(state.Store.Collections["Personal"].Mcps.Keys));
+
+        // Newest first, the first backup holding all 11 is the one the delete took, and pinned.
+        var before = McpsBackups(state).First(path => MasterStoreIO.Read(path)?.Collections.GetValueOrDefault("Personal")?.Mcps.Count == 11);
+        Assert.Contains(Path.GetFileName(before), BackupPins.Pinned(h.BackupsDir));
+        var data = BoundedRead.Data(before, ConfigService.MaxBackupBytes);
+        var plan = state.CollectionRestorePlan("Personal", Path.GetFileName(before), data);
+        Assert.False(plan.Created);
+        Assert.True(plan.Active);
+        Assert.Equal(["+ p02 (on)", .. Enumerable.Range(3, 9).Select(i => $"+ p{i:D2} (off)"), "= 1 unchanged"], plan.Lines());
+
+        state.RestoreCollection("Personal", before, data);
+        Assert.Equal(personal, state.Store.Collections["Personal"]);
+        Assert.Equal(2, state.Store.Collections["Personal"].Mcps.Values.Count(e => e.Enabled));
+        Assert.Equal(harvard, state.Store.Collections["Harvard"]);
+        Assert.Equal("Personal", state.ActiveCollection);
+        Assert.Equal(["p01", "p02"], AppStateHarness.Keys(h.ClaudeServers().Keys));
+    }
+
     /// <summary>Exactly as it was: a connector added since goes, a changed config and a changed switch go back,
     /// and one deleted since comes back. The lines run by name, whatever each one does.</summary>
     [Fact]

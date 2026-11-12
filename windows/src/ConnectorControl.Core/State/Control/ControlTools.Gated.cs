@@ -544,6 +544,8 @@ public sealed partial class ControlTools
 
     public static string RestoreActivatingText(string collection) => $"Its connectors go back into “{collection}”, which becomes the active collection:";
 
+    public static string RestoreRecreatingText(string collection) => $"“{collection}” no longer exists, so it is created again with only the connectors Claude was running, and becomes the active collection:";
+
     public static string RestoredText(string id) => $"Restored “{id}”.";
 
     public static string RestoredNotification(string shownAsker, string id) => $"{shownAsker} restored “{id}”.";
@@ -1010,9 +1012,8 @@ public sealed partial class ControlTools
     /// <see cref="ControlText.EscapedName"/>: Claude names collections.</summary>
     internal static string RestoreRefusalText(Exception refusal) => refusal switch
     {
-        RestoreCollectionGoneException gone => AppState.RestoreCollectionGoneError(ControlText.EscapedName(gone.Collection)),
         RestoreSubscribedException subscribed => AppState.RestoreSubscribedError(ControlText.EscapedName(subscribed.Collection)),
-        // RestoreRefusal returns only the two; Swift's switch over its enum is exhaustive.
+        // RestoreRefusal returns only this one; Swift's switch over its enum is exhaustive.
         _ => ControlText.Escaped(refusal.Message),
     };
 
@@ -1064,10 +1065,13 @@ public sealed partial class ControlTools
             return new ControlStep.Refused(ControlText.Escaped(ex.Message, [id]));
         }
         var fingerprint = ContentHash.Sha256(bytes);
-        // AppState's rule: back into the collection the backup was taken from, else the active one.
-        var target = recorded ?? state.ActiveCollection;
+        // AppState's rule: back into the collection the backup was taken from, as the store holds its
+        // name, created again when it is gone; else the active one.
+        var held = recorded is null ? null : state.Store.StoredCollectionName(recorded);
+        var target = held ?? recorded ?? state.ActiveCollection;
         var shownTarget = ControlText.EscapedName(target);
-        var into = target == state.ActiveCollection ? RestoreIntoText(shownTarget) : RestoreActivatingText(shownTarget);
+        var into = recorded is not null && held is null ? RestoreRecreatingText(shownTarget)
+            : target == state.ActiveCollection ? RestoreIntoText(shownTarget) : RestoreActivatingText(shownTarget);
         // Connector Control's own entry is the app's, not a connector the backup brings back.
         var names = servers.Keys.Where(name => name != ClaudeIntegration.EntryName).Order(StringComparer.Ordinal);
         var request = new ConfirmationRequest(RestoreTitle(shownAsker, shownId), RestoreModel.Caption + " " + into,
@@ -1079,7 +1083,7 @@ public sealed partial class ControlTools
             {
                 state.RestoreClaudeConfig(backup, bytes, recorded);
             }
-            catch (Exception ex) when (ex is RestoreCollectionGoneException or RestoreSubscribedException)
+            catch (RestoreSubscribedException ex)
             {
                 return new ControlOutcome(ControlResult.Refusal(RestoreRefusalText(ex)), null);
             }

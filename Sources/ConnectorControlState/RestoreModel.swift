@@ -18,6 +18,9 @@ public final class RestoreModel: ObservableObject {
 
     public static func confirmMessage(fileName: String) -> String { "Replace Claude's config with \(fileName)?" }
 
+    /// The confirmation's informative text when the backup's collection is gone.
+    public static func recreateInformative(_ collection: String) -> String { "“\(collection)” no longer exists, so it is created again with only the connectors Claude was running. To bring back all of its connectors, restore it from Collections." }
+
     private let state: AppState
 
     /// Full URLs, newest first; the permanent .original snapshot last.
@@ -38,6 +41,13 @@ public final class RestoreModel: ObservableObject {
 
     public var confirmMessage: String {
         RestoreModel.confirmMessage(fileName: selection?.lastPathComponent ?? "")
+    }
+
+    /// Under the confirmation's message: when the collection the backup records is gone, that the
+    /// restore creates it again with only what Claude was running; otherwise nil.
+    public var confirmInformative: String? {
+        guard let recorded = asked?.recorded, state.store.storedCollectionName(recorded) == nil else { return nil }
+        return RestoreModel.recreateInformative(recorded)
     }
 
     public func load() {

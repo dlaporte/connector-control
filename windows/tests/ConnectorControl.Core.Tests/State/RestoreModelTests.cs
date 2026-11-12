@@ -49,6 +49,31 @@ public class RestoreModelTests
         Assert.Null(model.RestoreError);
     }
 
+    /// <summary>A backup whose collection is gone says, under the confirmation's message, that the collection is
+    /// created again with only what Claude was running; the restore then makes it so.</summary>
+    [Fact]
+    public void AGoneCollectionsRestoreSaysItIsCreatedAgain()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateActiveCopy("Gone"));
+        Assert.Null(state.Upsert("gone-only", AppStateHarness.LocalConnector("g"), null, "Gone"));
+        state.Apply();
+        state.SwitchCollection("Default");   // backs up Gone's file, recorded as Gone's
+        Assert.Null(state.DeleteCollection("Gone"));
+        var model = new RestoreModel(state, h.Dialogs);
+        model.Load();
+        model.Selection = model.Backups[0];
+        Assert.Equal("Gone", BackupCollections.CollectionOf(model.Backups[0], h.BackupsDir));
+
+        Assert.True(model.Restore());
+        Assert.Equal(new FakeDialogs.ConfirmCall(RestoreModel.ConfirmMessage(model.BackupNames[0]), RestoreModel.RecreateInformative("Gone"),
+            RestoreModel.RestoreButton, "Cancel", true), Assert.Single(h.Dialogs.Confirms));
+        Assert.Equal("Gone", state.ActiveCollection);
+        Assert.True(state.Store.Collections["Gone"].Mcps.ContainsKey("gone-only"));
+        Assert.Null(model.RestoreError);
+    }
+
     /// <summary>What is restored is the backup the user was asked about, not the file as it is by the time
     /// they confirm.</summary>
     [Fact]

@@ -42,6 +42,8 @@ struct RestoreSheetView: View {
             Button(RestoreModel.restoreButton, role: .destructive) {
                 if model.confirmRestore() { dismiss() }
             }
+        } message: {
+            if let informative = model.confirmInformative { Text(informative) }
         }
     }
 }

@@ -789,6 +789,28 @@ public class ControlToolsSharingTests
         Assert.Equal(JsonValue.String("Work"), result.Structured.ValueAt(new JsonPointer(["activeCollection"])));
     }
 
+    /// <summary>A backup whose collection is gone creates it again, which becomes the active collection; the
+    /// question says it holds only what Claude was running.</summary>
+    [Fact]
+    public void RestoringABackupOfAGoneCollectionCreatesItAgain()
+    {
+        using var rig = Rig();
+        Assert.Null(rig.State.CreateActiveCopy("Work"));
+        Assert.Null(rig.State.Upsert("one", AppStateHarness.LocalConnector("node"), null));
+        rig.State.ApplyInteractively();
+        rig.State.SwitchCollection("Default");
+        var backup = rig.State.Service.Backups.Backups(RestoreModel.Series)
+            .First(path => BackupCollections.CollectionOf(path, rig.H.BackupsDir) == "Work");
+        Assert.Null(rig.State.DeleteCollection("Work"));
+        var result = rig.Call("restore_backup", Args(("id", Text(Path.GetFileName(backup)))));
+        Assert.NotNull(result);
+        Assert.Equal(RestoreModel.Caption + " " + ControlTools.RestoreRecreatingText("Work"), rig.Confirmer.Requests[^1].Message);
+        Assert.False(result.IsError, result.Text);
+        Assert.Equal("Work", rig.State.ActiveCollection);
+        Assert.True(rig.State.Store.Collections["Work"].Mcps.ContainsKey("one"));
+        Assert.Equal(JsonValue.String("Work"), result.Structured.ValueAt(new JsonPointer(["activeCollection"])));
+    }
+
     // MARK: restart_claude
 
     [Fact]

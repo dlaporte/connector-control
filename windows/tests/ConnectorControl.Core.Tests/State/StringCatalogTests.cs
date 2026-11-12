@@ -92,7 +92,6 @@ public class StringCatalogTests
         ["AppState.pathMarkMovedError"] = ["X"],
         ["AppState.publishFolderCarriedError"] = ["X", "Y"],
         ["AppState.publishSlugTakenError"] = ["X"],
-        ["AppState.restoreCollectionGoneError"] = ["X"],
         ["AppState.restoreCollectionSubscribedError"] = ["X"],
         ["AppState.restoreCollectionUnchangedError"] = ["X"],
         ["AppState.restoreSubscribedError"] = ["X"],
@@ -213,6 +212,7 @@ public class StringCatalogTests
         ["ControlTools.restartTitle"] = ["X"],
         ["ControlTools.restoreActivatingText"] = ["X"],
         ["ControlTools.restoreIntoText"] = ["X"],
+        ["ControlTools.restoreRecreatingText"] = ["X"],
         ["ControlTools.restoreTitle"] = ["X", "Y"],
         ["ControlTools.restoredNotification"] = ["X", "Y"],
         ["ControlTools.restoredText"] = ["X"],
@@ -296,6 +296,7 @@ public class StringCatalogTests
         // label one of them renders as rather than the usual "X".
         ["RemotePattern.cmdUnsafeReason"] = ["Server URL"],
         ["RestoreModel.confirmMessage"] = ["X"],
+        ["RestoreModel.recreateInformative"] = ["X"],
         ["ReviewModel.title"] = ["X"],
         ["SettingsModel.keepCountHelpText"] = ["3"],
         ["SettingsModel.loginItemFailureNote"] = ["X"],
@@ -372,7 +373,6 @@ public class StringCatalogTests
         actual["AppState.restartButton"] = AppState.RestartButton;
         actual["AppState.restartInformative"] = AppState.RestartInformative;
         actual["AppState.restartMessage"] = AppState.RestartMessage;
-        actual["AppState.restoreCollectionGoneError"] = AppState.RestoreCollectionGoneError("X");
         actual["AppState.restoreCollectionSubscribedError"] = AppState.RestoreCollectionSubscribedError("X");
         actual["AppState.restoreCollectionUnchangedError"] = AppState.RestoreCollectionUnchangedError("X");
         actual["AppState.restoreSubscribedError"] = AppState.RestoreSubscribedError("X");
@@ -697,6 +697,7 @@ public class StringCatalogTests
         actual["ControlTools.restartingText"] = ControlTools.RestartingText;
         actual["ControlTools.restoreActivatingText"] = ControlTools.RestoreActivatingText("X");
         actual["ControlTools.restoreIntoText"] = ControlTools.RestoreIntoText("X");
+        actual["ControlTools.restoreRecreatingText"] = ControlTools.RestoreRecreatingText("X");
         actual["ControlTools.restoreTitle"] = ControlTools.RestoreTitle("X", "Y");
         actual["ControlTools.restoredNotification"] = ControlTools.RestoredNotification("X", "Y");
         actual["ControlTools.restoredText"] = ControlTools.RestoredText("X");
@@ -969,6 +970,7 @@ public class StringCatalogTests
         actual["RestoreModel.caption"] = RestoreModel.Caption;
         actual["RestoreModel.confirmMessage"] = RestoreModel.ConfirmMessage("X");
         actual["RestoreModel.headline"] = RestoreModel.Headline;
+        actual["RestoreModel.recreateInformative"] = RestoreModel.RecreateInformative("X");
         actual["RestoreModel.restoreButton"] = RestoreModel.RestoreButton;
         actual["RestoreModel.restoreTitle"] = RestoreModel.RestoreTitle;
 

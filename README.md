@@ -475,11 +475,11 @@ machines that follow it, including the one that publishes it.
   It is not recognised as the one you marked, so it travels as written;
   read the preview.
 - Restoring a backup of Claude's configuration puts it back into the
-  collection it was taken from and makes that collection active. A backup
-  whose collection is gone is refused: "This backup was taken from
-  “<name>”, which no longer exists. Nothing was restored. Create a
-  collection named “<name>” again, and this backup goes back into it." Only
-  this version records the collection, so a backup from an earlier one -
+  collection it was taken from and makes that collection active. If you
+  have deleted that collection, it is created again, holding only the
+  connectors Claude was running: Claude's configuration never holds the
+  ones that were off, and the confirmation says so. Only this version
+  records the collection, so a backup from an earlier one -
   which is every backup you already have, and the first-run original -
   goes into the active collection instead. While the active collection is
   subscribed, such a backup is refused before anything is asked: "“<name>”

@@ -594,6 +594,25 @@ final class ControlToolsSharingTests: XCTestCase {
         XCTAssertEqual(result.structured.value(at: JSONPointer(["activeCollection"])), .string("Work"))
     }
 
+    /// A backup whose collection is gone creates it again, which becomes the active collection; the
+    /// question says it holds only what Claude was running.
+    func testRestoringABackupOfAGoneCollectionCreatesItAgain() throws {
+        let rig = rig(); defer { rig.dispose() }
+        XCTAssertNil(rig.state.createActiveCopy(named: "Work"))
+        XCTAssertNil(rig.state.upsert(name: "one", entry: AppStateHarness.localConnector("node"), renamedFrom: nil))
+        rig.state.applyInteractively()
+        rig.state.switchCollection(to: "Default")
+        let backups = try rig.state.service.backups.backups(series: RestoreModel.series)
+        let backup = try XCTUnwrap(backups.first { BackupCollections.collection(of: $0, in: rig.h.backupsDir) == "Work" })
+        XCTAssertNil(rig.state.deleteCollection(named: "Work"))
+        let result = try XCTUnwrap(rig.call("restore_backup", ["id": .string(backup.lastPathComponent)]))
+        XCTAssertEqual(rig.confirmer.requests.last?.message, RestoreModel.caption + " " + ControlTools.restoreRecreatingText("Work"))
+        XCTAssertFalse(result.isError, result.text)
+        XCTAssertEqual(rig.state.activeCollection, "Work")
+        XCTAssertNotNil(rig.state.store.collections["Work"]?.mcps["one"])
+        XCTAssertEqual(result.structured.value(at: JSONPointer(["activeCollection"])), .string("Work"))
+    }
+
     // MARK: restart_claude
 
     func testARestartFromClaudeAlwaysAsksAndFromTheCommandLineNever() {

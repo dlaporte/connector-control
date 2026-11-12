@@ -51,6 +51,7 @@ final class RestoreModelTests: XCTestCase {
         model.requestRestore()
         XCTAssertTrue(model.confirming)
         XCTAssertEqual(model.confirmMessage, "Replace Claude's config with \(model.backups[0].lastPathComponent)?")
+        XCTAssertNil(model.confirmInformative, "its collection is still there")
         model.cancelRestore()
         XCTAssertFalse(model.confirming)
         XCTAssertEqual(state.store.mcps["aws-mcp"]?.enabled, false)   // cancelled: nothing restored
@@ -61,6 +62,31 @@ final class RestoreModelTests: XCTestCase {
         XCTAssertEqual(state.store.mcps["aws-mcp"]?.enabled, true)
         XCTAssertNil(model.restoreError)
         XCTAssertTrue(h.dialogs.confirms.isEmpty)   // a sheet, not an NSAlert
+    }
+
+    /// A backup whose collection is gone says, under the confirmation's message, that the collection is
+    /// created again with only what Claude was running; the restore then makes it so.
+    func testAGoneCollectionsRestoreSaysItIsCreatedAgain() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createActiveCopy(named: "Gone"))
+        XCTAssertNil(state.upsert(name: "gone-only", entry: AppStateHarness.localConnector("g"), renamedFrom: nil, in: "Gone"))
+        state.apply()
+        state.switchCollection(to: "Default")   // backs up Gone's file, recorded as Gone's
+        XCTAssertNil(state.deleteCollection(named: "Gone"))
+        let model = RestoreModel(state: state)
+        model.load()
+        model.selection = model.backups[0]
+        XCTAssertEqual(BackupCollections.collection(of: model.backups[0], in: h.backupsDir), "Gone")
+
+        model.requestRestore()
+        XCTAssertTrue(model.confirming)
+        XCTAssertEqual(model.confirmMessage, RestoreModel.confirmMessage(fileName: model.backups[0].lastPathComponent))
+        XCTAssertEqual(model.confirmInformative, RestoreModel.recreateInformative("Gone"))
+        XCTAssertTrue(model.confirmRestore())
+        XCTAssertEqual(state.activeCollection, "Gone")
+        XCTAssertNotNil(state.store.collections["Gone"]?.mcps["gone-only"])
+        XCTAssertNil(model.restoreError)
     }
 
     /// What is restored is the backup the user was asked about, not the file as it is by the time

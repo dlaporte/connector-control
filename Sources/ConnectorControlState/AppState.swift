@@ -90,10 +90,6 @@ public final class AppState: ObservableObject {
 
     public static func keptPathCarriedError(_ connector: String, _ field: String) -> String { "“\(connector)” carries a path this machine keeps back, in \(field). Open Publishing Settings to review it." }
 
-    /// The way back is the second sentence: the refusal holds whatever the user does, and a
-    /// collection of that name makes the same backup restorable.
-    nonisolated public static func restoreCollectionGoneError(_ collection: String) -> String { "This backup was taken from “\(collection)”, which no longer exists. Nothing was restored. Create a collection named “\(collection)” again, and this backup goes back into it." }
-
     /// A backup that records no collection goes into the active one, which here is subscribed.
     nonisolated public static func restoreSubscribedError(_ collection: String) -> String { "“\(collection)” is subscribed, so its connectors are the author’s. Make a local collection active, then restore." }
 
@@ -483,11 +479,11 @@ public final class AppState: ObservableObject {
     /// restore is not misread as an external change or a re-add.
     ///
     /// The snapshot goes back into the collection the backup was taken from, which becomes the
-    /// active one again, since Claude's file held that collection's connectors. A backup whose
-    /// collection is gone is refused. One with no record - older than the record, the first-run
-    /// original, a file from elsewhere - goes into the active collection, and publishing still
-    /// keeps back any path or folder it carries. While that collection is subscribed, it is refused
-    /// (`restoreRefusal(for:)`).
+    /// active one again, since Claude's file held that collection's connectors. A collection that is
+    /// gone is created again, local, holding only what Claude was running. One with no record - older
+    /// than the record, the first-run original, a file from elsewhere - goes into the active
+    /// collection, and publishing still keeps back any path or folder it carries. While that
+    /// collection is subscribed, it is refused (`restoreRefusal(for:)`).
     ///
     /// `data`, when given, is the backup's content as the caller read it, so what is restored is what
     /// the caller checked.
@@ -502,7 +498,14 @@ public final class AppState: ObservableObject {
     public func restoreClaudeConfig(from backup: URL, data: Data?, recorded: String?) throws {
         if let refusal = restoreRefusal(forRecorded: recorded) { throw refusal }
         var target = store
-        if let recorded { target.activeCollection = recorded }
+        if let recorded {
+            // As the store holds the name, under any spelling Unicode counts as the same text; a
+            // collection that is gone is created again, empty, in the copy the snapshot is adopted
+            // into, so a backup that fails to restore leaves nothing behind.
+            let name = store.storedCollectionName(recorded) ?? recorded
+            if target.collections[name] == nil { target.collections[name] = Collection() }
+            target.activeCollection = name
+        }
         // Every apply backed Claude's file up with ${COLLECTION_DIR} resolved where the store holds
         // it (`collectionDirectory(of:)`): against a synced collection's document folder, or this
         // machine's publish folder. A connector that renders just as the backup does keeps its
@@ -527,9 +530,8 @@ public final class AppState: ObservableObject {
     }
 
     /// Why a restore of `backup` would be refused, before anything is asked or written; nil when it
-    /// can go ahead. A backup recorded against a collection that is gone has nowhere to go back to.
-    /// One with no record goes into the active collection, and a subscribed collection's connectors
-    /// are its author's: a snapshot adopted there could be neither edited nor deleted, and the next
+    /// can go ahead. One with no record goes into the active collection, and a subscribed collection's
+    /// connectors are its author's: a snapshot adopted there could be neither edited nor deleted, and the next
     /// Review & Apply would undo it. A recorded backup of a subscribed collection is different: it
     /// holds that collection's own rendered state, what Claude ran from it, so restoring it there is
     /// consistent with the subscription, and it goes back as any other.
@@ -541,10 +543,7 @@ public final class AppState: ObservableObject {
     /// (nil for no record). Platform idiom: a label tells this from `restoreRefusal(for:)`; the
     /// Windows mirror, where both would take a string, names it `RestoreRefusalForRecorded`.
     public func restoreRefusal(forRecorded recorded: String?) -> RestoreError? {
-        if let recorded {
-            return store.collections[recorded] == nil ? .collectionGone(recorded) : nil
-        }
-        return isSynced(activeCollection) ? .subscribedActive(activeCollection) : nil
+        recorded == nil && isSynced(activeCollection) ? .subscribedActive(activeCollection) : nil
     }
 
     /// What restoring `collection` from a master-list backup would do, for the Restore sheet and
@@ -1215,8 +1214,8 @@ public final class AppState: ObservableObject {
                 publishError = CollectionPublishError(collection: trimmed, message: failure.message, kind: failure.kind)
             }
             // Claude's file and its backups name the collection they were applied from, and the
-            // rename carries both. A backup record that fails to follow restores as refused, the
-            // name it holds being gone, never into the wrong collection.
+            // rename carries both. A backup record that fails to follow restores into a collection
+            // created again under the name it holds, never into the wrong collection.
             if collectionsCache.lastAppliedCollection == name { collectionsCache.lastAppliedCollection = trimmed }
             try? BackupCollections.rename(name, to: trimmed, in: service.paths.backupsDirURL, staging: service.paths.stagingDirURL)
         }
@@ -2721,14 +2720,11 @@ public struct CollectionRestorePlan: Equatable {
 /// Why a restore was refused before anything was written. Its description is the message the
 /// restore sheet shows.
 public enum RestoreError: Error, Equatable, LocalizedError {
-    /// The backup was taken from this collection, which no longer exists.
-    case collectionGone(String)
     /// The backup records no collection, and the active one, which would take it, is subscribed.
     case subscribedActive(String)
 
     public var errorDescription: String? {
         switch self {
-        case .collectionGone(let collection): return AppState.restoreCollectionGoneError(collection)
         case .subscribedActive(let collection): return AppState.restoreSubscribedError(collection)
         }
     }
