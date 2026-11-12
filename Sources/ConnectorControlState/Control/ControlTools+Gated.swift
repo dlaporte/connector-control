@@ -853,9 +853,11 @@ extension ControlTools {
             // A collection already as the backup holds it changes nothing, but the collection Claude runs,
             // with a connector on, has Claude's config written again, as a change would - a restart due, a
             // backup taken - and the answer is a restore's, so none of it tells Claude it guessed a value right.
-            let rewrite = unchanged && plan.active
+            // A restore that changed only connectors that are off writes it again too: a wrong guess at a
+            // value in one of them must be answered as a right one is.
+            let rewrite = caller != .cli && plan.active
                 && state.store.collections[plan.collection]?.mcps.values.contains(where: \.enabled) == true
-            if rewrite { state.apply() }
+            if rewrite, JSONValue.identical(state.appliedServers, mark) { state.apply() }
             // Only restoring the collection Claude runs reaches its config, and says to restart.
             return done([ControlTools.restoredText(shown)],
                         ["id": .string(id), "collection": .string(plan.collection), "activeCollection": .string(state.activeCollection)],

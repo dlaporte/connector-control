@@ -192,9 +192,10 @@ public class ControlToolsCollectionRestoreTests
     }
 
     /// <summary>Claude can't see a value, so a right guess at one leaves the collection as the backup holds it and a
-    /// wrong one doesn't: both restores get the same answer, restart and all, whether the collection is the one Claude
-    /// runs or not.</summary>
+    /// wrong one doesn't: both restores get the same answer, restart and all, whether the connector holding the value
+    /// is on or off, and whether the collection is the one Claude runs.</summary>
     [Theory]
+    [InlineData("Default", false)]
     [InlineData("Default", true)]
     [InlineData("Work", true)]
     public void AnUnchangedRestoreIsAnsweredAsOneThatChangesSomething(string collection, bool on)

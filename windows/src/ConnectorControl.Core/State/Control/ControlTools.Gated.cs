@@ -1228,10 +1228,12 @@ public sealed partial class ControlTools
             }
             // A collection already as the backup holds it changes nothing, but the collection Claude runs, with a
             // connector on, has Claude's config written again, as a change would - a restart due, a backup taken -
-            // and the answer is a restore's, so none of it tells Claude it guessed a value right.
-            var rewrite = unchanged && plan.Active
+            // and the answer is a restore's, so none of it tells Claude it guessed a value right. A restore that
+            // changed only connectors that are off writes it again too: a wrong guess at a value in one of them must
+            // be answered as a right one is.
+            var rewrite = caller is not ControlCaller.Cli && plan.Active
                 && state.Store.Collections.GetValueOrDefault(plan.Collection)?.Mcps.Values.Any(entry => entry.Enabled) == true;
-            if (rewrite)
+            if (rewrite && DictionaryEquality.Equal(state.AppliedServers, mark))
             {
                 state.Apply();
             }

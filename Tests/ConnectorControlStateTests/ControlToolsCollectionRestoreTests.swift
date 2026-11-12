@@ -174,10 +174,10 @@ final class ControlToolsCollectionRestoreTests: XCTestCase {
     }
 
     /// Claude can't see a value, so a right guess at one leaves the collection as the backup holds it and a
-    /// wrong one doesn't: both restores get the same answer, restart and all, whether the collection is the
-    /// one Claude runs or not.
+    /// wrong one doesn't: both restores get the same answer, restart and all, whether the connector holding
+    /// the value is on or off, and whether the collection is the one Claude runs.
     func testAnUnchangedRestoreIsAnsweredAsOneThatChangesSomething() throws {
-        for (collection, on) in [("Default", true), ("Work", true)] {
+        for (collection, on) in [("Default", false), ("Default", true), ("Work", true)] {
             let rig = rig(); defer { rig.dispose() }
             if collection != "Default" { XCTAssertNil(rig.state.addEmptyCollection(named: collection)) }
             XCTAssertTrue(rig.state.store.collections["Default"]?.mcps.values.contains(where: \.enabled) == true)
