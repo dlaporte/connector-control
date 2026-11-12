@@ -622,7 +622,9 @@ config is written again and **Restart Required** appears while Claude runs,
 as after any change. An import or a subscription names its file and lists
 what it brings; a restore lists the connectors it would put back, and a
 collection restore marks each connector + (comes back) or ~ (changes), with
-its switch, or − (goes), and counts the rest as unchanged. Each line
+its switch, or − (goes), and counts the rest as unchanged; a restore Claude
+asks for of the active collection, with a connector on, writes Claude's
+config again whatever it changes, so **Restart Required** appears. Each line
 of what would run is selected and copied one line at a time.
 
 **Don’t Allow** is the default, and Return answers it, as Escape does. One
