@@ -556,6 +556,42 @@ final class ConfigServiceTests: XCTestCase {
         XCTAssertEqual(result.claudeServers?["connector-control"], reserved,
                        "what the file holds is reported whole, so the caller's comparison sees the entry")
     }
+
+    /// Only a save that asks pins, and what it pins is the backup of the file as it was.
+    func testSaveStorePinsTheBackupOfTheFileAsItWasOnlyWhenAsked() throws {
+        var store = try service.loadAndReconcile().store
+        try service.saveStore(store)
+        store.collections["Team"] = store.collections["Default"]
+        try service.saveStore(store)   // an ordinary save
+        XCTAssertEqual(BackupPins.pinned(in: paths.backupsDirURL), [])
+        store.collections["Team"]?.mcps.removeValue(forKey: "scoutbook")
+        try service.saveStore(store, pinningBackup: true)
+        let newest = try XCTUnwrap(try service.backups.backups(series: "mcps").first)
+        XCTAssertEqual(BackupPins.pinned(in: paths.backupsDirURL), [newest.lastPathComponent])
+        XCTAssertNotNil(MasterStoreIO.read(from: newest)?.collections["Team"]?.mcps["scoutbook"],
+                        "the pinned copy still holds what the save removed")
+    }
+
+    /// An unchanged file keeps its one backup, and that is the one a pinning save pins.
+    func testSaveStorePinsTheNewestBackupWhenTheContentIsUnchanged() throws {
+        let store = try service.loadAndReconcile().store
+        try service.saveStore(store)
+        try service.saveStore(store, pinningBackup: true)
+        let backups = try service.backups.backups(series: "mcps")
+        XCTAssertEqual(backups.count, 1)
+        XCTAssertEqual(BackupPins.pinned(in: paths.backupsDirURL), [backups[0].lastPathComponent])
+    }
+
+    func testAFailedPinDoesNotFailSaveStore() throws {
+        var store = try service.loadAndReconcile().store
+        try service.saveStore(store)
+        // A folder where the index belongs: it can be neither read nor written.
+        try FileManager.default.createDirectory(
+            at: paths.backupsDirURL.appendingPathComponent(BackupPins.fileName), withIntermediateDirectories: true)
+        store.collections["Team"] = store.collections["Default"]
+        XCTAssertNoThrow(try service.saveStore(store, pinningBackup: true))
+        XCTAssertNotNil(MasterStoreIO.read(from: paths.masterStoreURL)?.collections["Team"], "the store was saved")
+    }
 }
 
 private extension ConfigService {

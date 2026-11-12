@@ -770,12 +770,15 @@ public final class AppState: ObservableObject {
     ///
     /// `touched` is the collection the change was made to, when it was one: its document is read
     /// again, as a Locate that points the binding back at the same path needs.
-    private func persistStore(touching touched: String? = nil) {
+    ///
+    /// `pinningBackup` keeps the backup this save takes for 30 days (`BackupPins`). Only the
+    /// operations that remove or replace what a collection held ask for it.
+    private func persistStore(touching touched: String? = nil, pinningBackup: Bool = false) {
         // The store just changed, so what a source document would change with it may have too -
         // and the excluded lists a re-render produces belong in the cache this save writes.
         rederivePending(rereading: touched)
         do {
-            try service.saveStore(store)
+            try service.saveStore(store, pinningBackup: pinningBackup)
             // A sidecar that the last load could not read is one something else is writing.
             // Our copy of it may never have been filled, and saving that would land an empty
             // sidecar - and, behind it, a cache pruned against nothing - on top of the real
@@ -934,7 +937,7 @@ public final class AppState: ObservableObject {
             removed = true
         }
         guard removed else { return }
-        persistStore()
+        persistStore(pinningBackup: true)
     }
 
     /// Rewrites a published collection's intent in memory, for the save that follows to write.
@@ -1176,7 +1179,7 @@ public final class AppState: ObservableObject {
         forgetOriginsOfDepartedCollections()
         forgetSource(name)
         if publishError?.collection == name { publishError = nil }
-        persistStore()
+        persistStore(pinningBackup: true)
         applyIfChanged()
         return nil
     }

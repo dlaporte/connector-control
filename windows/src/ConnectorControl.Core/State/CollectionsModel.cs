@@ -80,7 +80,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
     /// the most useful thing in that confirmation - survives here unchanged. Delete Collection's
     /// confirmation ends with it too.
     /// </summary>
-    public const string DeleteCheckedInformative = "A copy remains in Backups.";
+    public const string DeleteCheckedInformative = "A copy stays in Backups for 30 days.";
 
     /// <summary>
     /// The sidebar's chain glyph, or null when there is no chain to explain: a local collection
@@ -926,7 +926,7 @@ public sealed class CollectionsModel : ObservableObject, IDisposable
 
     /// <summary>
     /// The selection bar's Delete: asks first, names the connector when there is one and the
-    /// count when there are more, and always says a copy remains in Backups.
+    /// count when there are more, and always says a copy stays in Backups for 30 days.
     /// </summary>
     public void DeleteChecked()
     {

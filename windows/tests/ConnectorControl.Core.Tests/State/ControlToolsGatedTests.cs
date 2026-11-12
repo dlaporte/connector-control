@@ -511,7 +511,7 @@ public class ControlToolsGatedTests
         Assert.NotNull(result);
         Assert.Equal(new ConfirmationRequest(
             "Claude wants to delete “aws-mcp” and “scoutbook”",
-            "From “Default”, the collection Claude is running. A copy remains in Backups.",
+            "From “Default”, the collection Claude is running. A copy stays in Backups for 30 days.",
             [], ControlTools.TakesEffectFooter), rig.Confirmer.Requests[^1]);
         Assert.Equal(ControlTools.DeletedText("“aws-mcp” and “scoutbook”", "Default"), result.Text);
         Assert.Equal([ClaudeIntegration.EntryName, "service-now"], rig.H.ClaudeServers().Keys.Order(StringComparer.Ordinal));

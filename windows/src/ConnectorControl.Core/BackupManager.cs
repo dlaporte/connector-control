@@ -14,6 +14,8 @@ public sealed class BackupManager
     private const int CollisionBound = 100;
     /// <summary>The keep count ConfigService and SettingsStore fall back to.</summary>
     public const int DefaultKeepCount = 20;
+    /// <summary>How long a pinned backup (<see cref="BackupPins"/>) outlives the keep count.</summary>
+    public const int PinDays = 30;
 
     public string BackupsDir { get; }
     public int KeepCount { get; }
@@ -84,7 +86,8 @@ public sealed class BackupManager
         {
             return existing[0];
         }
-        var stamp = BackupTimestamp.From(now ?? DateTime.UtcNow);
+        var taken = now ?? DateTime.UtcNow;
+        var stamp = BackupTimestamp.From(taken);
         var dest = Path.Combine(BackupsDir, $"{series}.{stamp}.json");
         int counter = 2;
         while (File.Exists(dest) && counter <= CollisionBound)
@@ -95,7 +98,7 @@ public sealed class BackupManager
         // Bound exhausted (CollisionBound same-millisecond backups already exist): the write
         // replaces the last candidate rather than throwing.
         AtomicFile.Write(current, dest);
-        Prune(existing.Contains(dest, StringComparer.Ordinal) ? existing : [.. existing, dest]);
+        Prune(existing.Contains(dest, StringComparer.Ordinal) ? existing : [.. existing, dest], taken);
         return dest;
     }
 
@@ -164,18 +167,72 @@ public sealed class BackupManager
     }
 
     /// <summary>
+    /// Keeps the <see cref="KeepCount"/> newest, and every pinned backup (<see cref="BackupPins"/>)
+    /// taken less than <see cref="PinDays"/> before <paramref name="now"/>: a pinned one still among
+    /// the newest counts as one of them, and only keeps itself once it has fallen past. A pin older
+    /// than that prunes as any other backup.
+    ///
     /// <paramref name="listing"/> is the caller's own pre-write directory read plus the file it just
     /// wrote, sorted here the same way <see cref="Backups"/> sorts, so pruning does not re-list a
     /// directory <see cref="BackUp"/> already just listed.
     /// </summary>
-    private void Prune(IEnumerable<string> listing)
+    private void Prune(IEnumerable<string> listing, DateTime now)
     {
-        foreach (var stale in listing.Order(Comparer<string>.Create(NewestFirst)).Skip(KeepCount))
+        var stale = listing.Order(Comparer<string>.Create(NewestFirst)).Skip(KeepCount).ToList();
+        if (stale.Count == 0)
         {
+            return;
+        }
+        var pinned = BackupPins.Pinned(BackupsDir);
+        var cutoff = now.ToUniversalTime().AddDays(-PinDays);
+        foreach (var old in stale)
+        {
+            if (pinned.Contains(Path.GetFileName(old)) && TakenAt(old) is { } taken && taken > cutoff)
+            {
+                continue;
+            }
             // Best effort: a backup that briefly refuses deletion (locked by a scanner, say) is
             // pruned next time; a rotation must never fail the write it is cleaning up after.
-            FileSystemErrors.TryDelete(stale);
+            FileSystemErrors.TryDelete(old);
         }
+    }
+
+    /// <summary>
+    /// What each backup is called where several are listed together, keyed by file name: its local
+    /// time to the second. Backups that share a second carry milliseconds, read from the name's
+    /// stamp; those that still share one add " (n)" from the counter in the name, the first of a
+    /// millisecond taking none. A name with no time is its own label.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> Labels(IEnumerable<string> backups)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        var timed = new List<(string Name, string Seconds, string Millis, int Counter)>();
+        foreach (var backup in backups)
+        {
+            var name = Path.GetFileName(backup);
+            if (TakenAt(backup) is not { } taken)
+            {
+                result[name] = name;
+                continue;
+            }
+            var (stamp, counter) = Order(name);
+            timed.Add((name, IsoTimestamp.LocalDateTimeSeconds(taken), stamp[^4..^1], counter));
+        }
+        var perSecond = timed.GroupBy(e => e.Seconds).ToDictionary(g => g.Key, g => g.Count());
+        var groups = timed
+            .Select(e => (Entry: e, Label: perSecond[e.Seconds] > 1 ? $"{e.Seconds}.{e.Millis}" : e.Seconds))
+            .GroupBy(e => e.Label);
+        foreach (var group in groups)
+        {
+            var ordered = group.OrderBy(e => e.Entry.Counter).ToList();
+            for (var index = 0; index < ordered.Count; index++)
+            {
+                result[ordered[index].Entry.Name] = index == 0
+                    ? group.Key
+                    : $"{group.Key} ({ordered[index].Entry.Counter})";
+            }
+        }
+        return result;
     }
 
     /// <summary>Whether the backup at <paramref name="backup"/> holds exactly <paramref name="current"/>; one

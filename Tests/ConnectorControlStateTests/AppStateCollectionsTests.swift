@@ -234,6 +234,40 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.collectionsCache.lastAppliedCollection, "Default")
     }
 
+    /// The backup taken just before a delete is kept for 30 days: it is the only copy of what the
+    /// delete removed. An ordinary save pins nothing.
+    func testDeletingACollectionPinsTheBackupTakenBeforeIt() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createActiveCopy(named: "Other"))
+        state.switchCollection(to: "Default")
+        state.setEnabled("aws-mcp", false)
+        XCTAssertEqual(BackupPins.pinned(in: h.backupsDir), [], "an ordinary save pins nothing")
+
+        XCTAssertNil(state.deleteCollection(named: "Other"))
+        let newest = try XCTUnwrap(try state.service.backups.backups(series: "mcps").first)
+        XCTAssertEqual(BackupPins.pinned(in: h.backupsDir), [newest.lastPathComponent])
+        XCTAssertNotNil(MasterStoreIO.read(from: newest)?.collections["Other"], "the pinned copy still holds the collection")
+        XCTAssertNil(try h.storeOnDisk().collections["Other"])
+
+        state.setEnabled("aws-mcp", true)
+        XCTAssertEqual(BackupPins.pinned(in: h.backupsDir), [newest.lastPathComponent], "a toggle pins nothing more")
+    }
+
+    func testDeletingConnectorsPinsTheBackupTakenBeforeIt() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        state.setEnabled("aws-mcp", false)
+        XCTAssertEqual(BackupPins.pinned(in: h.backupsDir), [])
+
+        state.delete(names: ["aws-mcp"])
+        let newest = try XCTUnwrap(try state.service.backups.backups(series: "mcps").first)
+        XCTAssertEqual(BackupPins.pinned(in: h.backupsDir), [newest.lastPathComponent])
+        XCTAssertNotNil(MasterStoreIO.read(from: newest)?.collections["Default"]?.mcps["aws-mcp"],
+                        "the pinned copy still holds the connector")
+        XCTAssertNil(state.store.collections["Default"]?.mcps["aws-mcp"])
+    }
+
     func testDeletingTheActiveCollectionSwitchesToTheAlphabeticallyFirstRemaining() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

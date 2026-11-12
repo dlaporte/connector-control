@@ -35,9 +35,9 @@ extension ControlTools {
 
     public static func deleteTitle(_ shownAsker: String, _ names: String) -> String { "\(shownAsker) wants to delete \(names)" }
 
-    public static func deleteActiveMessage(_ collection: String) -> String { "From “\(collection)”, the collection Claude is running. A copy remains in Backups." }
+    public static func deleteActiveMessage(_ collection: String) -> String { "From “\(collection)”, the collection Claude is running. A copy stays in Backups for 30 days." }
 
-    public static func deleteMessage(_ collection: String) -> String { "From “\(collection)”. A copy remains in Backups." }
+    public static func deleteMessage(_ collection: String) -> String { "From “\(collection)”. A copy stays in Backups for 30 days." }
 
     public static func addedText(_ name: String, _ collection: String, _ state: String) -> String { "Added “\(name)” to “\(collection)”, switched \(state)." }
 

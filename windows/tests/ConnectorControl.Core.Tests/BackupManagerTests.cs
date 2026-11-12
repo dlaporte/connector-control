@@ -306,4 +306,140 @@ public class BackupManagerTests : IDisposable
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(backups));
         Assert.True(OwnerOnlyAcl.IsOwnerOnly(made), "the copy is private from its create call, not a fix-up");
     }
+
+    // Pinned backups
+
+    private const double Day = 86_400;
+
+    /// <summary>Backs up the source holding <paramref name="content"/>, <paramref name="offset"/> seconds after the epoch the tests share.</summary>
+    private string BackUpAt(string content, double offset, string series = "mcps")
+    {
+        File.WriteAllText(source, content);
+        return manager.BackUp(source, series, At(1_752_600_000 + offset))!;
+    }
+
+    [Fact]
+    public void APinnedBackupSurvivesPastTheKeepCount()
+    {
+        var first = BackUpAt("1", 0);
+        BackupPins.Pin(first, manager.BackupsDir);
+        for (var i = 2; i <= 6; i++) { BackUpAt($"{i}", i); }
+        var names = manager.Backups("mcps").Select(Path.GetFileName).ToList();
+        Assert.Equal(4, names.Count);   // the three newest and the pinned one
+        Assert.Contains(Path.GetFileName(first), names);
+        Assert.Equal([Path.GetFileName(first)], BackupPins.Pinned(manager.BackupsDir));
+    }
+
+    [Fact]
+    public void APinnedBackupStillAmongTheNewestCountsAsOneOfThem()
+    {
+        var first = BackUpAt("1", 0);
+        BackupPins.Pin(first, manager.BackupsDir);
+        BackUpAt("2", 1);
+        BackUpAt("3", 2);
+        Assert.Equal(3, manager.Backups("mcps").Count);
+        BackUpAt("4", 3);   // the pinned one is now the fourth newest and stays
+        Assert.Equal(4, manager.Backups("mcps").Count);
+    }
+
+    [Fact]
+    public void APinExpiresThirtyDaysAfterTheBackupWasTaken()
+    {
+        var first = BackUpAt("1", 0);
+        BackupPins.Pin(first, manager.BackupsDir);
+        BackUpAt("2", 1);
+        BackUpAt("3", 2);
+        BackUpAt("4", 29 * Day);
+        Assert.True(File.Exists(first), "29 days on, it is still kept");
+        BackUpAt("5", 31 * Day);
+        Assert.False(File.Exists(first), "31 days on, it prunes as any other");
+    }
+
+    [Fact]
+    public void APinForAPrunedOrMissingFileIsDroppedOnTheNextPin()
+    {
+        var first = BackUpAt("1", 0);
+        BackupPins.Pin(first, manager.BackupsDir);
+        for (var i = 2; i <= 5; i++) { BackUpAt($"{i}", i); }
+        BackupPins.Pin(Path.Combine(manager.BackupsDir, "mcps.nowhere.json"), manager.BackupsDir);
+        Assert.Equal(new HashSet<string> { "mcps.nowhere.json", Path.GetFileName(first) }, BackupPins.Pinned(manager.BackupsDir));
+        File.Delete(first);
+        var newest = manager.Backups("mcps")[0];
+        BackupPins.Pin(newest, manager.BackupsDir);
+        // Both the deleted file's pin and the missing one's are gone.
+        Assert.Equal([Path.GetFileName(newest)], BackupPins.Pinned(manager.BackupsDir));
+    }
+
+    [Fact]
+    public void AnUnreadablePinIndexPinsNothingAndDoesNotFailABackup()
+    {
+        var first = BackUpAt("1", 0);
+        File.WriteAllText(Path.Combine(manager.BackupsDir, BackupPins.FileName), "{not json");
+        Assert.Empty(BackupPins.Pinned(manager.BackupsDir));
+        for (var i = 2; i <= 6; i++) { BackUpAt($"{i}", i); }
+        Assert.False(File.Exists(first), "nothing was pinned, so it pruned");
+        Assert.Equal(3, manager.Backups("mcps").Count);
+    }
+
+    [Fact]
+    public void PinningAnAlreadyPinnedBackupWritesNothing()
+    {
+        var first = BackUpAt("1", 0);
+        BackupPins.Pin(first, manager.BackupsDir);
+        var file = Path.Combine(manager.BackupsDir, BackupPins.FileName);
+        var before = File.ReadAllBytes(file);
+        BackupPins.Pin(first, manager.BackupsDir);
+        Assert.Equal(before, File.ReadAllBytes(file));
+        Assert.Single(manager.Backups("mcps"));   // the index is not listed as a backup
+    }
+
+    // Labels
+
+    private string Named(string stamp) => Path.Combine(manager.BackupsDir, $"mcps.{stamp}.json");
+
+    private static string Second(string path) => IsoTimestamp.LocalDateTimeSeconds(BackupManager.TakenAt(path)!.Value);
+
+    [Fact]
+    public void LabelsAreLocalTimeToTheSecondWhenUnique()
+    {
+        var a = Named("2026-11-12T16-19-13-493Z");
+        var b = Named("2026-11-12T16-19-14-493Z");
+        var labels = BackupManager.Labels([a, b]);
+        Assert.Equal(Second(a), labels[Path.GetFileName(a)]);
+        Assert.NotEqual(labels[Path.GetFileName(a)], labels[Path.GetFileName(b)]);
+        Assert.Equal("2026-11-12 11:19:13".Length, labels[Path.GetFileName(a)].Length);
+    }
+
+    [Fact]
+    public void BackupsOfOneSecondCarryMilliseconds()
+    {
+        var a = Named("2026-11-12T16-19-13-493Z");
+        var b = Named("2026-11-12T16-19-13-871Z");
+        var c = Named("2026-11-12T16-19-14-000Z");
+        var labels = BackupManager.Labels([a, b, c]);
+        Assert.Equal($"{Second(a)}.493", labels[Path.GetFileName(a)]);
+        Assert.Equal($"{Second(a)}.871", labels[Path.GetFileName(b)]);
+        Assert.Equal(Second(c), labels[Path.GetFileName(c)]);   // another second keeps the short label
+    }
+
+    [Fact]
+    public void BackupsOfOneMillisecondAddTheirCounter()
+    {
+        var a = Named("2026-11-12T16-19-13-493Z");
+        var b = Named("2026-11-12T16-19-13-493Z-2");
+        var c = Named("2026-11-12T16-19-13-493Z-3");
+        var labels = BackupManager.Labels([c, a, b]);
+        var @base = $"{Second(a)}.493";
+        Assert.Equal(@base, labels[Path.GetFileName(a)]);
+        Assert.Equal($"{@base} (2)", labels[Path.GetFileName(b)]);
+        Assert.Equal($"{@base} (3)", labels[Path.GetFileName(c)]);
+    }
+
+    [Fact]
+    public void ANameWithNoTimeIsItsOwnLabel()
+    {
+        var original = Path.Combine(manager.BackupsDir, "mcps.original.json");
+        Assert.Equal(new Dictionary<string, string> { ["mcps.original.json"] = "mcps.original.json" }, BackupManager.Labels([original]));
+    }
 }
+

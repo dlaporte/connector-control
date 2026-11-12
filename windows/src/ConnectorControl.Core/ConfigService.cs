@@ -226,10 +226,27 @@ public sealed class ConfigService
         return null;
     }
 
-    /// <summary>Backup mcps.json (if present), then atomically save the store. Reports whether the file is owner-only.</summary>
-    public AtomicWriteResult SaveStore(MasterStore store)
+    /// <summary>
+    /// Backup mcps.json (if present), then atomically save the store. Reports whether the file is owner-only.
+    /// <paramref name="pinningBackup"/> pins that backup (<see cref="BackupPins"/>) so it outlives the keep
+    /// count: the one taken before a delete is the only copy of what the delete removes. It is the backup
+    /// of the file as it was, the newest one when the content had not changed. A failed pin never fails
+    /// the save: the backup then ages out like any other.
+    /// </summary>
+    public AtomicWriteResult SaveStore(MasterStore store, bool pinningBackup = false)
     {
-        Backups.BackUp(Paths.MasterStorePath, "mcps");
+        var backup = Backups.BackUp(Paths.MasterStorePath, "mcps");
+        if (pinningBackup && backup is not null)
+        {
+            try
+            {
+                BackupPins.Pin(backup, Paths.BackupsDir);
+            }
+            catch (Exception e) when (FileSystemErrors.IsTransient(e))
+            {
+                // Best effort, as the summary says: the backup itself is already written.
+            }
+        }
         return MasterStoreIO.Save(store, Paths.MasterStorePath);
     }
 

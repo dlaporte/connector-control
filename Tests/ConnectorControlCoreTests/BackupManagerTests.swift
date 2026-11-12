@@ -269,4 +269,118 @@ final class BackupManagerTests: XCTestCase {
         XCTAssertEqual(try manager.backups(series: "claude_desktop_config").count, 1)
         XCTAssertEqual(try manager.backups(series: "mcps").count, 1)
     }
+
+    // MARK: - Pinned backups
+
+    private let day: TimeInterval = 86_400
+    private let t0 = Date(timeIntervalSince1970: 1_752_600_000)
+
+    /// Backs up `source` holding `content`, `at` seconds after `t0`.
+    @discardableResult
+    private func backUp(_ content: String, at offset: TimeInterval, series: String = "mcps") throws -> URL {
+        try Data(content.utf8).write(to: source)
+        return try XCTUnwrap(manager.backUp(fileAt: source, series: series, now: t0.addingTimeInterval(offset)))
+    }
+
+    func testAPinnedBackupSurvivesPastTheKeepCount() throws {
+        let first = try backUp("1", at: 0)
+        try BackupPins.pin(first, in: manager.backupsDir, staging: nil)
+        for i in 2...6 { try backUp("\(i)", at: Double(i)) }
+        let names = try manager.backups(series: "mcps").map(\.lastPathComponent)
+        XCTAssertEqual(names.count, 4, "the three newest and the pinned one")
+        XCTAssertTrue(names.contains(first.lastPathComponent))
+        XCTAssertEqual(BackupPins.pinned(in: manager.backupsDir), [first.lastPathComponent])
+    }
+
+    func testAPinnedBackupStillAmongTheNewestCountsAsOneOfThem() throws {
+        let first = try backUp("1", at: 0)
+        try BackupPins.pin(first, in: manager.backupsDir, staging: nil)
+        try backUp("2", at: 1)
+        try backUp("3", at: 2)
+        XCTAssertEqual(try manager.backups(series: "mcps").count, 3)
+        try backUp("4", at: 3)   // the pinned one is now the fourth newest and stays
+        XCTAssertEqual(try manager.backups(series: "mcps").count, 4)
+    }
+
+    func testAPinExpiresThirtyDaysAfterTheBackupWasTaken() throws {
+        let first = try backUp("1", at: 0)
+        try BackupPins.pin(first, in: manager.backupsDir, staging: nil)
+        try backUp("2", at: 1)
+        try backUp("3", at: 2)
+        try backUp("4", at: 29 * day)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: first.path), "29 days on, it is still kept")
+        try backUp("5", at: 31 * day)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: first.path), "31 days on, it prunes as any other")
+    }
+
+    func testAPinForAPrunedOrMissingFileIsDroppedOnTheNextPin() throws {
+        let first = try backUp("1", at: 0)
+        try BackupPins.pin(first, in: manager.backupsDir, staging: nil)
+        for i in 2...5 { try backUp("\(i)", at: Double(i)) }
+        try BackupPins.pin(manager.backupsDir.appendingPathComponent("mcps.nowhere.json"), in: manager.backupsDir, staging: nil)
+        XCTAssertEqual(BackupPins.pinned(in: manager.backupsDir), ["mcps.nowhere.json", first.lastPathComponent])
+        try FileManager.default.removeItem(at: first)
+        let newest = try XCTUnwrap(try manager.backups(series: "mcps").first)
+        try BackupPins.pin(newest, in: manager.backupsDir, staging: nil)
+        XCTAssertEqual(BackupPins.pinned(in: manager.backupsDir), [newest.lastPathComponent],
+                       "both the deleted file's pin and the missing one's are gone")
+    }
+
+    func testAnUnreadablePinIndexPinsNothingAndDoesNotFailABackup() throws {
+        let first = try backUp("1", at: 0)
+        try Data("{not json".utf8).write(to: manager.backupsDir.appendingPathComponent(BackupPins.fileName))
+        XCTAssertEqual(BackupPins.pinned(in: manager.backupsDir), [])
+        for i in 2...6 { try backUp("\(i)", at: Double(i)) }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: first.path), "nothing was pinned, so it pruned")
+        XCTAssertEqual(try manager.backups(series: "mcps").count, 3)
+    }
+
+    func testPinningAnAlreadyPinnedBackupWritesNothing() throws {
+        let first = try backUp("1", at: 0)
+        try BackupPins.pin(first, in: manager.backupsDir, staging: nil)
+        let file = manager.backupsDir.appendingPathComponent(BackupPins.fileName)
+        let before = try Data(contentsOf: file)
+        try BackupPins.pin(first, in: manager.backupsDir, staging: nil)
+        XCTAssertEqual(try Data(contentsOf: file), before)
+        XCTAssertEqual(try manager.backups(series: "mcps").count, 1, "the index is not listed as a backup")
+    }
+
+    // MARK: - Labels
+
+    private func named(_ stamp: String, series: String = "mcps") -> URL {
+        dir.appendingPathComponent("\(series).\(stamp).json")
+    }
+
+    func testLabelsAreLocalTimeToTheSecondWhenUnique() throws {
+        let a = named("2026-11-12T16-19-13-493Z"), b = named("2026-11-12T16-19-14-493Z")
+        let labels = BackupManager.labels(for: [a, b])
+        XCTAssertEqual(labels[a.lastPathComponent], IsoTimestamp.localDateTimeSeconds(from: try XCTUnwrap(BackupManager.takenAt(a))))
+        XCTAssertNotEqual(labels[a.lastPathComponent], labels[b.lastPathComponent])
+        XCTAssertEqual(labels[a.lastPathComponent]?.count, "2026-11-12 11:19:13".count)
+    }
+
+    func testBackupsOfOneSecondCarryMilliseconds() throws {
+        let a = named("2026-11-12T16-19-13-493Z"), b = named("2026-11-12T16-19-13-871Z"), c = named("2026-11-12T16-19-14-000Z")
+        let labels = BackupManager.labels(for: [a, b, c])
+        let second = IsoTimestamp.localDateTimeSeconds(from: try XCTUnwrap(BackupManager.takenAt(a)))
+        XCTAssertEqual(labels[a.lastPathComponent], "\(second).493")
+        XCTAssertEqual(labels[b.lastPathComponent], "\(second).871")
+        XCTAssertEqual(labels[c.lastPathComponent], IsoTimestamp.localDateTimeSeconds(from: try XCTUnwrap(BackupManager.takenAt(c))),
+                       "a backup of another second keeps the short label")
+    }
+
+    func testBackupsOfOneMillisecondAddTheirCounter() throws {
+        let a = named("2026-11-12T16-19-13-493Z"), b = named("2026-11-12T16-19-13-493Z-2"), c = named("2026-11-12T16-19-13-493Z-3")
+        let labels = BackupManager.labels(for: [c, a, b])
+        let base = "\(IsoTimestamp.localDateTimeSeconds(from: try XCTUnwrap(BackupManager.takenAt(a)))).493"
+        XCTAssertEqual(labels[a.lastPathComponent], base)
+        XCTAssertEqual(labels[b.lastPathComponent], "\(base) (2)")
+        XCTAssertEqual(labels[c.lastPathComponent], "\(base) (3)")
+    }
+
+    func testANameWithNoTimeIsItsOwnLabel() {
+        let original = dir.appendingPathComponent("mcps.original.json")
+        XCTAssertEqual(BackupManager.labels(for: [original]), ["mcps.original.json": "mcps.original.json"])
+    }
 }
+

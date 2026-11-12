@@ -34,4 +34,14 @@ public enum IsoTimestamp {
         let c = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
         return String(format: "%04d-%02d-%02d %02d:%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0, c.hour ?? 0, c.minute ?? 0)
     }
+
+    /// The date and time here to the second, "2026-09-21 14:02:11": what tells two backups of the
+    /// same minute apart. Local for the same reason as `localDate(from:)`.
+    public static func localDateTimeSeconds(from date: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone.current
+        let c = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        return String(format: "%04d-%02d-%02d %02d:%02d:%02d",
+                      c.year ?? 0, c.month ?? 0, c.day ?? 0, c.hour ?? 0, c.minute ?? 0, c.second ?? 0)
+    }
 }

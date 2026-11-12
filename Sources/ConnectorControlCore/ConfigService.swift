@@ -163,8 +163,16 @@ public struct ConfigService: Sendable {
     }
 
     /// Backup mcps.json (if present), then atomically save the store.
-    public func saveStore(_ store: MasterStore) throws {
-        try backups.backUp(fileAt: paths.masterStoreURL, series: "mcps")
+    ///
+    /// `pinningBackup` pins that backup (`BackupPins`) so it outlives the keep count: the one
+    /// taken before a delete is the only copy of what the delete removes. It is the backup of the
+    /// file as it was, the newest one when the content had not changed. A failed pin never fails
+    /// the save: the backup then ages out like any other.
+    public func saveStore(_ store: MasterStore, pinningBackup: Bool = false) throws {
+        let backup = try backups.backUp(fileAt: paths.masterStoreURL, series: "mcps")
+        if pinningBackup, let backup {
+            try? BackupPins.pin(backup, in: paths.backupsDirURL, staging: paths.stagingDirURL)
+        }
         try MasterStoreIO.save(store, to: paths.masterStoreURL, staging: paths.stagingDirURL)
     }
 

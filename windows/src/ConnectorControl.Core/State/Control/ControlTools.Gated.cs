@@ -39,9 +39,9 @@ public sealed partial class ControlTools
 
     public static string DeleteTitle(string shownAsker, string names) => $"{shownAsker} wants to delete {names}";
 
-    public static string DeleteActiveMessage(string collection) => $"From “{collection}”, the collection Claude is running. A copy remains in Backups.";
+    public static string DeleteActiveMessage(string collection) => $"From “{collection}”, the collection Claude is running. A copy stays in Backups for 30 days.";
 
-    public static string DeleteMessage(string collection) => $"From “{collection}”. A copy remains in Backups.";
+    public static string DeleteMessage(string collection) => $"From “{collection}”. A copy stays in Backups for 30 days.";
 
     public static string AddedText(string name, string collection, string state) => $"Added “{name}” to “{collection}”, switched {state}.";
 

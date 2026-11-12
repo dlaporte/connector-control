@@ -20,7 +20,7 @@ final class ConfirmationDialogTests: XCTestCase {
         XCTAssertEqual(dialog.title, [TextRun("Claude wants to delete “"), TextRun("aws-billing", isSetApart: true),
                                       TextRun("” and “"), TextRun("splunk", isSetApart: true), TextRun("”")])
         XCTAssertEqual(dialog.message, [TextRun("From “"), TextRun("Harvard", isSetApart: true),
-                                        TextRun("”, the collection Claude is running. A copy remains in Backups.")])
+                                        TextRun("”, the collection Claude is running. A copy stays in Backups for 30 days.")])
         XCTAssertEqual(dialog.code, [])
         XCTAssertNil(dialog.footer)
         XCTAssertEqual(ConfirmationDialog(restart).title, [TextRun(ControlTools.restartItselfTitle)], "a question naming no one is one run")

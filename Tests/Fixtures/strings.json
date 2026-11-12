@@ -174,7 +174,7 @@
   "CollectionsModel.copyToButton": "Copy to",
   "CollectionsModel.deleteAction": "Delete",
   "CollectionsModel.deleteCheckedButton": "Delete",
-  "CollectionsModel.deleteCheckedInformative": "A copy remains in Backups.",
+  "CollectionsModel.deleteCheckedInformative": "A copy stays in Backups for 30 days.",
   "CollectionsModel.deleteCheckedMessage.many": {
     "format": "Delete {0} connectors?"
   },
@@ -443,21 +443,21 @@
   },
   "ControlTools.declinedError": "You declined this change in Connector Control.",
   "ControlTools.deleteActiveMessage": {
-    "format": "From “{0}”, the collection Claude is running. A copy remains in Backups."
+    "format": "From “{0}”, the collection Claude is running. A copy stays in Backups for 30 days."
   },
   "ControlTools.deleteCollectionTitle": {
     "format": "{0} wants to delete the collection “{1}”"
   },
   "ControlTools.deleteMessage": {
-    "format": "From “{0}”. A copy remains in Backups."
+    "format": "From “{0}”. A copy stays in Backups for 30 days."
   },
   "ControlTools.deleteTitle": {
     "format": "{0} wants to delete {1}"
   },
   "ControlTools.delete_collection.cliUsage": "collection delete <name>",
-  "ControlTools.delete_collection.description": "Delete a collection and its connectors. A copy remains in Connector Control's backups; a subscribed collection's file is left alone.",
+  "ControlTools.delete_collection.description": "Delete a collection and its connectors. A copy stays in Connector Control's backups for 30 days; a subscribed collection's file is left alone.",
   "ControlTools.delete_connectors.cliUsage": "delete <name>…",
-  "ControlTools.delete_connectors.description": "Delete connectors. A copy remains in Connector Control's backups.",
+  "ControlTools.delete_connectors.description": "Delete connectors. A copy stays in Connector Control's backups for 30 days.",
   "ControlTools.deletedCollectionNotification": {
     "format": "{0} deleted the collection “{1}”."
   },

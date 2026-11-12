@@ -22,6 +22,8 @@ has one.
 
 ### Both platforms
 
+- The backup taken before you delete a collection or connectors is now kept for 30 days, whatever “Backups to keep” is set to. Before, it was rotated out with the rest, often within a day. The delete confirmations and the Delete tools now say “A copy stays in Backups for 30 days.”
+
 ### Release pipeline
 
 ## v1.5.2

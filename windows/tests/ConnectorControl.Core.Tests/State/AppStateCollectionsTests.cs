@@ -267,6 +267,45 @@ public class AppStateCollectionsTests
         Assert.Equal("Default", state.CollectionsCache.LastAppliedCollection);
     }
 
+    /// <summary>
+    /// The backup taken just before a delete is kept for 30 days: it is the only copy of what the
+    /// delete removed. An ordinary save pins nothing.
+    /// </summary>
+    [Fact]
+    public void DeletingACollectionPinsTheBackupTakenBeforeIt()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateActiveCopy("Other"));
+        state.SwitchCollection("Default");
+        state.SetEnabled("aws-mcp", false);
+        Assert.Empty(BackupPins.Pinned(h.BackupsDir));   // an ordinary save pins nothing
+
+        Assert.Null(state.DeleteCollection("Other"));
+        var newest = state.Service.Backups.Backups("mcps")[0];
+        Assert.Equal([Path.GetFileName(newest)], BackupPins.Pinned(h.BackupsDir));
+        Assert.True(MasterStoreIO.Read(newest)!.Collections.ContainsKey("Other"));   // the pinned copy still holds the collection
+        Assert.False(h.StoreOnDisk().Collections.ContainsKey("Other"));
+
+        state.SetEnabled("aws-mcp", true);
+        Assert.Equal([Path.GetFileName(newest)], BackupPins.Pinned(h.BackupsDir));   // a toggle pins nothing more
+    }
+
+    [Fact]
+    public void DeletingConnectorsPinsTheBackupTakenBeforeIt()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        state.SetEnabled("aws-mcp", false);
+        Assert.Empty(BackupPins.Pinned(h.BackupsDir));
+
+        state.Delete(["aws-mcp"]);
+        var newest = state.Service.Backups.Backups("mcps")[0];
+        Assert.Equal([Path.GetFileName(newest)], BackupPins.Pinned(h.BackupsDir));
+        Assert.True(MasterStoreIO.Read(newest)!.Collections["Default"].Mcps.ContainsKey("aws-mcp"));   // the pinned copy still holds the connector
+        Assert.False(state.Store.Collections["Default"].Mcps.ContainsKey("aws-mcp"));
+    }
+
     [Fact]
     public void DeletingTheActiveCollectionSwitchesToTheAlphabeticallyFirstRemaining()
     {

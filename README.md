@@ -137,7 +137,7 @@ any of these, and the connector editor, as its **Cancel** button does.
   what goes with the collection: its connectors ("Its 3 connectors are deleted with it."), but not their copies
   in other collections, nor a subscribed collection's source file; the
   collection that becomes active, when it is the active one; and, when it
-  held connectors, that a copy remains in Backups. Duplicate copies a local
+  held connectors, that a copy stays in Backups for 30 days. Duplicate copies a local
   collection into a new local one exactly as it stands, each connector's
   switch included; it is your own copy, so nothing new is marked as
   imported, and a connector the source held as an imported copy keeps its
@@ -192,7 +192,7 @@ copy as `<name> 2` and is the default, or **Skip**; the rest are listed as
 "new · arrives off". Replacing a connector in the active collection applies
 at once. **Export…** opens the
 Export sheet on the ticked rows. **Delete** asks first - "Delete
-“<name>”?", or "Delete 3 connectors?" - adding "A copy remains in Backups.";
+“<name>”?", or "Delete 3 connectors?" - adding "A copy stays in Backups for 30 days.";
 deleting from the active collection applies at once.
 
 A connector that another local collection holds an identical copy of, under
@@ -924,6 +924,7 @@ the time - the app leaves Claude's config valid on the way out.
 └── backups/           ← timestamped copies of Claude's config, mcps.json and
                          collections.json, rotated; machine-local
     ├── backup-collections.json               ← which collection each backup came from
+    ├── backup-pins.json                      ← backups kept 30 days after a delete
     └── claude_desktop_config.original.json   ← taken before the app first writes Claude's config; never pruned
 
 ~/Library/Application Support/Claude/claude_desktop_config.json
@@ -950,6 +951,7 @@ profile, so backups stay on the machine that made them):
 └── backups\           ← timestamped copies of Claude's config, mcps.json and
                          collections.json, rotated; machine-local
     ├── backup-collections.json               ← which collection each backup came from
+    ├── backup-pins.json                      ← backups kept 30 days after a delete
     └── claude_desktop_config.original.json   ← taken before the app first writes Claude's config; never pruned
 
 %APPDATA%\Claude\claude_desktop_config.json   ← generated output, as above, with

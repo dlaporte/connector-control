@@ -521,7 +521,7 @@ public class CollectionsModelTests
     /// <summary>
     /// The Delete confirmation says what goes with the collection before the button is pressed:
     /// its connectors, which collection becomes active, that a synced source is left alone, and
-    /// that a copy remains in Backups, for a collection that held anything to get back.
+    /// that a copy stays in Backups for 30 days, for a collection that held anything to get back.
     /// </summary>
     [Fact]
     public void DeleteConfirmationSaysWhatGoesWithTheCollection()
@@ -551,12 +551,12 @@ public class CollectionsModelTests
         // Nothing in it to get back from Backups.
         Assert.Equal("It has no connectors.", Informative("Empty"));
         Assert.Equal("Its 1 connector is deleted with it. Copies in other collections are not affected. "
-                     + "A copy remains in Backups.", Informative("One"));
+                     + "A copy stays in Backups for 30 days.", Informative("One"));
         // The first local collection with connectors, not the empty Default.
         Assert.Equal("Its 2 connectors are deleted with it. Copies in other collections are not affected. "
-                     + "“One” becomes the active collection. A copy remains in Backups.", Informative("Two"));
+                     + "“One” becomes the active collection. A copy stays in Backups for 30 days.", Informative("Two"));
         Assert.Equal("Its 1 connector is deleted with it. Copies in other collections are not affected. "
-                     + "The source file is not changed. A copy remains in Backups.", Informative("Team"));
+                     + "The source file is not changed. A copy stays in Backups for 30 days.", Informative("Team"));
         // Publishing adds nothing here: the file has its own question.
         Assert.Equal("It has no connectors.", Informative("Shared"));
         Assert.Equal(["Default", "Empty", "One", "Shared", "Team", "Two"], state.CollectionNames);   // every one declined
@@ -1097,7 +1097,7 @@ public class CollectionsModelTests
 
     /// <summary>
     /// Removing the ticked rows asks first, names the connector when there is one and the count
-    /// when there are more, and always says a copy remains in Backups.
+    /// when there are more, and always says a copy stays in Backups for 30 days.
     /// </summary>
     [Fact]
     public void DeleteCheckedConfirmsAndCarriesTheBackupsSentence()

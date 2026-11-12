@@ -1019,15 +1019,19 @@ public sealed class AppState : ObservableObject, IDisposable
     ///
     /// <paramref name="touched"/> is the collection the change was made to, when it was one: its
     /// document is read again, as a Locate that points the binding back at the same path needs.
+    ///
+    /// <paramref name="pinningBackup"/> keeps the backup this save takes for 30 days
+    /// (<see cref="BackupPins"/>). Only the operations that remove or replace what a collection held
+    /// ask for it.
     /// </summary>
-    private void PersistStore(string? touched = null)
+    private void PersistStore(string? touched = null, bool pinningBackup = false)
     {
         // The store just changed, so what a source document would change with it may have too -
         // and the excluded lists a re-render produces belong in the cache this save writes.
         RederivePending(touched);
         try
         {
-            var isProtected = Service.SaveStore(Store).Protected;
+            var isProtected = Service.SaveStore(Store, pinningBackup).Protected;
             // A sidecar that the last load could not read is one something else is writing. Our
             // copy of it may never have been filled, and saving that would land an empty sidecar -
             // and, behind it, a cache pruned against nothing - on top of the real file the
@@ -1260,7 +1264,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             return;
         }
-        PersistStore();
+        PersistStore(pinningBackup: true);
         RaiseAll();
     }
 
@@ -1657,7 +1661,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             PublishError = null;
         }
-        PersistStore();
+        PersistStore(pinningBackup: true);
         ApplyIfChanged();
         RaiseAll();
         return null;
