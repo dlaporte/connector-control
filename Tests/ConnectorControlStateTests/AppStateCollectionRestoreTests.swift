@@ -255,6 +255,60 @@ final class AppStateCollectionRestoreTests: XCTestCase {
         XCTAssertNil(try CollectionDocument.decode(try Data(contentsOf: document)).connectors["ledger"])
     }
 
+    /// A published collection keeps the marks of every connector the restore leaves in place: only one it
+    /// removes loses its own, and the document still carries the placeholder, never the path.
+    func testAPublishedCollectionKeepsTheMarksOfWhatStays() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let path = "/Users/d/ledger/dist/index.js"
+        XCTAssertNil(state.upsert(name: "ledger", entry: MCPEntry(config: .object([
+            "command": .string("node"), "args": .array([.string(path)]),
+        ])), renamedFrom: nil))
+        let taken = try backup(h, of: state.store)
+        XCTAssertNil(state.upsert(name: "added-since", entry: MCPEntry(config: config("a")), renamedFrom: nil))
+        let marks: [JSONPointer: PublishIntent.PathMark] = [
+            JSONPointer(["args", "0"]): .init(name: "server_path", hint: "your ledger clone", value: path),
+        ]
+        let document = try h.publish(state, "Default", intent: PublishIntent(shareValues: [:], pathMarks: ["ledger": marks], hints: [:]))
+
+        try state.restoreCollection("Default", from: taken.url, data: taken.data)
+        XCTAssertNil(state.store.collections["Default"]?.mcps["added-since"])
+        XCTAssertEqual(state.collectionsFile.collections["Default"]?.publish?.intent.pathMarks["ledger"], marks)
+        XCTAssertNil(state.publishError)
+        let bytes = try Data(contentsOf: document)
+        let published = try CollectionDocument.decode(bytes)
+        XCTAssertNil(published.connectors["added-since"])
+        XCTAssertEqual(published.connectors["ledger"]?.needs.keys.sorted(), ["server_path"])
+        XCTAssertFalse(String(decoding: bytes, as: UTF8.self).contains(path))
+    }
+
+    /// A Claude's config backup recorded under another spelling of a collection's name (decomposed, the
+    /// store's composed) goes back into the collection held, which becomes active: it is not gone, so
+    /// nothing is created and the confirmation says nothing of it.
+    func testAClaudeConfigBackupRecordedUnderAnotherSpellingGoesIntoTheOneHeld() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let composed = "Caf\u{E9}", decomposed = "Cafe\u{301}"
+        XCTAssertNil(state.addEmptyCollection(named: composed))
+        try FileManager.default.createDirectory(at: h.backupsDir, withIntermediateDirectories: true)
+        let claudeBackup = h.backupsDir.appendingPathComponent("claude_desktop_config.2026-11-01T00-00-00-000Z.json")
+        try Data(#"{"mcpServers": {"c1": {"command": "c1"}}}"#.utf8).write(to: claudeBackup)
+        try BackupCollections.record(decomposed, for: claudeBackup, in: h.backupsDir, staging: nil)
+
+        let model = RestoreModel(state: state)
+        model.load()
+        model.selection = claudeBackup
+        model.requestRestore()
+        XCTAssertTrue(model.confirming)
+        XCTAssertNil(model.confirmInformative)
+        XCTAssertTrue(model.confirmRestore())
+        XCTAssertTrue(state.activeCollection.hasSameScalars(as: composed))
+        let names = state.store.collections.keys.filter { $0.hasPrefix("Caf") }
+        XCTAssertEqual(names.count, 1)
+        XCTAssertTrue(names[0].hasSameScalars(as: composed))
+        XCTAssertNotNil(state.store.collections[composed]?.mcps["c1"])
+    }
+
     /// For a collection this machine publishes, a connector that comes back has no review: the restore
     /// lands in the store, and nothing reaches the folder until the Publish sheet reviews it.
     func testAConnectorThatComesBackToAPublishedCollectionIsHeldForReview() throws {

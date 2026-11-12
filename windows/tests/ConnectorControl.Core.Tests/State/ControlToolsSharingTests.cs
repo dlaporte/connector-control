@@ -811,6 +811,27 @@ public class ControlToolsSharingTests
         Assert.Equal(JsonValue.String("Work"), result.Structured.ValueAt(new JsonPointer(["activeCollection"])));
     }
 
+    /// <summary>A backup recorded under another spelling of a collection's name goes into the collection held: the
+    /// question names it as held, and does not say it is created again.</summary>
+    [Fact]
+    public void RestoringABackupRecordedUnderAnotherSpellingGoesIntoTheOneHeld()
+    {
+        using var rig = Rig();
+        const string composed = "Caf\u00E9", decomposed = "Cafe\u0301";
+        Assert.Null(rig.State.AddEmptyCollection(composed));
+        const string id = "claude_desktop_config.2026-11-01T00-00-00-000Z.json";
+        var backup = Path.Combine(rig.H.BackupsDir, id);
+        File.WriteAllText(backup, """{"mcpServers": {"c1": {"command": "c1"}}}""");
+        BackupCollections.Record(decomposed, backup, rig.H.BackupsDir);
+        var result = rig.Call("restore_backup", Args(("id", Text(id))));
+        Assert.NotNull(result);
+        Assert.Equal(RestoreModel.Caption + " " + ControlTools.RestoreActivatingText(ControlText.EscapedName(composed)),
+            rig.Confirmer.Requests[^1].Message);
+        Assert.False(result.IsError, result.Text);
+        Assert.Equal(composed, rig.State.ActiveCollection);
+        Assert.Single(rig.State.Store.Collections.Keys, k => k.StartsWith("Caf", StringComparison.Ordinal));
+    }
+
     // MARK: restart_claude
 
     [Fact]

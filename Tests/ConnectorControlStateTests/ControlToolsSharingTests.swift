@@ -613,6 +613,24 @@ final class ControlToolsSharingTests: XCTestCase {
         XCTAssertEqual(result.structured.value(at: JSONPointer(["activeCollection"])), .string("Work"))
     }
 
+    /// A backup recorded under another spelling of a collection's name goes into the collection held: the
+    /// question names it as held, and does not say it is created again.
+    func testRestoringABackupRecordedUnderAnotherSpellingGoesIntoTheOneHeld() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let composed = "Caf\u{E9}", decomposed = "Cafe\u{301}"
+        XCTAssertNil(rig.state.addEmptyCollection(named: composed))
+        let id = "claude_desktop_config.2026-11-01T00-00-00-000Z.json"
+        let backup = rig.h.backupsDir.appendingPathComponent(id)
+        try Data(#"{"mcpServers": {"c1": {"command": "c1"}}}"#.utf8).write(to: backup)
+        try BackupCollections.record(decomposed, for: backup, in: rig.h.backupsDir, staging: nil)
+        let result = try XCTUnwrap(rig.call("restore_backup", ["id": .string(id)]))
+        XCTAssertEqual(rig.confirmer.requests.last?.message,
+                       RestoreModel.caption + " " + ControlTools.restoreActivatingText(ControlText.escapedName(composed)))
+        XCTAssertFalse(result.isError, result.text)
+        XCTAssertTrue(rig.state.activeCollection.hasSameScalars(as: composed))
+        XCTAssertEqual(rig.state.store.collections.keys.filter { $0.hasPrefix("Caf") }.count, 1)
+    }
+
     // MARK: restart_claude
 
     func testARestartFromClaudeAlwaysAsksAndFromTheCommandLineNever() {

@@ -280,6 +280,61 @@ public class AppStateCollectionRestoreTests
         Assert.False(CollectionDocument.Decode(File.ReadAllBytes(document)).Connectors.ContainsKey("ledger"));
     }
 
+    /// <summary>A published collection keeps the marks of every connector the restore leaves in place: only one it
+    /// removes loses its own, and the document still carries the placeholder, never the path.</summary>
+    [Fact]
+    public void APublishedCollectionKeepsTheMarksOfWhatStays()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        const string path = "/Users/d/ledger/dist/index.js";
+        Assert.Null(state.Upsert("ledger", new McpEntry(JsonValue.Object(
+            ("command", JsonValue.String("node")), ("args", JsonValue.Array([JsonValue.String(path)])))), null));
+        var taken = Backup(h, state.Store);
+        Assert.Null(state.Upsert("added-since", new McpEntry(Config("a")), null));
+        var mark = new PublishIntent.PathMark("server_path", "your ledger clone", path);
+        var pointer = new JsonPointer(["args", "0"]);
+        var document = h.Publish(state, "Default", new PublishIntent(
+            [],
+            [new("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark> { [pointer] = mark })],
+            []));
+
+        state.RestoreCollection("Default", taken.Path, taken.Data);
+        Assert.False(state.Store.Collections["Default"].Mcps.ContainsKey("added-since"));
+        var kept = Assert.Single(state.CollectionsFile.Collections["Default"].Publish!.Intent.PathMarks["ledger"]);
+        Assert.Equal((pointer, mark), (kept.Key, kept.Value));
+        Assert.Null(state.PublishError);
+        var published = CollectionDocument.Decode(File.ReadAllBytes(document));
+        Assert.False(published.Connectors.ContainsKey("added-since"));
+        Assert.Equal(["server_path"], published.Connectors["ledger"].Needs.Keys.Order(StringComparer.Ordinal));
+        Assert.False(JsonText.FileContains(document, path));
+    }
+
+    /// <summary>A Claude's config backup recorded under another spelling of a collection's name (decomposed, the
+    /// store's composed) goes back into the collection held, which becomes active: it is not gone, so nothing is
+    /// created and the confirmation says nothing of it.</summary>
+    [Fact]
+    public void AClaudeConfigBackupRecordedUnderAnotherSpellingGoesIntoTheOneHeld()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        const string composed = "Caf\u00E9", decomposed = "Cafe\u0301";
+        Assert.Null(state.AddEmptyCollection(composed));
+        Directory.CreateDirectory(h.BackupsDir);
+        var claudeBackup = Path.Combine(h.BackupsDir, "claude_desktop_config.2026-11-01T00-00-00-000Z.json");
+        File.WriteAllText(claudeBackup, """{"mcpServers": {"c1": {"command": "c1"}}}""");
+        BackupCollections.Record(decomposed, claudeBackup, h.BackupsDir);
+
+        var model = new RestoreModel(state, h.Dialogs);
+        model.Load();
+        model.Selection = claudeBackup;
+        Assert.True(model.Restore());
+        Assert.Null(Assert.Single(h.Dialogs.Confirms).Informative);
+        Assert.Equal(composed, state.ActiveCollection);
+        Assert.Equal(composed, Assert.Single(state.Store.Collections.Keys, k => k.StartsWith("Caf", StringComparison.Ordinal)));
+        Assert.True(state.Store.Collections[composed].Mcps.ContainsKey("c1"));
+    }
+
     /// <summary>For a collection this machine publishes, a connector that comes back has no review: the restore
     /// lands in the store, and nothing reaches the folder until the Publish sheet reviews it.</summary>
     [Fact]
