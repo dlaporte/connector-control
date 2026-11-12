@@ -103,6 +103,25 @@ public class ControlRecordingTests
         Assert.DoesNotContain("ghp_0123456789abcdefghijklmnopqrstuvwxyzAB", Fixtures.Text("control/set-env.transcript"), StringComparison.Ordinal);
     }
 
+    /// <summary>A collection the master list no longer holds, listed with the backups and restored: the question
+    /// names the backup by its label (local time, so not written out) and lists every connector that comes back
+    /// with its switch, and the collection is back as the backup holds it.</summary>
+    [Fact]
+    public void RestoreCollection()
+    {
+        using var rig = Check("restore-collection").Rig;
+        const string id = "mcps.2026-09-04T12-00-00-000Z.json";
+        var time = BackupManager.Labels(rig.State.Service.Backups.Backups(CollectionRestoreModel.Series))[id];
+        Assert.Equal([new ConfirmationRequest(
+            ControlTools.RestoreTitle(ControlCaller.ClaudeName, "Personal"),
+            ControlTools.RestoreCollectionCreatedText("Personal", time),
+            ["+ aws-mcp (on)", "+ github (off)"], null)], rig.Confirmer.Requests);
+        var backup = MasterStoreIO.Read(Fixtures.Path("control/collection_backup.json"));
+        Assert.NotNull(backup);
+        Assert.Equal(backup.Collections["Personal"], rig.State.Store.Collections["Personal"]);
+        Assert.Equal("Default", rig.State.ActiveCollection);
+    }
+
     [Fact]
     public void IntegrationOff() => Check("integration-off").Rig.Dispose();
 
@@ -150,12 +169,14 @@ public class ControlRecordingTests
     public void ADirectiveTheReplayDoesNotKnowFailsIt()
     {
         foreach (var line in new[] { "#! confirm of", "#! caller CLI", "#! colour on", "#! backup off", "#! backup", "#! answer  allow",
-                                     "#! answer allow ", "#!caller cli", "caller cli" })
+                                     "#! answer allow ", "#!caller cli", "caller cli", "#! collection-backup off" })
         {
             Assert.Throws<FormatException>(() => ControlTranscript.Directives([line]));
         }
         Assert.Throws<FormatException>(() => ControlTranscript.Directives(["#! confirm on", "#! confirm off"]));
         Assert.Equal(new Dictionary<string, string> { ["caller"] = "cli", ["answer"] = "deny" },
             ControlTranscript.Directives(["# A comment.", "#! caller cli", "#! answer deny", "> {}", "< {}"]));
+        Assert.Equal(new Dictionary<string, string> { ["backup"] = "on", ["collection-backup"] = "on" },
+            ControlTranscript.Directives(["#! backup on", "#! collection-backup on"]));
     }
 }

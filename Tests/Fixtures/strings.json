@@ -446,12 +446,14 @@
   },
   "ControlTools.check_tools.cliUsage": "doctor",
   "ControlTools.check_tools.description": "Whether npx, node, uvx and uv are installed where Claude can find them. A connector launched through a missing one shows only \"server disconnected\" in Claude.",
+  "ControlTools.claudeBackupsHeading": "Claude’s config:",
   "ControlTools.claudeGroup": "Claude",
   "ControlTools.claudeLabel": "Claude",
   "ControlTools.claudeNotRunning": "not running",
   "ControlTools.claudeRunning": "running",
   "ControlTools.claudeRunningRestart": "running · restart required",
   "ControlTools.clauseSeparator": "; ",
+  "ControlTools.collectionBackupsHeading": "Collections:",
   "ControlTools.collectionHeader": "COLLECTION",
   "ControlTools.collectionsGroup": "Collections",
   "ControlTools.configShapeError": "A connector’s config needs a “command” or a “url”.",
@@ -599,7 +601,7 @@
   "ControlTools.kindHeader": "KIND",
   "ControlTools.listKind": "a list of names",
   "ControlTools.list_backups.cliUsage": "backups",
-  "ControlTools.list_backups.description": "List the backups of Claude's config. Each id can be given to restore_backup.",
+  "ControlTools.list_backups.description": "List the backups of Claude's config, whose ids restore_backup takes, and of the collections, whose ids restore_collection takes with one of the collection names listed.",
   "ControlTools.list_collections.cliUsage": "collections",
   "ControlTools.list_collections.description": "List collections. Each is a set of connectors and the active one is what Claude runs; a subscribed collection follows a file someone else publishes and is read-only.",
   "ControlTools.list_connectors.cliUsage": "connectors [--collection <name>]",
@@ -685,6 +687,12 @@
   "ControlTools.restoreActivatingText": {
     "format": "Its connectors go back into “{0}”, which becomes the active collection:"
   },
+  "ControlTools.restoreCollectionCreatedText": {
+    "format": "“{0}” is created again as it was at {1}:"
+  },
+  "ControlTools.restoreCollectionText": {
+    "format": "“{0}” goes back to how it was at {1}:"
+  },
   "ControlTools.restoreIntoText": {
     "format": "Its connectors go back into “{0}”:"
   },
@@ -696,6 +704,8 @@
   },
   "ControlTools.restore_backup.cliUsage": "backups restore <id>",
   "ControlTools.restore_backup.description": "Replace Claude's config with a backup. The current file is backed up first.",
+  "ControlTools.restore_collection.cliUsage": "backups restore-collection <id> <collection>",
+  "ControlTools.restore_collection.description": "Put one collection back exactly as it was in a backup: every connector, its settings and its switch, created again if it was deleted. Connectors added since are removed; other collections are left alone. The current state is backed up first and kept for 30 days.",
   "ControlTools.restoredNotification": {
     "format": "{0} restored “{1}”."
   },
@@ -780,6 +790,7 @@
   "ControlTools.titles.rename_collection": "Rename collection",
   "ControlTools.titles.restart_claude": "Restart Claude",
   "ControlTools.titles.restore_backup": "Restore backup",
+  "ControlTools.titles.restore_collection": "Restore collection",
   "ControlTools.titles.set_connector_enabled": "Turn connector on or off",
   "ControlTools.titles.set_connector_env": "Change environment",
   "ControlTools.titles.set_setting": "Change setting",
@@ -805,6 +816,7 @@
   "ControlTools.unknownToolError": {
     "format": "There’s no tool named “{0}”."
   },
+  "ControlTools.unreadableBackupText": "can’t be read",
   "ControlTools.upToDateText": {
     "format": "“{0}” is up to date."
   },

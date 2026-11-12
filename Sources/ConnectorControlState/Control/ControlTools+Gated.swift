@@ -398,6 +398,11 @@ extension ControlTools {
 
     public static func noBackupError(_ id: String) -> String { "There’s no backup named “\(id)”." }
 
+    /// restore_collection's question: the collection, and the backup's label (`BackupManager.labels(for:)`).
+    public static func restoreCollectionText(_ collection: String, _ time: String) -> String { "“\(collection)” goes back to how it was at \(time):" }
+
+    public static func restoreCollectionCreatedText(_ collection: String, _ time: String) -> String { "“\(collection)” is created again as it was at \(time):" }
+
     public static func restartTitle(_ shownAsker: String) -> String { "\(shownAsker) wants to restart Claude Desktop" }
 
     /// A connector as a question lists it: its name in quotes, through `ControlText.quotedList(_:)` -
@@ -750,6 +755,89 @@ extension ControlTools {
             return done([ControlTools.restoredText(shownID)], ["id": .string(id), "activeCollection": .string(state.activeCollection)],
                         touching: nil, since: mark, restart: ControlTools.restartToApplyText,
                         notification: ControlTools.restoredNotification(shownAsker, shownID))
+        })
+    }
+
+    /// A refused collection restore in AppState's own sentences, the backup and the collection each
+    /// named through `ControlText.escapedName(_:)`: Claude names both. The plan and the restore throw
+    /// only these; any other error is shown in its own words, escaped.
+    static func collectionRestoreRefusalText(_ error: Error) -> String {
+        switch error as? CollectionRestoreError {
+        case .backupUnreadable(let id)?: return AppState.collectionBackupUnreadableError(ControlText.escapedName(id))
+        case .notInBackup(let id, let collection)?:
+            return AppState.collectionNotInBackupError(ControlText.escapedName(id), ControlText.escapedName(collection))
+        case .subscribed(let collection)?: return AppState.restoreCollectionSubscribedError(ControlText.escapedName(collection))
+        case .unchanged(let collection)?: return AppState.restoreCollectionUnchangedError(ControlText.escapedName(collection))
+        case nil: return ControlText.escaped(error.localizedDescription)
+        }
+    }
+
+    /// What a collection restore's Allow stands for beyond its question, which lists by name only
+    /// what changes: the backup's bytes, then the collection's connectors as they are now, each with
+    /// its switch and config (null when it is gone), so a config changed while the question was up is
+    /// never overwritten unseen. The connectors are one key-sorted JSON line, hashed after the
+    /// backup's own fixed-length hash: one hash over both, exact to the scalar.
+    static func collectionRestoreFingerprint(_ bytes: Data, _ current: Collection?) -> String {
+        let connectors: JSONValue = current.map { held in
+            .object(held.mcps.mapValues { entry in
+                .object(["enabled": .bool(entry.enabled), "config": entry.config, "lastEditView": .string(entry.lastEditView.rawValue)])
+            })
+        } ?? .null
+        return ContentHash.sha256(Data((ContentHash.sha256(bytes) + connectors.compactLine()).utf8))
+    }
+
+    /// The Restore sheet's Collections restore, by an id `list_backups` gave and a collection that
+    /// backup holds, refused first for what the sheet refuses; the question lists what changes,
+    /// connector by connector, as the sheet's confirmation does.
+    func restoreCollection(_ arguments: ControlArguments, _ shownAsker: String) -> ControlStep {
+        let id = arguments.string("id") ?? ""
+        let collection = arguments.string("collection") ?? ""
+        let urls: [URL]
+        do {
+            urls = try collectionBackupURLs()
+        } catch {
+            return .refused(ControlText.escaped(AppState.friendly(error)))
+        }
+        // Only an id the list gives for the master list: never a path, so nothing outside the backups
+        // folder is read, nor a Claude's config backup, which is restore_backup's. Compared scalar by
+        // scalar, as the Windows mirror compares ordinally.
+        guard let backup = urls.first(where: { $0.lastPathComponent.hasSameScalars(as: id) }) else {
+            return .refused(ControlTools.noBackupError(ControlText.escapedName(id)))
+        }
+        // Read once: the question, the fingerprint and the restore all come from these bytes. Bytes
+        // that cannot be read are the plan's first refusal.
+        let data = try? BoundedRead.data(at: backup, limit: ConfigService.maxBackupBytes)
+        let plan: CollectionRestorePlan
+        do {
+            plan = try state.collectionRestorePlan(collection, id: backup.lastPathComponent, data: data)
+        } catch {
+            return .refused(ControlTools.collectionRestoreRefusalText(error))
+        }
+        let bytes = data ?? Data()
+        // Named as the store holds it, or as the backup spells it when it is gone; the backup as the
+        // Restore sheet labels it among the same list.
+        let shown = ControlText.escapedName(plan.collection)
+        let time = ControlText.escapedName(BackupManager.labels(for: urls)[backup.lastPathComponent] ?? backup.lastPathComponent)
+        let request = ConfirmationRequest(
+            title: ControlTools.restoreTitle(shownAsker, shown),
+            message: plan.created ? ControlTools.restoreCollectionCreatedText(shown, time) : ControlTools.restoreCollectionText(shown, time),
+            code: plan.lines(naming: ControlText.escapedName),
+            footer: plan.active ? ControlTools.takesEffectFooter : nil)
+        let fingerprint = ControlTools.collectionRestoreFingerprint(bytes, state.store.collections[plan.collection])
+        return .ready(request, fingerprint: fingerprint, perform: { [self] in
+            let mark = state.appliedServers
+            do {
+                try state.restoreCollection(collection, from: backup, data: bytes)
+            } catch {
+                // Platform idiom: the restore throws only its refusals, and Swift's catch must take every
+                // error; the Windows mirror catches the refusals and leaves anything else to the write queue.
+                return ControlOutcome(result: .refusal(ControlTools.collectionRestoreRefusalText(error)), notification: nil)
+            }
+            // Only restoring the collection Claude runs reaches its config, and says to restart.
+            return done([ControlTools.restoredText(shown)],
+                        ["id": .string(id), "collection": .string(plan.collection), "activeCollection": .string(state.activeCollection)],
+                        touching: plan.collection, since: mark, restart: ControlTools.restartToApplyText,
+                        notification: ControlTools.restoredNotification(shownAsker, shown))
         })
     }
 

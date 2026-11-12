@@ -82,6 +82,7 @@ extension ControlTools {
         case "subscribe": return subscribeDocument(arguments, caller)
         case "apply_update": return applyUpdate(arguments, caller.shownAsker)
         case "restore_backup": return restoreBackup(arguments, caller.shownAsker)
+        case "restore_collection": return restoreCollection(arguments, caller.shownAsker)
         case "restart_claude": return restartClaude(caller.shownAsker)
         default: return .refused(ControlTools.unknownToolError(ControlText.escapedName(name)))
         }

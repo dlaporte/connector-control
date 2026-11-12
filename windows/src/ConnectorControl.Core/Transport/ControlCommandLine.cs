@@ -215,11 +215,16 @@ public static class ControlCommandLine
                 return Call("set_setting", rest.Skip(1).ToList(), min: 2, max: 2, build: w =>
                     [("key", JsonValue.String(w.Positionals[0])), ("value", JsonValue.String(w.Positionals[1]))]);
             case "backups":
-                if (rest.FirstOrDefault() != "restore")
+                switch (rest.FirstOrDefault())
                 {
-                    return Call("list_backups", rest);
+                    case "restore":
+                        return Call("restore_backup", rest.Skip(1).ToList(), min: 1, max: 1, build: w => [("id", JsonValue.String(w.Positionals[0]))]);
+                    case "restore-collection":
+                        return Call("restore_collection", rest.Skip(1).ToList(), min: 2, max: 2, build: w =>
+                            [("id", JsonValue.String(w.Positionals[0])), ("collection", JsonValue.String(w.Positionals[1]))]);
+                    default:
+                        return Call("list_backups", rest);
                 }
-                return Call("restore_backup", rest.Skip(1).ToList(), min: 1, max: 1, build: w => [("id", JsonValue.String(w.Positionals[0]))]);
             case "restart-claude": return Call("restart_claude", rest);
             default: return new ControlInvocation.Usage(UnknownCommandError(command));
         }

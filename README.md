@@ -549,7 +549,7 @@ commands:
 - **Sharing** - Import collection, Subscribe to collection, Show pending
   update, Apply update, Refresh subscription.
 - **Settings and backups** - Show settings, Change setting, List backups,
-  Restore backup.
+  Restore backup, Restore collection.
 - **Claude** - Restart Claude.
 
 Claude can't publish a collection or stop publishing one, Stop Syncing, or
@@ -739,8 +739,10 @@ Sharing
 Settings and backups
   settings                           List Connector Control's settings and their values
   settings set <key> <value>         Change a setting
-  backups                            List the backups of Claude's config
+  backups                            List the backups of Claude's config, whose ids restore_backup takes, and of the collections, whose ids restore_collection takes with one of the collection names listed
   backups restore <id>               Replace Claude's config with a backup
+  backups restore-collection <id> <collection>
+                                     Put one collection back exactly as it was in a backup: every connector, its settings and its switch, created again if it was deleted
 Claude
   restart-claude                     Quit and reopen Claude Desktop
   mcp                                The relay Claude Desktop runs; not for direct use

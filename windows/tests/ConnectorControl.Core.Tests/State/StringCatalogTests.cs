@@ -211,6 +211,8 @@ public class StringCatalogTests
         ["ControlTools.renamedText"] = ["X", "Y"],
         ["ControlTools.restartTitle"] = ["X"],
         ["ControlTools.restoreActivatingText"] = ["X"],
+        ["ControlTools.restoreCollectionCreatedText"] = ["X", "Y"],
+        ["ControlTools.restoreCollectionText"] = ["X", "Y"],
         ["ControlTools.restoreIntoText"] = ["X"],
         ["ControlTools.restoreRecreatingText"] = ["X"],
         ["ControlTools.restoreTitle"] = ["X", "Y"],
@@ -595,12 +597,14 @@ public class StringCatalogTests
         actual["ControlTools.changedText"] = ControlTools.ChangedText("X", "Y");
         actual["ControlTools.changedWhileAskingError"] = ControlTools.ChangedWhileAskingError;
         actual["ControlTools.changesClause"] = ControlTools.ChangesClause("X");
+        actual["ControlTools.claudeBackupsHeading"] = ControlTools.ClaudeBackupsHeading;
         actual["ControlTools.claudeGroup"] = ControlTools.ClaudeGroup;
         actual["ControlTools.claudeLabel"] = ControlTools.ClaudeLabel;
         actual["ControlTools.claudeNotRunning"] = ControlTools.ClaudeNotRunning;
         actual["ControlTools.claudeRunning"] = ControlTools.ClaudeRunning;
         actual["ControlTools.claudeRunningRestart"] = ControlTools.ClaudeRunningRestart;
         actual["ControlTools.clauseSeparator"] = ControlTools.ClauseSeparator;
+        actual["ControlTools.collectionBackupsHeading"] = ControlTools.CollectionBackupsHeading;
         actual["ControlTools.collectionHeader"] = ControlTools.CollectionHeader;
         actual["ControlTools.collectionsGroup"] = ControlTools.CollectionsGroup;
         actual["ControlTools.configShapeError"] = ControlTools.ConfigShapeError;
@@ -696,6 +700,8 @@ public class StringCatalogTests
         actual["ControlTools.restartToUseText"] = ControlTools.RestartToUseText;
         actual["ControlTools.restartingText"] = ControlTools.RestartingText;
         actual["ControlTools.restoreActivatingText"] = ControlTools.RestoreActivatingText("X");
+        actual["ControlTools.restoreCollectionCreatedText"] = ControlTools.RestoreCollectionCreatedText("X", "Y");
+        actual["ControlTools.restoreCollectionText"] = ControlTools.RestoreCollectionText("X", "Y");
         actual["ControlTools.restoreIntoText"] = ControlTools.RestoreIntoText("X");
         actual["ControlTools.restoreRecreatingText"] = ControlTools.RestoreRecreatingText("X");
         actual["ControlTools.restoreTitle"] = ControlTools.RestoreTitle("X", "Y");
@@ -729,6 +735,7 @@ public class StringCatalogTests
         actual["ControlTools.turnedOnText"] = ControlTools.TurnedOnText("X", "Y");
         actual["ControlTools.unchangedError"] = ControlTools.UnchangedError("X");
         actual["ControlTools.unknownToolError"] = ControlTools.UnknownToolError("X");
+        actual["ControlTools.unreadableBackupText"] = ControlTools.UnreadableBackupText;
         actual["ControlTools.upToDateText"] = ControlTools.UpToDateText("X");
         actual["ControlTools.updateAvailableKind"] = ControlTools.UpdateAvailableKind;
         actual["ControlTools.waitingText"] = ControlTools.WaitingText;

@@ -1,0 +1,13 @@
+# A collection the master list no longer holds: listed with the backups, then restored after the question.
+#! backup on
+#! collection-backup on
+#! answer allow
+> {"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"claude-ai","version":"0.1.0"}}}
+< {"id":0,"jsonrpc":"2.0","result":{"capabilities":{"tools":{}},"protocolVersion":"2025-11-25","serverInfo":{"name":"connector-control","version":"1.2.2"}}}
+> {"jsonrpc":"2.0","method":"notifications/initialized"}
+> {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_backups","arguments":{}}}
+< {"id":1,"jsonrpc":"2.0","result":{"content":[{"text":"Claude’s config:\nID                                                    COLLECTION\nclaude_desktop_config.2026-09-04T12-00-00-000Z.json\n\nCollections:\nID                                   COLLECTION   CONNECTORS\nmcps.2026-09-04T12-00-00-000Z.json   Default      3 connectors, 3 on\nmcps.2026-09-04T12-00-00-000Z.json   Personal     2 connectors, 1 on","type":"text"}],"isError":false,"structuredContent":{"backups":[{"collection":null,"id":"claude_desktop_config.2026-09-04T12-00-00-000Z.json"}],"collectionBackups":[{"collections":[{"connectors":3,"name":"Default","on":3},{"connectors":2,"name":"Personal","on":1}],"id":"mcps.2026-09-04T12-00-00-000Z.json"}]}}}
+> {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"restore_collection","arguments":{"id":"mcps.2026-09-04T12-00-00-000Z.json","collection":"Personal"}}}
+< {"id":2,"jsonrpc":"2.0","result":{"content":[{"text":"Restored “Personal”.","type":"text"}],"isError":false,"structuredContent":{"activeCollection":"Default","applied":true,"collection":"Personal","id":"mcps.2026-09-04T12-00-00-000Z.json","restartRequired":false}}}
+> {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_collections","arguments":{}}}
+< {"id":3,"jsonrpc":"2.0","result":{"content":[{"text":"         NAME       KIND    CONNECTORS\nactive   Default    local   3 connectors, 3 on\n         Personal   local   2 connectors, 1 on","type":"text"}],"isError":false,"structuredContent":{"active":"Default","collections":[{"active":true,"connectors":3,"enabled":3,"kind":"local","name":"Default","published":false,"updateAvailable":false},{"active":false,"connectors":2,"enabled":1,"kind":"local","name":"Personal","published":false,"updateAvailable":false}]}}}

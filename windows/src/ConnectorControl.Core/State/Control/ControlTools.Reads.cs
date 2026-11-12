@@ -30,6 +30,9 @@ public sealed partial class ControlTools
     public const string PublishedKind = "published";
     public const string UpdateAvailableKind = "update available";
     public const string NoBackupsText = "No backups yet.";
+    public const string ClaudeBackupsHeading = "Claude’s config:";
+    public const string CollectionBackupsHeading = "Collections:";
+    public const string UnreadableBackupText = "can’t be read";
     public const string ClauseSeparator = "; ";
 
     public static string StatusTitle(string version) => $"Connector Control {version}";
@@ -331,12 +334,21 @@ public sealed partial class ControlTools
     /// <summary>The backups the Restore sheet lists: newest first, the first-run original last.</summary>
     internal List<string> BackupPaths() => new(state.Service.Backups.RestorableBackups(RestoreModel.Series));
 
+    /// <summary>The master list's backups the Restore dialog's Collections tab lists, newest first; the series
+    /// has no first-run original.</summary>
+    internal List<string> CollectionBackupPaths() => new(state.Service.Backups.Backups(CollectionRestoreModel.Series));
+
+    /// <summary>Both kinds of backup, each under its heading when there are any: Claude's config's, whose ids
+    /// restore_backup takes, then the master list's, a row for each collection one holds, whose ids
+    /// restore_collection takes. A master-list backup is read once, within the bound every backup read keeps,
+    /// and one that cannot be read is listed as such rather than left out.</summary>
     internal ControlResult ListBackups()
     {
-        List<string> paths;
+        List<string> paths, collectionPaths;
         try
         {
             paths = BackupPaths();
+            collectionPaths = CollectionBackupPaths();
         }
         catch (Exception error)
         {
@@ -352,10 +364,51 @@ public sealed partial class ControlTools
             items.Add(JsonValue.Object(("id", JsonValue.String(Path.GetFileName(path))),
                                        ("collection", collection is not null ? JsonValue.String(collection) : JsonValue.Null)));
         }
-        var text = rows.Count == 0
-            ? NoBackupsText
-            : string.Join("\n", ControlText.Table([IdHeader, CollectionHeader], rows));
-        return new ControlResult(JsonValue.Object(("backups", JsonValue.Array(items))), text, false);
+        var collectionRows = new List<IReadOnlyList<string>>();
+        var collectionItems = new List<JsonValue>();
+        foreach (var path in collectionPaths)
+        {
+            var id = Path.GetFileName(path);
+            MasterStore store;
+            try
+            {
+                store = MasterStoreIO.Decode(BoundedRead.Data(path, ConfigService.MaxBackupBytes));
+            }
+            // Platform idiom: whatever the read or the decode throws for the backup itself, as the Mac's try? takes
+            // every error they throw; a programming fault is left to end the call, as restore_backup leaves it.
+            catch (Exception ex) when (ex is not (NullReferenceException or IndexOutOfRangeException or InvalidCastException))
+            {
+                collectionRows.Add([ControlText.EscapedName(id), "", UnreadableBackupText]);
+                collectionItems.Add(JsonValue.Object(("id", JsonValue.String(id)), ("collections", JsonValue.Null)));
+                continue;
+            }
+            var collections = new List<JsonValue>();
+            foreach (var (name, held) in store.Collections.OrderBy(p => p.Key, StringComparer.Ordinal))
+            {
+                var on = held.Mcps.Count(p => p.Value.Enabled);
+                collectionRows.Add([ControlText.EscapedName(id), ControlText.EscapedName(name), ConnectorCountText(held.Mcps.Count, on)]);
+                collections.Add(JsonValue.Object(("name", JsonValue.String(name)), ("connectors", JsonValue.Int(held.Mcps.Count)),
+                                                 ("on", JsonValue.Int(on))));
+            }
+            collectionItems.Add(JsonValue.Object(("id", JsonValue.String(id)), ("collections", JsonValue.Array(collections))));
+        }
+        var lines = new List<string>();
+        if (rows.Count > 0)
+        {
+            lines.Add(ClaudeBackupsHeading);
+            lines.AddRange(ControlText.Table([IdHeader, CollectionHeader], rows));
+        }
+        if (collectionRows.Count > 0)
+        {
+            if (lines.Count > 0)
+            {
+                lines.Add("");
+            }
+            lines.Add(CollectionBackupsHeading);
+            lines.AddRange(ControlText.Table([IdHeader, CollectionHeader, ConnectorsHeader], collectionRows));
+        }
+        return new ControlResult(JsonValue.Object(("backups", JsonValue.Array(items)), ("collectionBackups", JsonValue.Array(collectionItems))),
+            lines.Count == 0 ? NoBackupsText : string.Join("\n", lines), false);
     }
 
     internal ControlResult CurrentSettings()

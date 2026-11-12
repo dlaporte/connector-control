@@ -36,6 +36,7 @@ public sealed partial class ControlTools
         ["restart_claude"] = "Restart Claude", ["update_connector"] = "Change connector", ["set_connector_env"] = "Change environment",
         ["delete_connectors"] = "Delete connectors", ["delete_collection"] = "Delete collection",
         ["import_document"] = "Import collection", ["apply_update"] = "Apply update", ["restore_backup"] = "Restore backup",
+        ["restore_collection"] = "Restore collection",
     };
 
     internal const string CollectionOrActive = "A collection's name; the active collection when left out.";
@@ -132,10 +133,15 @@ public sealed partial class ControlTools
                           ("value", Text($"on or off; for backups-to-keep, a number from {ControlSettingKey.KeepCountRange}."))],
              required: ["key", "value"]),
         Tool("list_backups", ControlGateClass.Read, usage: "backups", group: SettingsGroup,
-             description: "List the backups of Claude's config. Each id can be given to restore_backup."),
+             description: "List the backups of Claude's config, whose ids restore_backup takes, and of the collections, whose ids restore_collection takes with one of the collection names listed."),
         Tool("restore_backup", ControlGateClass.Gated, destructive: true, usage: "backups restore <id>", group: SettingsGroup,
              description: "Replace Claude's config with a backup. The current file is backed up first.",
              properties: [("id", Text("A backup's id, from list_backups."))], required: ["id"]),
+        Tool("restore_collection", ControlGateClass.Gated, destructive: true, usage: "backups restore-collection <id> <collection>", group: SettingsGroup,
+             description: "Put one collection back exactly as it was in a backup: every connector, its settings and its switch, created again if it was deleted. Connectors added since are removed; other collections are left alone. The current state is backed up first and kept for 30 days.",
+             properties: [("id", Text("A collections backup's id, from list_backups.")),
+                          ("collection", Text("The collection to restore, as list_backups names it."))],
+             required: ["id", "collection"]),
         Tool("restart_claude", ControlGateClass.AlwaysConfirm, usage: "restart-claude", group: ClaudeGroup,
              description: "Quit and reopen Claude Desktop. The user is always asked first; the reply in progress stops and the conversation is kept."),
 

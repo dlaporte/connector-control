@@ -206,6 +206,8 @@ final class StringCatalogTests: XCTestCase {
         "ControlTools.renamedText": ["X", "Y"],
         "ControlTools.restartTitle": ["X"],
         "ControlTools.restoreActivatingText": ["X"],
+        "ControlTools.restoreCollectionCreatedText": ["X", "Y"],
+        "ControlTools.restoreCollectionText": ["X", "Y"],
         "ControlTools.restoreIntoText": ["X"],
         "ControlTools.restoreRecreatingText": ["X"],
         "ControlTools.restoreTitle": ["X", "Y"],
@@ -571,12 +573,14 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.changedText"] = ControlTools.changedText("X", "Y")
         actual["ControlTools.changedWhileAskingError"] = ControlTools.changedWhileAskingError
         actual["ControlTools.changesClause"] = ControlTools.changesClause("X")
+        actual["ControlTools.claudeBackupsHeading"] = ControlTools.claudeBackupsHeading
         actual["ControlTools.claudeGroup"] = ControlTools.claudeGroup
         actual["ControlTools.claudeLabel"] = ControlTools.claudeLabel
         actual["ControlTools.claudeNotRunning"] = ControlTools.claudeNotRunning
         actual["ControlTools.claudeRunning"] = ControlTools.claudeRunning
         actual["ControlTools.claudeRunningRestart"] = ControlTools.claudeRunningRestart
         actual["ControlTools.clauseSeparator"] = ControlTools.clauseSeparator
+        actual["ControlTools.collectionBackupsHeading"] = ControlTools.collectionBackupsHeading
         actual["ControlTools.collectionHeader"] = ControlTools.collectionHeader
         actual["ControlTools.collectionsGroup"] = ControlTools.collectionsGroup
         actual["ControlTools.configShapeError"] = ControlTools.configShapeError
@@ -671,6 +675,8 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.restartToUseText"] = ControlTools.restartToUseText
         actual["ControlTools.restartingText"] = ControlTools.restartingText
         actual["ControlTools.restoreActivatingText"] = ControlTools.restoreActivatingText("X")
+        actual["ControlTools.restoreCollectionCreatedText"] = ControlTools.restoreCollectionCreatedText("X", "Y")
+        actual["ControlTools.restoreCollectionText"] = ControlTools.restoreCollectionText("X", "Y")
         actual["ControlTools.restoreIntoText"] = ControlTools.restoreIntoText("X")
         actual["ControlTools.restoreRecreatingText"] = ControlTools.restoreRecreatingText("X")
         actual["ControlTools.restoreTitle"] = ControlTools.restoreTitle("X", "Y")
@@ -704,6 +710,7 @@ final class StringCatalogTests: XCTestCase {
         actual["ControlTools.turnedOnText"] = ControlTools.turnedOnText("X", "Y")
         actual["ControlTools.unchangedError"] = ControlTools.unchangedError("X")
         actual["ControlTools.unknownToolError"] = ControlTools.unknownToolError("X")
+        actual["ControlTools.unreadableBackupText"] = ControlTools.unreadableBackupText
         actual["ControlTools.upToDateText"] = ControlTools.upToDateText("X")
         actual["ControlTools.updateAvailableKind"] = ControlTools.updateAvailableKind
         actual["ControlTools.waitingText"] = ControlTools.waitingText

@@ -9,6 +9,10 @@ namespace ConnectorControl.Core.State;
 /// </summary>
 public sealed class CollectionRestoreModel : ObservableObject
 {
+    /// <summary>The master list's backups, as <c>ConfigService.SaveStore</c> names them: the ones this tab and
+    /// <c>list_backups</c> list, and <c>restore_collection</c> takes.</summary>
+    public const string Series = "mcps";
+
     public static string ComesBackLine(string name, bool on) => on ? $"+ {name} (on)" : $"+ {name} (off)";
     public static string ChangesLine(string name, bool on) => on ? $"~ {name} (on)" : $"~ {name} (off)";
     /// <summary>"−" is U+2212, as <c>ControlMasking.RemovedPrefix</c> marks a removed line.</summary>

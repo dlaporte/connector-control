@@ -61,6 +61,8 @@ final class ControlCommandLineTests: XCTestCase {
             (["settings", "set", "backups-to-keep", "30"], call("set_setting", ["key": .string("backups-to-keep"), "value": .string("30")])),
             (["backups"], call("list_backups")),
             (["backups", "restore", id], call("restore_backup", ["id": .string(id)])),
+            (["backups", "restore-collection", "mcps.2026-10-28T12-00-00-000Z.json", "Team"],
+             call("restore_collection", ["id": .string("mcps.2026-10-28T12-00-00-000Z.json"), "collection": .string("Team")])),
             (["restart-claude"], call("restart_claude")),
         ]
         var tools: Set<String> = []
@@ -132,6 +134,16 @@ final class ControlCommandLineTests: XCTestCase {
                        "a combining mark after the dashes does not make the word a name")
         XCTAssertEqual(parse("mcp", "extra"), .usage(ControlCommandLine.unknownOptionError("extra")))
         XCTAssertEqual(parse("help", "status"), .usage(ControlCommandLine.helpTakesNoArgumentsError))
+    }
+
+    /// `backups restore-collection` takes exactly an id and a collection.
+    func testRestoringACollectionTakesAnIdAndACollection() {
+        let usage = ControlInvocation.usage(ControlCommandLine.usageError("backups restore-collection <id> <collection>"))
+        XCTAssertEqual(parse("backups", "restore-collection", "mcps.x.json", "My team", "--json"),
+                       call("restore_collection", ["id": .string("mcps.x.json"), "collection": .string("My team")], json: true))
+        XCTAssertEqual(parse("backups", "restore-collection", "mcps.x.json"), usage)
+        XCTAssertEqual(parse("backups", "restore-collection", "mcps.x.json", "Team", "Extra"), usage)
+        XCTAssertEqual(parse("backups", "restore-collection"), usage)
     }
 
     /// `env` takes `KEY=value` words, each split at its first "=", and `--unset KEY` as often as it

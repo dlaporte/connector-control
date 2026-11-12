@@ -9,9 +9,12 @@ namespace ConnectorControl.Core.Tests.TestSupport;
 ///
 /// A recording is UTF-8 with <c>\n</c> line ends. <c># </c> lines are comments; <c>#! &lt;key&gt; &lt;value&gt;</c>
 /// lines set up the rig (<c>integration on|off</c>, <c>confirm on|off</c>, <c>answer allow|deny</c>,
-/// <c>caller relay|cli</c>, <c>backup on</c>); <c>&gt; </c> lines go to the session in order, and each line
-/// the session sends back is a <c>&lt; </c> line after the request that drew it. The master list's path,
-/// the one temp path a result carries, is <c>&lt;master-list&gt;</c> in a recording.
+/// <c>caller relay|cli</c>, <c>backup on</c>, <c>collection-backup on</c>); <c>&gt; </c> lines go to the session
+/// in order, and each line the session sends back is a <c>&lt; </c> line after the request that drew it.
+/// <c>backup on</c> backs Claude's config up, and <c>collection-backup on</c> puts <c>collection_backup.json</c>
+/// among the master list's backups, a master list holding a collection the rig's does not; each at the
+/// harness's clock, so its id is the same every run. The master list's path, the one temp path a result
+/// carries, is <c>&lt;master-list&gt;</c> in a recording.
 ///
 /// Mirror: Tests/ConnectorControlStateTests/TestSupport/ControlTranscript.swift
 /// </summary>
@@ -22,7 +25,7 @@ public static class ControlTranscript
     public static readonly IReadOnlyDictionary<string, string[]> DirectiveValues = new Dictionary<string, string[]>(StringComparer.Ordinal)
     {
         ["integration"] = ["on", "off"], ["confirm"] = ["on", "off"], ["answer"] = ["allow", "deny"],
-        ["caller"] = ["relay", "cli"], ["backup"] = ["on"],
+        ["caller"] = ["relay", "cli"], ["backup"] = ["on"], ["collection-backup"] = ["on"],
     };
 
     public sealed record Replay(ControlRig Rig, McpSession Session, IReadOnlyList<string> Expected, IReadOnlyList<string> Actual);
@@ -44,6 +47,10 @@ public static class ControlTranscript
         if (settings.GetValueOrDefault("backup") == "on")
         {
             rig.State.Service.Backups.BackUp(rig.H.ClaudeConfigPath, RestoreModel.Series, rig.H.Now);
+        }
+        if (settings.GetValueOrDefault("collection-backup") == "on")
+        {
+            rig.State.Service.Backups.BackUp(Fixtures.Path("control/collection_backup.json"), CollectionRestoreModel.Series, rig.H.Now);
         }
         var host = new ControlToolHost(rig.Tools, isCli: settings.GetValueOrDefault("caller") == "cli");
         var sent = new List<string>();

@@ -8,6 +8,10 @@ import Combine
 /// Mirror: windows/src/ConnectorControl.Core/State/CollectionRestoreModel.cs
 @MainActor
 public final class CollectionRestoreModel: ObservableObject {
+    /// The master list's backups, as `ConfigService.saveStore` names them: the ones this tab and
+    /// `list_backups` list, and `restore_collection` takes.
+    nonisolated public static let series = "mcps"
+
     nonisolated public static func comesBackLine(_ name: String, _ on: Bool) -> String { on ? "+ \(name) (on)" : "+ \(name) (off)" }
 
     nonisolated public static func changesLine(_ name: String, _ on: Bool) -> String { on ? "~ \(name) (on)" : "~ \(name) (off)" }

@@ -12,16 +12,19 @@ import ConnectorControlTestSupport
 ///
 /// A recording is UTF-8 with `\n` line ends. `# ` lines are comments; `#! <key> <value>` lines set
 /// up the rig (`integration on|off`, `confirm on|off`, `answer allow|deny`, `caller relay|cli`,
-/// `backup on`); `> ` lines go to the session in order, and each line the session sends back is a
-/// `< ` line after the request that drew it. The master list's path, the one temp path a result
-/// carries, is `<master-list>` in a recording.
+/// `backup on`, `collection-backup on`); `> ` lines go to the session in order, and each line the
+/// session sends back is a `< ` line after the request that drew it. `backup on` backs Claude's
+/// config up, and `collection-backup on` puts `collection_backup.json` among the master list's
+/// backups, a master list holding a collection the rig's does not; each at the harness's clock, so
+/// its id is the same every run. The master list's path, the one temp path a result carries, is
+/// `<master-list>` in a recording.
 @MainActor
 enum ControlTranscript {
     static let masterListToken = "<master-list>"
     /// Each directive's key and the values it takes.
     static let directiveValues: [String: Set<String>] = [
         "integration": ["on", "off"], "confirm": ["on", "off"], "answer": ["allow", "deny"],
-        "caller": ["relay", "cli"], "backup": ["on"],
+        "caller": ["relay", "cli"], "backup": ["on"], "collection-backup": ["on"],
     ]
 
     /// A recording the replay cannot read as written. The Windows mirror throws `FormatException`.
@@ -50,6 +53,10 @@ enum ControlTranscript {
         }
         if settings["backup"] == "on" {
             _ = try rig.state.service.backups.backUp(fileAt: rig.h.claudeConfigURL, series: RestoreModel.series, now: rig.h.now)
+        }
+        if settings["collection-backup"] == "on" {
+            _ = try rig.state.service.backups.backUp(fileAt: Fixtures.url("control/collection_backup.json"),
+                                                     series: CollectionRestoreModel.series, now: rig.h.now)
         }
         let host = ControlToolHost(tools: rig.tools, isCLI: settings["caller"] == "cli")
         var sent: [String] = []
