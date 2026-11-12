@@ -116,7 +116,14 @@ public final class CollectionRestoreModel: ObservableObject {
     /// The chosen backup's collections, by name ordinally.
     @Published public private(set) var rows: [Row] = []
     /// The chosen collection, by its row's name.
-    @Published public var collection: String?
+    /// Choosing one re-reads the chosen backup's rows, so a row that changed since the backup was chosen
+    /// shows how it stands now.
+    @Published public var collection: String? {
+        didSet {
+            guard collection != nil, collection != oldValue, let backup = selectedBackup else { return }
+            rows = rows(of: backup)
+        }
+    }
     @Published public private(set) var restoreError: String?
     /// True while the confirmation sheet is up.
     @Published public private(set) var confirming = false

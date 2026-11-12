@@ -101,6 +101,27 @@ final class CollectionRestoreModelTests: XCTestCase {
         XCTAssertEqual(model.rows.map(\.name), ["Data team", "Default", "Personal"])
     }
 
+    /// A row read when the backup was chosen is read again when its collection is chosen, so one that
+    /// changed in between shows how it stands now, and the choice stays.
+    func testChoosingACollectionRereadsItsRowsAgainstTheStoreNow() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try stagedBackup(h, state)
+        let model = CollectionRestoreModel(state: state)
+        model.load()
+        choose(url, in: model)
+        XCTAssertEqual(model.rows.first { $0.name == "Gone" }?.state, .gone)
+
+        XCTAssertNil(state.addEmptyCollection(named: "Gone"))
+        XCTAssertNil(state.upsert(name: "g", entry: entry("g"), renamedFrom: nil, in: "Gone"))
+        XCTAssertEqual(model.rows.first { $0.name == "Gone" }?.state, .gone, "not read again until chosen")
+
+        model.collection = "Gone"
+        XCTAssertEqual(model.rows.first { $0.name == "Gone" }?.state, .same)
+        XCTAssertEqual(model.collection, "Gone")
+        XCTAssertFalse(model.canRestore)
+    }
+
     /// The confirmation names the collection and the backup's time, and lists every line; then, after a
     /// blank line, that a gone collection is created again, or that Claude's config is updated too for
     /// the active one, or nothing more. A gone collection that held no connectors says only that.

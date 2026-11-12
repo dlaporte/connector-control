@@ -133,7 +133,8 @@ public sealed class CollectionRestoreModel : ObservableObject
         }
     }
 
-    /// <summary>The chosen collection, by its row's name.</summary>
+    /// <summary>The chosen collection, by its row's name. Choosing one re-reads the chosen backup's rows, so a row
+    /// that changed since the backup was chosen shows how it stands now.</summary>
     public string? Collection
     {
         get => collection;
@@ -141,6 +142,10 @@ public sealed class CollectionRestoreModel : ObservableObject
         {
             if (Set(ref collection, value))
             {
+                if (value is not null && SelectedBackup is { } backup)
+                {
+                    Rows = RowsOf(backup);
+                }
                 Raise(nameof(CanRestore));
             }
         }

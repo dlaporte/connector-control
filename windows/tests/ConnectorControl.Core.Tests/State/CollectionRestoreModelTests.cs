@@ -109,6 +109,29 @@ public class CollectionRestoreModelTests
         Assert.Equal(["Data team", "Default", "Personal"], model.Rows.Select(r => r.Name));
     }
 
+    /// <summary>A row read when the backup was chosen is read again when its collection is chosen, so one that changed
+    /// in between shows how it stands now, and the choice stays.</summary>
+    [Fact]
+    public void ChoosingACollectionRereadsItsRowsAgainstTheStoreNow()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = StagedBackup(h, state);
+        var model = new CollectionRestoreModel(state, h.Dialogs);
+        model.Load();
+        Choose(path, model);
+        Assert.Equal(CollectionRestoreModel.RowState.Gone, model.Rows.Single(r => r.Name == "Gone").State);
+
+        Assert.Null(state.AddEmptyCollection("Gone"));
+        Assert.Null(state.Upsert("g", Entry("g"), null, "Gone"));
+        Assert.Equal(CollectionRestoreModel.RowState.Gone, model.Rows.Single(r => r.Name == "Gone").State);   // not read again until chosen
+
+        model.Collection = "Gone";
+        Assert.Equal(CollectionRestoreModel.RowState.Same, model.Rows.Single(r => r.Name == "Gone").State);
+        Assert.Equal("Gone", model.Collection);
+        Assert.False(model.CanRestore);
+    }
+
     /// <summary>The confirmation names the collection and the backup's time, and lists every line; then, after a
     /// blank line, that a gone collection is created again, or that Claude's config is updated too for the active
     /// one, or nothing more. A gone collection that held no connectors says only that.</summary>
