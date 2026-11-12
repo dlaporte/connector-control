@@ -42,11 +42,12 @@
         <StackPanel Margin="0,10,0,0">
           <TextBlock Text="{x:Static state:RestoreModel.Caption}" Style="{StaticResource CaptionText}" />
           <TextBlock Text="{x:Static state:RestoreModel.ClaudeConfigNote}" Style="{StaticResource CaptionText}" Margin="0,4,0,10" />
-          <ListBox x:Name="BackupList" Height="180" FontFamily="{StaticResource MonoFont}" FontSize="13" SelectionChanged="OnSelectionChanged" />
+          <ListBox x:Name="BackupList" Height="240" FontFamily="{StaticResource MonoFont}" FontSize="13" SelectionChanged="OnSelectionChanged" />
         </StackPanel>
       </TabItem>
     </TabControl>
-    <!-- The chosen tab's failure line and buttons: its model is this panel's DataContext. -->
+    <!-- Platform idiom: one failure line under the tabs follows the shown tab; the Mac puts each tab's in the tab.
+         The panel's DataContext is the shown tab's model. -->
     <StackPanel x:Name="Footer">
       <TextBlock x:Name="FailureText" Text="{Binding RestoreError}" Style="{StaticResource ErrorText}" Margin="0,8,0,0" Visibility="{Binding HasRestoreError, Converter={StaticResource Vis}}" />
       <StackPanel Style="{StaticResource DialogButtons}" Margin="0,16,0,0">

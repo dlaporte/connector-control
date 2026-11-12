@@ -103,7 +103,7 @@ struct RestoreSheetView: View {
             List(model.backups, id: \.self, selection: $model.selection) { url in
                 Text(url.lastPathComponent).font(.system(.callout, design: .monospaced))
             }
-            .frame(height: 180)
+            .frame(height: 240)
             if let restoreError = model.restoreError {
                 FailureLine(restoreError)
             }
