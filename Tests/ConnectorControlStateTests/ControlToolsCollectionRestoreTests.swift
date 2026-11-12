@@ -46,6 +46,17 @@ final class ControlToolsCollectionRestoreTests: XCTestCase {
         return Dictionary(uniqueKeysWithValues: try urls.map { ($0.lastPathComponent, try Data(contentsOf: $0)) })
     }
 
+    /// The master list's backups and their bytes: a save takes one, and writing Claude's config again
+    /// takes only a backup of Claude's config.
+    private func collectionBackupFiles(_ rig: ControlRig) throws -> [String: Data] {
+        try backupFiles(rig).filter { $0.key.hasPrefix(CollectionRestoreModel.series + ".") }
+    }
+
+    /// A connector holding a value Claude never sees.
+    private func vault(_ value: String, on: Bool = true) -> MCPEntry {
+        MCPEntry(enabled: on, config: .object(["command": .string("node"), "env": .object(["API_KEY": .string(value)])]))
+    }
+
     /// Personal, two connectors and one of them on (holding the secret), deleted; the id of the backup
     /// the delete took, which holds it whole.
     private func deletedPersonal(_ rig: ControlRig) throws -> (id: String, personal: Collection) {
@@ -84,8 +95,8 @@ final class ControlToolsCollectionRestoreTests: XCTestCase {
 
     /// Each refusal comes before anyone is asked: an id that is not a master-list backup's (a Claude's
     /// config backup's among them, as restore_backup refuses a master-list backup's), one that cannot be
-    /// read, a collection the backup does not hold, one subscribed now, and one already as it was. The
-    /// names they echo show as escapes.
+    /// read, a collection the backup does not hold, one subscribed now, and, from the command line, one
+    /// already as it was. The names they echo show as escapes.
     func testEachRefusalComesBeforeAnyoneIsAsked() throws {
         let rig = rig(); defer { rig.dispose() }
         try rig.h.subscribe(rig.state, to: CollectionDocumentSamples.dataTeam)
@@ -94,20 +105,116 @@ final class ControlToolsCollectionRestoreTests: XCTestCase {
         try Data("{".utf8).write(to: rig.h.backupsDir.appendingPathComponent(unreadable))
         let claudeID = try XCTUnwrap(try rig.state.service.backups.backups(series: RestoreModel.series).first?.lastPathComponent)
         let odd = "Odd\u{201D}\nname"
-        let cases: [(String, [String: JSONValue], ControlResult)] = [
-            ("restore_collection", arguments("../mcps.json", "Default"), .refusal(ControlTools.noBackupError("../mcps.json"))),
-            ("restore_collection", arguments(claudeID, "Default"), .refusal(ControlTools.noBackupError(claudeID))),
-            ("restore_backup", ["id": .string(id)], .refusal(ControlTools.noBackupError(id))),
-            ("restore_collection", arguments(unreadable, "Default"), .refusal(AppState.collectionBackupUnreadableError(unreadable))),
-            ("restore_collection", arguments(id, odd),
+        let cases: [(String, [String: JSONValue], ControlCaller, ControlResult)] = [
+            ("restore_collection", arguments("../mcps.json", "Default"), .relay(clientName: "claude-ai"), .refusal(ControlTools.noBackupError("../mcps.json"))),
+            ("restore_collection", arguments(claudeID, "Default"), .relay(clientName: "claude-ai"), .refusal(ControlTools.noBackupError(claudeID))),
+            ("restore_backup", ["id": .string(id)], .relay(clientName: "claude-ai"), .refusal(ControlTools.noBackupError(id))),
+            ("restore_collection", arguments(unreadable, "Default"), .relay(clientName: "claude-ai"),
+             .refusal(AppState.collectionBackupUnreadableError(unreadable))),
+            ("restore_collection", arguments(id, odd), .relay(clientName: "claude-ai"),
              .refusal(AppState.collectionNotInBackupError(id, ControlText.escapedName(odd)))),
-            ("restore_collection", arguments(id, "Data team"), .refusal(AppState.restoreCollectionSubscribedError("Data team"))),
-            ("restore_collection", arguments(id, "Default"), .refusal(AppState.restoreCollectionUnchangedError("Default"))),
+            ("restore_collection", arguments(id, "Data team"), .relay(clientName: "claude-ai"),
+             .refusal(AppState.restoreCollectionSubscribedError("Data team"))),
+            ("restore_collection", arguments(id, "Default"), .cli, .refusal(AppState.restoreCollectionUnchangedError("Default"))),
         ]
-        for (tool, arguments, expected) in cases {
-            XCTAssertEqual(rig.call(tool, arguments), expected, "\(tool) \(arguments)")
+        for (tool, arguments, caller, expected) in cases {
+            XCTAssertEqual(rig.call(tool, arguments, as: caller), expected, "\(tool) \(arguments)")
         }
         XCTAssertTrue(rig.confirmer.requests.isEmpty)
+    }
+
+    /// From Claude, a collection already as the backup holds it is not refused: the question lists its
+    /// only line, how many connectors stay as they are, and the answer is a restore's. Nothing in the
+    /// master list changes and nothing is saved; a collection Claude doesn't run leaves Claude's config
+    /// alone too.
+    func testAnUnchangedCollectionIsAskedAndAnsweredAsRestored() throws {
+        let rig = rig(); defer { rig.dispose() }
+        XCTAssertNil(rig.state.addEmptyCollection(named: "Work"))
+        XCTAssertNil(rig.state.upsert(name: "one", entry: MCPEntry(config: config("a")), renamedFrom: nil, in: "Work"))
+        XCTAssertNil(rig.state.upsert(name: "two", entry: MCPEntry(enabled: false, config: config("b")), renamedFrom: nil, in: "Work"))
+        let id = try backup(rig, of: rig.state.store)
+        let time = try label(rig, id)
+        let store = try rig.h.storeOnDisk(), claude = try rig.h.claudeServers(), files = try backupFiles(rig)
+        let result = try XCTUnwrap(rig.call("restore_collection", arguments(id, "Work")))
+        XCTAssertEqual(rig.confirmer.requests, [ConfirmationRequest(
+            title: ControlTools.restoreTitle("Claude", "Work"),
+            message: ControlTools.restoreCollectionText("Work", time),
+            code: ["= 2 unchanged"], footer: nil)])
+        XCTAssertEqual(result, ControlResult(structured: .object([
+            "id": .string(id), "collection": .string("Work"), "activeCollection": .string("Default"),
+            "restartRequired": .bool(false), "applied": .bool(true),
+        ]), text: ControlTools.restoredText("Work"), isError: false))
+        XCTAssertEqual(try rig.h.storeOnDisk(), store)
+        XCTAssertEqual(try rig.h.claudeServers(), claude)
+        XCTAssertEqual(try backupFiles(rig), files, "nothing saved")
+    }
+
+    /// The collection Claude runs, already as the backup holds it, with a connector on: allowed, Claude's
+    /// config is written again and the answer says to restart, as a restore that changed it would. The
+    /// master list and its backups stay as they were.
+    func testAnUnchangedActiveCollectionHasClaudesConfigWrittenAgain() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let held = try XCTUnwrap(rig.state.store.collections["Default"])
+        XCTAssertTrue(held.mcps.values.contains(where: \.enabled))
+        let id = try backup(rig, of: rig.state.store)
+        let store = try rig.h.storeOnDisk(), files = try collectionBackupFiles(rig)
+        rig.h.claudeRunningSince(hours: 1)
+        rig.h.settings.lastApplyDate = nil
+        rig.state.refreshRestartState()
+        XCTAssertFalse(rig.state.needsClaudeRestart)
+        let result = try XCTUnwrap(rig.call("restore_collection", arguments(id, "Default")))
+        XCTAssertEqual(rig.confirmer.requests.last?.code, [CollectionRestoreModel.unchangedLine(held.mcps.count)])
+        XCTAssertEqual(rig.confirmer.requests.last?.footer, ControlTools.takesEffectFooter)
+        XCTAssertEqual(result.text, ControlTools.restoredText("Default") + " " + ControlTools.restartToApplyText)
+        XCTAssertEqual(result.structured.value(at: JSONPointer(["restartRequired"])), .bool(true))
+        XCTAssertNotNil(rig.h.settings.lastApplyDate, "Claude's config was written again")
+        XCTAssertEqual(try rig.h.storeOnDisk(), store)
+        XCTAssertEqual(rig.state.store.collections["Default"], held)
+        XCTAssertEqual(try collectionBackupFiles(rig), files, "nothing saved")
+    }
+
+    /// Claude can't see a value, so a right guess at one leaves the collection as the backup holds it and a
+    /// wrong one doesn't: both restores get the same answer, restart and all, whether the collection is the
+    /// one Claude runs or not.
+    func testAnUnchangedRestoreIsAnsweredAsOneThatChangesSomething() throws {
+        for (collection, on) in [("Default", true), ("Work", true)] {
+            let rig = rig(); defer { rig.dispose() }
+            if collection != "Default" { XCTAssertNil(rig.state.addEmptyCollection(named: collection)) }
+            XCTAssertTrue(rig.state.store.collections["Default"]?.mcps.values.contains(where: \.enabled) == true)
+            XCTAssertNil(rig.state.upsert(name: "vault", entry: vault(secret, on: on), renamedFrom: nil, in: collection))
+            rig.state.applyInteractively()
+            let id = try backup(rig, of: rig.state.store)
+            rig.h.claudeRunningSince(hours: 1)
+            rig.state.refreshRestartState()
+            let right = try XCTUnwrap(rig.call("restore_collection", arguments(id, collection)))
+            XCTAssertNil(rig.state.upsert(name: "vault", entry: vault("guess", on: on), renamedFrom: "vault", in: collection))
+            rig.state.applyInteractively()
+            let wrong = try XCTUnwrap(rig.call("restore_collection", arguments(id, collection)))
+            let shown = "\(collection), \(on ? "on" : "off")"
+            XCTAssertEqual(rig.state.store.collections[collection]?.mcps["vault"], vault(secret, on: on), shown)
+            XCTAssertEqual(right, wrong, "\(shown): the same answer")
+            XCTAssertEqual(right.text, collection == "Default" ? ControlTools.restoredText(collection) + " " + ControlTools.restartToApplyText
+                                                               : ControlTools.restoredText(collection), shown)
+        }
+    }
+
+    /// The guess end to end: Claude sets a variable to the value it already holds, which is asked and
+    /// answered as a change, then restores the collection from the newest backup, which holds it as it is.
+    /// The restore is asked about, not refused, so no refusal tells Claude it guessed right.
+    func testAGuessThenARestoreIsAskedNotRefused() throws {
+        let rig = rig(); defer { rig.dispose() }
+        XCTAssertNil(rig.state.upsert(name: "vault", entry: vault(secret), renamedFrom: nil))
+        rig.state.applyInteractively()
+        rig.h.claudeRunningSince(hours: 1)
+        let set = try XCTUnwrap(rig.call("set_connector_env", ["name": .string("vault"), "set": .object(["API_KEY": .string(secret)])]))
+        XCTAssertFalse(set.isError)
+        let newest = try XCTUnwrap(try backups(rig).first).lastPathComponent
+        let count = try XCTUnwrap(rig.state.store.collections["Default"]).mcps.count
+        let result = try XCTUnwrap(rig.call("restore_collection", arguments(newest, "Default")))
+        XCTAssertEqual(rig.confirmer.requests.count, 2)
+        XCTAssertEqual(rig.confirmer.requests.last?.code, [CollectionRestoreModel.unchangedLine(count)])
+        XCTAssertEqual(result.text, ControlTools.restoredText("Default") + " " + ControlTools.restartToApplyText)
+        XCTAssertEqual(rig.state.store.collections["Default"]?.mcps["vault"], vault(secret))
     }
 
     /// Don't Allow leaves the master list, Claude's config and every backup as they were.
@@ -164,13 +271,17 @@ final class ControlToolsCollectionRestoreTests: XCTestCase {
         XCTAssertEqual(rig.confirmer.requests.first, rig.confirmer.requests.last, "the question itself reads the same")
     }
 
-    /// With confirmations off nobody is asked, so the restore is announced, naming who asked.
+    /// With confirmations off nobody is asked, so the restore is announced, naming who asked; restored
+    /// again, with nothing to change, it is announced the same way.
     func testARestoreNobodyWasAskedAboutIsAnnounced() throws {
         let rig = ControlRig(confirm: false); defer { rig.dispose() }
         let (id, personal) = try deletedPersonal(rig)
         XCTAssertEqual(rig.call("restore_collection", arguments(id, "Personal"))?.text, ControlTools.restoredText("Personal"))
         XCTAssertTrue(rig.confirmer.requests.isEmpty)
         XCTAssertEqual(rig.h.notifier.sent.map(\.body), [ControlTools.restoredNotification(ControlCaller.claudeName, "Personal")])
+        XCTAssertEqual(rig.state.store.collections["Personal"], personal)
+        XCTAssertEqual(rig.call("restore_collection", arguments(id, "Personal"))?.text, ControlTools.restoredText("Personal"))
+        XCTAssertEqual(rig.h.notifier.sent.map(\.body), Array(repeating: ControlTools.restoredNotification(ControlCaller.claudeName, "Personal"), count: 2))
         XCTAssertEqual(rig.state.store.collections["Personal"], personal)
     }
 

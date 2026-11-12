@@ -550,8 +550,11 @@ public final class AppState: ObservableObject {
     /// `restore_collection` to show before asking, or the refusal (`CollectionRestoreError`) that
     /// would stop it. `id` is the backup's file name; `data` its bytes as the caller read them, nil
     /// when they could not be read, so what is shown is what `restoreCollection` restores.
-    public func collectionRestorePlan(_ collection: String, id: String, data: Data?) throws -> CollectionRestorePlan {
-        try collectionRestore(collection, id: id, data: data).plan
+    /// `refusingUnchanged` false gives a plan with nothing to change rather than refusing it:
+    /// `restore_collection` asks Claude's about like any other, and `restoreCollection` still refuses it.
+    public func collectionRestorePlan(_ collection: String, id: String, data: Data?,
+                                      refusingUnchanged: Bool = true) throws -> CollectionRestorePlan {
+        try collectionRestore(collection, id: id, data: data, refusingUnchanged: refusingUnchanged).plan
     }
 
     /// Puts `collection` back exactly as the master-list backup at `backup` holds it: every connector,
@@ -579,9 +582,9 @@ public final class AppState: ObservableObject {
     /// The plan and the backup's collection, or the first refusal, in order: a backup that cannot be
     /// decoded (`MasterStoreIO.decode`, the rules every read of the master list applies), one with no
     /// collection of that name, a collection subscribed now, whose connectors are its author's, and one
-    /// already as the backup holds it. The collection is named as the store holds it, under any spelling
-    /// Unicode counts as the same text, else as the backup spells it.
-    private func collectionRestore(_ collection: String, id: String, data: Data?) throws
+    /// already as the backup holds it (unless `refusingUnchanged` is false). The collection is named as
+    /// the store holds it, under any spelling Unicode counts as the same text, else as the backup spells it.
+    private func collectionRestore(_ collection: String, id: String, data: Data?, refusingUnchanged: Bool = true) throws
         -> (plan: CollectionRestorePlan, restored: Collection) {
         guard let backup = data.flatMap({ try? MasterStoreIO.decode($0) }) else {
             throw CollectionRestoreError.backupUnreadable(id)
@@ -593,7 +596,7 @@ public final class AppState: ObservableObject {
         let current = store.collections[target]
         if current != nil, isSynced(target) { throw CollectionRestoreError.subscribed(target) }
         let changes = CollectionRestore.changes(current: current, restored: restored)
-        if current != nil, changes.isEmpty { throw CollectionRestoreError.unchanged(target) }
+        if refusingUnchanged, current != nil, changes.isEmpty { throw CollectionRestoreError.unchanged(target) }
         let plan = CollectionRestorePlan(collection: target, created: current == nil,
                                          active: current != nil && target == activeCollection, changes: changes)
         return (plan, restored)

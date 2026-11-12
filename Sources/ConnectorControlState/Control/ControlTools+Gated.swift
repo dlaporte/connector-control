@@ -795,7 +795,12 @@ extension ControlTools {
     /// The Restore sheet's Collections restore, by an id `list_backups` gave and a collection that
     /// backup holds, refused first for what the sheet refuses; the question lists what changes,
     /// connector by connector, as the sheet's confirmation does.
-    func restoreCollection(_ arguments: ControlArguments, _ shownAsker: String) -> ControlStep {
+    ///
+    /// Claude cannot see a value, so a collection already as the backup holds it - a value it set
+    /// being one it guessed right - is asked about and answered as a restore, as set_connector_env's
+    /// unchanged value is. The command line is the user, who can, and is told there is nothing to change.
+    func restoreCollection(_ arguments: ControlArguments, _ caller: ControlCaller) -> ControlStep {
+        let shownAsker = caller.shownAsker
         let id = arguments.string("id") ?? ""
         let collection = arguments.string("collection") ?? ""
         let urls: [URL]
@@ -815,10 +820,13 @@ extension ControlTools {
         let data = try? BoundedRead.data(at: backup, limit: ConfigService.maxBackupBytes)
         let plan: CollectionRestorePlan
         do {
-            plan = try state.collectionRestorePlan(collection, id: backup.lastPathComponent, data: data)
+            plan = try state.collectionRestorePlan(collection, id: backup.lastPathComponent, data: data,
+                                                   refusingUnchanged: caller == .cli)
         } catch {
             return .refused(ControlTools.collectionRestoreRefusalText(error))
         }
+        // A deleted collection that held no connectors changes nothing either, but it is created again.
+        let unchanged = !plan.created && plan.changes.isEmpty
         let bytes = data ?? Data()
         // Named as the store holds it, or as the backup spells it when it is gone; the backup as the
         // Restore sheet labels it among the same list.
@@ -832,18 +840,27 @@ extension ControlTools {
         let fingerprint = ControlTools.collectionRestoreFingerprint(bytes, state.store.collections[plan.collection])
         return .ready(request, fingerprint: fingerprint, perform: { [self] in
             let mark = state.appliedServers
-            do {
-                try state.restoreCollection(collection, from: backup, data: bytes)
-            } catch {
-                // Platform idiom: the restore throws only its refusals, and Swift's catch must take every
-                // error; the Windows mirror catches the refusals and leaves anything else to the write queue.
-                return ControlOutcome(result: .refusal(ControlTools.collectionRestoreRefusalText(error)), notification: nil)
+            // Nothing to change leaves the master list as it is, unsaved.
+            if !unchanged {
+                do {
+                    try state.restoreCollection(collection, from: backup, data: bytes)
+                } catch {
+                    // Platform idiom: the restore throws only its refusals, and Swift's catch must take every
+                    // error; the Windows mirror catches the refusals and leaves anything else to the write queue.
+                    return ControlOutcome(result: .refusal(ControlTools.collectionRestoreRefusalText(error)), notification: nil)
+                }
             }
+            // A collection already as the backup holds it changes nothing, but the collection Claude runs,
+            // with a connector on, has Claude's config written again, as a change would - a restart due, a
+            // backup taken - and the answer is a restore's, so none of it tells Claude it guessed a value right.
+            let rewrite = unchanged && plan.active
+                && state.store.collections[plan.collection]?.mcps.values.contains(where: \.enabled) == true
+            if rewrite { state.apply() }
             // Only restoring the collection Claude runs reaches its config, and says to restart.
             return done([ControlTools.restoredText(shown)],
                         ["id": .string(id), "collection": .string(plan.collection), "activeCollection": .string(state.activeCollection)],
                         touching: plan.collection, since: mark, restart: ControlTools.restartToApplyText,
-                        notification: ControlTools.restoredNotification(shownAsker, shown))
+                        notification: ControlTools.restoredNotification(shownAsker, shown), rewrote: rewrite)
         })
     }
 

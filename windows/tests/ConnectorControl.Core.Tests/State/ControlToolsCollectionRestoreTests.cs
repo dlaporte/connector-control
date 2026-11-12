@@ -43,6 +43,16 @@ public class ControlToolsCollectionRestoreTests
     private static Dictionary<string, byte[]> BackupFiles(ControlRig rig) =>
         Directory.GetFiles(rig.H.BackupsDir).ToDictionary(path => Path.GetFileName(path), File.ReadAllBytes, StringComparer.Ordinal);
 
+    /// <summary>The master list's backups and their bytes: a save takes one, and writing Claude's config again takes
+    /// only a backup of Claude's config.</summary>
+    private static Dictionary<string, byte[]> CollectionBackupFiles(ControlRig rig) =>
+        BackupFiles(rig).Where(p => p.Key.StartsWith(CollectionRestoreModel.Series + ".", StringComparison.Ordinal))
+            .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+
+    /// <summary>A connector holding a value Claude never sees.</summary>
+    private static McpEntry Vault(string value, bool on = true) =>
+        new(on, JsonValue.Object(("command", JsonValue.String("node")), ("env", JsonValue.Object(("API_KEY", JsonValue.String(value))))));
+
     /// <summary>Personal, two connectors and one of them on (holding the secret), deleted; the id of the backup the
     /// delete took, which holds it whole.</summary>
     private static (string Id, Collection Personal) DeletedPersonal(ControlRig rig)
@@ -86,8 +96,8 @@ public class ControlToolsCollectionRestoreTests
 
     /// <summary>Each refusal comes before anyone is asked: an id that is not a master-list backup's (a Claude's
     /// config backup's among them, as restore_backup refuses a master-list backup's), one that cannot be read, a
-    /// collection the backup does not hold, one subscribed now, and one already as it was. The names they echo
-    /// show as escapes.</summary>
+    /// collection the backup does not hold, one subscribed now, and, from the command line, one already as it was.
+    /// The names they echo show as escapes.</summary>
     [Fact]
     public void EachRefusalComesBeforeAnyoneIsAsked()
     {
@@ -98,22 +108,141 @@ public class ControlToolsCollectionRestoreTests
         File.WriteAllText(Path.Combine(rig.H.BackupsDir, unreadable), "{");
         var claudeId = Path.GetFileName(rig.State.Service.Backups.Backups(RestoreModel.Series)[0]);
         const string odd = "Odd”\nname";
-        (string Tool, JsonValue Arguments, ControlResult Expected)[] cases =
+        ControlCaller relay = new ControlCaller.Relay("claude-ai");
+        (string Tool, JsonValue Arguments, ControlCaller Caller, ControlResult Expected)[] cases =
         [
-            ("restore_collection", Arguments("../mcps.json", "Default"), ControlResult.Refusal(ControlTools.NoBackupError("../mcps.json"))),
-            ("restore_collection", Arguments(claudeId, "Default"), ControlResult.Refusal(ControlTools.NoBackupError(claudeId))),
-            ("restore_backup", JsonValue.Object(("id", JsonValue.String(id))), ControlResult.Refusal(ControlTools.NoBackupError(id))),
-            ("restore_collection", Arguments(unreadable, "Default"), ControlResult.Refusal(AppState.CollectionBackupUnreadableError(unreadable))),
-            ("restore_collection", Arguments(id, odd),
+            ("restore_collection", Arguments("../mcps.json", "Default"), relay, ControlResult.Refusal(ControlTools.NoBackupError("../mcps.json"))),
+            ("restore_collection", Arguments(claudeId, "Default"), relay, ControlResult.Refusal(ControlTools.NoBackupError(claudeId))),
+            ("restore_backup", JsonValue.Object(("id", JsonValue.String(id))), relay, ControlResult.Refusal(ControlTools.NoBackupError(id))),
+            ("restore_collection", Arguments(unreadable, "Default"), relay,
+             ControlResult.Refusal(AppState.CollectionBackupUnreadableError(unreadable))),
+            ("restore_collection", Arguments(id, odd), relay,
              ControlResult.Refusal(AppState.CollectionNotInBackupError(id, ControlText.EscapedName(odd)))),
-            ("restore_collection", Arguments(id, "Data team"), ControlResult.Refusal(AppState.RestoreCollectionSubscribedError("Data team"))),
-            ("restore_collection", Arguments(id, "Default"), ControlResult.Refusal(AppState.RestoreCollectionUnchangedError("Default"))),
+            ("restore_collection", Arguments(id, "Data team"), relay,
+             ControlResult.Refusal(AppState.RestoreCollectionSubscribedError("Data team"))),
+            ("restore_collection", Arguments(id, "Default"), new ControlCaller.Cli(),
+             ControlResult.Refusal(AppState.RestoreCollectionUnchangedError("Default"))),
         ];
-        foreach (var (tool, arguments, expected) in cases)
+        foreach (var (tool, arguments, caller, expected) in cases)
         {
-            Assert.Equal(expected, rig.Call(tool, arguments));
+            Assert.Equal(expected, rig.Call(tool, arguments, caller));
         }
         Assert.Empty(rig.Confirmer.Requests);
+    }
+
+    /// <summary>From Claude, a collection already as the backup holds it is not refused: the question lists its only
+    /// line, how many connectors stay as they are, and the answer is a restore's. Nothing in the master list changes
+    /// and nothing is saved; a collection Claude doesn't run leaves Claude's config alone too.</summary>
+    [Fact]
+    public void AnUnchangedCollectionIsAskedAndAnsweredAsRestored()
+    {
+        using var rig = Rig();
+        Assert.Null(rig.State.AddEmptyCollection("Work"));
+        Assert.Null(rig.State.Upsert("one", new McpEntry(Config("a")), null, "Work"));
+        Assert.Null(rig.State.Upsert("two", new McpEntry(false, Config("b")), null, "Work"));
+        var id = Backup(rig, rig.State.Store);
+        var time = Label(rig, id);
+        var store = rig.H.StoreOnDisk();
+        var claude = rig.H.ClaudeServers();
+        var files = BackupFiles(rig);
+        var result = rig.Call("restore_collection", Arguments(id, "Work"));
+        Assert.NotNull(result);
+        Assert.Equal([new ConfirmationRequest(
+            ControlTools.RestoreTitle("Claude", "Work"),
+            ControlTools.RestoreCollectionText("Work", time),
+            ["= 2 unchanged"], null)], rig.Confirmer.Requests);
+        Assert.Equal(new ControlResult(JsonValue.Object(
+            ("id", JsonValue.String(id)), ("collection", JsonValue.String("Work")), ("activeCollection", JsonValue.String("Default")),
+            ("restartRequired", JsonValue.Bool(false)), ("applied", JsonValue.Bool(true))),
+            ControlTools.RestoredText("Work"), false), result);
+        Assert.Equal(store, rig.H.StoreOnDisk());
+        Assert.Equal(claude, rig.H.ClaudeServers());
+        // Nothing saved.
+        Assert.Equal(files, BackupFiles(rig));
+    }
+
+    /// <summary>The collection Claude runs, already as the backup holds it, with a connector on: allowed, Claude's
+    /// config is written again and the answer says to restart, as a restore that changed it would. The master list
+    /// and its backups stay as they were.</summary>
+    [Fact]
+    public void AnUnchangedActiveCollectionHasClaudesConfigWrittenAgain()
+    {
+        using var rig = Rig();
+        var held = rig.State.Store.Collections["Default"].Clone();
+        Assert.Contains(held.Mcps.Values, entry => entry.Enabled);
+        var id = Backup(rig, rig.State.Store);
+        var store = rig.H.StoreOnDisk();
+        var files = CollectionBackupFiles(rig);
+        rig.H.ClaudeRunningSince(hours: 1);
+        rig.H.Settings.LastApplyDate = null;
+        rig.State.RefreshRestartState();
+        Assert.False(rig.State.NeedsClaudeRestart);
+        var result = rig.Call("restore_collection", Arguments(id, "Default"));
+        Assert.NotNull(result);
+        Assert.Equal([CollectionRestoreModel.UnchangedLine(held.Mcps.Count)], rig.Confirmer.Requests[^1].Code);
+        Assert.Equal(ControlTools.TakesEffectFooter, rig.Confirmer.Requests[^1].Footer);
+        Assert.Equal(ControlTools.RestoredText("Default") + " " + ControlTools.RestartToApplyText, result.Text);
+        Assert.Equal(JsonValue.Bool(true), result.Structured.ValueAt(new JsonPointer(["restartRequired"])));
+        // Claude's config was written again.
+        Assert.NotNull(rig.H.Settings.LastApplyDate);
+        Assert.Equal(store, rig.H.StoreOnDisk());
+        Assert.Equal(held, rig.State.Store.Collections["Default"]);
+        // Nothing saved.
+        Assert.Equal(files, CollectionBackupFiles(rig));
+    }
+
+    /// <summary>Claude can't see a value, so a right guess at one leaves the collection as the backup holds it and a
+    /// wrong one doesn't: both restores get the same answer, restart and all, whether the collection is the one Claude
+    /// runs or not.</summary>
+    [Theory]
+    [InlineData("Default", true)]
+    [InlineData("Work", true)]
+    public void AnUnchangedRestoreIsAnsweredAsOneThatChangesSomething(string collection, bool on)
+    {
+        using var rig = Rig();
+        if (collection != "Default")
+        {
+            Assert.Null(rig.State.AddEmptyCollection(collection));
+        }
+        Assert.Contains(rig.State.Store.Collections["Default"].Mcps.Values, entry => entry.Enabled);
+        Assert.Null(rig.State.Upsert("vault", Vault(Secret, on), null, collection));
+        rig.State.ApplyInteractively();
+        var id = Backup(rig, rig.State.Store);
+        rig.H.ClaudeRunningSince(hours: 1);
+        rig.State.RefreshRestartState();
+        var right = rig.Call("restore_collection", Arguments(id, collection));
+        Assert.NotNull(right);
+        Assert.Null(rig.State.Upsert("vault", Vault("guess", on), "vault", collection));
+        rig.State.ApplyInteractively();
+        var wrong = rig.Call("restore_collection", Arguments(id, collection));
+        Assert.Equal(Vault(Secret, on), rig.State.Store.Collections[collection].Mcps["vault"]);
+        // The same answer.
+        Assert.Equal(right, wrong);
+        Assert.Equal(collection == "Default" ? ControlTools.RestoredText(collection) + " " + ControlTools.RestartToApplyText
+                                             : ControlTools.RestoredText(collection), right.Text);
+    }
+
+    /// <summary>The guess end to end: Claude sets a variable to the value it already holds, which is asked and answered
+    /// as a change, then restores the collection from the newest backup, which holds it as it is. The restore is asked
+    /// about, not refused, so no refusal tells Claude it guessed right.</summary>
+    [Fact]
+    public void AGuessThenARestoreIsAskedNotRefused()
+    {
+        using var rig = Rig();
+        Assert.Null(rig.State.Upsert("vault", Vault(Secret), null));
+        rig.State.ApplyInteractively();
+        rig.H.ClaudeRunningSince(hours: 1);
+        var set = rig.Call("set_connector_env", JsonValue.Object(("name", JsonValue.String("vault")),
+            ("set", JsonValue.Object(("API_KEY", JsonValue.String(Secret))))));
+        Assert.False(set?.IsError);
+        var newest = Path.GetFileName(Backups(rig)[0]);
+        var count = rig.State.Store.Collections["Default"].Mcps.Count;
+        var result = rig.Call("restore_collection", Arguments(newest, "Default"));
+        Assert.NotNull(result);
+        Assert.Equal(2, rig.Confirmer.Requests.Count);
+        Assert.Equal([CollectionRestoreModel.UnchangedLine(count)], rig.Confirmer.Requests[^1].Code);
+        Assert.Equal(ControlTools.RestoredText("Default") + " " + ControlTools.RestartToApplyText, result.Text);
+        Assert.Equal(Vault(Secret), rig.State.Store.Collections["Default"].Mcps["vault"]);
     }
 
     /// <summary>Don't Allow leaves the master list, Claude's config and every backup as they were.</summary>
@@ -183,7 +312,8 @@ public class ControlToolsCollectionRestoreTests
         Assert.Equal(rig.Confirmer.Requests[0], rig.Confirmer.Requests[^1]);
     }
 
-    /// <summary>With confirmations off nobody is asked, so the restore is announced, naming who asked.</summary>
+    /// <summary>With confirmations off nobody is asked, so the restore is announced, naming who asked; restored again,
+    /// with nothing to change, it is announced the same way.</summary>
     [Fact]
     public void ARestoreNobodyWasAskedAboutIsAnnounced()
     {
@@ -192,6 +322,10 @@ public class ControlToolsCollectionRestoreTests
         Assert.Equal(ControlTools.RestoredText("Personal"), rig.Call("restore_collection", Arguments(id, "Personal"))?.Text);
         Assert.Empty(rig.Confirmer.Requests);
         Assert.Equal([ControlTools.RestoredNotification(ControlCaller.ClaudeName, "Personal")], rig.H.Notifier.Sent.Select(sent => sent.Body));
+        Assert.Equal(personal, rig.State.Store.Collections["Personal"]);
+        Assert.Equal(ControlTools.RestoredText("Personal"), rig.Call("restore_collection", Arguments(id, "Personal"))?.Text);
+        Assert.Equal(Enumerable.Repeat(ControlTools.RestoredNotification(ControlCaller.ClaudeName, "Personal"), 2),
+            rig.H.Notifier.Sent.Select(sent => sent.Body));
         Assert.Equal(personal, rig.State.Store.Collections["Personal"]);
     }
 

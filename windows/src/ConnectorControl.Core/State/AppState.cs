@@ -729,10 +729,12 @@ public sealed class AppState : ObservableObject, IDisposable
     /// dialog and <c>restore_collection</c> to show before asking; throws the refusal
     /// (<see cref="CollectionRestoreException"/>) that would stop it. <paramref name="id"/> is the backup's
     /// file name; <paramref name="data"/> its bytes as the caller read them, null when they could not be
-    /// read, so what is shown is what <see cref="RestoreCollection"/> restores.
+    /// read, so what is shown is what <see cref="RestoreCollection"/> restores. <paramref name="refusingUnchanged"/>
+    /// false gives a plan with nothing to change rather than refusing it: <c>restore_collection</c> asks Claude's
+    /// about like any other, and <see cref="RestoreCollection"/> still refuses it.
     /// </summary>
-    public CollectionRestorePlan CollectionRestorePlan(string collection, string id, byte[]? data) =>
-        CollectionRestoreOf(collection, id, data).Plan;
+    public CollectionRestorePlan CollectionRestorePlan(string collection, string id, byte[]? data, bool refusingUnchanged = true) =>
+        CollectionRestoreOf(collection, id, data, refusingUnchanged).Plan;
 
     /// <summary>
     /// Puts <paramref name="collection"/> back exactly as the master-list backup at
@@ -771,11 +773,13 @@ public sealed class AppState : ObservableObject, IDisposable
     /// The plan and the backup's collection, or the first refusal, in order: a backup that cannot be
     /// decoded (<see cref="MasterStoreIO.Decode"/>, the rules every read of the master list applies), one
     /// with no collection of that name, a collection subscribed now, whose connectors are its author's,
-    /// and one already as the backup holds it. The collection is named as the store holds it, under any
-    /// spelling Unicode counts as the same text (<see cref="MasterStore.StoredCollectionName"/>), else as
-    /// the backup spells it. Nothing is changed before it returns.
+    /// and one already as the backup holds it (unless <paramref name="refusingUnchanged"/> is false). The
+    /// collection is named as the store holds it, under any spelling Unicode counts as the same text
+    /// (<see cref="MasterStore.StoredCollectionName"/>), else as the backup spells it. Nothing is changed before
+    /// it returns.
     /// </summary>
-    private (CollectionRestorePlan Plan, Collection Restored) CollectionRestoreOf(string collection, string id, byte[]? data)
+    private (CollectionRestorePlan Plan, Collection Restored) CollectionRestoreOf(string collection, string id, byte[]? data,
+                                                                               bool refusingUnchanged = true)
     {
         MasterStore backup;
         try
@@ -798,7 +802,7 @@ public sealed class AppState : ObservableObject, IDisposable
             throw new RestoreCollectionSubscribedException(target);
         }
         var changes = CollectionRestore.Changes(current, restored);
-        if (current is not null && changes.IsEmpty)
+        if (refusingUnchanged && current is not null && changes.IsEmpty)
         {
             throw new RestoreCollectionUnchangedException(target);
         }

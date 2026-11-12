@@ -1149,9 +1149,15 @@ public sealed partial class ControlTools
 
     /// <summary>The Restore dialog's Collections restore, by an id <c>list_backups</c> gave and a collection that
     /// backup holds, refused first for what the dialog refuses; the question lists what changes, connector by
-    /// connector, as the dialog's confirmation does.</summary>
-    private ControlStep RestoreCollection(ControlArguments arguments, string shownAsker)
+    /// connector, as the dialog's confirmation does.
+    /// <para>
+    /// Claude cannot see a value, so a collection already as the backup holds it - a value it set being one it
+    /// guessed right - is asked about and answered as a restore, as set_connector_env's unchanged value is. The
+    /// command line is the user, who can, and is told there is nothing to change.
+    /// </para></summary>
+    private ControlStep RestoreCollection(ControlArguments arguments, ControlCaller caller)
     {
+        var shownAsker = caller.ShownAsker;
         var id = arguments.String("id") ?? "";
         var collection = arguments.String("collection") ?? "";
         List<string> paths;
@@ -1186,12 +1192,14 @@ public sealed partial class ControlTools
         CollectionRestorePlan plan;
         try
         {
-            plan = state.CollectionRestorePlan(collection, Path.GetFileName(backup), data);
+            plan = state.CollectionRestorePlan(collection, Path.GetFileName(backup), data, refusingUnchanged: caller is ControlCaller.Cli);
         }
         catch (CollectionRestoreException refusal)
         {
             return new ControlStep.Refused(CollectionRestoreRefusalText(refusal));
         }
+        // A deleted collection that held no connectors changes nothing either, but it is created again.
+        var unchanged = !plan.Created && plan.Changes.IsEmpty;
         var bytes = data ?? [];
         // Named as the store holds it, or as the backup spells it when it is gone; the backup as the Restore
         // dialog labels it among the same list.
@@ -1204,22 +1212,35 @@ public sealed partial class ControlTools
         return new ControlStep.Ready(request, Fingerprint: fingerprint, Perform: () =>
         {
             var mark = state.AppliedServers;
-            try
+            // Nothing to change leaves the master list as it is, unsaved.
+            if (!unchanged)
             {
-                state.RestoreCollection(collection, backup, bytes);
+                try
+                {
+                    state.RestoreCollection(collection, backup, bytes);
+                }
+                // Platform idiom: the restore throws only its refusals, and anything else is left to the write queue,
+                // which ends the call; Swift's catch must take every error.
+                catch (CollectionRestoreException refusal)
+                {
+                    return new ControlOutcome(ControlResult.Refusal(CollectionRestoreRefusalText(refusal)), null);
+                }
             }
-            // Platform idiom: the restore throws only its refusals, and anything else is left to the write queue,
-            // which ends the call; Swift's catch must take every error.
-            catch (CollectionRestoreException refusal)
+            // A collection already as the backup holds it changes nothing, but the collection Claude runs, with a
+            // connector on, has Claude's config written again, as a change would - a restart due, a backup taken -
+            // and the answer is a restore's, so none of it tells Claude it guessed a value right.
+            var rewrite = unchanged && plan.Active
+                && state.Store.Collections.GetValueOrDefault(plan.Collection)?.Mcps.Values.Any(entry => entry.Enabled) == true;
+            if (rewrite)
             {
-                return new ControlOutcome(ControlResult.Refusal(CollectionRestoreRefusalText(refusal)), null);
+                state.Apply();
             }
             // Only restoring the collection Claude runs reaches its config, and says to restart.
             return Done([RestoredText(shown)],
                 [("id", JsonValue.String(id)), ("collection", JsonValue.String(plan.Collection)),
                  ("activeCollection", JsonValue.String(state.ActiveCollection))],
                 plan.Collection, mark, RestartToApplyText,
-                notification: RestoredNotification(shownAsker, shown));
+                notification: RestoredNotification(shownAsker, shown), rewrote: rewrite);
         });
     }
 
