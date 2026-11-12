@@ -67,7 +67,8 @@ struct RestoreSheetView: View {
                 HStack {
                     Text(row.name).lineLimit(1)
                     Spacer()
-                    Text(row.detail).foregroundStyle(.secondary).lineLimit(1)
+                    // The name gives way to a long detail, as on Windows, where the detail's column is sized to it.
+                    Text(row.detail).foregroundStyle(.secondary).lineLimit(1).layoutPriority(1)
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(row.spokenName)
