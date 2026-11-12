@@ -565,11 +565,10 @@ public final class AppState: ObservableObject {
     /// publishes, a restore is a change like any edit: a connector that comes back has no review, so
     /// `publishIfChanged` holds the write for the Publish sheet.
     ///
-    /// `data`, when given, is the backup's content as the caller read it, so what is restored is what
-    /// the caller showed; nil reads it now, and a read that fails is refused as unreadable.
-    public func restoreCollection(_ collection: String, from backup: URL, data: Data? = nil) throws {
-        let bytes = data ?? (try? BoundedRead.data(at: backup, limit: ConfigService.maxBackupBytes))
-        let (plan, restored) = try collectionRestore(collection, id: backup.lastPathComponent, data: bytes)
+    /// `data` is the backup's content as the caller read it, so what is restored is what the caller
+    /// showed; it is never read again here.
+    public func restoreCollection(_ collection: String, from backup: URL, data: Data) throws {
+        let (plan, restored) = try collectionRestore(collection, id: backup.lastPathComponent, data: data)
         for (name, change) in plan.changes.byName where change == .goes {
             removeConnector(name, from: plan.collection)
         }

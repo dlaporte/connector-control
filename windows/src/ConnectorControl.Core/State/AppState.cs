@@ -748,26 +748,13 @@ public sealed class AppState : ObservableObject, IDisposable
     /// <see cref="PublishIfChanged"/> holds the write for the Publish sheet.
     /// </para>
     /// <para>
-    /// <paramref name="data"/>, when given, is the backup's content as the caller read it, so what is
-    /// restored is what the caller showed; null reads it now, and a read that fails is refused as unreadable.
+    /// <paramref name="data"/> is the backup's content as the caller read it, so what is restored is what
+    /// the caller showed; it is never read again here.
     /// </para>
     /// </summary>
-    public void RestoreCollection(string collection, string backupPath, byte[]? data = null)
+    public void RestoreCollection(string collection, string backupPath, byte[] data)
     {
-        var bytes = data;
-        if (bytes is null)
-        {
-            try
-            {
-                bytes = BoundedRead.Data(backupPath, ConfigService.MaxBackupBytes);
-            }
-            // Platform idiom: the I/O and access errors a read throws; the Mac mirror's try? takes every error.
-            catch (Exception ex) when (FileSystemErrors.IsTransient(ex))
-            {
-                bytes = null;
-            }
-        }
-        var (plan, restored) = CollectionRestoreOf(collection, Path.GetFileName(backupPath), bytes);
+        var (plan, restored) = CollectionRestoreOf(collection, Path.GetFileName(backupPath), data);
         foreach (var (name, change) in plan.Changes.ByName)
         {
             if (change is CollectionRestore.Change.Goes)

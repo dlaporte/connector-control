@@ -130,16 +130,12 @@ final class AppStateCollectionRestoreTests: XCTestCase {
         XCTAssertEqual(try mcpsBackups(state), backupsBefore, "nothing was saved")
     }
 
-    /// Without the bytes, the restore reads the backup itself; one it cannot read is refused as unreadable.
-    func testARestoreWithoutBytesReadsTheBackup() throws {
+    /// A backup whose bytes could not be read is refused as unreadable, in the plan.
+    func testABackupWhoseBytesCouldNotBeReadIsRefusedAsUnreadable() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
-        let taken = try backup(h, of: state.store)
-        state.setEnabled("aws-mcp", false)
-        try state.restoreCollection("Default", from: taken.url)
-        XCTAssertEqual(state.store.collections["Default"]?.mcps["aws-mcp"]?.enabled, true)
         let missing = h.backupsDir.appendingPathComponent("mcps.2026-01-02T00-00-00-000Z.json")
-        XCTAssertThrowsError(try state.restoreCollection("Default", from: missing)) {
+        XCTAssertThrowsError(try state.collectionRestorePlan("Default", id: missing.lastPathComponent, data: nil)) {
             XCTAssertEqual($0 as? CollectionRestoreError, .backupUnreadable(missing.lastPathComponent))
         }
     }

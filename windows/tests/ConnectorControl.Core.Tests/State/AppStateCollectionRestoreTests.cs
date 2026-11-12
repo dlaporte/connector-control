@@ -143,18 +143,15 @@ public class AppStateCollectionRestoreTests
         Assert.Equal(backupsBefore, McpsBackups(state));   // nothing was saved
     }
 
-    /// <summary>Without the bytes, the restore reads the backup itself; one it cannot read is refused as unreadable.</summary>
+    /// <summary>A backup whose bytes could not be read is refused as unreadable, in the plan.</summary>
     [Fact]
-    public void ARestoreWithoutBytesReadsTheBackup()
+    public void ABackupWhoseBytesCouldNotBeReadIsRefusedAsUnreadable()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        var taken = Backup(h, state.Store);
-        state.SetEnabled("aws-mcp", false);
-        state.RestoreCollection("Default", taken.Path);
-        Assert.True(state.Store.Collections["Default"].Mcps["aws-mcp"].Enabled);
         var missing = Path.Combine(h.BackupsDir, "mcps.2026-01-02T00-00-00-000Z.json");
-        var refused = Assert.Throws<CollectionBackupUnreadableException>(() => state.RestoreCollection("Default", missing));
+        var refused = Assert.Throws<CollectionBackupUnreadableException>(
+            () => state.CollectionRestorePlan("Default", Path.GetFileName(missing), null));
         Assert.Equal(Path.GetFileName(missing), refused.Id);
     }
 
