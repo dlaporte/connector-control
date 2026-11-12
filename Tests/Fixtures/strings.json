@@ -164,6 +164,8 @@
   "CollectionDocument.credentialReferencePhrase": "refers to a credential",
   "CollectionDocument.credentialUserOnlyPhrase": "names a user",
   "CollectionDocument.notJSONError": "not JSON",
+  "CollectionRestoreModel.activeInformative": "Claude is running this collection, so Claude’s config is updated too.",
+  "CollectionRestoreModel.caption": "Choose a backup, then a collection. The collection goes back to exactly how it was; its current connectors are backed up first and kept for 30 days.",
   "CollectionRestoreModel.changesLine.off": {
     "format": "~ {0} (off)"
   },
@@ -176,9 +178,20 @@
   "CollectionRestoreModel.comesBackLine.on": {
     "format": "+ {0} (on)"
   },
+  "CollectionRestoreModel.confirmMessage": {
+    "format": "Restore “{0}” as it was at {1}?"
+  },
+  "CollectionRestoreModel.createdInformative": {
+    "format": "“{0}” no longer exists, so it is created again."
+  },
+  "CollectionRestoreModel.detailSeparator": " · ",
+  "CollectionRestoreModel.differsState": "differs from now",
   "CollectionRestoreModel.goesLine": {
     "format": "− {0}"
   },
+  "CollectionRestoreModel.goneState": "deleted since",
+  "CollectionRestoreModel.sameState": "same as now",
+  "CollectionRestoreModel.subscribedState": "subscribed now",
   "CollectionRestoreModel.unchangedLine": {
     "format": "= {0} unchanged"
   },
@@ -1140,10 +1153,13 @@
   },
   "RestoreModel.cancelTitle": "Cancel",
   "RestoreModel.caption": "The current file is backed up first, then replaced by the selected backup.",
+  "RestoreModel.claudeConfigNote": "It holds only the connectors that were on. To bring back a whole collection, use Collections.",
+  "RestoreModel.claudeConfigTab": "Claude’s config",
+  "RestoreModel.collectionsTab": "Collections",
   "RestoreModel.confirmMessage": {
     "format": "Replace Claude's config with {0}?"
   },
-  "RestoreModel.headline": "Restore Claude config from a backup",
+  "RestoreModel.headline": "Restore from a backup",
   "RestoreModel.recreateInformative": {
     "format": "“{0}” no longer exists, so it is created again with only the connectors Claude was running. To bring back all of its connectors, restore it from Collections."
   },

@@ -2,11 +2,16 @@ using System.Text.Json;
 
 namespace ConnectorControl.Core.State;
 
-/// <summary>RestoreSheetView state.</summary>
+/// <summary>The Restore dialog's Claude's config tab, and the dialog's own strings.</summary>
 public sealed class RestoreModel : ObservableObject
 {
-    public const string Headline = "Restore Claude config from a backup";
+    public const string Headline = "Restore from a backup";
+    /// <summary>The dialog's two tabs, Collections first and chosen when it opens.</summary>
+    public const string CollectionsTab = "Collections";
+    public const string ClaudeConfigTab = "Claude’s config";
     public const string Caption = "The current file is backed up first, then replaced by the selected backup.";
+    /// <summary>Under the Claude's config tab's caption.</summary>
+    public const string ClaudeConfigNote = "It holds only the connectors that were on. To bring back a whole collection, use Collections.";
     public const string CancelTitle = "Cancel";
     /// <summary>
     /// The button that opens this dialog from Settings and the dialog's own Restore, on both

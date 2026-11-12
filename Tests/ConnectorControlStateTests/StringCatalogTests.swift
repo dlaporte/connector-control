@@ -98,6 +98,8 @@ final class StringCatalogTests: XCTestCase {
         "CollectionRestoreModel.changesLine.on": ["X"],
         "CollectionRestoreModel.comesBackLine.off": ["X"],
         "CollectionRestoreModel.comesBackLine.on": ["X"],
+        "CollectionRestoreModel.confirmMessage": ["X", "Y"],
+        "CollectionRestoreModel.createdInformative": ["X"],
         "CollectionRestoreModel.goesLine": ["X"],
         "CollectionRestoreModel.unchangedLine": ["3"],
         "CollectionsModel.connectorTally.many": ["3"],
@@ -412,11 +414,20 @@ final class StringCatalogTests: XCTestCase {
 
         // MARK: CollectionRestoreModel
 
+        actual["CollectionRestoreModel.activeInformative"] = CollectionRestoreModel.activeInformative
+        actual["CollectionRestoreModel.caption"] = CollectionRestoreModel.caption
         actual["CollectionRestoreModel.changesLine.off"] = CollectionRestoreModel.changesLine("X", false)
         actual["CollectionRestoreModel.changesLine.on"] = CollectionRestoreModel.changesLine("X", true)
         actual["CollectionRestoreModel.comesBackLine.off"] = CollectionRestoreModel.comesBackLine("X", false)
         actual["CollectionRestoreModel.comesBackLine.on"] = CollectionRestoreModel.comesBackLine("X", true)
+        actual["CollectionRestoreModel.confirmMessage"] = CollectionRestoreModel.confirmMessage("X", "Y")
+        actual["CollectionRestoreModel.createdInformative"] = CollectionRestoreModel.createdInformative("X")
+        actual["CollectionRestoreModel.detailSeparator"] = CollectionRestoreModel.detailSeparator
+        actual["CollectionRestoreModel.differsState"] = CollectionRestoreModel.differsState
         actual["CollectionRestoreModel.goesLine"] = CollectionRestoreModel.goesLine("X")
+        actual["CollectionRestoreModel.goneState"] = CollectionRestoreModel.goneState
+        actual["CollectionRestoreModel.sameState"] = CollectionRestoreModel.sameState
+        actual["CollectionRestoreModel.subscribedState"] = CollectionRestoreModel.subscribedState
         actual["CollectionRestoreModel.unchangedLine"] = CollectionRestoreModel.unchangedLine(3)
 
         // MARK: CollectionsModel
@@ -923,6 +934,9 @@ final class StringCatalogTests: XCTestCase {
 
         actual["RestoreModel.cancelTitle"] = RestoreModel.cancelTitle
         actual["RestoreModel.caption"] = RestoreModel.caption
+        actual["RestoreModel.claudeConfigNote"] = RestoreModel.claudeConfigNote
+        actual["RestoreModel.claudeConfigTab"] = RestoreModel.claudeConfigTab
+        actual["RestoreModel.collectionsTab"] = RestoreModel.collectionsTab
         actual["RestoreModel.confirmMessage"] = RestoreModel.confirmMessage(fileName: "X")
         actual["RestoreModel.headline"] = RestoreModel.headline
         actual["RestoreModel.recreateInformative"] = RestoreModel.recreateInformative("X")

@@ -104,6 +104,8 @@ public class StringCatalogTests
         ["CollectionRestoreModel.changesLine.on"] = ["X"],
         ["CollectionRestoreModel.comesBackLine.off"] = ["X"],
         ["CollectionRestoreModel.comesBackLine.on"] = ["X"],
+        ["CollectionRestoreModel.confirmMessage"] = ["X", "Y"],
+        ["CollectionRestoreModel.createdInformative"] = ["X"],
         ["CollectionRestoreModel.goesLine"] = ["X"],
         ["CollectionRestoreModel.unchangedLine"] = ["3"],
         ["CollectionsModel.connectorTally.many"] = ["3"],
@@ -436,11 +438,20 @@ public class StringCatalogTests
 
         // MARK: CollectionRestoreModel
 
+        actual["CollectionRestoreModel.activeInformative"] = CollectionRestoreModel.ActiveInformative;
+        actual["CollectionRestoreModel.caption"] = CollectionRestoreModel.Caption;
         actual["CollectionRestoreModel.changesLine.off"] = CollectionRestoreModel.ChangesLine("X", false);
         actual["CollectionRestoreModel.changesLine.on"] = CollectionRestoreModel.ChangesLine("X", true);
         actual["CollectionRestoreModel.comesBackLine.off"] = CollectionRestoreModel.ComesBackLine("X", false);
         actual["CollectionRestoreModel.comesBackLine.on"] = CollectionRestoreModel.ComesBackLine("X", true);
+        actual["CollectionRestoreModel.confirmMessage"] = CollectionRestoreModel.ConfirmMessage("X", "Y");
+        actual["CollectionRestoreModel.createdInformative"] = CollectionRestoreModel.CreatedInformative("X");
+        actual["CollectionRestoreModel.detailSeparator"] = CollectionRestoreModel.DetailSeparator;
+        actual["CollectionRestoreModel.differsState"] = CollectionRestoreModel.DiffersState;
         actual["CollectionRestoreModel.goesLine"] = CollectionRestoreModel.GoesLine("X");
+        actual["CollectionRestoreModel.goneState"] = CollectionRestoreModel.GoneState;
+        actual["CollectionRestoreModel.sameState"] = CollectionRestoreModel.SameState;
+        actual["CollectionRestoreModel.subscribedState"] = CollectionRestoreModel.SubscribedState;
         actual["CollectionRestoreModel.unchangedLine"] = CollectionRestoreModel.UnchangedLine(3);
 
         // MARK: CollectionsModel
@@ -975,6 +986,9 @@ public class StringCatalogTests
 
         actual["RestoreModel.cancelTitle"] = RestoreModel.CancelTitle;
         actual["RestoreModel.caption"] = RestoreModel.Caption;
+        actual["RestoreModel.claudeConfigNote"] = RestoreModel.ClaudeConfigNote;
+        actual["RestoreModel.claudeConfigTab"] = RestoreModel.ClaudeConfigTab;
+        actual["RestoreModel.collectionsTab"] = RestoreModel.CollectionsTab;
         actual["RestoreModel.confirmMessage"] = RestoreModel.ConfirmMessage("X");
         actual["RestoreModel.headline"] = RestoreModel.Headline;
         actual["RestoreModel.recreateInformative"] = RestoreModel.RecreateInformative("X");

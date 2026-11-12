@@ -2,13 +2,18 @@ import Foundation
 import Combine
 import ConnectorControlCore
 
-/// RestoreSheetView state. The confirmation is a sheet:
+/// RestoreSheetView's Claude's config tab, and the sheet's own strings. The confirmation is a sheet:
 /// requestRestore opens it (and clears the previous attempt's error),
 /// confirmRestore is its Restore button, cancelRestore its implicit Cancel.
 @MainActor
 public final class RestoreModel: ObservableObject {
-    public static let headline = "Restore Claude config from a backup"
+    public static let headline = "Restore from a backup"
+    /// The sheet's two tabs, Collections first and chosen when it opens.
+    public static let collectionsTab = "Collections"
+    public static let claudeConfigTab = "Claude’s config"
     public static let caption = "The current file is backed up first, then replaced by the selected backup."
+    /// Under the Claude's config tab's caption.
+    public static let claudeConfigNote = "It holds only the connectors that were on. To bring back a whole collection, use Collections."
     public static let cancelTitle = "Cancel"
     /// The button that opens this sheet from Settings and the sheet's own Restore, on both
     /// platforms; `restoreButton` is the confirmation's, a separate question with its own title.
