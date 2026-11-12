@@ -164,6 +164,13 @@ public struct MasterStore: Equatable, Codable, Sendable {
         return rest.first { isLocal($0) && !(collections[$0]?.mcps.isEmpty ?? true) } ?? rest.first
     }
 
+    /// The name `name` is held under among the collections, in the spelling first stored, or nil when
+    /// no collection has it: a dictionary key finds a collection under any spelling Unicode counts as
+    /// the same text, as `Collection.storedName(_:)` finds a connector.
+    public func storedCollectionName(_ name: String) -> String? {
+        collections.index(forKey: name).map { collections.keys[$0] }
+    }
+
     /// The one wording for a name no collection has, shared by switch, rename and delete.
     public static func noCollectionError(_ name: String) -> String { "No collection named \u{201C}\(name)\u{201D}." }
 
@@ -215,10 +222,13 @@ public enum MasterStoreIO {
         return try? decode(data)
     }
 
+    /// A master list's bytes as `load` and `read` decode them: a backup read once is decoded here, so
+    /// what is shown from it is what is restored from it.
+    ///
     /// Platform idiom: JSONDecoder also reads UTF-16 and UTF-32, nesting past 64 and a trailing comma,
     /// which the Windows reader refuses; refused here alike, as Claude's config is, so a master list
     /// shared between the two is readable on both or on neither.
-    private static func decode(_ data: Data) throws -> MasterStore {
+    public static func decode(_ data: Data) throws -> MasterStore {
         guard !JSONValue.isRefusedByTheWindowsReader(data) else {
             throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "not JSON the Windows reader reads"))
         }
