@@ -314,15 +314,70 @@ public class SettingsWindowTests
         WpfApp.Invoke(() =>
         {
             var dialog = new RestoreDialog(state);
+            dialog.Tabs.SelectedItem = dialog.ClaudeConfigTabItem;
             dialog.Measure(new Size(460, 400));
             dialog.Arrange(new Rect(0, 0, 460, 400));
             dialog.UpdateLayout();
+            Assert.Same(dialog.Model, dialog.Footer.DataContext);   // the failure line and buttons are this tab's
             Assert.Equal(2, dialog.BackupList.Items.Count);
             Assert.Equal("claude_desktop_config.original.json", dialog.BackupList.Items[1]);
             Assert.False(dialog.Model.CanRestore);
             dialog.BackupList.SelectedIndex = 0;
             Assert.True(dialog.Model.CanRestore);
             Assert.Equal(dialog.Model.Backups[0], dialog.Model.Selection);
+        });
+    }
+
+    /// <summary>The dialog opens on Collections, the first of its two tabs, with no backup chosen; the failure line
+    /// and buttons under the tabs are the shown tab's. A chosen backup lists its collections, each spoken as its
+    /// name and detail, and Restore is enabled for one a restore would bring back.</summary>
+    [Fact]
+    public void RestoreDialogOpensOnCollectionsAndListsTheChosenBackupsCollections()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.AddEmptyCollection("Personal"));
+        Assert.Null(state.Upsert("notes", AppStateHarness.LocalConnector("notes"), null, "Personal"));
+        Assert.Null(state.DeleteCollection("Personal"));   // the master list is backed up with Personal in it
+        WpfApp.Invoke(() =>
+        {
+            var dialog = new RestoreDialog(state);
+            try
+            {
+                WindowTestSupport.Layout(dialog, new Size(460, 700));
+                Assert.Equal([RestoreModel.CollectionsTab, RestoreModel.ClaudeConfigTab],
+                    dialog.Tabs.Items.Cast<TabItem>().Select(t => (string)t.Header));
+                Assert.Same(dialog.CollectionsTabItem, dialog.Tabs.SelectedItem);
+                Assert.Same(dialog.Collections, dialog.Footer.DataContext);
+                Assert.Equal(dialog.Collections.BackupLabels, dialog.CollectionBackupList.Items.Cast<string>());
+                Assert.Equal(-1, dialog.CollectionBackupList.SelectedIndex);
+                Assert.Empty(dialog.CollectionList.Items);
+                Assert.False(dialog.RestoreButton.IsEnabled);
+
+                var index = dialog.Collections.Backups.ToList()
+                    .FindIndex(b => b.Store?.Collections.GetValueOrDefault("Personal")?.Mcps.ContainsKey("notes") == true);
+                dialog.CollectionBackupList.SelectedIndex = index;
+                WindowTestSupport.Layout(dialog, new Size(460, 700));
+                var personal = dialog.CollectionList.Items.Cast<CollectionRestoreModel.Row>().Single(r => r.Name == "Personal");
+                Assert.Equal(CollectionRestoreModel.RowState.Gone, personal.State);
+                var container = (ListBoxItem)dialog.CollectionList.ItemContainerGenerator.ContainerFromItem(personal);
+                Assert.Equal(personal.SpokenName, AutomationProperties.GetName(container));
+                Assert.False(dialog.RestoreButton.IsEnabled);   // no collection chosen yet
+
+                dialog.CollectionList.SelectedItem = personal;
+                WindowTestSupport.Layout(dialog, new Size(460, 700));
+                Assert.Equal("Personal", dialog.Collections.Collection);
+                Assert.True(dialog.RestoreButton.IsEnabled);
+
+                dialog.Tabs.SelectedItem = dialog.ClaudeConfigTabItem;
+                WindowTestSupport.Layout(dialog, new Size(460, 700));
+                Assert.Same(dialog.Model, dialog.Footer.DataContext);
+                Assert.False(dialog.RestoreButton.IsEnabled);   // nothing is chosen on this tab
+            }
+            finally
+            {
+                dialog.Close();
+            }
         });
     }
 

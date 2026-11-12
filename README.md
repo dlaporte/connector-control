@@ -36,8 +36,9 @@ wiped or mangled config is always one click from restored.
   **Notify on external changes** is off in Settings).
 - **Automatic backups** - timestamped copies of Claude's config, the master
   list and collections.json, each taken before that file is written
-  (configurable retention, plus a permanent first-run snapshot), with in-app
-  restore.
+  (configurable retention, plus a permanent first-run snapshot; the copy
+  taken before a delete is kept for 30 days), with in-app restore: a whole
+  collection exactly as it was, even one you deleted, or Claude's config.
 - **Syncable** - point the master list at a folder synced by git, iCloud, or
   Dropbox and share one connector catalog across machines; backups always
   stay machine-local so they never pollute the synced folder.
@@ -478,8 +479,10 @@ machines that follow it, including the one that publishes it.
   collection it was taken from and makes that collection active. If you
   have deleted that collection, it is created again, holding only the
   connectors Claude was running: Claude's configuration never holds the
-  ones that were off, and the confirmation says so. Only this version
-  records the collection, so a backup from an earlier one -
+  ones that were off, and the confirmation says so. To bring back the
+  whole collection, every connector with its switch, restore it from
+  **Collections** in the same sheet. Only this version records the
+  collection, so a backup from an earlier one -
   which is every backup you already have, and the first-run original -
   goes into the active collection instead. While the active collection is
   subscribed, such a backup is refused before anything is asked: "“<name>”
@@ -1023,7 +1026,11 @@ the master list and collections.json live in, with **Use Default** and
 **Choose…** (point it at a synced folder to share connectors across
 machines), and **Backups**: how many of each file to keep (20 unless you
 change it, from 5 to 100), and the backups folder with **Reveal in Finder** (**Show in Explorer** on Windows) and
-**Restore…**. **Claude** has **Claude App**, the app to restart (on Windows,
+**Restore…**, one sheet with two tabs: **Collections**, which brings back one
+collection exactly as a backup of the master list holds it - every connector,
+its settings and its switch, even a collection you deleted - and leaves the
+others alone, and **Claude’s config**, which puts back a backup of Claude's
+config, holding only the connectors that were on. **Claude** has **Claude App**, the app to restart (on Windows,
 how Claude is installed, its config file and its launch target; a chosen app
 or launch target is checked to be Claude, signed by Anthropic, and the row
 reads "Checking…" until it is), the
