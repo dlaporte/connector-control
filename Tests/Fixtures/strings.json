@@ -601,7 +601,7 @@
   "ControlTools.kindHeader": "KIND",
   "ControlTools.listKind": "a list of names",
   "ControlTools.list_backups.cliUsage": "backups",
-  "ControlTools.list_backups.description": "List the backups of Claude's config, whose ids restore_backup takes, and of the collections, whose ids restore_collection takes with one of the collection names listed.",
+  "ControlTools.list_backups.description": "List the backups of Claude's config and of the collections. A Claude's config id goes to restore_backup; a collections id goes to restore_collection with one of the collection names listed beside it.",
   "ControlTools.list_collections.cliUsage": "collections",
   "ControlTools.list_collections.description": "List collections. Each is a set of connectors and the active one is what Claude runs; a subscribed collection follows a file someone else publishes and is read-only.",
   "ControlTools.list_connectors.cliUsage": "connectors [--collection <name>]",
@@ -705,7 +705,7 @@
   "ControlTools.restore_backup.cliUsage": "backups restore <id>",
   "ControlTools.restore_backup.description": "Replace Claude's config with a backup. The current file is backed up first.",
   "ControlTools.restore_collection.cliUsage": "backups restore-collection <id> <collection>",
-  "ControlTools.restore_collection.description": "Put one collection back exactly as it was in a backup: every connector, its settings and its switch, created again if it was deleted. Connectors added since are removed; other collections are left alone. The current state is backed up first and kept for 30 days.",
+  "ControlTools.restore_collection.description": "Put one collection back exactly as it was in a backup. Every connector comes back with its settings and its switch, and a deleted collection is created again. Connectors added since are removed; other collections are left alone. The current state is backed up first and kept for 30 days.",
   "ControlTools.restoredNotification": {
     "format": "{0} restored “{1}”."
   },
