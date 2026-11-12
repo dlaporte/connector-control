@@ -69,7 +69,9 @@ final class StringCatalogTests: XCTestCase {
     /// parameters, and the joined-keys rendering for a factory that takes a
     /// list of keys - matching the convention the C# test also follows.
     private static let argsByKey: [String: [String]] = [
+        "AppState.collectionBackupUnreadableError": ["X"],
         "AppState.collectionLocateBanner": ["X"],
+        "AppState.collectionNotInBackupError": ["X", "Y"],
         "AppState.collectionPublishFailedBanner": ["X", "Y", "Z"],
         "AppState.collectionUpdateBanner": ["X", "Y"],
         "AppState.collectionUpdateNotificationBody": ["X", "Y"],
@@ -85,12 +87,20 @@ final class StringCatalogTests: XCTestCase {
         "AppState.publishFolderCarriedError": ["X", "Y"],
         "AppState.publishSlugTakenError": ["X"],
         "AppState.restoreCollectionGoneError": ["X"],
+        "AppState.restoreCollectionSubscribedError": ["X"],
+        "AppState.restoreCollectionUnchangedError": ["X"],
         "AppState.restoreSubscribedError": ["X"],
         "AppState.sourceUnreadableError": ["X", "Y"],
         "AppState.unreviewedConnectorError": ["X"],
         "ClaudeSignature.notFoundMessage": ["X"],
         "ClaudeSignature.refusalMessage": ["X", "Y"],
         "ClaudeSignature.uninspectableMessage": ["X"],
+        "CollectionRestoreModel.changesLine.off": ["X"],
+        "CollectionRestoreModel.changesLine.on": ["X"],
+        "CollectionRestoreModel.comesBackLine.off": ["X"],
+        "CollectionRestoreModel.comesBackLine.on": ["X"],
+        "CollectionRestoreModel.goesLine": ["X"],
+        "CollectionRestoreModel.unchangedLine": ["3"],
         "CollectionsModel.connectorTally.many": ["3"],
         "CollectionsModel.connectorTally.one": ["1"],
         "CollectionsModel.copiedNote.many": ["3", "X"],
@@ -293,7 +303,9 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.chooseClaude"] = AppState.chooseClaude
         actual["AppState.claudeConfigChangedBody"] = AppState.claudeConfigChangedBody
         actual["AppState.claudeConfigRegeneratedBody"] = AppState.claudeConfigRegeneratedBody
+        actual["AppState.collectionBackupUnreadableError"] = AppState.collectionBackupUnreadableError("X")
         actual["AppState.collectionLocateBanner"] = AppState.collectionLocateBanner("X")
+        actual["AppState.collectionNotInBackupError"] = AppState.collectionNotInBackupError("X", "Y")
         actual["AppState.collectionPublishFailedBanner"] = AppState.collectionPublishFailedBanner("X", "Y", "Z")
         actual["AppState.collectionUpdateBanner"] = AppState.collectionUpdateBanner("X", "Y")
         actual["AppState.collectionUpdateNotificationBody"] = AppState.collectionUpdateNotificationBody("X", "Y")
@@ -331,6 +343,8 @@ final class StringCatalogTests: XCTestCase {
         actual["AppState.restartInformative"] = AppState.restartInformative
         actual["AppState.restartMessage"] = AppState.restartMessage
         actual["AppState.restoreCollectionGoneError"] = AppState.restoreCollectionGoneError("X")
+        actual["AppState.restoreCollectionSubscribedError"] = AppState.restoreCollectionSubscribedError("X")
+        actual["AppState.restoreCollectionUnchangedError"] = AppState.restoreCollectionUnchangedError("X")
         actual["AppState.restoreSubscribedError"] = AppState.restoreSubscribedError("X")
         actual["AppState.sourceUnreadableError"] = AppState.sourceUnreadableError("X", "Y")
         actual["AppState.storeChangedBody"] = AppState.storeChangedBody
@@ -393,6 +407,15 @@ final class StringCatalogTests: XCTestCase {
         actual["CollectionDocument.notJSONError"] = CollectionDocument.notJSONError
         actual["CollectionDocument.credentialReferencePhrase"] = CollectionDocument.credentialReferencePhrase
         actual["CollectionDocument.credentialUserOnlyPhrase"] = CollectionDocument.credentialUserOnlyPhrase
+
+        // MARK: CollectionRestoreModel
+
+        actual["CollectionRestoreModel.changesLine.off"] = CollectionRestoreModel.changesLine("X", false)
+        actual["CollectionRestoreModel.changesLine.on"] = CollectionRestoreModel.changesLine("X", true)
+        actual["CollectionRestoreModel.comesBackLine.off"] = CollectionRestoreModel.comesBackLine("X", false)
+        actual["CollectionRestoreModel.comesBackLine.on"] = CollectionRestoreModel.comesBackLine("X", true)
+        actual["CollectionRestoreModel.goesLine"] = CollectionRestoreModel.goesLine("X")
+        actual["CollectionRestoreModel.unchangedLine"] = CollectionRestoreModel.unchangedLine(3)
 
         // MARK: CollectionsModel
 

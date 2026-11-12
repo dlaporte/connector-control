@@ -97,6 +97,16 @@ public final class AppState: ObservableObject {
     /// A backup that records no collection goes into the active one, which here is subscribed.
     nonisolated public static func restoreSubscribedError(_ collection: String) -> String { "“\(collection)” is subscribed, so its connectors are the author’s. Make a local collection active, then restore." }
 
+    /// A collection restore's refusals (`CollectionRestoreError`), in the order they are checked. `id` is the
+    /// backup's file name.
+    nonisolated public static func collectionBackupUnreadableError(_ id: String) -> String { "“\(id)” can’t be read, so nothing was restored." }
+
+    nonisolated public static func collectionNotInBackupError(_ id: String, _ collection: String) -> String { "“\(id)” holds no collection named “\(collection)”." }
+
+    nonisolated public static func restoreCollectionSubscribedError(_ collection: String) -> String { "“\(collection)” is subscribed, so its connectors are the author’s. Nothing was restored." }
+
+    nonisolated public static func restoreCollectionUnchangedError(_ collection: String) -> String { "“\(collection)” is already as it was in this backup." }
+
     /// A synced connector-list change was adopted and written into Claude's config: say what it runs now.
     public static func connectorListChangedBody(_ delta: ServerDelta, restartRequired: Bool) -> String {
         let what = delta.isEmpty ? "was regenerated" : "now " + delta.summary()
@@ -537,6 +547,60 @@ public final class AppState: ObservableObject {
         return isSynced(activeCollection) ? .subscribedActive(activeCollection) : nil
     }
 
+    /// What restoring `collection` from a master-list backup would do, for the Restore sheet and
+    /// `restore_collection` to show before asking, or the refusal (`CollectionRestoreError`) that
+    /// would stop it. `id` is the backup's file name; `data` its bytes as the caller read them, nil
+    /// when they could not be read, so what is shown is what `restoreCollection` restores.
+    public func collectionRestorePlan(_ collection: String, id: String, data: Data?) throws -> CollectionRestorePlan {
+        try collectionRestore(collection, id: id, data: data).plan
+    }
+
+    /// Puts `collection` back exactly as the master-list backup at `backup` holds it: every connector,
+    /// its config and its switch, and nothing added since. A collection that is gone is created again,
+    /// local, whatever it was when the backup was taken. Other collections, and the active one's place,
+    /// are left alone. The refusals are checked again against `data` and the store as they are now.
+    ///
+    /// A connector the restore removes goes as a delete removes it (`removeConnector(_:from:)`), and
+    /// the save keeps the backup it takes for 30 days, so the restore can be undone the same way.
+    /// Claude's config follows when the collection is the active one. For a collection this machine
+    /// publishes, a restore is a change like any edit: a connector that comes back has no review, so
+    /// `publishIfChanged` holds the write for the Publish sheet.
+    ///
+    /// `data`, when given, is the backup's content as the caller read it, so what is restored is what
+    /// the caller showed; nil reads it now, and a read that fails is refused as unreadable.
+    public func restoreCollection(_ collection: String, from backup: URL, data: Data? = nil) throws {
+        let bytes = data ?? (try? BoundedRead.data(at: backup, limit: ConfigService.maxBackupBytes))
+        let (plan, restored) = try collectionRestore(collection, id: backup.lastPathComponent, data: bytes)
+        for (name, change) in plan.changes.byName where change == .goes {
+            removeConnector(name, from: plan.collection)
+        }
+        store.collections[plan.collection] = restored
+        persistAndApply(touching: plan.collection, pinningBackup: true)
+    }
+
+    /// The plan and the backup's collection, or the first refusal, in order: a backup that cannot be
+    /// decoded (`MasterStoreIO.decode`, the rules every read of the master list applies), one with no
+    /// collection of that name, a collection subscribed now, whose connectors are its author's, and one
+    /// already as the backup holds it. The collection is named as the store holds it, under any spelling
+    /// Unicode counts as the same text, else as the backup spells it.
+    private func collectionRestore(_ collection: String, id: String, data: Data?) throws
+        -> (plan: CollectionRestorePlan, restored: Collection) {
+        guard let backup = data.flatMap({ try? MasterStoreIO.decode($0) }) else {
+            throw CollectionRestoreError.backupUnreadable(id)
+        }
+        guard let held = backup.storedCollectionName(collection), let restored = backup.collections[held] else {
+            throw CollectionRestoreError.notInBackup(id: id, collection: collection)
+        }
+        let target = store.storedCollectionName(held) ?? held
+        let current = store.collections[target]
+        if current != nil, isSynced(target) { throw CollectionRestoreError.subscribed(target) }
+        let changes = CollectionRestore.changes(current: current, restored: restored)
+        if current != nil, changes.isEmpty { throw CollectionRestoreError.unchanged(target) }
+        let plan = CollectionRestorePlan(collection: target, created: current == nil,
+                                         active: current != nil && target == activeCollection, changes: changes)
+        return (plan, restored)
+    }
+
     // MARK: - Tools
 
     /// Probes `tools` off the main thread, through the host's `background`,
@@ -735,8 +799,9 @@ public final class AppState: ObservableObject {
     /// Saves the store, then applies it when `collection` is the active one: Claude only runs the
     /// active collection, so only a change to that one reaches its config. Shared by the verbs
     /// that can change what a collection runs, so none of them saves without the second half.
-    private func persistAndApply(touching collection: String) {
-        persistStore(touching: collection)
+    /// `pinningBackup` is `persistStore`'s.
+    private func persistAndApply(touching collection: String, pinningBackup: Bool = false) {
+        persistStore(touching: collection, pinningBackup: pinningBackup)
         if collection == activeCollection { applyIfChanged() }
     }
 
@@ -922,22 +987,26 @@ public final class AppState: ObservableObject {
     /// Deletes connectors and persists them as one write, and no more: a caller deleting from the
     /// active collection applies at the call site, as `CollectionsModel.deleteChecked` does. Names
     /// the collection does not hold are skipped, and deleting nothing writes nothing.
-    ///
-    /// Whatever the publish record said about a connector goes with it: a connector added later
-    /// under the same name was never ticked, and a mark left behind would refuse every publish as
-    /// a path that had moved.
     public func delete(names: [String], in collection: String? = nil) {
         let target = collection ?? activeCollection
         var removed = false
         // By the name as stored, so the publish record's entry goes too when the name is typed another way.
         for typed in names {
             guard let name = store.collections[target]?.storedName(typed) else { continue }
-            store.collections[target]?.mcps.removeValue(forKey: name)
-            editPublishIntent(of: target) { $0 = $0.movingConnector(name, to: nil) }
+            removeConnector(name, from: target)
             removed = true
         }
         guard removed else { return }
         persistStore(pinningBackup: true)
+    }
+
+    /// Removes the connector stored as `name` from `collection`, in memory, for the save that follows.
+    /// Whatever the publish record said about it goes with it: a connector added later under the same
+    /// name was never ticked, and a mark left behind would refuse every publish as a path that had
+    /// moved. A delete and a collection's restore both remove through here.
+    private func removeConnector(_ name: String, from collection: String) {
+        store.collections[collection]?.mcps.removeValue(forKey: name)
+        editPublishIntent(of: collection) { $0 = $0.movingConnector(name, to: nil) }
     }
 
     /// Rewrites a published collection's intent in memory, for the save that follows to write.
@@ -2596,6 +2665,56 @@ public final class AppState: ObservableObject {
         storeWatcher = nil
         sourceWatchers.values.forEach { $0.watcher.stop() }
         sourceWatchers.removeAll()
+    }
+}
+
+/// Why a collection's restore from a master-list backup was refused before anything was written, in
+/// the order the refusals are checked. Its description is the message the Restore sheet shows.
+public enum CollectionRestoreError: Error, Equatable, LocalizedError {
+    /// The backup, by its file name, could not be read or decoded.
+    case backupUnreadable(String)
+    /// The backup holds no collection of that name.
+    case notInBackup(id: String, collection: String)
+    /// The collection is subscribed now: its connectors are its author's.
+    case subscribed(String)
+    /// The collection is already as the backup holds it.
+    case unchanged(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .backupUnreadable(let id): return AppState.collectionBackupUnreadableError(id)
+        case .notInBackup(let id, let collection): return AppState.collectionNotInBackupError(id, collection)
+        case .subscribed(let collection): return AppState.restoreCollectionSubscribedError(collection)
+        case .unchanged(let collection): return AppState.restoreCollectionUnchangedError(collection)
+        }
+    }
+}
+
+/// What restoring one collection from a master-list backup does (`AppState.collectionRestorePlan`),
+/// shown by the Restore sheet and `restore_collection` before they ask.
+public struct CollectionRestorePlan: Equatable {
+    /// The collection restored: as the store holds it, or as the backup spells it when it is gone.
+    public let collection: String
+    /// True when the collection is gone now, so the restore creates it again.
+    public let created: Bool
+    /// True when it is the active collection, so Claude's config is updated too.
+    public let active: Bool
+    /// What the restore changes, connector by connector.
+    public let changes: CollectionRestore
+
+    /// One line per connector the restore brings back, changes or removes, by name ordinally, then how
+    /// many it leaves as they are. `shown` names each connector: `restore_collection` escapes names
+    /// (`ControlText.escapedName`), the sheet shows them as stored.
+    public func lines(naming shown: (String) -> String = { $0 }) -> [String] {
+        var lines = changes.byName.sorted { $0.key.ordinallyPrecedes($1.key) }.map { name, change in
+            switch change {
+            case .comesBack(let on): return CollectionRestoreModel.comesBackLine(shown(name), on)
+            case .changes(let on): return CollectionRestoreModel.changesLine(shown(name), on)
+            case .goes: return CollectionRestoreModel.goesLine(shown(name))
+            }
+        }
+        if changes.unchanged > 0 { lines.append(CollectionRestoreModel.unchangedLine(changes.unchanged)) }
+        return lines
     }
 }
 

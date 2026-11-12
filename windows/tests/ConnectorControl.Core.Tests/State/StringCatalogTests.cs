@@ -75,7 +75,9 @@ public class StringCatalogTests
     /// </summary>
     private static readonly Dictionary<string, string[]> ArgsByKey = new(StringComparer.Ordinal)
     {
+        ["AppState.collectionBackupUnreadableError"] = ["X"],
         ["AppState.collectionLocateBanner"] = ["X"],
+        ["AppState.collectionNotInBackupError"] = ["X", "Y"],
         ["AppState.collectionPublishFailedBanner"] = ["X", "Y", "Z"],
         ["AppState.collectionUpdateBanner"] = ["X", "Y"],
         ["AppState.collectionUpdateNotificationBody"] = ["X", "Y"],
@@ -91,12 +93,20 @@ public class StringCatalogTests
         ["AppState.publishFolderCarriedError"] = ["X", "Y"],
         ["AppState.publishSlugTakenError"] = ["X"],
         ["AppState.restoreCollectionGoneError"] = ["X"],
+        ["AppState.restoreCollectionSubscribedError"] = ["X"],
+        ["AppState.restoreCollectionUnchangedError"] = ["X"],
         ["AppState.restoreSubscribedError"] = ["X"],
         ["AppState.sourceUnreadableError"] = ["X", "Y"],
         ["AppState.unreviewedConnectorError"] = ["X"],
         ["ClaudeProcess.notAClaudePackageError"] = ["X"],
         ["ClaudePublisher.subjectNoOrganizationError"] = ["X", "Y"],
         ["ClaudeSignature.notFoundMessage"] = ["X"],
+        ["CollectionRestoreModel.changesLine.off"] = ["X"],
+        ["CollectionRestoreModel.changesLine.on"] = ["X"],
+        ["CollectionRestoreModel.comesBackLine.off"] = ["X"],
+        ["CollectionRestoreModel.comesBackLine.on"] = ["X"],
+        ["CollectionRestoreModel.goesLine"] = ["X"],
+        ["CollectionRestoreModel.unchangedLine"] = ["3"],
         ["CollectionsModel.connectorTally.many"] = ["3"],
         ["CollectionsModel.connectorTally.one"] = ["1"],
         ["CollectionsModel.copiedNote.many"] = ["3", "X"],
@@ -323,7 +333,9 @@ public class StringCatalogTests
         actual["AppState.claudeConfigChangedBody"] = AppState.ClaudeConfigChangedBody;
         actual["AppState.claudeConfigRegeneratedBody"] = AppState.ClaudeConfigRegeneratedBody;
         actual["AppState.collectionDirCmdUnsafeCaution"] = AppState.CollectionDirCmdUnsafeCaution;
+        actual["AppState.collectionBackupUnreadableError"] = AppState.CollectionBackupUnreadableError("X");
         actual["AppState.collectionLocateBanner"] = AppState.CollectionLocateBanner("X");
+        actual["AppState.collectionNotInBackupError"] = AppState.CollectionNotInBackupError("X", "Y");
         actual["AppState.collectionPublishFailedBanner"] = AppState.CollectionPublishFailedBanner("X", "Y", "Z");
         actual["AppState.collectionUpdateBanner"] = AppState.CollectionUpdateBanner("X", "Y");
         actual["AppState.collectionUpdateNotificationBody"] = AppState.CollectionUpdateNotificationBody("X", "Y");
@@ -361,6 +373,8 @@ public class StringCatalogTests
         actual["AppState.restartInformative"] = AppState.RestartInformative;
         actual["AppState.restartMessage"] = AppState.RestartMessage;
         actual["AppState.restoreCollectionGoneError"] = AppState.RestoreCollectionGoneError("X");
+        actual["AppState.restoreCollectionSubscribedError"] = AppState.RestoreCollectionSubscribedError("X");
+        actual["AppState.restoreCollectionUnchangedError"] = AppState.RestoreCollectionUnchangedError("X");
         actual["AppState.restoreSubscribedError"] = AppState.RestoreSubscribedError("X");
         actual["AppState.sourceUnreadableError"] = AppState.SourceUnreadableError("X", "Y");
         actual["AppState.storeChangedBody"] = AppState.StoreChangedBody;
@@ -417,6 +431,15 @@ public class StringCatalogTests
         actual["CollectionDocument.notJSONError"] = CollectionDocument.NotJsonError;
         actual["CollectionDocument.credentialReferencePhrase"] = CollectionDocument.CredentialReferencePhrase;
         actual["CollectionDocument.credentialUserOnlyPhrase"] = CollectionDocument.CredentialUserOnlyPhrase;
+
+        // MARK: CollectionRestoreModel
+
+        actual["CollectionRestoreModel.changesLine.off"] = CollectionRestoreModel.ChangesLine("X", false);
+        actual["CollectionRestoreModel.changesLine.on"] = CollectionRestoreModel.ChangesLine("X", true);
+        actual["CollectionRestoreModel.comesBackLine.off"] = CollectionRestoreModel.ComesBackLine("X", false);
+        actual["CollectionRestoreModel.comesBackLine.on"] = CollectionRestoreModel.ComesBackLine("X", true);
+        actual["CollectionRestoreModel.goesLine"] = CollectionRestoreModel.GoesLine("X");
+        actual["CollectionRestoreModel.unchangedLine"] = CollectionRestoreModel.UnchangedLine(3);
 
         // MARK: CollectionsModel
 
