@@ -5,7 +5,7 @@ using ConnectorControl.Core.State;
 namespace ConnectorControl.App.Views;
 
 /// <summary>Modal, 460 wide, two tabs: Collections (a 120-high list of master-list backups over a 120-high list of
-/// the chosen one's collections) and Claude's config (a 180-high list of backups); under them the chosen tab's
+/// the chosen one's collections) and Claude's config (a 240-high list of backups); under them the chosen tab's
 /// inline error and Cancel / Restore, then its confirmation.</summary>
 public partial class RestoreDialog : DialogWindow
 {
