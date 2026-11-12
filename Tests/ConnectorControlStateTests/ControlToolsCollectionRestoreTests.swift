@@ -143,6 +143,37 @@ final class ControlToolsCollectionRestoreTests: XCTestCase {
         XCTAssertEqual(rig.confirmer.requests.first, rig.confirmer.requests.last, "the question itself reads the same")
     }
 
+    /// A backup rewritten while the question was up, where the question reads the same, is not restored
+    /// from: the Allow lands nothing.
+    func testABackupThatChangedWhileAskingIsNotRestoredFrom() throws {
+        let rig = rig(answer: nil); defer { rig.dispose() }
+        XCTAssertNil(rig.state.addEmptyCollection(named: "Work"))
+        XCTAssertNil(rig.state.upsert(name: "one", entry: MCPEntry(config: config("a")), renamedFrom: nil, in: "Work"))
+        let id = try backup(rig, of: rig.state.store)
+        XCTAssertNil(rig.state.upsert(name: "one", entry: MCPEntry(config: config("b")), renamedFrom: "one", in: "Work"))
+        var rewritten = try XCTUnwrap(MasterStoreIO.read(from: rig.h.backupsDir.appendingPathComponent(id)))
+        rewritten.collections["Work"]?.mcps["one"] = MCPEntry(config: config("z"))
+        let answer = rig.start("restore_collection", arguments(id, "Work"))
+        _ = try backup(rig, of: rewritten, named: id)
+        rig.confirmer.answer(true)
+        rig.h.drain()
+        XCTAssertEqual(answer.result, .refusal(ControlTools.changedWhileAskingError))
+        XCTAssertEqual(rig.state.store.collections["Work"]?.mcps["one"]?.config, config("b"), "nothing restored")
+        _ = rig.start("restore_collection", arguments(id, "Work"))
+        XCTAssertEqual(rig.confirmer.requests.count, 2)
+        XCTAssertEqual(rig.confirmer.requests.first, rig.confirmer.requests.last, "the question itself reads the same")
+    }
+
+    /// With confirmations off nobody is asked, so the restore is announced, naming who asked.
+    func testARestoreNobodyWasAskedAboutIsAnnounced() throws {
+        let rig = ControlRig(confirm: false); defer { rig.dispose() }
+        let (id, personal) = try deletedPersonal(rig)
+        XCTAssertEqual(rig.call("restore_collection", arguments(id, "Personal"))?.text, ControlTools.restoredText("Personal"))
+        XCTAssertTrue(rig.confirmer.requests.isEmpty)
+        XCTAssertEqual(rig.h.notifier.sent.map(\.body), [ControlTools.restoredNotification(ControlCaller.claudeName, "Personal")])
+        XCTAssertEqual(rig.state.store.collections["Personal"], personal)
+    }
+
     /// Only the collection Claude runs takes effect when Claude restarts: its question says so, and its
     /// answer says to restart. Another collection's says neither.
     func testOnlyTheActiveCollectionsRestoreSaysToRestart() throws {

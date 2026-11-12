@@ -157,6 +157,44 @@ public class ControlToolsCollectionRestoreTests
         Assert.Equal(rig.Confirmer.Requests[0], rig.Confirmer.Requests[^1]);
     }
 
+    /// <summary>A backup rewritten while the question was up, where the question reads the same, is not restored
+    /// from: the Allow lands nothing.</summary>
+    [Fact]
+    public void ABackupThatChangedWhileAskingIsNotRestoredFrom()
+    {
+        using var rig = Rig(answer: null);
+        Assert.Null(rig.State.AddEmptyCollection("Work"));
+        Assert.Null(rig.State.Upsert("one", new McpEntry(Config("a")), null, "Work"));
+        var id = Backup(rig, rig.State.Store);
+        Assert.Null(rig.State.Upsert("one", new McpEntry(Config("b")), "one", "Work"));
+        var rewritten = MasterStoreIO.Read(Path.Combine(rig.H.BackupsDir, id));
+        Assert.NotNull(rewritten);
+        rewritten.Collections["Work"].Mcps["one"] = new McpEntry(Config("z"));
+        var answer = rig.Start("restore_collection", Arguments(id, "Work"));
+        Backup(rig, rewritten, id);
+        rig.Confirmer.Answer(true);
+        rig.H.Drain();
+        Assert.Equal(ControlResult.Refusal(ControlTools.ChangedWhileAskingError), answer.Result);
+        // Nothing restored.
+        Assert.Equal(Config("b"), rig.State.Store.Collections["Work"].Mcps["one"].Config);
+        rig.Start("restore_collection", Arguments(id, "Work"));
+        Assert.Equal(2, rig.Confirmer.Requests.Count);
+        // The question itself reads the same.
+        Assert.Equal(rig.Confirmer.Requests[0], rig.Confirmer.Requests[^1]);
+    }
+
+    /// <summary>With confirmations off nobody is asked, so the restore is announced, naming who asked.</summary>
+    [Fact]
+    public void ARestoreNobodyWasAskedAboutIsAnnounced()
+    {
+        using var rig = new ControlRig(confirm: false);
+        var (id, personal) = DeletedPersonal(rig);
+        Assert.Equal(ControlTools.RestoredText("Personal"), rig.Call("restore_collection", Arguments(id, "Personal"))?.Text);
+        Assert.Empty(rig.Confirmer.Requests);
+        Assert.Equal([ControlTools.RestoredNotification(ControlCaller.ClaudeName, "Personal")], rig.H.Notifier.Sent.Select(sent => sent.Body));
+        Assert.Equal(personal, rig.State.Store.Collections["Personal"]);
+    }
+
     /// <summary>Only the collection Claude runs takes effect when Claude restarts: its question says so, and its
     /// answer says to restart. Another collection's says neither.</summary>
     [Fact]
