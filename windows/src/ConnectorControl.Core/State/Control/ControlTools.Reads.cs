@@ -376,12 +376,13 @@ public sealed partial class ControlTools
             }
             // Platform idiom: whatever the read or the decode throws for the backup itself, as the Mac's try? takes
             // every error they throw; a programming fault is left to end the call, as restore_backup leaves it.
-            catch (Exception ex) when (ex is not (NullReferenceException or IndexOutOfRangeException or InvalidCastException))
+            catch (Exception ex) when (IsBackupError(ex))
             {
                 collectionRows.Add([ControlText.EscapedName(id), "", UnreadableBackupText]);
                 collectionItems.Add(JsonValue.Object(("id", JsonValue.String(id)), ("collections", JsonValue.Null)));
                 continue;
             }
+            // A readable backup holding no collections lists no rows; real stores always hold one.
             var collections = new List<JsonValue>();
             foreach (var (name, held) in store.Collections.OrderBy(p => p.Key, StringComparer.Ordinal))
             {

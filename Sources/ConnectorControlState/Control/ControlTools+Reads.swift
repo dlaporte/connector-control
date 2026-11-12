@@ -318,6 +318,7 @@ extension ControlTools {
                 collectionItems.append(.object(["id": .string(id), "collections": .null]))
                 continue
             }
+            // A readable backup holding no collections lists no rows; real stores always hold one.
             var collections: [JSONValue] = []
             for (name, held) in store.collections.sorted(by: { $0.key.ordinallyPrecedes($1.key) }) {
                 let on = held.mcps.values.filter(\.enabled).count

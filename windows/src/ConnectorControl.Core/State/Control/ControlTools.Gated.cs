@@ -1023,6 +1023,17 @@ public sealed partial class ControlTools
         _ => ControlText.Escaped(refusal.Message),
     };
 
+    /// <summary>The listed backup an id names, compared ordinally, as the Mac mirror compares scalar by scalar;
+    /// null when the list does not hold it.</summary>
+    internal static string? ListedBackup(IEnumerable<string> paths, string id) =>
+        paths.FirstOrDefault(path => string.Equals(Path.GetFileName(path), id, StringComparison.Ordinal));
+
+    /// <summary>Whether an exception thrown reading or decoding a backup is the backup's own, as the Mac's
+    /// <c>try?</c> and <c>catch</c> take every error they throw; a programming fault is not, and is left to end
+    /// the call as a fault.</summary>
+    internal static bool IsBackupError(Exception ex) =>
+        ex is not (NullReferenceException or IndexOutOfRangeException or InvalidCastException);
+
     /// <summary>The Restore sheet's restore, by an id <c>list_backups</c> gave, refused first for what the
     /// sheet refuses; the question says which connectors come back, and into which collection.</summary>
     private ControlStep RestoreBackup(ControlArguments arguments, string shownAsker)
@@ -1040,7 +1051,7 @@ public sealed partial class ControlTools
         }
         // Only an id the list gives: never a path, so nothing outside the backups folder is read.
         // Compared ordinally, as the Mac mirror compares scalar by scalar.
-        if (paths.FirstOrDefault(path => string.Equals(Path.GetFileName(path), id, StringComparison.Ordinal)) is not { } backup)
+        if (ListedBackup(paths, id) is not { } backup)
         {
             return new ControlStep.Refused(NoBackupError(shownId));
         }
@@ -1066,7 +1077,7 @@ public sealed partial class ControlTools
         // throws, so a backup that cannot be read is refused before the question in the reader's own words. A
         // programming fault is not the backup's: it is left to end the call as a fault, and is never reported
         // to Claude as an unreadable backup. Swift's catch receives thrown errors only, so the Mac needs no filter.
-        catch (Exception ex) when (ex is not (NullReferenceException or IndexOutOfRangeException or InvalidCastException))
+        catch (Exception ex) when (IsBackupError(ex))
         {
             return new ControlStep.Refused(ControlText.Escaped(ex.Message, [id]));
         }
@@ -1155,7 +1166,7 @@ public sealed partial class ControlTools
         // Only an id the list gives for the master list: never a path, so nothing outside the backups folder is
         // read, nor a Claude's config backup, which is restore_backup's. Compared ordinally, as the Mac mirror
         // compares scalar by scalar.
-        if (paths.FirstOrDefault(path => string.Equals(Path.GetFileName(path), id, StringComparison.Ordinal)) is not { } backup)
+        if (ListedBackup(paths, id) is not { } backup)
         {
             return new ControlStep.Refused(NoBackupError(ControlText.EscapedName(id)));
         }
@@ -1168,7 +1179,7 @@ public sealed partial class ControlTools
         }
         // Platform idiom: whatever the read throws for the backup itself, as the Mac's try? takes every error its
         // read throws; a programming fault is left to end the call, as restore_backup leaves it.
-        catch (Exception ex) when (ex is not (NullReferenceException or IndexOutOfRangeException or InvalidCastException))
+        catch (Exception ex) when (IsBackupError(ex))
         {
             data = null;
         }

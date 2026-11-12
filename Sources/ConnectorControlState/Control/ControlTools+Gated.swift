@@ -689,6 +689,12 @@ extension ControlTools {
         }
     }
 
+    /// The listed backup an id names, compared scalar by scalar, as the Windows mirror compares
+    /// ordinally; nil when the list does not hold it.
+    static func listedBackup(_ urls: [URL], id: String) -> URL? {
+        urls.first(where: { $0.lastPathComponent.hasSameScalars(as: id) })
+    }
+
     /// The Restore sheet's restore, by an id `list_backups` gave, refused first for what the sheet
     /// refuses; the question says which connectors come back, and into which collection.
     func restoreBackup(_ arguments: ControlArguments, _ shownAsker: String) -> ControlStep {
@@ -702,7 +708,7 @@ extension ControlTools {
         }
         // Only an id the list gives: never a path, so nothing outside the backups folder is read.
         // Compared scalar by scalar, as the Windows mirror compares ordinally.
-        guard let backup = urls.first(where: { $0.lastPathComponent.hasSameScalars(as: id) }) else {
+        guard let backup = ControlTools.listedBackup(urls, id: id) else {
             return .refused(ControlTools.noBackupError(shownID))
         }
         // The backup's record, read once: the refusal, the question and the restore all follow it.
@@ -801,7 +807,7 @@ extension ControlTools {
         // Only an id the list gives for the master list: never a path, so nothing outside the backups
         // folder is read, nor a Claude's config backup, which is restore_backup's. Compared scalar by
         // scalar, as the Windows mirror compares ordinally.
-        guard let backup = urls.first(where: { $0.lastPathComponent.hasSameScalars(as: id) }) else {
+        guard let backup = ControlTools.listedBackup(urls, id: id) else {
             return .refused(ControlTools.noBackupError(ControlText.escapedName(id)))
         }
         // Read once: the question, the fingerprint and the restore all come from these bytes. Bytes
