@@ -204,6 +204,41 @@ public class CollectionRestoreModelTests
         Assert.Equal(1, closed);
     }
 
+    /// <summary>The collection changed while the confirmation was up, so the restore would do what the confirmation
+    /// didn't show: nothing is restored, and the confirmation asks again with the new lines. Confirming that one
+    /// restores.</summary>
+    [Fact]
+    public void APlanThatChangedWhileConfirmingIsAskedAgain()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        var path = StagedBackup(h, state);
+        var held = MasterStoreIO.Read(path)!.Collections["Personal"];
+        var model = new CollectionRestoreModel(state, h.Dialogs);
+        model.Load();
+        Choose(path, model);
+        model.Collection = "Personal";
+        var closed = 0;
+        model.CloseRequested += () => closed++;
+        h.Dialogs.DuringConfirm = () =>
+        {
+            if (h.Dialogs.Confirms.Count == 1)
+            {
+                Assert.Null(state.Upsert("late", Entry("late"), null, "Personal"));
+            }
+            else
+            {
+                // Nothing restored.
+                Assert.Equal(["added", "late", "notes"], state.Store.Collections["Personal"].Mcps.Keys.Order(StringComparer.Ordinal));
+            }
+        };
+        Assert.True(model.Restore());
+        Assert.Equal(["− added\n= 1 unchanged", "− added\n− late\n= 1 unchanged"], h.Dialogs.Confirms.Select(c => c.Informative));
+        Assert.Null(model.RestoreError);
+        Assert.Equal(held, state.Store.Collections["Personal"]);
+        Assert.Equal(1, closed);
+    }
+
     /// <summary>A refusal is the dialog's alone on either side of the confirmation: nothing was restored, so the
     /// banner has nothing to say, and the rows then say how the collection stands.</summary>
     [Fact]

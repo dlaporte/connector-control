@@ -212,8 +212,10 @@ public sealed class CollectionRestoreModel : ObservableObject
     public void Cancel() => CloseRequested?.Invoke();
 
     /// <summary>The Restore button: confirm, then restore the bytes the tab read through AppState. A restore
-    /// AppState would refuse says why at once, rather than after a confirmation it could never honour. True when
-    /// restored and closing.</summary>
+    /// AppState would refuse says why at once, rather than after a confirmation it could never honour. The plan is
+    /// worked out again once confirmed: one that differs from what the confirmation showed, the collection having
+    /// changed while it was up, is asked about again with its own lines, never restored unseen. True when restored
+    /// and closing.</summary>
     public bool Restore()
     {
         if (SelectedBackup is not { } backup || collection is not { } chosen)
@@ -232,9 +234,28 @@ public sealed class CollectionRestoreModel : ObservableObject
             Refused(refusal, backup);
             return false;
         }
-        if (!dialogs.Confirm(ConfirmMessage(plan.Collection, backup.Label), Informative(plan), RestoreModel.RestoreButton, destructive: true))
+        while (true)
         {
-            return false;
+            if (!dialogs.Confirm(ConfirmMessage(plan.Collection, backup.Label), Informative(plan), RestoreModel.RestoreButton, destructive: true))
+            {
+                return false;
+            }
+            CollectionRestorePlan confirmed;
+            try
+            {
+                confirmed = state.CollectionRestorePlan(chosen, id, backup.Data);
+            }
+            catch (CollectionRestoreException refusal)
+            {
+                Refused(refusal, backup);
+                return false;
+            }
+            // Equal plans list the same lines under the same message; record equality compares the changes by value.
+            if (confirmed == plan)
+            {
+                break;
+            }
+            plan = confirmed;
         }
         try
         {
@@ -246,8 +267,7 @@ public sealed class CollectionRestoreModel : ObservableObject
         catch (CollectionRestoreException refusal)
         {
             // A refusal is the dialog's alone, as the one before the confirmation is: nothing was restored,
-            // so there is nothing for the banner to say. It arrives here only when the collection changed
-            // while the confirmation was up.
+            // so there is nothing for the banner to say. The plan worked out just above would have refused first.
             Refused(refusal, backup);
             return false;
         }

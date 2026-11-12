@@ -85,7 +85,13 @@ struct RestoreSheetView: View {
             titleVisibility: .visible
         ) {
             Button(RestoreModel.restoreButton, role: .destructive) {
-                if collections.confirmRestore() { dismiss() }
+                if collections.confirmRestore() {
+                    dismiss()
+                } else if collections.confirming {
+                    // Asked again: the collection changed while the confirmation was up. SwiftUI may close
+                    // the confirmation once this action has run, so it opens again on the next turn.
+                    DispatchQueue.main.async { collections.askAgain() }
+                }
             }
         } message: {
             if let informative = collections.confirmInformative { Text(informative) }

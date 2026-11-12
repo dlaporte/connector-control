@@ -188,6 +188,38 @@ final class CollectionRestoreModelTests: XCTestCase {
         XCTAssertNil(model.restoreError)
     }
 
+    /// The collection changed while the confirmation was up, so the restore would do what the confirmation
+    /// didn't show: nothing is restored, and the confirmation asks again with the new lines. Confirming
+    /// that one restores.
+    func testAPlanThatChangedWhileConfirmingIsAskedAgain() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let url = try stagedBackup(h, state)
+        let held = try XCTUnwrap(MasterStoreIO.read(from: url)?.collections["Personal"])
+        let model = CollectionRestoreModel(state: state)
+        model.load()
+        choose(url, in: model)
+        model.collection = "Personal"
+        model.requestRestore()
+        XCTAssertEqual(model.confirmInformative, "− added\n= 1 unchanged")
+        XCTAssertNil(state.upsert(name: "late", entry: entry("late"), renamedFrom: nil, in: "Personal"))
+        XCTAssertFalse(model.confirmRestore())
+        XCTAssertEqual(state.store.collections["Personal"]?.mcps.keys.sorted(), ["added", "late", "notes"], "nothing restored")
+        XCTAssertTrue(model.confirming)
+        XCTAssertEqual(model.confirmInformative, "− added\n− late\n= 1 unchanged")
+        XCTAssertNil(model.restoreError)
+        // SwiftUI may close the confirmation after the button's action; the sheet then asks again.
+        model.cancelRestore()
+        model.askAgain()
+        XCTAssertTrue(model.confirming)
+        XCTAssertEqual(model.confirmInformative, "− added\n− late\n= 1 unchanged")
+        XCTAssertTrue(model.confirmRestore())
+        XCTAssertFalse(model.confirming)
+        XCTAssertEqual(state.store.collections["Personal"], held)
+        model.askAgain()
+        XCTAssertFalse(model.confirming, "nothing left to ask about")
+    }
+
     /// A refusal is the sheet's alone on either side of the confirmation: nothing was restored, so the
     /// banner has nothing to say, and the rows then say how the collection stands.
     func testARefusalIsTheSheetsAlone() throws {

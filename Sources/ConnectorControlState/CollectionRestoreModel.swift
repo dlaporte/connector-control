@@ -186,20 +186,45 @@ public final class CollectionRestoreModel: ObservableObject {
     /// Restore button's action, and the next `requestRestore()` replaces it anyway.
     public func cancelRestore() { confirming = false }
 
+    /// Opens the confirmation again on the plan `confirmRestore()` asked about anew, when there is one.
+    /// Platform idiom: SwiftUI may close the confirmation after its button's action has run, and so after
+    /// that action asked again, so the sheet calls this on the next turn; the Windows mirror's confirmation
+    /// is modal, and its Restore asks again in a loop.
+    public func askAgain() {
+        guard asked != nil else { return }
+        confirming = true
+    }
+
     /// The confirmation's Restore button: restore the bytes the tab read through AppState. True when
-    /// restored and the sheet should close.
+    /// restored and the sheet should close. The plan is worked out again first: one that differs from
+    /// what the confirmation showed, the collection having changed while it was up, is asked about
+    /// again with its own lines, never restored unseen.
     public func confirmRestore() -> Bool {
         confirming = false
         guard let asked else { return false }
         self.asked = nil
+        let plan: CollectionRestorePlan
+        do {
+            plan = try state.collectionRestorePlan(asked.collection, id: asked.backup.url.lastPathComponent, data: asked.backup.data)
+        } catch {
+            // The plan throws only its refusals, which are the sheet's alone, as the restore's are below.
+            refused(error, in: asked.backup)
+            return false
+        }
+        // Equal plans list the same lines under the same message.
+        guard plan == asked.plan else {
+            self.asked = (asked.backup, asked.collection, plan)
+            confirming = true
+            return false
+        }
         do {
             // Never nil here: bytes that could not be read give no plan, and none would restore anyway.
             try state.restoreCollection(asked.collection, from: asked.backup.url, data: asked.backup.data ?? Data())
             return true
         } catch let refusal as CollectionRestoreError {
             // A refusal is the sheet's alone, as the one before the confirmation is: nothing was
-            // restored, so there is nothing for the banner to say. It arrives here only when the
-            // collection changed while the confirmation was up.
+            // restored, so there is nothing for the banner to say. The plan worked out just above
+            // would have refused first.
             refused(refusal, in: asked.backup)
             return false
         } catch {
