@@ -811,6 +811,33 @@ public class ControlToolsSharingTests
         Assert.Equal(JsonValue.String("Work"), result.Structured.ValueAt(new JsonPointer(["activeCollection"])));
     }
 
+    /// <summary>A restore asked about a collection that is gone, and answered after it was created again, asks a
+    /// different question now (it is no longer created), so the Allow lands nothing.</summary>
+    [Fact]
+    public void ARestoreOfAGoneCollectionThatWasCreatedAgainWhileAskingLandsNothing()
+    {
+        using var rig = Rig(answer: null);
+        Assert.Null(rig.State.CreateActiveCopy("Work"));
+        Assert.Null(rig.State.Upsert("one", AppStateHarness.LocalConnector("node"), null));
+        rig.State.ApplyInteractively();
+        rig.State.SwitchCollection("Default");
+        var backup = rig.State.Service.Backups.Backups(RestoreModel.Series)
+            .First(path => BackupCollections.CollectionOf(path, rig.H.BackupsDir) == "Work");
+        Assert.Null(rig.State.DeleteCollection("Work"));
+        var answer = rig.Start("restore_backup", Args(("id", Text(Path.GetFileName(backup)))));
+        Assert.Equal(RestoreModel.Caption + " " + ControlTools.RestoreRecreatingText("Work"), rig.Confirmer.Requests[^1].Message);
+        Assert.Null(rig.State.AddEmptyCollection("Work"));
+        var store = rig.H.StoreOnDisk();
+        var claude = rig.H.ClaudeServers();
+        rig.Confirmer.Answer(true);
+        rig.H.Drain();
+        Assert.Equal(ControlResult.Refusal(ControlTools.ChangedWhileAskingError), answer.Result);
+        Assert.Equal("Default", rig.State.ActiveCollection);
+        // Nothing applied.
+        Assert.Equal(store, rig.H.StoreOnDisk());
+        Assert.Equal(claude, rig.H.ClaudeServers());
+    }
+
     /// <summary>A backup recorded under another spelling of a collection's name goes into the collection held: the
     /// question names it as held, and does not say it is created again.</summary>
     [Fact]

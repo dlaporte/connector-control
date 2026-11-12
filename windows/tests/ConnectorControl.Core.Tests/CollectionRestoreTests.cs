@@ -55,8 +55,8 @@ public class CollectionRestoreTests
     [Fact]
     public void AnotherSpellingOfANameIsTheSameConnector()
     {
-        var current = Of(("café", Entry("c")));
-        var restored = Of(("café", Entry("c")));
+        var current = Of(("caf\u00E9", Entry("c")));
+        var restored = Of(("cafe\u0301", Entry("c")));
         Assert.Equal(CollectionRestore.Changes(restored, restored), CollectionRestore.Changes(current, restored));
         Assert.True(CollectionRestore.Changes(current, restored).IsEmpty);
     }
@@ -65,7 +65,7 @@ public class CollectionRestoreTests
     [Fact]
     public void AConfigComposedAnotherWayIsAChange()
     {
-        var changes = CollectionRestore.Changes(Of(("a", Entry("café"))), Of(("a", Entry("café"))));
+        var changes = CollectionRestore.Changes(Of(("a", Entry("caf\u00E9"))), Of(("a", Entry("cafe\u0301"))));
         Assert.Equal(new CollectionRestore.Change.Changes(true), Assert.Single(changes.ByName).Value);
     }
 }

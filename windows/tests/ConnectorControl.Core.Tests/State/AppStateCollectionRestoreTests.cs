@@ -106,6 +106,8 @@ public class AppStateCollectionRestoreTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
+        // A backup from before Data team was subscribed, so it holds no such collection.
+        var early = Backup(h, state.Store, "mcps.2025-12-31T00-00-00-000Z.json");
         h.Subscribe(state, CollectionDocumentSamples.DataTeam);
         var taken = Backup(h, state.Store);
         var id = Path.GetFileName(taken.Path);
@@ -131,6 +133,9 @@ public class AppStateCollectionRestoreTests
         var notInBackup = Assert.IsType<CollectionNotInBackupException>(Refusal("Nope", taken.Data));
         Assert.Equal((id, "Nope"), (notInBackup.Id, notInBackup.Collection));
         Assert.Equal(AppState.CollectionNotInBackupError(id, "Nope"), notInBackup.Message);
+        // Not in the backup before subscribed.
+        var absent = Assert.IsType<CollectionNotInBackupException>(Refusal("Data team", early.Data));
+        Assert.Equal((id, "Data team"), (absent.Id, absent.Collection));
         // Subscribed before unchanged.
         var subscribed = Assert.IsType<RestoreCollectionSubscribedException>(Refusal("Data team", taken.Data));
         Assert.Equal("Data team", subscribed.Collection);
@@ -184,7 +189,7 @@ public class AppStateCollectionRestoreTests
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
-        const string composed = "Café", decomposed = "Café";
+        const string composed = "Caf\u00E9", decomposed = "Cafe\u0301";
         Assert.Null(state.AddEmptyCollection(composed));
         Assert.Null(state.Upsert("now", new McpEntry(Config("n")), null, composed));
         var then = new Collection([new KeyValuePair<string, McpEntry>("then", new McpEntry(Config("t")))]);
@@ -352,5 +357,33 @@ public class AppStateCollectionRestoreTests
         Assert.Equal("Default", state.PublishError?.Collection);
         Assert.Equal(AppState.UnreviewedConnectorError("extra"), state.PublishError?.Message);
         Assert.Equal(PublishErrorKind.BlockedForReview, state.PublishError?.Kind);
+    }
+
+    /// <summary>A connector with a marked path that comes back from the backup with a different config no longer
+    /// carries the path the mark placed: the restore lands in the store, and nothing reaches the folder.</summary>
+    [Fact]
+    public void AMarkedConnectorThatComesBackWithAnotherConfigIsHeldFromThePublishFolder()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        const string path = "/Users/d/ledger/dist/index.js", other = "/Users/d/ledger/old/index.js";
+        static McpEntry Ledger(string at) => new(JsonValue.Object(
+            ("command", JsonValue.String("node")), ("args", JsonValue.Array([JsonValue.String(at)]))));
+        Assert.Null(state.Upsert("ledger", Ledger(other), null));
+        var taken = Backup(h, state.Store);
+        Assert.Null(state.Upsert("ledger", Ledger(path), "ledger"));
+        var mark = new PublishIntent.PathMark("server_path", "your ledger clone", path);
+        var document = h.Publish(state, "Default", new PublishIntent(
+            [],
+            [new("ledger", new Dictionary<JsonPointer, PublishIntent.PathMark> { [new JsonPointer(["args", "0"])] = mark })],
+            []));
+        Assert.Null(state.PublishError);
+        var published = File.ReadAllBytes(document);
+
+        state.RestoreCollection("Default", taken.Path, taken.Data);
+        Assert.Equal(Ledger(other).Config, state.Store.Collections["Default"].Mcps["ledger"].Config);
+        Assert.Equal(published, File.ReadAllBytes(document));   // nothing reached the folder
+        Assert.Equal("Default", state.PublishError?.Collection);
+        Assert.Equal(AppState.PathMarkMovedError("ledger"), state.PublishError?.Message);
     }
 }

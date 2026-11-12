@@ -613,6 +613,29 @@ final class ControlToolsSharingTests: XCTestCase {
         XCTAssertEqual(result.structured.value(at: JSONPointer(["activeCollection"])), .string("Work"))
     }
 
+    /// A restore asked about a collection that is gone, and answered after it was created again, asks a
+    /// different question now (it is no longer created), so the Allow lands nothing.
+    func testARestoreOfAGoneCollectionThatWasCreatedAgainWhileAskingLandsNothing() throws {
+        let rig = rig(answer: nil); defer { rig.dispose() }
+        XCTAssertNil(rig.state.createActiveCopy(named: "Work"))
+        XCTAssertNil(rig.state.upsert(name: "one", entry: AppStateHarness.localConnector("node"), renamedFrom: nil))
+        rig.state.applyInteractively()
+        rig.state.switchCollection(to: "Default")
+        let backups = try rig.state.service.backups.backups(series: RestoreModel.series)
+        let backup = try XCTUnwrap(backups.first { BackupCollections.collection(of: $0, in: rig.h.backupsDir) == "Work" })
+        XCTAssertNil(rig.state.deleteCollection(named: "Work"))
+        let answer = rig.start("restore_backup", ["id": .string(backup.lastPathComponent)])
+        XCTAssertEqual(rig.confirmer.requests.last?.message, RestoreModel.caption + " " + ControlTools.restoreRecreatingText("Work"))
+        XCTAssertNil(rig.state.addEmptyCollection(named: "Work"))
+        let store = try rig.h.storeOnDisk(), claude = try rig.h.claudeServers()
+        rig.confirmer.answer(true)
+        rig.h.drain()
+        XCTAssertEqual(answer.result, .refusal(ControlTools.changedWhileAskingError))
+        XCTAssertEqual(rig.state.activeCollection, "Default")
+        XCTAssertEqual(try rig.h.storeOnDisk(), store, "nothing applied")
+        XCTAssertEqual(try rig.h.claudeServers(), claude)
+    }
+
     /// A backup recorded under another spelling of a collection's name goes into the collection held: the
     /// question names it as held, and does not say it is created again.
     func testRestoringABackupRecordedUnderAnotherSpellingGoesIntoTheOneHeld() throws {

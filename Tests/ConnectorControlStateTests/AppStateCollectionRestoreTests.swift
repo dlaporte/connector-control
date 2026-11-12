@@ -97,6 +97,8 @@ final class AppStateCollectionRestoreTests: XCTestCase {
     func testEachRefusalInOrder() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
+        // A backup from before Data team was subscribed, so it holds no such collection.
+        let early = try backup(h, of: state.store, named: "mcps.2025-12-31T00-00-00-000Z.json")
         try h.subscribe(state, to: CollectionDocumentSamples.dataTeam)
         let taken = try backup(h, of: state.store)
         let id = taken.url.lastPathComponent
@@ -117,6 +119,8 @@ final class AppStateCollectionRestoreTests: XCTestCase {
         }
         XCTAssertEqual(refusal("Data team", Data("{not json".utf8)), .backupUnreadable(id), "unreadable comes first")
         XCTAssertEqual(refusal("Nope", taken.data), .notInBackup(id: id, collection: "Nope"))
+        XCTAssertEqual(refusal("Data team", early.data), .notInBackup(id: id, collection: "Data team"),
+                       "not in the backup before subscribed")
         XCTAssertEqual(refusal("Data team", taken.data), .subscribed("Data team"), "subscribed before unchanged")
         XCTAssertEqual(refusal("Default", taken.data), .unchanged("Default"))
 
@@ -323,5 +327,30 @@ final class AppStateCollectionRestoreTests: XCTestCase {
         XCTAssertEqual(state.publishError?.collection, "Default")
         XCTAssertEqual(state.publishError?.message, AppState.unreviewedConnectorError("extra"))
         XCTAssertEqual(state.publishError?.kind, .blockedForReview)
+    }
+
+    /// A connector with a marked path that comes back from the backup with a different config no longer
+    /// carries the path the mark placed: the restore lands in the store, and nothing reaches the folder.
+    func testAMarkedConnectorThatComesBackWithAnotherConfigIsHeldFromThePublishFolder() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        let path = "/Users/d/ledger/dist/index.js", other = "/Users/d/ledger/old/index.js"
+        func ledger(_ at: String) -> MCPEntry {
+            MCPEntry(config: .object(["command": .string("node"), "args": .array([.string(at)])]))
+        }
+        XCTAssertNil(state.upsert(name: "ledger", entry: ledger(other), renamedFrom: nil))
+        let taken = try backup(h, of: state.store)
+        XCTAssertNil(state.upsert(name: "ledger", entry: ledger(path), renamedFrom: "ledger"))
+        let intent = PublishIntent(shareValues: [:], pathMarks: ["ledger": [JSONPointer(["args", "0"]):
+            .init(name: "server_path", hint: "your ledger clone", value: path)]], hints: [:])
+        let document = try h.publish(state, "Default", intent: intent)
+        XCTAssertNil(state.publishError)
+        let published = try Data(contentsOf: document)
+
+        try state.restoreCollection("Default", from: taken.url, data: taken.data)
+        XCTAssertEqual(state.store.collections["Default"]?.mcps["ledger"], ledger(other))
+        XCTAssertEqual(try Data(contentsOf: document), published, "nothing reached the folder")
+        XCTAssertEqual(state.publishError?.collection, "Default")
+        XCTAssertEqual(state.publishError?.message, AppState.pathMarkMovedError("ledger"))
     }
 }
