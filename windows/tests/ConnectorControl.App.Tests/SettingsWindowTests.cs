@@ -360,7 +360,10 @@ public class SettingsWindowTests
                 WindowTestSupport.Layout(dialog, new Size(460, 700));
                 var personal = dialog.CollectionList.Items.Cast<CollectionRestoreModel.Row>().Single(r => r.Name == "Personal");
                 Assert.Equal(CollectionRestoreModel.RowState.Gone, personal.State);
-                var container = (ListBoxItem)dialog.CollectionList.ItemContainerGenerator.ContainerFromItem(personal);
+                dialog.CollectionList.ScrollIntoView(personal);
+                dialog.CollectionList.UpdateLayout();   // an unshown window realizes its rows only on a layout of the list
+                var container = dialog.CollectionList.ItemContainerGenerator.ContainerFromItem(personal) as ListBoxItem;
+                Assert.NotNull(container);
                 Assert.Equal(personal.SpokenName, AutomationProperties.GetName(container));
                 Assert.False(dialog.RestoreButton.IsEnabled);   // no collection chosen yet
 
