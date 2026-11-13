@@ -173,6 +173,8 @@ public class ControlToolsCollectionRestoreTests
         var id = Backup(rig, rig.State.Store);
         var store = rig.H.StoreOnDisk();
         var files = CollectionBackupFiles(rig);
+        var pins = Path.Combine(rig.H.BackupsDir, BackupPins.FileName);
+        var pinned = File.Exists(pins) ? File.ReadAllBytes(pins) : null;
         rig.H.ClaudeRunningSince(hours: 1);
         rig.H.Settings.LastApplyDate = null;
         rig.State.RefreshRestartState();
@@ -189,6 +191,8 @@ public class ControlToolsCollectionRestoreTests
         Assert.Equal(held, rig.State.Store.Collections["Default"]);
         // Nothing saved.
         Assert.Equal(files, CollectionBackupFiles(rig));
+        // Nothing pinned.
+        Assert.Equal(pinned, File.Exists(pins) ? File.ReadAllBytes(pins) : null);
     }
 
     /// <summary>The collection Claude runs, already as the backup holds it, with no connector on: allowed, a write of
@@ -220,35 +224,87 @@ public class ControlToolsCollectionRestoreTests
     }
 
     /// <summary>Claude can't see a value, so a right guess at one leaves the collection as the backup holds it and a
-    /// wrong one doesn't: both restores get the same answer, restart and all, whether the connector holding the value
-    /// is on or off, and whether the collection is the one Claude runs.</summary>
+    /// wrong one doesn't: both restores get the same answer and the same notification, restart and all, and write
+    /// Claude's config alike, whether the connector holding the value is on or off, whether the collection is the one
+    /// Claude runs, and whether any of its connectors is on. Nobody is asked, so each restore is announced.</summary>
     [Theory]
-    [InlineData("Default", false)]
-    [InlineData("Default", true)]
-    [InlineData("Work", true)]
-    public void AnUnchangedRestoreIsAnsweredAsOneThatChangesSomething(string collection, bool on)
+    [InlineData("Default", false, true)]
+    [InlineData("Default", true, true)]
+    [InlineData("Work", true, true)]
+    [InlineData("Default", false, false)]
+    public void AnUnchangedRestoreIsAnsweredAsOneThatChangesSomething(string collection, bool on, bool othersOn)
     {
-        using var rig = Rig();
+        using var rig = new ControlRig(confirm: false);
         if (collection != "Default")
         {
             Assert.Null(rig.State.AddEmptyCollection(collection));
         }
-        Assert.Contains(rig.State.Store.Collections["Default"].Mcps.Values, entry => entry.Enabled);
+        if (!othersOn)
+        {
+            foreach (var name in rig.State.Store.Collections["Default"].Mcps.Where(p => p.Value.Enabled).Select(p => p.Key).ToList())
+            {
+                rig.State.SetEnabled(name, false);
+            }
+        }
+        Assert.Equal(othersOn, rig.State.Store.Collections["Default"].Mcps.Values.Any(entry => entry.Enabled));
         Assert.Null(rig.State.Upsert("vault", Vault(Secret, on), null, collection));
         rig.State.ApplyInteractively();
         var id = Backup(rig, rig.State.Store);
         rig.H.ClaudeRunningSince(hours: 1);
-        rig.State.RefreshRestartState();
-        var right = rig.Call("restore_collection", Arguments(id, collection));
-        Assert.NotNull(right);
+        // Each restore as Claude would meet it: no write of Claude's config since Claude started.
+        (ControlResult Result, List<(string Title, string Body, string? Category)> Sent, bool Wrote) Restore()
+        {
+            rig.H.Settings.LastApplyDate = null;
+            rig.State.RefreshRestartState();
+            rig.H.Notifier.Sent.Clear();
+            var result = rig.Call("restore_collection", Arguments(id, collection));
+            Assert.NotNull(result);
+            return (result, [.. rig.H.Notifier.Sent], rig.H.Settings.LastApplyDate is not null);
+        }
+        var right = Restore();
         Assert.Null(rig.State.Upsert("vault", Vault("guess", on), "vault", collection));
         rig.State.ApplyInteractively();
-        var wrong = rig.Call("restore_collection", Arguments(id, collection));
+        var wrong = Restore();
         Assert.Equal(Vault(Secret, on), rig.State.Store.Collections[collection].Mcps["vault"]);
-        // The same answer.
-        Assert.Equal(right, wrong);
-        Assert.Equal(collection == "Default" ? ControlTools.RestoredText(collection) + " " + ControlTools.RestartToApplyText
-                                             : ControlTools.RestoredText(collection), right.Text);
+        // The same answer and the same notification.
+        Assert.Equal(right.Result, wrong.Result);
+        Assert.Equal(right.Sent, wrong.Sent);
+        Assert.Equal([ControlTools.RestoredNotification(ControlCaller.ClaudeName, collection)
+                      + (right.Wrote ? " " + ControlTools.RestartToApplyText : "")], right.Sent.Select(sent => sent.Body));
+        // Claude's config written alike.
+        var writes = collection == "Default" && (on || othersOn);
+        Assert.Equal(writes, right.Wrote);
+        Assert.Equal(writes, wrong.Wrote);
+        Assert.Equal(writes ? ControlTools.RestoredText(collection) + " " + ControlTools.RestartToApplyText
+                            : ControlTools.RestoredText(collection), right.Result.Text);
+    }
+
+    /// <summary>The command line is the user, who sees every value: a restore of the collection Claude runs that changes
+    /// only a connector that is off leaves Claude's config alone, as any change Claude doesn't run does, and says nothing
+    /// about a restart.</summary>
+    [Fact]
+    public void ACommandLineRestoreThatChangesOnlyAConnectorThatIsOffLeavesClaudesConfigAlone()
+    {
+        using var rig = Rig();
+        Assert.Contains(rig.State.Store.Collections["Default"].Mcps.Values, entry => entry.Enabled);
+        Assert.Null(rig.State.Upsert("vault", Vault(Secret, on: false), null));
+        var id = Backup(rig, rig.State.Store);
+        Assert.Null(rig.State.Upsert("vault", Vault("other", on: false), "vault"));
+        rig.State.ApplyInteractively();
+        rig.H.ClaudeRunningSince(hours: 1);
+        rig.H.Settings.LastApplyDate = null;
+        rig.State.RefreshRestartState();
+        var claude = rig.H.ClaudeServers();
+        Assert.Equal(new ControlResult(JsonValue.Object(
+            ("id", JsonValue.String(id)), ("collection", JsonValue.String("Default")), ("activeCollection", JsonValue.String("Default")),
+            ("restartRequired", JsonValue.Bool(false)), ("applied", JsonValue.Bool(true))),
+            ControlTools.RestoredText("Default"), false), rig.Call("restore_collection", Arguments(id, "Default"), new ControlCaller.Cli()));
+        // Restored.
+        Assert.Equal(Vault(Secret, on: false), rig.State.Store.Collections["Default"].Mcps["vault"]);
+        // Claude's config was not written.
+        Assert.Null(rig.H.Settings.LastApplyDate);
+        Assert.Equal(claude, rig.H.ClaudeServers());
+        Assert.Empty(rig.Confirmer.Requests);
     }
 
     /// <summary>The guess end to end: Claude sets a variable to the value it already holds, which is asked and answered

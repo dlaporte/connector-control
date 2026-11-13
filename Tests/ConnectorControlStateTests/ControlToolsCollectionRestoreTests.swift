@@ -158,6 +158,8 @@ final class ControlToolsCollectionRestoreTests: XCTestCase {
         XCTAssertTrue(held.mcps.values.contains(where: \.enabled))
         let id = try backup(rig, of: rig.state.store)
         let store = try rig.h.storeOnDisk(), files = try collectionBackupFiles(rig)
+        let pins = rig.h.backupsDir.appendingPathComponent(BackupPins.fileName)
+        let pinned = try? Data(contentsOf: pins)
         rig.h.claudeRunningSince(hours: 1)
         rig.h.settings.lastApplyDate = nil
         rig.state.refreshRestartState()
@@ -171,6 +173,7 @@ final class ControlToolsCollectionRestoreTests: XCTestCase {
         XCTAssertEqual(try rig.h.storeOnDisk(), store)
         XCTAssertEqual(rig.state.store.collections["Default"], held)
         XCTAssertEqual(try collectionBackupFiles(rig), files, "nothing saved")
+        XCTAssertEqual(try? Data(contentsOf: pins), pinned, "nothing pinned")
     }
 
     /// The collection Claude runs, already as the backup holds it, with no connector on: allowed, a write of
@@ -198,28 +201,72 @@ final class ControlToolsCollectionRestoreTests: XCTestCase {
     }
 
     /// Claude can't see a value, so a right guess at one leaves the collection as the backup holds it and a
-    /// wrong one doesn't: both restores get the same answer, restart and all, whether the connector holding
-    /// the value is on or off, and whether the collection is the one Claude runs.
+    /// wrong one doesn't: both restores get the same answer and the same notification, restart and all, and
+    /// write Claude's config alike, whether the connector holding the value is on or off, whether the
+    /// collection is the one Claude runs, and whether any of its connectors is on. Nobody is asked, so each
+    /// restore is announced.
     func testAnUnchangedRestoreIsAnsweredAsOneThatChangesSomething() throws {
-        for (collection, on) in [("Default", false), ("Default", true), ("Work", true)] {
-            let rig = rig(); defer { rig.dispose() }
+        for (collection, on, othersOn) in [("Default", false, true), ("Default", true, true), ("Work", true, true), ("Default", false, false)] {
+            let rig = ControlRig(confirm: false); defer { rig.dispose() }
             if collection != "Default" { XCTAssertNil(rig.state.addEmptyCollection(named: collection)) }
-            XCTAssertTrue(rig.state.store.collections["Default"]?.mcps.values.contains(where: \.enabled) == true)
+            if !othersOn {
+                for (name, entry) in try XCTUnwrap(rig.state.store.collections["Default"]).mcps where entry.enabled {
+                    rig.state.setEnabled(name, false)
+                }
+            }
+            XCTAssertEqual(rig.state.store.collections["Default"]?.mcps.values.contains(where: \.enabled), othersOn)
             XCTAssertNil(rig.state.upsert(name: "vault", entry: vault(secret, on: on), renamedFrom: nil, in: collection))
             rig.state.applyInteractively()
             let id = try backup(rig, of: rig.state.store)
             rig.h.claudeRunningSince(hours: 1)
-            rig.state.refreshRestartState()
-            let right = try XCTUnwrap(rig.call("restore_collection", arguments(id, collection)))
+            // Each restore as Claude would meet it: no write of Claude's config since Claude started.
+            func restore() throws -> (result: ControlResult, sent: [FakeNotifier.Sent], wrote: Bool) {
+                rig.h.settings.lastApplyDate = nil
+                rig.state.refreshRestartState()
+                rig.h.notifier.clearSent()
+                let result = try XCTUnwrap(rig.call("restore_collection", arguments(id, collection)))
+                return (result, rig.h.notifier.sent, rig.h.settings.lastApplyDate != nil)
+            }
+            let right = try restore()
             XCTAssertNil(rig.state.upsert(name: "vault", entry: vault("guess", on: on), renamedFrom: "vault", in: collection))
             rig.state.applyInteractively()
-            let wrong = try XCTUnwrap(rig.call("restore_collection", arguments(id, collection)))
-            let shown = "\(collection), \(on ? "on" : "off")"
+            let wrong = try restore()
+            let shown = "\(collection), \(on ? "on" : "off"), \(othersOn ? "others on" : "others off")"
             XCTAssertEqual(rig.state.store.collections[collection]?.mcps["vault"], vault(secret, on: on), shown)
-            XCTAssertEqual(right, wrong, "\(shown): the same answer")
-            XCTAssertEqual(right.text, collection == "Default" ? ControlTools.restoredText(collection) + " " + ControlTools.restartToApplyText
-                                                               : ControlTools.restoredText(collection), shown)
+            XCTAssertEqual(right.result, wrong.result, "\(shown): the same answer")
+            XCTAssertEqual(right.sent, wrong.sent, "\(shown): the same notification")
+            XCTAssertEqual(right.sent.map(\.body), [ControlTools.restoredNotification(ControlCaller.claudeName, collection)
+                                                    + (right.wrote ? " " + ControlTools.restartToApplyText : "")], shown)
+            let writes = collection == "Default" && (on || othersOn)
+            XCTAssertEqual(right.wrote, writes, "\(shown): Claude's config written")
+            XCTAssertEqual(wrong.wrote, writes, "\(shown): Claude's config written")
+            XCTAssertEqual(right.result.text, writes ? ControlTools.restoredText(collection) + " " + ControlTools.restartToApplyText
+                                                     : ControlTools.restoredText(collection), shown)
         }
+    }
+
+    /// The command line is the user, who sees every value: a restore of the collection Claude runs that
+    /// changes only a connector that is off leaves Claude's config alone, as any change Claude doesn't run
+    /// does, and says nothing about a restart.
+    func testACommandLineRestoreThatChangesOnlyAConnectorThatIsOffLeavesClaudesConfigAlone() throws {
+        let rig = rig(); defer { rig.dispose() }
+        XCTAssertTrue(rig.state.store.collections["Default"]?.mcps.values.contains(where: \.enabled) == true)
+        XCTAssertNil(rig.state.upsert(name: "vault", entry: vault(secret, on: false), renamedFrom: nil))
+        let id = try backup(rig, of: rig.state.store)
+        XCTAssertNil(rig.state.upsert(name: "vault", entry: vault("other", on: false), renamedFrom: "vault"))
+        rig.state.applyInteractively()
+        rig.h.claudeRunningSince(hours: 1)
+        rig.h.settings.lastApplyDate = nil
+        rig.state.refreshRestartState()
+        let claude = try rig.h.claudeServers()
+        XCTAssertEqual(rig.call("restore_collection", arguments(id, "Default"), as: .cli), ControlResult(structured: .object([
+            "id": .string(id), "collection": .string("Default"), "activeCollection": .string("Default"),
+            "restartRequired": .bool(false), "applied": .bool(true),
+        ]), text: ControlTools.restoredText("Default"), isError: false))
+        XCTAssertEqual(rig.state.store.collections["Default"]?.mcps["vault"], vault(secret, on: false), "restored")
+        XCTAssertNil(rig.h.settings.lastApplyDate, "Claude's config was not written")
+        XCTAssertEqual(try rig.h.claudeServers(), claude)
+        XCTAssertTrue(rig.confirmer.requests.isEmpty)
     }
 
     /// The guess end to end: Claude sets a variable to the value it already holds, which is asked and
