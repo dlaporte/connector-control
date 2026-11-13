@@ -173,6 +173,30 @@ final class ControlToolsCollectionRestoreTests: XCTestCase {
         XCTAssertEqual(try collectionBackupFiles(rig), files, "nothing saved")
     }
 
+    /// The collection Claude runs, already as the backup holds it, with no connector on: allowed, a write of
+    /// Claude's config that failed earlier is tried again, as a restore that changed the collection would try
+    /// it, and the answer says it reached Claude.
+    func testAnUnchangedActiveCollectionTriesAFailedWriteAgain() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let block = try WriteBlock(rig.h.claudeConfigURL)
+        defer { block.dispose() }
+        XCTAssertTrue(block.isEffective)
+        for (name, entry) in try XCTUnwrap(rig.state.store.collections["Default"]).mcps where entry.enabled {
+            rig.state.setEnabled(name, false)
+        }
+        XCTAssertTrue(rig.state.applyRetryNeeded)
+        block.dispose()
+        let held = try XCTUnwrap(rig.state.store.collections["Default"])
+        let id = try backup(rig, of: rig.state.store)
+        let result = try XCTUnwrap(rig.call("restore_collection", arguments(id, "Default")))
+        XCTAssertEqual(rig.confirmer.requests.last?.code, [CollectionRestoreModel.unchangedLine(held.mcps.count)])
+        XCTAssertEqual(result.text, ControlTools.restoredText("Default"))
+        XCTAssertEqual(result.structured.value(at: JSONPointer(["applied"])), .bool(true))
+        XCTAssertFalse(rig.state.applyRetryNeeded)
+        XCTAssertEqual(Set(try rig.h.claudeServers().keys), [ClaudeIntegration.entryName], "Claude's config was written")
+        XCTAssertEqual(rig.state.store.collections["Default"], held)
+    }
+
     /// Claude can't see a value, so a right guess at one leaves the collection as the backup holds it and a
     /// wrong one doesn't: both restores get the same answer, restart and all, whether the connector holding
     /// the value is on or off, and whether the collection is the one Claude runs.

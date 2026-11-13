@@ -191,6 +191,34 @@ public class ControlToolsCollectionRestoreTests
         Assert.Equal(files, CollectionBackupFiles(rig));
     }
 
+    /// <summary>The collection Claude runs, already as the backup holds it, with no connector on: allowed, a write of
+    /// Claude's config that failed earlier is tried again, as a restore that changed the collection would try it, and
+    /// the answer says it reached Claude.</summary>
+    [Fact]
+    public void AnUnchangedActiveCollectionTriesAFailedWriteAgain()
+    {
+        using var rig = Rig();
+        using var block = new WriteBlock(rig.H.ClaudeConfigPath);
+        Assert.True(block.IsEffective);
+        foreach (var name in rig.State.Store.Collections["Default"].Mcps.Where(p => p.Value.Enabled).Select(p => p.Key).ToList())
+        {
+            rig.State.SetEnabled(name, false);
+        }
+        Assert.True(rig.State.ApplyRetryNeeded);
+        block.Dispose();
+        var held = rig.State.Store.Collections["Default"].Clone();
+        var id = Backup(rig, rig.State.Store);
+        var result = rig.Call("restore_collection", Arguments(id, "Default"));
+        Assert.NotNull(result);
+        Assert.Equal([CollectionRestoreModel.UnchangedLine(held.Mcps.Count)], rig.Confirmer.Requests[^1].Code);
+        Assert.Equal(ControlTools.RestoredText("Default"), result.Text);
+        Assert.Equal(JsonValue.Bool(true), result.Structured.ValueAt(new JsonPointer(["applied"])));
+        Assert.False(rig.State.ApplyRetryNeeded);
+        // Claude's config was written.
+        Assert.Equal([ClaudeIntegration.EntryName], rig.H.ClaudeServers().Keys);
+        Assert.Equal(held, rig.State.Store.Collections["Default"]);
+    }
+
     /// <summary>Claude can't see a value, so a right guess at one leaves the collection as the backup holds it and a
     /// wrong one doesn't: both restores get the same answer, restart and all, whether the connector holding the value
     /// is on or off, and whether the collection is the one Claude runs.</summary>
