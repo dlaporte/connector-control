@@ -624,8 +624,9 @@ what it brings; a restore lists the connectors it would put back, and a
 collection restore marks each connector + (comes back) or ~ (changes), with
 its switch, or − (goes), and counts the rest as unchanged; a restore Claude
 asks for of the active collection, with a connector on, writes Claude's
-config again whatever it changes, so **Restart Required** appears. Each line
-of what would run is selected and copied one line at a time.
+config again whatever it changes, so **Restart Required** appears while
+Claude runs. Each line of what would run is selected and copied one line at a
+time.
 
 **Don’t Allow** is the default, and Return answers it, as Escape does. One
 question is asked at a time; Claude's other changes wait their turn. After
@@ -1292,10 +1293,13 @@ that no file in the repository contains an em-dash.
   then shows the line as changed, both − and + reading `••• (set)`, and
   neither value. A value that really is one of those words can still be typed
   in the editor.
-- Claude can't tell from a collection restore's question or reply whether a
-  value it can't see differs from the backup: a restore with nothing to change
-  is asked and answered like any other. It can still tell from the backups
-  listed afterwards whether a restore you allowed changed anything.
+- Claude can't tell from a question or a reply whether a value it can't see
+  matched its guess: a change or a collection restore with nothing to change
+  is asked and answered like any other. It can tell from the backups
+  `list_backups` shows: a change you allow is backed up only when it differs
+  from the last backup, so two changes Claude asks for in a row, or a
+  collection restore, can show whether its guess matched. Each try needs your
+  Allow, and a wrong guess replaces the real value.
 - A restore asks with the names of the connectors it would put back, and a
   collection restore with their names and switches, never their settings. A
   backup someone else planted in your backups folder could carry commands
