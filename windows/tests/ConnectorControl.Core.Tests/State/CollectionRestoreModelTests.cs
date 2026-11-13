@@ -205,10 +205,11 @@ public class CollectionRestoreModelTests
     }
 
     /// <summary>The collection changed while the confirmation was up, so the restore would do what the confirmation
-    /// didn't show: nothing is restored, and the confirmation asks again with the new lines. Confirming that one
-    /// restores.</summary>
+    /// didn't show: nothing is restored, the dialog's failure line says so, not the banner, no confirmation opens
+    /// again, and the rows say how the collections stand now. Restore then asks with the new lines, and confirming
+    /// that one restores.</summary>
     [Fact]
-    public void APlanThatChangedWhileConfirmingIsAskedAgain()
+    public void APlanThatChangedWhileConfirmingRestoresNothingAndSaysSo()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -218,24 +219,29 @@ public class CollectionRestoreModelTests
         model.Load();
         Choose(path, model);
         model.Collection = "Personal";
+        var banner = state.LastError;
         var closed = 0;
         model.CloseRequested += () => closed++;
-        h.Dialogs.DuringConfirm = () =>
-        {
-            if (h.Dialogs.Confirms.Count == 1)
-            {
-                Assert.Null(state.Upsert("late", Entry("late"), null, "Personal"));
-            }
-            else
-            {
-                // Nothing restored.
-                Assert.Equal(["added", "late", "notes"], state.Store.Collections["Personal"].Mcps.Keys.Order(StringComparer.Ordinal));
-            }
-        };
+        h.Dialogs.DuringConfirm = () => Assert.Null(state.DeleteCollection("Personal"));
+        Assert.False(model.Restore());
+        // No confirmation opens again.
+        Assert.Equal("− added\n= 1 unchanged", Assert.Single(h.Dialogs.Confirms).Informative);
+        // Nothing restored.
+        Assert.False(state.Store.Collections.ContainsKey("Personal"));
+        Assert.Equal(CollectionRestoreModel.ChangedWhileAskingError("Personal"), model.RestoreError);
+        Assert.Equal(banner, state.LastError);   // the dialog's alone
+        // The rows are read again.
+        Assert.Equal(CollectionRestoreModel.RowState.Gone, model.Rows.First(r => r.Name == "Personal").State);
+        Assert.Equal("Personal", model.Collection);   // still chosen
+        Assert.True(model.CanRestore);
+        Assert.Equal(0, closed);
+
+        h.Dialogs.DuringConfirm = null;
         Assert.True(model.Restore());
-        Assert.Equal(["− added\n= 1 unchanged", "− added\n− late\n= 1 unchanged"], h.Dialogs.Confirms.Select(c => c.Informative));
-        Assert.Null(model.RestoreError);
+        Assert.Equal(2, h.Dialogs.Confirms.Count);
+        Assert.Equal("+ notes (off)\n\n“Personal” no longer exists, so it is created again.", h.Dialogs.Confirms[^1].Informative);
         Assert.Equal(held, state.Store.Collections["Personal"]);
+        Assert.Null(model.RestoreError);
         Assert.Equal(1, closed);
     }
 

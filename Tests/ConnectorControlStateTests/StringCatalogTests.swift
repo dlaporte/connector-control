@@ -94,6 +94,7 @@ final class StringCatalogTests: XCTestCase {
         "ClaudeSignature.notFoundMessage": ["X"],
         "ClaudeSignature.refusalMessage": ["X", "Y"],
         "ClaudeSignature.uninspectableMessage": ["X"],
+        "CollectionRestoreModel.changedWhileAskingError": ["X"],
         "CollectionRestoreModel.changesLine.off": ["X"],
         "CollectionRestoreModel.changesLine.on": ["X"],
         "CollectionRestoreModel.comesBackLine.off": ["X"],
@@ -416,6 +417,7 @@ final class StringCatalogTests: XCTestCase {
 
         actual["CollectionRestoreModel.activeInformative"] = CollectionRestoreModel.activeInformative
         actual["CollectionRestoreModel.caption"] = CollectionRestoreModel.caption
+        actual["CollectionRestoreModel.changedWhileAskingError"] = CollectionRestoreModel.changedWhileAskingError("X")
         actual["CollectionRestoreModel.changesLine.off"] = CollectionRestoreModel.changesLine("X", false)
         actual["CollectionRestoreModel.changesLine.on"] = CollectionRestoreModel.changesLine("X", true)
         actual["CollectionRestoreModel.comesBackLine.off"] = CollectionRestoreModel.comesBackLine("X", false)

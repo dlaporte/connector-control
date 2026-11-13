@@ -100,6 +100,7 @@ public class StringCatalogTests
         ["ClaudeProcess.notAClaudePackageError"] = ["X"],
         ["ClaudePublisher.subjectNoOrganizationError"] = ["X", "Y"],
         ["ClaudeSignature.notFoundMessage"] = ["X"],
+        ["CollectionRestoreModel.changedWhileAskingError"] = ["X"],
         ["CollectionRestoreModel.changesLine.off"] = ["X"],
         ["CollectionRestoreModel.changesLine.on"] = ["X"],
         ["CollectionRestoreModel.comesBackLine.off"] = ["X"],
@@ -440,6 +441,7 @@ public class StringCatalogTests
 
         actual["CollectionRestoreModel.activeInformative"] = CollectionRestoreModel.ActiveInformative;
         actual["CollectionRestoreModel.caption"] = CollectionRestoreModel.Caption;
+        actual["CollectionRestoreModel.changedWhileAskingError"] = CollectionRestoreModel.ChangedWhileAskingError("X");
         actual["CollectionRestoreModel.changesLine.off"] = CollectionRestoreModel.ChangesLine("X", false);
         actual["CollectionRestoreModel.changesLine.on"] = CollectionRestoreModel.ChangesLine("X", true);
         actual["CollectionRestoreModel.comesBackLine.off"] = CollectionRestoreModel.ComesBackLine("X", false);

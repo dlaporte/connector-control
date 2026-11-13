@@ -28,6 +28,7 @@ public sealed class CollectionRestoreModel : ObservableObject
 
     public static string ConfirmMessage(string collection, string time) => $"Restore “{collection}” as it was at {time}?";
     public static string CreatedInformative(string collection) => $"“{collection}” no longer exists, so it is created again.";
+    public static string ChangedWhileAskingError(string collection) => $"“{collection}” changed while you were asked, so nothing was restored. Choose Restore again to see what it would change now.";
 
     public static string ComesBackLine(string name, bool on) => on ? $"+ {name} (on)" : $"+ {name} (off)";
     public static string ChangesLine(string name, bool on) => on ? $"~ {name} (on)" : $"~ {name} (off)";
@@ -214,8 +215,8 @@ public sealed class CollectionRestoreModel : ObservableObject
     /// <summary>The Restore button: confirm, then restore the bytes the tab read through AppState. A restore
     /// AppState would refuse says why at once, rather than after a confirmation it could never honour. The plan is
     /// worked out again once confirmed: one that differs from what the confirmation showed, the collection having
-    /// changed while it was up, is asked about again with its own lines, never restored unseen. True when restored
-    /// and closing.</summary>
+    /// changed while it was up, is never restored unseen. Nothing is restored, the failure line says so and the rows
+    /// say how the collections stand now; Restore then asks with the new lines. True when restored and closing.</summary>
     public bool Restore()
     {
         if (SelectedBackup is not { } backup || collection is not { } chosen)
@@ -234,28 +235,27 @@ public sealed class CollectionRestoreModel : ObservableObject
             Refused(refusal, backup);
             return false;
         }
-        while (true)
+        if (!dialogs.Confirm(ConfirmMessage(plan.Collection, backup.Label), Informative(plan), RestoreModel.RestoreButton, destructive: true))
         {
-            if (!dialogs.Confirm(ConfirmMessage(plan.Collection, backup.Label), Informative(plan), RestoreModel.RestoreButton, destructive: true))
-            {
-                return false;
-            }
-            CollectionRestorePlan confirmed;
-            try
-            {
-                confirmed = state.CollectionRestorePlan(chosen, id, backup.Data);
-            }
-            catch (CollectionRestoreException refusal)
-            {
-                Refused(refusal, backup);
-                return false;
-            }
-            // Equal plans list the same lines under the same message; record equality compares the changes by value.
-            if (confirmed == plan)
-            {
-                break;
-            }
-            plan = confirmed;
+            return false;
+        }
+        CollectionRestorePlan confirmed;
+        try
+        {
+            confirmed = state.CollectionRestorePlan(chosen, id, backup.Data);
+        }
+        catch (CollectionRestoreException refusal)
+        {
+            Refused(refusal, backup);
+            return false;
+        }
+        // Equal plans list the same lines under the same message; record equality compares the changes by value. A
+        // change is the dialog's alone, as a refusal is: nothing was restored, so there is nothing for the banner to say.
+        if (confirmed != plan)
+        {
+            RestoreError = ChangedWhileAskingError(plan.Collection);
+            Rows = RowsOf(backup);
+            return false;
         }
         try
         {

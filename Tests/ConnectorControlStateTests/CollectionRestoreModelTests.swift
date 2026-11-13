@@ -189,9 +189,10 @@ final class CollectionRestoreModelTests: XCTestCase {
     }
 
     /// The collection changed while the confirmation was up, so the restore would do what the confirmation
-    /// didn't show: nothing is restored, and the confirmation asks again with the new lines. Confirming
-    /// that one restores.
-    func testAPlanThatChangedWhileConfirmingIsAskedAgain() throws {
+    /// didn't show: nothing is restored, the sheet's failure line says so, not the banner, no confirmation
+    /// opens again, and the rows say how the collections stand now. Restore then asks with the new lines,
+    /// and confirming that one restores.
+    func testAPlanThatChangedWhileConfirmingRestoresNothingAndSaysSo() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         let url = try stagedBackup(h, state)
@@ -200,24 +201,27 @@ final class CollectionRestoreModelTests: XCTestCase {
         model.load()
         choose(url, in: model)
         model.collection = "Personal"
+        let banner = state.lastError
         model.requestRestore()
         XCTAssertEqual(model.confirmInformative, "− added\n= 1 unchanged")
-        XCTAssertNil(state.upsert(name: "late", entry: entry("late"), renamedFrom: nil, in: "Personal"))
+        XCTAssertNil(state.deleteCollection(named: "Personal"))
         XCTAssertFalse(model.confirmRestore())
-        XCTAssertEqual(state.store.collections["Personal"]?.mcps.keys.sorted(), ["added", "late", "notes"], "nothing restored")
+        XCTAssertNil(state.store.collections["Personal"], "nothing restored")
+        XCTAssertFalse(model.confirming, "no confirmation opens again")
+        XCTAssertEqual(model.restoreError, CollectionRestoreModel.changedWhileAskingError("Personal"))
+        XCTAssertEqual(state.lastError, banner, "the sheet's alone")
+        XCTAssertEqual(model.rows.first { $0.name == "Personal" }?.state, .gone, "the rows are read again")
+        XCTAssertEqual(model.collection, "Personal", "still chosen")
+        XCTAssertTrue(model.canRestore)
+
+        model.requestRestore()
         XCTAssertTrue(model.confirming)
-        XCTAssertEqual(model.confirmInformative, "− added\n− late\n= 1 unchanged")
         XCTAssertNil(model.restoreError)
-        // SwiftUI may close the confirmation after the button's action; the sheet then asks again.
-        model.cancelRestore()
-        model.askAgain()
-        XCTAssertTrue(model.confirming)
-        XCTAssertEqual(model.confirmInformative, "− added\n− late\n= 1 unchanged")
+        XCTAssertEqual(model.confirmInformative, "+ notes (off)\n\n“Personal” no longer exists, so it is created again.")
         XCTAssertTrue(model.confirmRestore())
         XCTAssertFalse(model.confirming)
         XCTAssertEqual(state.store.collections["Personal"], held)
-        model.askAgain()
-        XCTAssertFalse(model.confirming, "nothing left to ask about")
+        XCTAssertNil(model.restoreError)
     }
 
     /// A refusal is the sheet's alone on either side of the confirmation: nothing was restored, so the

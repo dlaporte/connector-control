@@ -33,6 +33,8 @@ public final class CollectionRestoreModel: ObservableObject {
 
     nonisolated public static func createdInformative(_ collection: String) -> String { "“\(collection)” no longer exists, so it is created again." }
 
+    nonisolated public static func changedWhileAskingError(_ collection: String) -> String { "“\(collection)” changed while you were asked, so nothing was restored. Choose Restore again to see what it would change now." }
+
     nonisolated public static func comesBackLine(_ name: String, _ on: Bool) -> String { on ? "+ \(name) (on)" : "+ \(name) (off)" }
 
     nonisolated public static func changesLine(_ name: String, _ on: Bool) -> String { on ? "~ \(name) (on)" : "~ \(name) (off)" }
@@ -186,19 +188,11 @@ public final class CollectionRestoreModel: ObservableObject {
     /// Restore button's action, and the next `requestRestore()` replaces it anyway.
     public func cancelRestore() { confirming = false }
 
-    /// Opens the confirmation again on the plan `confirmRestore()` asked about anew, when there is one.
-    /// Platform idiom: SwiftUI may close the confirmation after its button's action has run, and so after
-    /// that action asked again, so the sheet calls this on the next turn; the Windows mirror's confirmation
-    /// is modal, and its Restore asks again in a loop.
-    public func askAgain() {
-        guard asked != nil else { return }
-        confirming = true
-    }
-
     /// The confirmation's Restore button: restore the bytes the tab read through AppState. True when
     /// restored and the sheet should close. The plan is worked out again first: one that differs from
-    /// what the confirmation showed, the collection having changed while it was up, is asked about
-    /// again with its own lines, never restored unseen.
+    /// what the confirmation showed, the collection having changed while it was up, is never restored
+    /// unseen. Nothing is restored, the failure line says so and the rows say how the collections stand
+    /// now; Restore then asks with the new lines.
     public func confirmRestore() -> Bool {
         confirming = false
         guard let asked else { return false }
@@ -211,10 +205,11 @@ public final class CollectionRestoreModel: ObservableObject {
             refused(error, in: asked.backup)
             return false
         }
-        // Equal plans list the same lines under the same message.
+        // Equal plans list the same lines under the same message. A change is the sheet's alone, as a
+        // refusal is: nothing was restored, so there is nothing for the banner to say.
         guard plan == asked.plan else {
-            self.asked = (asked.backup, asked.collection, plan)
-            confirming = true
+            restoreError = CollectionRestoreModel.changedWhileAskingError(asked.plan.collection)
+            rows = rows(of: asked.backup)
             return false
         }
         do {
