@@ -78,6 +78,25 @@ final class ControlRecordingTests: XCTestCase {
         XCTAssertFalse(Fixtures.text("control/set-env.transcript").contains("ghp_0123456789abcdefghijklmnopqrstuvwxyzAB"))
     }
 
+    /// A collection the master list no longer holds, listed with the backups and restored: the question
+    /// names the backup by its label (local time, so not written out) and lists every connector that
+    /// comes back with its switch, and the collection is back as the backup holds it.
+    func testRestoreCollection() throws {
+        let rig = try check("restore-collection").rig; defer { rig.dispose() }
+        let id = "mcps.2026-09-04T12-00-00-000Z.json"
+        // The one backup the replay seeded, which is all the question listed: the restore's own backup
+        // is listed by now, and the question never named it.
+        let listed = try rig.state.service.backups.backups(series: CollectionRestoreModel.series).filter { $0.lastPathComponent == id }
+        let time = try XCTUnwrap(BackupManager.labels(for: listed)[id])
+        XCTAssertEqual(rig.confirmer.requests, [ConfirmationRequest(
+            title: ControlTools.restoreTitle(ControlCaller.claudeName, "Personal"),
+            message: ControlTools.restoreCollectionCreatedText("Personal", time),
+            code: ["+ aws-mcp (on)", "+ github (off)"], footer: nil)])
+        let backup = try XCTUnwrap(MasterStoreIO.read(from: Fixtures.url("control/collection_backup.json")))
+        XCTAssertEqual(rig.state.store.collections["Personal"], backup.collections["Personal"])
+        XCTAssertEqual(rig.state.activeCollection, "Default")
+    }
+
     func testIntegrationOff() throws { try check("integration-off").rig.dispose() }
 
     func testReservedName() throws {
@@ -113,11 +132,13 @@ final class ControlRecordingTests: XCTestCase {
     /// A directive the replay does not know fails it, rather than leaving the rig at its default.
     func testADirectiveTheReplayDoesNotKnowFailsIt() throws {
         for line in ["#! confirm of", "#! caller CLI", "#! colour on", "#! backup off", "#! backup", "#! answer  allow",
-                     "#! answer allow ", "#!caller cli", "caller cli"] {
+                     "#! answer allow ", "#!caller cli", "caller cli", "#! collection-backup off"] {
             XCTAssertThrowsError(try ControlTranscript.directives([line]), line)
         }
         XCTAssertThrowsError(try ControlTranscript.directives(["#! confirm on", "#! confirm off"]), "given twice")
         XCTAssertEqual(try ControlTranscript.directives(["# A comment.", "#! caller cli", "#! answer deny", "> {}", "< {}"]),
                        ["caller": "cli", "answer": "deny"])
+        XCTAssertEqual(try ControlTranscript.directives(["#! backup on", "#! collection-backup on"]),
+                       ["backup": "on", "collection-backup": "on"])
     }
 }

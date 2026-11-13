@@ -36,6 +36,15 @@ final class MasterStoreTests: XCTestCase {
         XCTAssertEqual(store.deleteCollection(named: "Nope"), "No collection named \u{201C}Nope\u{201D}.")
     }
 
+    /// A collection is found under any spelling Unicode counts as the same text, and named as it is held.
+    func testStoredCollectionNameIsTheSpellingHeld() {
+        let composed = "Caf\u{E9}", decomposed = "Cafe\u{301}"
+        let store = MasterStore(activeCollection: composed, collections: [composed: Collection()])
+        XCTAssertTrue(store.storedCollectionName(decomposed)?.hasSameScalars(as: composed) == true)
+        XCTAssertTrue(store.storedCollectionName(composed)?.hasSameScalars(as: composed) == true)
+        XCTAssertNil(store.storedCollectionName("Other"))
+    }
+
     func testDeletesANonActiveCollectionAndRefusesTheLast() {
         var store = MasterStore(activeCollection: "A", collections: ["A": Collection(), "B": Collection()])
         XCTAssertNil(store.deleteCollection(named: "B"))
@@ -98,7 +107,7 @@ final class MasterStoreTests: XCTestCase {
 
     /// The master list is read as Claude's config is, and as Windows reads both: nesting past 64, a trailing
     /// comma, and UTF-16 or UTF-32 are refused, so the file is unreadable alike on both, and the watcher's peek
-    /// refuses what the load does. A UTF-8 byte-order mark is read.
+    /// refuses what the load does. A UTF-8 byte-order mark is read. A backup's bytes, decoded, follow the same rules.
     func testTheMasterListIsReadAsClaudesConfigIs() throws {
         let refused: [(String, Data)] = [
             ("65 deep", Data(Self.storeText(depth: 65).utf8)),
@@ -110,6 +119,7 @@ final class MasterStoreTests: XCTestCase {
         for (what, data) in refused {
             try data.write(to: url)
             XCTAssertNil(MasterStoreIO.read(from: url), what)
+            XCTAssertThrowsError(try MasterStoreIO.decode(data), what)
             XCTAssertNotNil(MasterStoreIO.load(from: url).corruptFileURL, what)
         }
         let read: [(String, Data)] = [
@@ -120,6 +130,7 @@ final class MasterStoreTests: XCTestCase {
         for (what, data) in read {
             try data.write(to: url)
             XCTAssertNotNil(MasterStoreIO.read(from: url), what)
+            XCTAssertEqual(try MasterStoreIO.decode(data), MasterStoreIO.read(from: url), what)
             let loaded = MasterStoreIO.load(from: url)
             XCTAssertNil(loaded.corruptFileURL, what)
             XCTAssertNotNil(loaded.store.mcps["a"], what)

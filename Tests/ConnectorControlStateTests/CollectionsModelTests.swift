@@ -473,7 +473,7 @@ final class CollectionsModelTests: XCTestCase {
 
     /// The Delete confirmation says what goes with the collection before the button is pressed:
     /// its connectors, which collection becomes active, that a synced source is left alone, and
-    /// that a copy remains in Backups, for a collection that held anything to get back.
+    /// that a copy stays in Backups for 30 days, for a collection that held anything to get back.
     func testDeleteConfirmationSaysWhatGoesWithTheCollection() throws {
         let (h, state) = AppStateHarness.started(seedClaudeConfig: false)
         defer { h.dispose() }
@@ -496,14 +496,14 @@ final class CollectionsModelTests: XCTestCase {
         XCTAssertEqual(informative("Empty"), "It has no connectors.", "nothing in it to get back from Backups")
         XCTAssertEqual(informative("One"),
                        "Its 1 connector is deleted with it. Copies in other collections are not affected. "
-                       + "A copy remains in Backups.")
+                       + "A copy stays in Backups for 30 days.")
         XCTAssertEqual(informative("Two"),
                        "Its 2 connectors are deleted with it. Copies in other collections are not affected. "
-                       + "“One” becomes the active collection. A copy remains in Backups.",
+                       + "“One” becomes the active collection. A copy stays in Backups for 30 days.",
                        "the first local collection with connectors, not the empty Default")
         XCTAssertEqual(informative("Team"),
                        "Its 1 connector is deleted with it. Copies in other collections are not affected. "
-                       + "The source file is not changed. A copy remains in Backups.")
+                       + "The source file is not changed. A copy stays in Backups for 30 days.")
         XCTAssertEqual(informative("Shared"), "It has no connectors.",
                        "publishing adds nothing here: the file has its own question")
         XCTAssertEqual(state.collectionNames, ["Default", "Empty", "One", "Shared", "Team", "Two"], "every one declined")
@@ -955,7 +955,7 @@ final class CollectionsModelTests: XCTestCase {
     }
 
     /// Removing the ticked rows asks first, names the connector when there is one and the count
-    /// when there are more, and always says a copy remains in Backups.
+    /// when there are more, and always says a copy stays in Backups for 30 days.
     func testDeleteCheckedConfirmsAndCarriesTheBackupsSentence() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }

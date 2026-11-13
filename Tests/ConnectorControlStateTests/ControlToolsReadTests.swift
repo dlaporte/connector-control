@@ -128,8 +128,78 @@ final class ControlToolsReadTests: XCTestCase {
         let result = try XCTUnwrap(rig.call("list_backups"))
         guard case .array(let items)? = result.structured.value(at: JSONPointer(["backups"])) else { return XCTFail() }
         XCTAssertEqual(items.map { $0.value(at: JSONPointer(["id"])) }, expected.map { .string($0.lastPathComponent) })
-        XCTAssertTrue(result.text.hasPrefix("ID "))
+        XCTAssertTrue(result.text.hasPrefix(ControlTools.claudeBackupsHeading + "\nID "))
         XCTAssertTrue(result.text.contains(expected[0].lastPathComponent))
+    }
+
+    /// The backups folder emptied, then holding only `files`, each as its bytes: what `list_backups`
+    /// lists is then exactly what a test put there.
+    private func backups(_ rig: ControlRig, _ files: [String: Data]) throws {
+        let fm = FileManager.default
+        try fm.createDirectory(at: rig.h.backupsDir, withIntermediateDirectories: true)
+        for url in try fm.contentsOfDirectory(at: rig.h.backupsDir, includingPropertiesForKeys: nil) { try fm.removeItem(at: url) }
+        for (name, data) in files { try data.write(to: rig.h.backupsDir.appendingPathComponent(name)) }
+    }
+
+    private let claudeBackup = "claude_desktop_config.2026-11-01T00-00-00-000Z.json"
+    private let newerBackup = "mcps.2026-11-02T00-00-00-000Z.json"
+    private let olderBackup = "mcps.2026-11-01T00-00-00-000Z.json"
+
+    /// A master list as a backup holds it: Personal, with one connector, on, and Default, with two,
+    /// one of them on.
+    private let masterList = Data("""
+        {"version": 2, "activeProfile": "Default", "profiles": {
+          "Personal": {"mcps": {"notes": {"enabled": true, "config": {"command": "node"}, "lastEditView": "form"}}},
+          "Default": {"mcps": {"github": {"enabled": true, "config": {"command": "node"}, "lastEditView": "form"},
+                               "splunk": {"enabled": false, "config": {"command": "node"}, "lastEditView": "form"}}}}}
+        """.utf8)
+
+    /// Both kinds, each under its heading: Claude's config's as before, then a row for each collection
+    /// a master-list backup holds, by name, newest backup first; one that cannot be read says so.
+    func testListBackupsListsBothKindsUnderTheirHeadings() throws {
+        let rig = ControlRig(); defer { rig.dispose() }
+        try backups(rig, [claudeBackup: Data(#"{"mcpServers": {}}"#.utf8), newerBackup: masterList, olderBackup: Data("{".utf8)])
+        try BackupCollections.record("Default", for: rig.h.backupsDir.appendingPathComponent(claudeBackup), in: rig.h.backupsDir, staging: nil)
+        let result = try XCTUnwrap(rig.call("list_backups"))
+        XCTAssertEqual(result.text, [
+            "Claude’s config:",
+            "ID                                                    COLLECTION",
+            "claude_desktop_config.2026-11-01T00-00-00-000Z.json   Default",
+            "",
+            "Collections:",
+            "ID                                   COLLECTION   CONNECTORS",
+            "mcps.2026-11-02T00-00-00-000Z.json   Default      2 connectors, 1 on",
+            "mcps.2026-11-02T00-00-00-000Z.json   Personal     1 connector, 1 on",
+            "mcps.2026-11-01T00-00-00-000Z.json                can’t be read",
+        ].joined(separator: "\n"))
+        XCTAssertEqual(result.structured, .object([
+            "backups": .array([.object(["id": .string(claudeBackup), "collection": .string("Default")])]),
+            "collectionBackups": .array([
+                .object(["id": .string(newerBackup), "collections": .array([
+                    .object(["name": .string("Default"), "connectors": .int(2), "on": .int(1)]),
+                    .object(["name": .string("Personal"), "connectors": .int(1), "on": .int(1)]),
+                ])]),
+                .object(["id": .string(olderBackup), "collections": .null]),
+            ]),
+        ]))
+    }
+
+    /// Only the kind there is, under its heading and with no blank line before it; neither kind is the
+    /// sentence it always was.
+    func testListBackupsListsOnlyTheKindThereIsAndSaysWhenThereAreNone() throws {
+        let rig = ControlRig(); defer { rig.dispose() }
+        try backups(rig, [newerBackup: masterList])
+        let collections = try XCTUnwrap(rig.call("list_backups"))
+        XCTAssertTrue(collections.text.hasPrefix("Collections:\nID "), collections.text)
+        XCTAssertEqual(collections.structured.value(at: JSONPointer(["backups"])), .array([]))
+        try backups(rig, [claudeBackup: Data(#"{"mcpServers": {}}"#.utf8)])
+        let claude = try XCTUnwrap(rig.call("list_backups"))
+        XCTAssertEqual(claude.text, ["Claude’s config:", "ID                                                    COLLECTION",
+                                     claudeBackup].joined(separator: "\n"))
+        XCTAssertEqual(claude.structured.value(at: JSONPointer(["collectionBackups"])), .array([]))
+        try backups(rig, [:])
+        XCTAssertEqual(rig.call("list_backups"), ControlResult(
+            structured: .object(["backups": .array([]), "collectionBackups": .array([])]), text: ControlTools.noBackupsText, isError: false))
     }
 
     func testSettingsListsEveryKeySetSettingTakes() {

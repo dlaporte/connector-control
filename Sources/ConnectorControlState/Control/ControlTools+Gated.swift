@@ -35,9 +35,9 @@ extension ControlTools {
 
     public static func deleteTitle(_ shownAsker: String, _ names: String) -> String { "\(shownAsker) wants to delete \(names)" }
 
-    public static func deleteActiveMessage(_ collection: String) -> String { "From “\(collection)”, the collection Claude is running. A copy remains in Backups." }
+    public static func deleteActiveMessage(_ collection: String) -> String { "From “\(collection)”, the collection Claude is running. A copy stays in Backups for 30 days." }
 
-    public static func deleteMessage(_ collection: String) -> String { "From “\(collection)”. A copy remains in Backups." }
+    public static func deleteMessage(_ collection: String) -> String { "From “\(collection)”. A copy stays in Backups for 30 days." }
 
     public static func addedText(_ name: String, _ collection: String, _ state: String) -> String { "Added “\(name)” to “\(collection)”, switched \(state)." }
 
@@ -390,11 +390,18 @@ extension ControlTools {
 
     public static func restoreActivatingText(_ collection: String) -> String { "Its connectors go back into “\(collection)”, which becomes the active collection:" }
 
+    public static func restoreRecreatingText(_ collection: String) -> String { "“\(collection)” no longer exists, so it is created again with only the connectors Claude was running, and becomes the active collection:" }
+
     public static func restoredText(_ id: String) -> String { "Restored “\(id)”." }
 
     public static func restoredNotification(_ shownAsker: String, _ id: String) -> String { "\(shownAsker) restored “\(id)”." }
 
     public static func noBackupError(_ id: String) -> String { "There’s no backup named “\(id)”." }
+
+    /// restore_collection's question: the collection, and the backup's label (`BackupManager.labels(for:)`).
+    public static func restoreCollectionText(_ collection: String, _ time: String) -> String { "“\(collection)” goes back to how it was at \(time):" }
+
+    public static func restoreCollectionCreatedText(_ collection: String, _ time: String) -> String { "“\(collection)” is created again as it was at \(time):" }
 
     public static func restartTitle(_ shownAsker: String) -> String { "\(shownAsker) wants to restart Claude Desktop" }
 
@@ -678,9 +685,14 @@ extension ControlTools {
     /// `ControlText.escapedName(_:)`: Claude names collections.
     static func restoreRefusalText(_ refusal: RestoreError) -> String {
         switch refusal {
-        case .collectionGone(let collection): return AppState.restoreCollectionGoneError(ControlText.escapedName(collection))
         case .subscribedActive(let collection): return AppState.restoreSubscribedError(ControlText.escapedName(collection))
         }
+    }
+
+    /// The listed backup an id names, compared scalar by scalar, as the Windows mirror compares
+    /// ordinally; nil when the list does not hold it.
+    static func listedBackup(_ urls: [URL], id: String) -> URL? {
+        urls.first(where: { $0.lastPathComponent.hasSameScalars(as: id) })
     }
 
     /// The Restore sheet's restore, by an id `list_backups` gave, refused first for what the sheet
@@ -696,7 +708,7 @@ extension ControlTools {
         }
         // Only an id the list gives: never a path, so nothing outside the backups folder is read.
         // Compared scalar by scalar, as the Windows mirror compares ordinally.
-        guard let backup = urls.first(where: { $0.lastPathComponent.hasSameScalars(as: id) }) else {
+        guard let backup = ControlTools.listedBackup(urls, id: id) else {
             return .refused(ControlTools.noBackupError(shownID))
         }
         // The backup's record, read once: the refusal, the question and the restore all follow it.
@@ -718,10 +730,13 @@ extension ControlTools {
             return .refused(ControlText.escaped(error.localizedDescription, naming: [id]))
         }
         let fingerprint = ContentHash.sha256(bytes)
-        // AppState's rule: back into the collection the backup was taken from, else the active one.
-        let target = recorded ?? state.activeCollection
+        // AppState's rule: back into the collection the backup was taken from, as the store holds its
+        // name, created again when it is gone; else the active one.
+        let held = recorded.flatMap { state.store.storedCollectionName($0) }
+        let target = held ?? recorded ?? state.activeCollection
         let shownTarget = ControlText.escapedName(target)
-        let into = target == state.activeCollection ? ControlTools.restoreIntoText(shownTarget) : ControlTools.restoreActivatingText(shownTarget)
+        let into = recorded != nil && held == nil ? ControlTools.restoreRecreatingText(shownTarget)
+            : target == state.activeCollection ? ControlTools.restoreIntoText(shownTarget) : ControlTools.restoreActivatingText(shownTarget)
         // Connector Control's own entry is the app's, not a connector the backup brings back.
         let names = servers.keys.filter { $0 != ClaudeIntegration.entryName }.sorted { $0.ordinallyPrecedes($1) }
         let request = ConfirmationRequest(title: ControlTools.restoreTitle(shownAsker, shownID),
@@ -746,6 +761,115 @@ extension ControlTools {
             return done([ControlTools.restoredText(shownID)], ["id": .string(id), "activeCollection": .string(state.activeCollection)],
                         touching: nil, since: mark, restart: ControlTools.restartToApplyText,
                         notification: ControlTools.restoredNotification(shownAsker, shownID))
+        })
+    }
+
+    /// A refused collection restore in AppState's own sentences, the backup and the collection each
+    /// named through `ControlText.escapedName(_:)`: Claude names both. The plan and the restore throw
+    /// only these; any other error is shown in its own words, escaped.
+    static func collectionRestoreRefusalText(_ error: Error) -> String {
+        switch error as? CollectionRestoreError {
+        case .backupUnreadable(let id)?: return AppState.collectionBackupUnreadableError(ControlText.escapedName(id))
+        case .notInBackup(let id, let collection)?:
+            return AppState.collectionNotInBackupError(ControlText.escapedName(id), ControlText.escapedName(collection))
+        case .subscribed(let collection)?: return AppState.restoreCollectionSubscribedError(ControlText.escapedName(collection))
+        case .unchanged(let collection)?: return AppState.restoreCollectionUnchangedError(ControlText.escapedName(collection))
+        case nil: return ControlText.escaped(error.localizedDescription)
+        }
+    }
+
+    /// What a collection restore's Allow stands for beyond its question, which lists by name only
+    /// what changes: the backup's bytes, then the collection's connectors as they are now, each with
+    /// its switch and config (null when it is gone), so a config changed while the question was up is
+    /// never overwritten unseen. The connectors are one key-sorted JSON line, hashed after the
+    /// backup's own fixed-length hash: one hash over both, exact to the scalar.
+    static func collectionRestoreFingerprint(_ bytes: Data, _ current: Collection?) -> String {
+        let connectors: JSONValue = current.map { held in
+            .object(held.mcps.mapValues { entry in
+                .object(["enabled": .bool(entry.enabled), "config": entry.config, "lastEditView": .string(entry.lastEditView.rawValue)])
+            })
+        } ?? .null
+        return ContentHash.sha256(Data((ContentHash.sha256(bytes) + connectors.compactLine()).utf8))
+    }
+
+    /// The Restore sheet's Collections restore, by an id `list_backups` gave and a collection that
+    /// backup holds, refused first for what the sheet refuses; the question lists what changes,
+    /// connector by connector, as the sheet's confirmation does.
+    ///
+    /// Claude cannot see a value, so a collection already as the backup holds it - a value it set
+    /// being one it guessed right - is asked about and answered as a restore, as set_connector_env's
+    /// unchanged value is. The command line is the user, who can, and is told there is nothing to change.
+    func restoreCollection(_ arguments: ControlArguments, _ caller: ControlCaller) -> ControlStep {
+        let shownAsker = caller.shownAsker
+        let id = arguments.string("id") ?? ""
+        let collection = arguments.string("collection") ?? ""
+        let urls: [URL]
+        do {
+            urls = try collectionBackupURLs()
+        } catch {
+            return .refused(ControlText.escaped(AppState.friendly(error)))
+        }
+        // Only an id the list gives for the master list: never a path, so nothing outside the backups
+        // folder is read, nor a Claude's config backup, which is restore_backup's. Compared scalar by
+        // scalar, as the Windows mirror compares ordinally.
+        guard let backup = ControlTools.listedBackup(urls, id: id) else {
+            return .refused(ControlTools.noBackupError(ControlText.escapedName(id)))
+        }
+        // Read once: the question, the fingerprint and the restore all come from these bytes. Bytes
+        // that cannot be read are the plan's first refusal.
+        let data = try? BoundedRead.data(at: backup, limit: ConfigService.maxBackupBytes)
+        let plan: CollectionRestorePlan
+        do {
+            plan = try state.collectionRestorePlan(collection, id: backup.lastPathComponent, data: data,
+                                                   refusingUnchanged: caller == .cli)
+        } catch {
+            return .refused(ControlTools.collectionRestoreRefusalText(error))
+        }
+        // A deleted collection that held no connectors changes nothing either, but it is created again.
+        let unchanged = !plan.created && plan.changes.isEmpty
+        let bytes = data ?? Data()
+        // Named as the store holds it, or as the backup spells it when it is gone; the backup as the
+        // Restore sheet labels it among the same list.
+        let shown = ControlText.escapedName(plan.collection)
+        let time = ControlText.escapedName(BackupManager.labels(for: urls)[backup.lastPathComponent] ?? backup.lastPathComponent)
+        let request = ConfirmationRequest(
+            title: ControlTools.restoreTitle(shownAsker, shown),
+            message: plan.created ? ControlTools.restoreCollectionCreatedText(shown, time) : ControlTools.restoreCollectionText(shown, time),
+            code: plan.lines(naming: ControlText.escapedName),
+            footer: plan.active ? ControlTools.takesEffectFooter : nil)
+        let fingerprint = ControlTools.collectionRestoreFingerprint(bytes, state.store.collections[plan.collection])
+        return .ready(request, fingerprint: fingerprint, perform: { [self] in
+            let mark = state.appliedServers
+            // Nothing to change leaves the master list as it is, unsaved.
+            if !unchanged {
+                do {
+                    try state.restoreCollection(collection, from: backup, data: bytes)
+                } catch {
+                    // Platform idiom: the restore throws only its refusals, and Swift's catch must take every
+                    // error; the Windows mirror catches the refusals and leaves anything else to the write queue.
+                    return ControlOutcome(result: .refusal(ControlTools.collectionRestoreRefusalText(error)), notification: nil)
+                }
+            }
+            // A collection already as the backup holds it changes nothing, but the collection Claude runs,
+            // with a connector on, has Claude's config written again, as a change would - a restart due - and
+            // the answer is a restore's, so none of it tells Claude it guessed a value right. The same bytes
+            // written again may take no new backup of Claude's config, as backups skip a file that matches the
+            // last one. A restore that changed only connectors that are off writes it again too: a wrong guess
+            // at a value in one of them must be answered as a right one is.
+            let rewrite = caller != .cli && plan.active
+                && state.store.collections[plan.collection]?.mcps.values.contains(where: \.enabled) == true
+            if rewrite {
+                if JSONValue.identical(state.appliedServers, mark) { state.apply() }
+            } else if unchanged, plan.active {
+                // Nothing written, but a write of Claude's config that failed earlier is tried again, as a
+                // restore that changed the collection would try it.
+                state.applyInteractively()
+            }
+            // Only restoring the collection Claude runs reaches its config, and says to restart.
+            return done([ControlTools.restoredText(shown)],
+                        ["id": .string(id), "collection": .string(plan.collection), "activeCollection": .string(state.activeCollection)],
+                        touching: plan.collection, since: mark, restart: ControlTools.restartToApplyText,
+                        notification: ControlTools.restoredNotification(shownAsker, shown), rewrote: rewrite)
         })
     }
 

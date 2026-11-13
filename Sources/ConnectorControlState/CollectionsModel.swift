@@ -67,7 +67,7 @@ public final class CollectionsModel: ObservableObject {
     /// Lifted from the editor's old delete confirmation, which the list now replaces: the sentence -
     /// the most useful thing in that confirmation - survives here unchanged. Delete Collection's
     /// confirmation ends with it too.
-    public static let deleteCheckedInformative = "A copy remains in Backups."
+    public static let deleteCheckedInformative = "A copy stays in Backups for 30 days."
 
     /// The sidebar's chain glyph, or nil when there is no chain to explain: a local collection
     /// has no source, and a synced one whose file is still to be found has no path to name. The
@@ -679,7 +679,7 @@ public final class CollectionsModel: ObservableObject {
     }
 
     /// The selection bar's Delete: asks first, names the connector when there is one and the
-    /// count when there are more, and always says a copy remains in Backups.
+    /// count when there are more, and always says a copy stays in Backups for 30 days.
     public func deleteChecked() {
         let names = checkedNames
         guard !names.isEmpty else {

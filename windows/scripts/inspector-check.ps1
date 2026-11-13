@@ -70,7 +70,7 @@ try {
     $list = Invoke-Inspector @('--method', 'tools/list', '--strict')
     if ($list.Code -ne 0) { throw "tools/list exited $($list.Code): $($list.Text)" }
     $tools = @((Get-Result $list.Text).tools)
-    if ($tools.Count -ne 25) { throw "expected 25 tools, got $($tools.Count)" }
+    if ($tools.Count -ne 26) { throw "expected 26 tools, got $($tools.Count)" }
     if (@($tools | Where-Object { $_.annotations.readOnlyHint -eq $true }).Count -ne 8) { throw 'expected 8 read-only tools' }
 
     Write-Host '== tools/call get_status'

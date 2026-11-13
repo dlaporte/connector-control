@@ -39,9 +39,9 @@ public sealed partial class ControlTools
 
     public static string DeleteTitle(string shownAsker, string names) => $"{shownAsker} wants to delete {names}";
 
-    public static string DeleteActiveMessage(string collection) => $"From “{collection}”, the collection Claude is running. A copy remains in Backups.";
+    public static string DeleteActiveMessage(string collection) => $"From “{collection}”, the collection Claude is running. A copy stays in Backups for 30 days.";
 
-    public static string DeleteMessage(string collection) => $"From “{collection}”. A copy remains in Backups.";
+    public static string DeleteMessage(string collection) => $"From “{collection}”. A copy stays in Backups for 30 days.";
 
     public static string AddedText(string name, string collection, string state) => $"Added “{name}” to “{collection}”, switched {state}.";
 
@@ -544,11 +544,19 @@ public sealed partial class ControlTools
 
     public static string RestoreActivatingText(string collection) => $"Its connectors go back into “{collection}”, which becomes the active collection:";
 
+    public static string RestoreRecreatingText(string collection) => $"“{collection}” no longer exists, so it is created again with only the connectors Claude was running, and becomes the active collection:";
+
     public static string RestoredText(string id) => $"Restored “{id}”.";
 
     public static string RestoredNotification(string shownAsker, string id) => $"{shownAsker} restored “{id}”.";
 
     public static string NoBackupError(string id) => $"There’s no backup named “{id}”.";
+
+    /// <summary>restore_collection's question: the collection, and the backup's label
+    /// (<see cref="BackupManager.Labels"/>).</summary>
+    public static string RestoreCollectionText(string collection, string time) => $"“{collection}” goes back to how it was at {time}:";
+
+    public static string RestoreCollectionCreatedText(string collection, string time) => $"“{collection}” is created again as it was at {time}:";
 
     public static string RestartTitle(string shownAsker) => $"{shownAsker} wants to restart Claude Desktop";
 
@@ -1010,11 +1018,21 @@ public sealed partial class ControlTools
     /// <see cref="ControlText.EscapedName"/>: Claude names collections.</summary>
     internal static string RestoreRefusalText(Exception refusal) => refusal switch
     {
-        RestoreCollectionGoneException gone => AppState.RestoreCollectionGoneError(ControlText.EscapedName(gone.Collection)),
         RestoreSubscribedException subscribed => AppState.RestoreSubscribedError(ControlText.EscapedName(subscribed.Collection)),
-        // RestoreRefusal returns only the two; Swift's switch over its enum is exhaustive.
+        // RestoreRefusal returns only this one; Swift's switch over its enum is exhaustive.
         _ => ControlText.Escaped(refusal.Message),
     };
+
+    /// <summary>The listed backup an id names, compared ordinally, as the Mac mirror compares scalar by scalar;
+    /// null when the list does not hold it.</summary>
+    internal static string? ListedBackup(IEnumerable<string> paths, string id) =>
+        paths.FirstOrDefault(path => string.Equals(Path.GetFileName(path), id, StringComparison.Ordinal));
+
+    /// <summary>Whether an exception thrown reading or decoding a backup is the backup's own, as the Mac's
+    /// <c>try?</c> and <c>catch</c> take every error they throw; a programming fault is not, and is left to end
+    /// the call as a fault.</summary>
+    internal static bool IsBackupError(Exception ex) =>
+        ex is not (NullReferenceException or IndexOutOfRangeException or InvalidCastException);
 
     /// <summary>The Restore sheet's restore, by an id <c>list_backups</c> gave, refused first for what the
     /// sheet refuses; the question says which connectors come back, and into which collection.</summary>
@@ -1033,7 +1051,7 @@ public sealed partial class ControlTools
         }
         // Only an id the list gives: never a path, so nothing outside the backups folder is read.
         // Compared ordinally, as the Mac mirror compares scalar by scalar.
-        if (paths.FirstOrDefault(path => string.Equals(Path.GetFileName(path), id, StringComparison.Ordinal)) is not { } backup)
+        if (ListedBackup(paths, id) is not { } backup)
         {
             return new ControlStep.Refused(NoBackupError(shownId));
         }
@@ -1059,15 +1077,18 @@ public sealed partial class ControlTools
         // throws, so a backup that cannot be read is refused before the question in the reader's own words. A
         // programming fault is not the backup's: it is left to end the call as a fault, and is never reported
         // to Claude as an unreadable backup. Swift's catch receives thrown errors only, so the Mac needs no filter.
-        catch (Exception ex) when (ex is not (NullReferenceException or IndexOutOfRangeException or InvalidCastException))
+        catch (Exception ex) when (IsBackupError(ex))
         {
             return new ControlStep.Refused(ControlText.Escaped(ex.Message, [id]));
         }
         var fingerprint = ContentHash.Sha256(bytes);
-        // AppState's rule: back into the collection the backup was taken from, else the active one.
-        var target = recorded ?? state.ActiveCollection;
+        // AppState's rule: back into the collection the backup was taken from, as the store holds its
+        // name, created again when it is gone; else the active one.
+        var held = recorded is null ? null : state.Store.StoredCollectionName(recorded);
+        var target = held ?? recorded ?? state.ActiveCollection;
         var shownTarget = ControlText.EscapedName(target);
-        var into = target == state.ActiveCollection ? RestoreIntoText(shownTarget) : RestoreActivatingText(shownTarget);
+        var into = recorded is not null && held is null ? RestoreRecreatingText(shownTarget)
+            : target == state.ActiveCollection ? RestoreIntoText(shownTarget) : RestoreActivatingText(shownTarget);
         // Connector Control's own entry is the app's, not a connector the backup brings back.
         var names = servers.Keys.Where(name => name != ClaudeIntegration.EntryName).Order(StringComparer.Ordinal);
         var request = new ConfirmationRequest(RestoreTitle(shownAsker, shownId), RestoreModel.Caption + " " + into,
@@ -1079,7 +1100,7 @@ public sealed partial class ControlTools
             {
                 state.RestoreClaudeConfig(backup, bytes, recorded);
             }
-            catch (Exception ex) when (ex is RestoreCollectionGoneException or RestoreSubscribedException)
+            catch (RestoreSubscribedException ex)
             {
                 return new ControlOutcome(ControlResult.Refusal(RestoreRefusalText(ex)), null);
             }
@@ -1096,6 +1117,142 @@ public sealed partial class ControlTools
             return Done([RestoredText(shownId)], [("id", JsonValue.String(id)), ("activeCollection", JsonValue.String(state.ActiveCollection))],
                 null, mark, RestartToApplyText,
                 notification: RestoredNotification(shownAsker, shownId));
+        });
+    }
+
+    /// <summary>A refused collection restore in AppState's own sentences, the backup and the collection each
+    /// named through <see cref="ControlText.EscapedName"/>: Claude names both.</summary>
+    internal static string CollectionRestoreRefusalText(CollectionRestoreException refusal) => refusal switch
+    {
+        CollectionBackupUnreadableException unreadable => AppState.CollectionBackupUnreadableError(ControlText.EscapedName(unreadable.Id)),
+        CollectionNotInBackupException notInBackup =>
+            AppState.CollectionNotInBackupError(ControlText.EscapedName(notInBackup.Id), ControlText.EscapedName(notInBackup.Collection)),
+        RestoreCollectionSubscribedException subscribed => AppState.RestoreCollectionSubscribedError(ControlText.EscapedName(subscribed.Collection)),
+        RestoreCollectionUnchangedException unchanged => AppState.RestoreCollectionUnchangedError(ControlText.EscapedName(unchanged.Collection)),
+        // The four above are every refusal there is; Swift's switch over its enum is exhaustive.
+        _ => ControlText.Escaped(refusal.Message),
+    };
+
+    /// <summary>What a collection restore's Allow stands for beyond its question, which lists by name only what
+    /// changes: the backup's bytes, then the collection's connectors as they are now, each with its switch and
+    /// config (null when it is gone), so a config changed while the question was up is never overwritten unseen.
+    /// The connectors are one key-sorted JSON line, hashed after the backup's own fixed-length hash: one hash
+    /// over both, exact to the character.</summary>
+    internal static string CollectionRestoreFingerprint(byte[] bytes, Collection? current)
+    {
+        var connectors = current is null ? JsonValue.Null : JsonValue.Object(current.Mcps.Select(p =>
+            new KeyValuePair<string, JsonValue>(p.Key, JsonValue.Object(
+                ("enabled", JsonValue.Bool(p.Value.Enabled)), ("config", p.Value.Config),
+                ("lastEditView", JsonValue.String(p.Value.LastEditView.ToJsonString()))))));
+        return ContentHash.Sha256(System.Text.Encoding.UTF8.GetBytes(ContentHash.Sha256(bytes) + connectors.CompactLine()));
+    }
+
+    /// <summary>The Restore dialog's Collections restore, by an id <c>list_backups</c> gave and a collection that
+    /// backup holds, refused first for what the dialog refuses; the question lists what changes, connector by
+    /// connector, as the dialog's confirmation does.
+    /// <para>
+    /// Claude cannot see a value, so a collection already as the backup holds it - a value it set being one it
+    /// guessed right - is asked about and answered as a restore, as set_connector_env's unchanged value is. The
+    /// command line is the user, who can, and is told there is nothing to change.
+    /// </para></summary>
+    private ControlStep RestoreCollection(ControlArguments arguments, ControlCaller caller)
+    {
+        var shownAsker = caller.ShownAsker;
+        var id = arguments.String("id") ?? "";
+        var collection = arguments.String("collection") ?? "";
+        List<string> paths;
+        try
+        {
+            paths = CollectionBackupPaths();
+        }
+        catch (Exception error)
+        {
+            return new ControlStep.Refused(ControlText.Escaped(AppState.Friendly(error)));
+        }
+        // Only an id the list gives for the master list: never a path, so nothing outside the backups folder is
+        // read, nor a Claude's config backup, which is restore_backup's. Compared ordinally, as the Mac mirror
+        // compares scalar by scalar.
+        if (ListedBackup(paths, id) is not { } backup)
+        {
+            return new ControlStep.Refused(NoBackupError(ControlText.EscapedName(id)));
+        }
+        // Read once: the question, the fingerprint and the restore all come from these bytes. Bytes that cannot be
+        // read are the plan's first refusal.
+        byte[]? data;
+        try
+        {
+            data = BoundedRead.Data(backup, ConfigService.MaxBackupBytes);
+        }
+        // Platform idiom: whatever the read throws for the backup itself, as the Mac's try? takes every error its
+        // read throws; a programming fault is left to end the call, as restore_backup leaves it.
+        catch (Exception ex) when (IsBackupError(ex))
+        {
+            data = null;
+        }
+        CollectionRestorePlan plan;
+        try
+        {
+            plan = state.CollectionRestorePlan(collection, Path.GetFileName(backup), data, refusingUnchanged: caller is ControlCaller.Cli);
+        }
+        catch (CollectionRestoreException refusal)
+        {
+            return new ControlStep.Refused(CollectionRestoreRefusalText(refusal));
+        }
+        // A deleted collection that held no connectors changes nothing either, but it is created again.
+        var unchanged = !plan.Created && plan.Changes.IsEmpty;
+        var bytes = data ?? [];
+        // Named as the store holds it, or as the backup spells it when it is gone; the backup as the Restore
+        // dialog labels it among the same list.
+        var shown = ControlText.EscapedName(plan.Collection);
+        var time = ControlText.EscapedName(BackupManager.Labels(paths).GetValueOrDefault(Path.GetFileName(backup)) ?? Path.GetFileName(backup));
+        var request = new ConfirmationRequest(RestoreTitle(shownAsker, shown),
+            plan.Created ? RestoreCollectionCreatedText(shown, time) : RestoreCollectionText(shown, time),
+            plan.Lines(ControlText.EscapedName), plan.Active ? TakesEffectFooter : null);
+        var fingerprint = CollectionRestoreFingerprint(bytes, state.Store.Collections.GetValueOrDefault(plan.Collection));
+        return new ControlStep.Ready(request, Fingerprint: fingerprint, Perform: () =>
+        {
+            var mark = state.AppliedServers;
+            // Nothing to change leaves the master list as it is, unsaved.
+            if (!unchanged)
+            {
+                try
+                {
+                    state.RestoreCollection(collection, backup, bytes);
+                }
+                // Platform idiom: the restore throws only its refusals, and anything else is left to the write queue,
+                // which ends the call; Swift's catch must take every error.
+                catch (CollectionRestoreException refusal)
+                {
+                    return new ControlOutcome(ControlResult.Refusal(CollectionRestoreRefusalText(refusal)), null);
+                }
+            }
+            // A collection already as the backup holds it changes nothing, but the collection Claude runs, with a
+            // connector on, has Claude's config written again, as a change would - a restart due - and the answer is a
+            // restore's, so none of it tells Claude it guessed a value right. The same bytes written again may take no
+            // new backup of Claude's config, as backups skip a file that matches the last one. A restore that changed
+            // only connectors that are off writes it again too: a wrong guess at a value in one of them must be
+            // answered as a right one is.
+            var rewrite = caller is not ControlCaller.Cli && plan.Active
+                && state.Store.Collections.GetValueOrDefault(plan.Collection)?.Mcps.Values.Any(entry => entry.Enabled) == true;
+            if (rewrite)
+            {
+                if (DictionaryEquality.Equal(state.AppliedServers, mark))
+                {
+                    state.Apply();
+                }
+            }
+            else if (unchanged && plan.Active)
+            {
+                // Nothing written, but a write of Claude's config that failed earlier is tried again, as a restore that
+                // changed the collection would try it.
+                state.ApplyInteractively();
+            }
+            // Only restoring the collection Claude runs reaches its config, and says to restart.
+            return Done([RestoredText(shown)],
+                [("id", JsonValue.String(id)), ("collection", JsonValue.String(plan.Collection)),
+                 ("activeCollection", JsonValue.String(state.ActiveCollection))],
+                plan.Collection, mark, RestartToApplyText,
+                notification: RestoredNotification(shownAsker, shown), rewrote: rewrite);
         });
     }
 

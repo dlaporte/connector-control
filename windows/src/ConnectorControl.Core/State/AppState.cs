@@ -65,11 +65,15 @@ public sealed class AppState : ObservableObject, IDisposable
     public static string UnreviewedConnectorError(string connector) => $"“{connector}” hasn’t been reviewed for publishing. Open Publishing Settings to review it.";
     public static string NewCredentialError(string connector) => $"“{connector}” may now carry a credential. Open Publishing Settings to review it.";
     public static string KeptPathCarriedError(string connector, string field) => $"“{connector}” carries a path this machine keeps back, in {field}. Open Publishing Settings to review it.";
-    /// <summary>The way back is the second sentence: the refusal holds whatever the user does, and a collection of that name makes the same backup restorable.</summary>
-    public static string RestoreCollectionGoneError(string collection) => $"This backup was taken from “{collection}”, which no longer exists. Nothing was restored. Create a collection named “{collection}” again, and this backup goes back into it.";
-
     /// <summary>A backup that records no collection goes into the active one, which here is subscribed.</summary>
     public static string RestoreSubscribedError(string collection) => $"“{collection}” is subscribed, so its connectors are the author’s. Make a local collection active, then restore.";
+
+    /// <summary>A collection restore's refusals (<see cref="CollectionRestoreException"/>), in the order they are
+    /// checked. The id is the backup's file name.</summary>
+    public static string CollectionBackupUnreadableError(string id) => $"“{id}” can’t be read, so nothing was restored.";
+    public static string CollectionNotInBackupError(string id, string collection) => $"“{id}” holds no collection named “{collection}”.";
+    public static string RestoreCollectionSubscribedError(string collection) => $"“{collection}” is subscribed, so its connectors are the author’s. Nothing was restored.";
+    public static string RestoreCollectionUnchangedError(string collection) => $"“{collection}” is already as it was in this backup.";
     /// <summary>Claude's launch time is re-read 3 s after the restart completes.</summary>
     public static readonly TimeSpan RestartRecheckDelay = TimeSpan.FromSeconds(3);
     /// <summary>
@@ -644,10 +648,10 @@ public sealed class AppState : ObservableObject, IDisposable
     /// Throws on a bad backup; nothing is written then.
     ///
     /// The snapshot goes back into the collection the backup was taken from, which becomes the
-    /// active one again, since Claude's file held that collection's connectors. A backup whose
-    /// collection is gone is refused (<see cref="RestoreCollectionGoneException"/>). One with no
-    /// record - older than the record, the first-run original, a file from elsewhere - goes into the
-    /// active collection, and publishing still keeps back any path or folder it carries. While that
+    /// active one again, since Claude's file held that collection's connectors. A collection that is
+    /// gone is created again, local, holding only what Claude was running. One with no record - older
+    /// than the record, the first-run original, a file from elsewhere - goes into the active
+    /// collection, and publishing still keeps back any path or folder it carries. While that
     /// collection is subscribed, it is refused (<see cref="RestoreRefusal"/>).
     /// <para>
     /// <paramref name="data"/>, when given, is the backup's content as the caller read it, so what is
@@ -671,7 +675,15 @@ public sealed class AppState : ObservableObject, IDisposable
         var target = Store.Clone();
         if (recorded is not null)
         {
-            target.ActiveCollection = recorded;
+            // As the store holds the name, under any spelling Unicode counts as the same text; a
+            // collection that is gone is created again, empty, in the copy the snapshot is adopted
+            // into, so a backup that fails to restore leaves nothing behind.
+            var name = Store.StoredCollectionName(recorded) ?? recorded;
+            if (!target.Collections.ContainsKey(name))
+            {
+                target.Collections[name] = new Collection();
+            }
+            target.ActiveCollection = name;
         }
         // Every apply backed Claude's file up with ${COLLECTION_DIR} resolved where the store holds it
         // (CollectionDirectory): against a synced collection's document folder, or this machine's
@@ -695,9 +707,8 @@ public sealed class AppState : ObservableObject, IDisposable
 
     /// <summary>
     /// Why a restore of <paramref name="backupPath"/> would be refused, before anything is asked or
-    /// written; null when it can go ahead. A backup recorded against a collection that is gone has
-    /// nowhere to go back to. One with no record goes into the active collection, and a subscribed
-    /// collection's connectors are its author's: a snapshot adopted there could be neither edited nor
+    /// written; null when it can go ahead. One with no record goes into the active collection, and a
+    /// subscribed collection's connectors are its author's: a snapshot adopted there could be neither edited nor
     /// deleted, and the next Review &amp; Apply would undo it. A recorded backup of a subscribed
     /// collection is different: it holds that collection's own rendered state, what Claude ran from
     /// it, so restoring it there is consistent with the subscription, and it goes back as any other.
@@ -710,13 +721,93 @@ public sealed class AppState : ObservableObject, IDisposable
     /// (null for no record). Platform idiom: its name tells it from <see cref="RestoreRefusal"/>, which
     /// also takes a string; the Mac mirror tells them apart by a label, <c>restoreRefusal(forRecorded:)</c>.
     /// </summary>
-    public Exception? RestoreRefusalForRecorded(string? recorded)
+    public Exception? RestoreRefusalForRecorded(string? recorded) =>
+        recorded is null && IsSynced(ActiveCollection) ? new RestoreSubscribedException(ActiveCollection) : null;
+
+    /// <summary>
+    /// What restoring <paramref name="collection"/> from a master-list backup would do, for the Restore
+    /// dialog and <c>restore_collection</c> to show before asking; throws the refusal
+    /// (<see cref="CollectionRestoreException"/>) that would stop it. <paramref name="id"/> is the backup's
+    /// file name; <paramref name="data"/> its bytes as the caller read them, null when they could not be
+    /// read, so what is shown is what <see cref="RestoreCollection"/> restores. <paramref name="refusingUnchanged"/>
+    /// false gives a plan with nothing to change rather than refusing it: <c>restore_collection</c> asks Claude's
+    /// about like any other, and <see cref="RestoreCollection"/> still refuses it.
+    /// </summary>
+    public CollectionRestorePlan CollectionRestorePlan(string collection, string id, byte[]? data, bool refusingUnchanged = true) =>
+        CollectionRestoreOf(collection, id, data, refusingUnchanged).Plan;
+
+    /// <summary>
+    /// Puts <paramref name="collection"/> back exactly as the master-list backup at
+    /// <paramref name="backupPath"/> holds it: every connector, its config and its switch, and nothing
+    /// added since. A collection that is gone is created again, local, whatever it was when the backup
+    /// was taken. Other collections, and the active one's place, are left alone. The refusals are checked
+    /// again against <paramref name="data"/> and the store as they are now.
+    /// <para>
+    /// A connector the restore removes goes as a delete removes it (<see cref="RemoveConnector"/>), and the
+    /// save keeps the backup it takes for 30 days, so the restore can be undone the same way. Claude's
+    /// config follows when the collection is the active one. For a collection this machine publishes, a
+    /// restore is a change like any edit: a connector that comes back has no review, so
+    /// <see cref="PublishIfChanged"/> holds the write for the Publish sheet.
+    /// </para>
+    /// <para>
+    /// <paramref name="data"/> is the backup's content as the caller read it, so what is restored is what
+    /// the caller showed; it is never read again here.
+    /// </para>
+    /// </summary>
+    public void RestoreCollection(string collection, string backupPath, byte[] data)
     {
-        if (recorded is not null)
+        var (plan, restored) = CollectionRestoreOf(collection, Path.GetFileName(backupPath), data);
+        foreach (var (name, change) in plan.Changes.ByName)
         {
-            return Store.Collections.ContainsKey(recorded) ? null : new RestoreCollectionGoneException(recorded);
+            if (change is CollectionRestore.Change.Goes)
+            {
+                RemoveConnector(name, plan.Collection);
+            }
         }
-        return IsSynced(ActiveCollection) ? new RestoreSubscribedException(ActiveCollection) : null;
+        Store.Collections[plan.Collection] = restored;
+        PersistAndApply(plan.Collection, pinningBackup: true);
+        RaiseAll();
+    }
+
+    /// <summary>
+    /// The plan and the backup's collection, or the first refusal, in order: a backup that cannot be
+    /// decoded (<see cref="MasterStoreIO.Decode"/>, the rules every read of the master list applies), one
+    /// with no collection of that name, a collection subscribed now, whose connectors are its author's,
+    /// and one already as the backup holds it (unless <paramref name="refusingUnchanged"/> is false). The
+    /// collection is named as the store holds it, under any spelling Unicode counts as the same text
+    /// (<see cref="MasterStore.StoredCollectionName"/>), else as the backup spells it. Nothing is changed before
+    /// it returns.
+    /// </summary>
+    private (CollectionRestorePlan Plan, Collection Restored) CollectionRestoreOf(string collection, string id, byte[]? data,
+                                                                               bool refusingUnchanged = true)
+    {
+        MasterStore backup;
+        try
+        {
+            backup = MasterStoreIO.Decode(data ?? throw new CollectionBackupUnreadableException(id));
+        }
+        catch (Exception ex) when (ex is JsonException or FormatException)
+        {
+            throw new CollectionBackupUnreadableException(id);
+        }
+        if (backup.StoredCollectionName(collection) is not { } held)
+        {
+            throw new CollectionNotInBackupException(id, collection);
+        }
+        var restored = backup.Collections[held];
+        var target = Store.StoredCollectionName(held) ?? held;
+        var current = Store.Collections.GetValueOrDefault(target);
+        if (current is not null && IsSynced(target))
+        {
+            throw new RestoreCollectionSubscribedException(target);
+        }
+        var changes = CollectionRestore.Changes(current, restored);
+        if (refusingUnchanged && current is not null && changes.IsEmpty)
+        {
+            throw new RestoreCollectionUnchangedException(target);
+        }
+        var plan = new CollectionRestorePlan(target, current is null, current is not null && target == ActiveCollection, changes);
+        return (plan, restored);
     }
 
     // MARK: service construction
@@ -955,11 +1046,11 @@ public sealed class AppState : ObservableObject, IDisposable
     /// Saves the store, then applies it when <paramref name="touching"/> is the active collection:
     /// Claude only runs the active collection, so only a change to that one reaches its config.
     /// Shared by the verbs that can change what a collection runs, so none of them saves without
-    /// the second half.
+    /// the second half. <paramref name="pinningBackup"/> is <see cref="PersistStore"/>'s.
     /// </summary>
-    private void PersistAndApply(string touching)
+    private void PersistAndApply(string touching, bool pinningBackup = false)
     {
-        PersistStore(touching);
+        PersistStore(touching, pinningBackup);
         if (touching == ActiveCollection)
         {
             ApplyIfChanged();
@@ -1019,15 +1110,19 @@ public sealed class AppState : ObservableObject, IDisposable
     ///
     /// <paramref name="touched"/> is the collection the change was made to, when it was one: its
     /// document is read again, as a Locate that points the binding back at the same path needs.
+    ///
+    /// <paramref name="pinningBackup"/> keeps the backup this save takes for 30 days
+    /// (<see cref="BackupPins"/>). Only the operations that remove or replace what a collection held
+    /// ask for it.
     /// </summary>
-    private void PersistStore(string? touched = null)
+    private void PersistStore(string? touched = null, bool pinningBackup = false)
     {
         // The store just changed, so what a source document would change with it may have too -
         // and the excluded lists a re-render produces belong in the cache this save writes.
         RederivePending(touched);
         try
         {
-            var isProtected = Service.SaveStore(Store).Protected;
+            var isProtected = Service.SaveStore(Store, pinningBackup).Protected;
             // A sidecar that the last load could not read is one something else is writing. Our
             // copy of it may never have been filled, and saving that would land an empty sidecar -
             // and, behind it, a cache pruned against nothing - on top of the real file the
@@ -1232,10 +1327,6 @@ public sealed class AppState : ObservableObject, IDisposable
     /// Deletes connectors and persists them as one write, and no more: a caller deleting from the
     /// active collection applies at the call site, as <c>CollectionsModel.DeleteChecked</c> does.
     /// Names the collection does not hold are skipped, and deleting nothing writes nothing.
-    ///
-    /// Whatever the publish record said about a connector goes with it: a connector added later
-    /// under the same name was never ticked, and a mark left behind would refuse every publish as
-    /// a path that had moved.
     /// </summary>
     public void Delete(IReadOnlyList<string> names, string? collection = null)
     {
@@ -1252,16 +1343,30 @@ public sealed class AppState : ObservableObject, IDisposable
             {
                 continue;
             }
-            held.Mcps.Remove(name);
-            EditPublishIntent(target, intent => intent.MovingConnector(name, null));
+            RemoveConnector(name, target);
             removed = true;
         }
         if (!removed)
         {
             return;
         }
-        PersistStore();
+        PersistStore(pinningBackup: true);
         RaiseAll();
+    }
+
+    /// <summary>
+    /// Removes the connector stored as <paramref name="name"/> from <paramref name="collection"/>, in
+    /// memory, for the save that follows. Whatever the publish record said about it goes with it: a
+    /// connector added later under the same name was never ticked, and a mark left behind would refuse
+    /// every publish as a path that had moved. A delete and a collection's restore both remove through here.
+    /// </summary>
+    private void RemoveConnector(string name, string collection)
+    {
+        if (Store.Collections.TryGetValue(collection, out var held))
+        {
+            held.Mcps.Remove(name);
+        }
+        EditPublishIntent(collection, intent => intent.MovingConnector(name, null));
     }
 
     /// <summary>
@@ -1589,8 +1694,8 @@ public sealed class AppState : ObservableObject, IDisposable
                 kept[trimmed] = CollectionsLocalCache.KeptRecord.Renamed(kept.GetValueOrDefault(trimmed), displaced);
             }
             // Claude's file and its backups name the collection they were applied from, and the
-            // rename carries both. A backup record that fails to follow restores as refused, the
-            // name it holds being gone, never into the wrong collection.
+            // rename carries both. A backup record that fails to follow restores into a collection
+            // created again under the name it holds, never into the wrong collection.
             CollectionsCache = CollectionsCache with
             {
                 Synced = Moved(CollectionsCache.Synced, name, trimmed),
@@ -1657,7 +1762,7 @@ public sealed class AppState : ObservableObject, IDisposable
         {
             PublishError = null;
         }
-        PersistStore();
+        PersistStore(pinningBackup: true);
         ApplyIfChanged();
         RaiseAll();
         return null;
@@ -3655,15 +3760,78 @@ public sealed class AppState : ObservableObject, IDisposable
 }
 
 /// <summary>
-/// A restore refused before anything was written: the backup was taken from a collection that no
-/// longer exists. Its message is the one the restore dialog shows.
+/// Why a collection's restore from a master-list backup was refused before anything was written; each
+/// refusal is one of the sealed types below, checked in their order. Its message is the one the Restore
+/// dialog shows.
 ///
-/// Mirror: <c>RestoreError.collectionGone</c> in Sources/ConnectorControlState/AppState.swift
+/// Mirror: <c>CollectionRestoreError</c> in Sources/ConnectorControlState/AppState.swift
 /// </summary>
-public sealed class RestoreCollectionGoneException(string collection)
-    : Exception(AppState.RestoreCollectionGoneError(collection))
+public abstract class CollectionRestoreException(string message) : Exception(message);
+
+/// <summary>The backup, by its file name, could not be read or decoded.
+/// Mirror: <c>CollectionRestoreError.backupUnreadable</c></summary>
+public sealed class CollectionBackupUnreadableException(string id)
+    : CollectionRestoreException(AppState.CollectionBackupUnreadableError(id))
+{
+    public string Id { get; } = id;
+}
+
+/// <summary>The backup holds no collection of that name.
+/// Mirror: <c>CollectionRestoreError.notInBackup</c></summary>
+public sealed class CollectionNotInBackupException(string id, string collection)
+    : CollectionRestoreException(AppState.CollectionNotInBackupError(id, collection))
+{
+    public string Id { get; } = id;
+    public string Collection { get; } = collection;
+}
+
+/// <summary>The collection is subscribed now: its connectors are its author's.
+/// Mirror: <c>CollectionRestoreError.subscribed</c></summary>
+public sealed class RestoreCollectionSubscribedException(string collection)
+    : CollectionRestoreException(AppState.RestoreCollectionSubscribedError(collection))
 {
     public string Collection { get; } = collection;
+}
+
+/// <summary>The collection is already as the backup holds it.
+/// Mirror: <c>CollectionRestoreError.unchanged</c></summary>
+public sealed class RestoreCollectionUnchangedException(string collection)
+    : CollectionRestoreException(AppState.RestoreCollectionUnchangedError(collection))
+{
+    public string Collection { get; } = collection;
+}
+
+/// <summary>
+/// What restoring one collection from a master-list backup does (<see cref="AppState.CollectionRestorePlan"/>),
+/// shown by the Restore dialog and <c>restore_collection</c> before they ask. <see cref="Collection"/> is the
+/// collection restored, as the store holds it or as the backup spells it when it is gone; <see cref="Created"/>
+/// says it is gone now, so the restore creates it again; <see cref="Active"/> that it is the active collection,
+/// so Claude's config is updated too.
+///
+/// Mirror: <c>CollectionRestorePlan</c> in Sources/ConnectorControlState/AppState.swift
+/// </summary>
+public sealed record CollectionRestorePlan(string Collection, bool Created, bool Active, CollectionRestore Changes)
+{
+    /// <summary>
+    /// One line per connector the restore brings back, changes or removes, by name ordinally, then how many it
+    /// leaves as they are. <paramref name="shown"/> names each connector: <c>restore_collection</c> escapes names
+    /// (<see cref="ControlText.EscapedName"/>), the dialog shows them as stored.
+    /// </summary>
+    public IReadOnlyList<string> Lines(Func<string, string>? shown = null)
+    {
+        shown ??= name => name;
+        var lines = Changes.ByName.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => p.Value switch
+        {
+            CollectionRestore.Change.ComesBack comesBack => CollectionRestoreModel.ComesBackLine(shown(p.Key), comesBack.On),
+            CollectionRestore.Change.Changes changes => CollectionRestoreModel.ChangesLine(shown(p.Key), changes.On),
+            _ => CollectionRestoreModel.GoesLine(shown(p.Key)),
+        }).ToList();
+        if (Changes.Unchanged > 0)
+        {
+            lines.Add(CollectionRestoreModel.UnchangedLine(Changes.Unchanged));
+        }
+        return lines;
+    }
 }
 
 /// <summary>

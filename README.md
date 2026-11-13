@@ -36,8 +36,9 @@ wiped or mangled config is always one click from restored.
   **Notify on external changes** is off in Settings).
 - **Automatic backups** - timestamped copies of Claude's config, the master
   list and collections.json, each taken before that file is written
-  (configurable retention, plus a permanent first-run snapshot), with in-app
-  restore.
+  (configurable retention, plus a permanent first-run snapshot; the copy
+  taken before a delete is kept for 30 days), with in-app restore: a whole
+  collection exactly as it was, even one you deleted, or Claude's config.
 - **Syncable** - point the master list at a folder synced by git, iCloud, or
   Dropbox and share one connector catalog across machines; backups always
   stay machine-local so they never pollute the synced folder.
@@ -137,7 +138,7 @@ any of these, and the connector editor, as its **Cancel** button does.
   what goes with the collection: its connectors ("Its 3 connectors are deleted with it."), but not their copies
   in other collections, nor a subscribed collection's source file; the
   collection that becomes active, when it is the active one; and, when it
-  held connectors, that a copy remains in Backups. Duplicate copies a local
+  held connectors, that a copy stays in Backups for 30 days. Duplicate copies a local
   collection into a new local one exactly as it stands, each connector's
   switch included; it is your own copy, so nothing new is marked as
   imported, and a connector the source held as an imported copy keeps its
@@ -192,7 +193,7 @@ copy as `<name> 2` and is the default, or **Skip**; the rest are listed as
 "new · arrives off". Replacing a connector in the active collection applies
 at once. **Export…** opens the
 Export sheet on the ticked rows. **Delete** asks first - "Delete
-“<name>”?", or "Delete 3 connectors?" - adding "A copy remains in Backups.";
+“<name>”?", or "Delete 3 connectors?" - adding "A copy stays in Backups for 30 days.";
 deleting from the active collection applies at once.
 
 A connector that another local collection holds an identical copy of, under
@@ -475,11 +476,13 @@ machines that follow it, including the one that publishes it.
   It is not recognised as the one you marked, so it travels as written;
   read the preview.
 - Restoring a backup of Claude's configuration puts it back into the
-  collection it was taken from and makes that collection active. A backup
-  whose collection is gone is refused: "This backup was taken from
-  “<name>”, which no longer exists. Nothing was restored. Create a
-  collection named “<name>” again, and this backup goes back into it." Only
-  this version records the collection, so a backup from an earlier one -
+  collection it was taken from and makes that collection active. If you
+  have deleted that collection, it is created again, holding only the
+  connectors Claude was running: Claude's configuration never holds the
+  ones that were off, and the confirmation says so. To bring back the
+  whole collection, every connector with its switch, restore it from
+  **Collections** in the same sheet. Only this version records the
+  collection, so a backup from an earlier one -
   which is every backup you already have, and the first-run original -
   goes into the active collection instead. While the active collection is
   subscribed, such a backup is refused before anything is asked: "“<name>”
@@ -549,7 +552,7 @@ commands:
 - **Sharing** - Import collection, Subscribe to collection, Show pending
   update, Apply update, Refresh subscription.
 - **Settings and backups** - Show settings, Change setting, List backups,
-  Restore backup.
+  Restore backup, Restore collection.
 - **Claude** - Restart Claude.
 
 Claude can't publish a collection or stop publishing one, Stop Syncing, or
@@ -617,8 +620,13 @@ those values, so a config or a value it guessed right is asked about, and
 answered, just as one it guessed wrong: for a connector Claude runs, Claude's
 config is written again and **Restart Required** appears while Claude runs,
 as after any change. An import or a subscription names its file and lists
-what it brings; a restore lists the connectors it would put back. Each line
-of what would run is selected and copied one line at a time.
+what it brings; a restore lists the connectors it would put back, and a
+collection restore marks each connector + (comes back) or ~ (changes), with
+its switch, or − (goes), and counts the rest as unchanged; a restore Claude
+asks for of the active collection, with a connector on, writes Claude's
+config again whatever it changes, so **Restart Required** appears while
+Claude runs. Each line of what would run is selected and copied one line at a
+time.
 
 **Don’t Allow** is the default, and Return answers it, as Escape does. One
 question is asked at a time; Claude's other changes wait their turn. After
@@ -739,8 +747,10 @@ Sharing
 Settings and backups
   settings                           List Connector Control's settings and their values
   settings set <key> <value>         Change a setting
-  backups                            List the backups of Claude's config
+  backups                            List the backups of Claude's config and of the collections
   backups restore <id>               Replace Claude's config with a backup
+  backups restore-collection <id> <collection>
+                                     Put one collection back exactly as it was in a backup
 Claude
   restart-claude                     Quit and reopen Claude Desktop
   mcp                                The relay Claude Desktop runs; not for direct use
@@ -924,6 +934,7 @@ the time - the app leaves Claude's config valid on the way out.
 └── backups/           ← timestamped copies of Claude's config, mcps.json and
                          collections.json, rotated; machine-local
     ├── backup-collections.json               ← which collection each backup came from
+    ├── backup-pins.json                      ← backups kept 30 days after a delete
     └── claude_desktop_config.original.json   ← taken before the app first writes Claude's config; never pruned
 
 ~/Library/Application Support/Claude/claude_desktop_config.json
@@ -950,6 +961,7 @@ profile, so backups stay on the machine that made them):
 └── backups\           ← timestamped copies of Claude's config, mcps.json and
                          collections.json, rotated; machine-local
     ├── backup-collections.json               ← which collection each backup came from
+    ├── backup-pins.json                      ← backups kept 30 days after a delete
     └── claude_desktop_config.original.json   ← taken before the app first writes Claude's config; never pruned
 
 %APPDATA%\Claude\claude_desktop_config.json   ← generated output, as above, with
@@ -1019,7 +1031,11 @@ the master list and collections.json live in, with **Use Default** and
 **Choose…** (point it at a synced folder to share connectors across
 machines), and **Backups**: how many of each file to keep (20 unless you
 change it, from 5 to 100), and the backups folder with **Reveal in Finder** (**Show in Explorer** on Windows) and
-**Restore…**. **Claude** has **Claude App**, the app to restart (on Windows,
+**Restore…**, one sheet with two tabs: **Collections**, which brings back one
+collection exactly as a backup of the master list holds it - every connector,
+its settings and its switch, even a collection you deleted - and leaves the
+others alone, and **Claude’s config**, which puts back a backup of Claude's
+config, holding only the connectors that were on. **Claude** has **Claude App**, the app to restart (on Windows,
 how Claude is installed, its config file and its launch target; a chosen app
 or launch target is checked to be Claude, signed by Anthropic, and the row
 reads "Checking…" until it is), the
@@ -1277,7 +1293,15 @@ that no file in the repository contains an em-dash.
   then shows the line as changed, both − and + reading `••• (set)`, and
   neither value. A value that really is one of those words can still be typed
   in the editor.
-- A restore asks with the names of the connectors it would put back. A
+- Claude can't tell from a question or a reply whether a value it can't see
+  matched its guess: a change or a collection restore with nothing to change
+  is asked and answered like any other. It can tell from the backups
+  `list_backups` shows: a change you allow is backed up only when it differs
+  from the last backup, so two changes Claude asks for in a row, or a
+  collection restore, can show whether its guess matched. Each try needs your
+  Allow, and a wrong guess replaces the real value.
+- A restore asks with the names of the connectors it would put back, and a
+  collection restore with their names and switches, never their settings. A
   backup someone else planted in your backups folder could carry commands
   the question doesn't show; doing that needs write access to your own
   folder. A restore refuses a backup that names one connector twice, or in

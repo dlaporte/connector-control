@@ -31,6 +31,7 @@ extension ControlTools {
         "restart_claude": "Restart Claude", "update_connector": "Change connector", "set_connector_env": "Change environment",
         "delete_connectors": "Delete connectors", "delete_collection": "Delete collection",
         "import_document": "Import collection", "apply_update": "Apply update", "restore_backup": "Restore backup",
+        "restore_collection": "Restore collection",
     ]
 
     static let collectionOrActive = "A collection's name; the active collection when left out."
@@ -76,7 +77,7 @@ extension ControlTools {
                           "collection": text(collectionOrActive)],
              required: ["name"]),
         tool("delete_connectors", .gated, destructive: true, usage: "delete <name>…", group: connectorsGroup,
-             description: "Delete connectors. A copy remains in Connector Control's backups.",
+             description: "Delete connectors. A copy stays in Connector Control's backups for 30 days.",
              properties: ["names": names("The connectors' names."), "collection": text(collectionOrActive)],
              required: ["names"]),
         tool("list_collections", .read, usage: "collections", group: collectionsGroup,
@@ -96,7 +97,7 @@ extension ControlTools {
              properties: ["collection": text("The collection to copy."), "newName": text("The copy's name.")],
              required: ["collection", "newName"]),
         tool("delete_collection", .gated, destructive: true, usage: "collection delete <name>", group: collectionsGroup,
-             description: "Delete a collection and its connectors. A copy remains in Connector Control's backups; a subscribed collection's file is left alone.",
+             description: "Delete a collection and its connectors. A copy stays in Connector Control's backups for 30 days; a subscribed collection's file is left alone.",
              properties: ["collection": text(collectionName)], required: ["collection"]),
         tool("import_document", .gated, destructive: true,
              usage: "import <file> [--into <collection> | --new <name>] [--on-clash replace|keep-both|skip]", group: sharingGroup,
@@ -126,10 +127,15 @@ extension ControlTools {
                           "value": text("on or off; for backups-to-keep, a number from \(ControlSettingKey.keepCountRange).")],
              required: ["key", "value"]),
         tool("list_backups", .read, usage: "backups", group: settingsGroup,
-             description: "List the backups of Claude's config. Each id can be given to restore_backup."),
+             description: "List the backups of Claude's config and of the collections. A Claude's config id goes to restore_backup; a collections id goes to restore_collection with one of the collection names listed beside it."),
         tool("restore_backup", .gated, destructive: true, usage: "backups restore <id>", group: settingsGroup,
              description: "Replace Claude's config with a backup. The current file is backed up first.",
              properties: ["id": text("A backup's id, from list_backups.")], required: ["id"]),
+        tool("restore_collection", .gated, destructive: true, usage: "backups restore-collection <id> <collection>", group: settingsGroup,
+             description: "Put one collection back exactly as it was in a backup. Every connector comes back with its settings and its switch, and a deleted collection is created again. Connectors added since are removed; other collections are left alone. The current state is backed up first and kept for 30 days.",
+             properties: ["id": text("A collections backup's id, from list_backups."),
+                          "collection": text("The collection to restore, as list_backups names it.")],
+             required: ["id", "collection"]),
         tool("restart_claude", .alwaysConfirm, usage: "restart-claude", group: claudeGroup,
              description: "Quit and reopen Claude Desktop. The user is always asked first; the reply in progress stops and the conversation is kept."),
     ]

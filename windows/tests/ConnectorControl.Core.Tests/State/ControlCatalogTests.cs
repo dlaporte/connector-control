@@ -35,6 +35,7 @@ public class ControlCatalogTests
             ["import_document"] = (false, true, false, ControlGateClass.Gated, "import <file>"),
             ["apply_update"] = (false, true, false, ControlGateClass.Gated, "apply-update <collection>"),
             ["restore_backup"] = (false, true, false, ControlGateClass.Gated, "backups restore <id>"),
+            ["restore_collection"] = (false, true, false, ControlGateClass.Gated, "backups restore-collection <id> <collection>"),
         };
 
     [Fact]

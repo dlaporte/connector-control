@@ -32,6 +32,7 @@ final class ControlCatalogTests: XCTestCase {
         "import_document": (false, true, false, .gated, "import <file>"),
         "apply_update": (false, true, false, .gated, "apply-update <collection>"),
         "restore_backup": (false, true, false, .gated, "backups restore <id>"),
+        "restore_collection": (false, true, false, .gated, "backups restore-collection <id> <collection>"),
     ]
 
     func testTheCatalogIsTheSpecsTable() {

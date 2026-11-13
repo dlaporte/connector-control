@@ -21,7 +21,7 @@ public class ConfirmationDialogTests
         Assert.Equal([new TextRun("Claude wants to delete “"), new TextRun("aws-billing", IsSetApart: true),
                       new TextRun("” and “"), new TextRun("splunk", IsSetApart: true), new TextRun("”")], dialog.Title);
         Assert.Equal([new TextRun("From “"), new TextRun("Harvard", IsSetApart: true),
-                      new TextRun("”, the collection Claude is running. A copy remains in Backups.")], dialog.Message);
+                      new TextRun("”, the collection Claude is running. A copy stays in Backups for 30 days.")], dialog.Message);
         Assert.Empty(dialog.Code);
         Assert.Null(dialog.Footer);
         // A question naming no one is one run.

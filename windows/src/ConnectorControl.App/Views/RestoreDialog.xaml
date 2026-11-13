@@ -7,12 +7,53 @@
         Width="460">
   <StackPanel Margin="16">
     <TextBlock Text="{x:Static state:RestoreModel.Headline}" FontSize="14" FontWeight="SemiBold" />
-    <TextBlock Text="{x:Static state:RestoreModel.Caption}" Style="{StaticResource CaptionText}" Margin="0,4,0,10" />
-    <ListBox x:Name="BackupList" Height="180" FontFamily="{StaticResource MonoFont}" FontSize="13" SelectionChanged="OnSelectionChanged" />
-    <TextBlock Text="{Binding RestoreError}" Style="{StaticResource ErrorText}" Margin="0,8,0,0" Visibility="{Binding HasRestoreError, Converter={StaticResource Vis}}" />
-    <StackPanel Style="{StaticResource DialogButtons}" Margin="0,16,0,0">
-      <Button Content="{x:Static state:RestoreModel.CancelTitle}" MinWidth="80" IsCancel="True" Click="OnCancel" />
-      <Button Content="{x:Static state:RestoreModel.RestoreTitle}" MinWidth="90" Margin="8,0,0,0" IsEnabled="{Binding CanRestore}" Style="{DynamicResource AccentButtonStyle}" Click="OnRestore" />
+    <!-- Platform idiom: a TabControl styled as Settings' own tabs switches between the two; the Mac switches with a
+         segmented picker. Collections comes first and is chosen when the dialog opens. -->
+    <TabControl x:Name="Tabs" Margin="0,8,0,0">
+      <TabItem x:Name="CollectionsTabItem" Header="{x:Static state:RestoreModel.CollectionsTab}">
+        <StackPanel Margin="0,10,0,0">
+          <TextBlock Text="{x:Static state:CollectionRestoreModel.Caption}" Style="{StaticResource CaptionText}" Margin="0,0,0,10" />
+          <!-- Each row is the backup's label, which is also what a screen reader says for it. -->
+          <ListBox x:Name="CollectionBackupList" Height="120" FontFamily="{StaticResource MonoFont}" FontSize="13"
+                   SelectionChanged="OnCollectionBackupSelectionChanged" />
+          <ListBox x:Name="CollectionList" Height="120" Margin="0,10,0,0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                   SelectionChanged="OnCollectionSelectionChanged">
+            <ListBox.ItemContainerStyle>
+              <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                <!-- The item holds a record, and without a name of its own a screen reader reads the record's
+                     ToString(). The Mac row reads the same name: the collection's, then its detail. -->
+                <Setter Property="AutomationProperties.Name" Value="{Binding SpokenName}" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+              </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" Margin="0,0,12,0" />
+                  <TextBlock Grid.Column="1" Text="{Binding Detail}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </StackPanel>
+      </TabItem>
+      <TabItem x:Name="ClaudeConfigTabItem" Header="{x:Static state:RestoreModel.ClaudeConfigTab}">
+        <StackPanel Margin="0,10,0,0">
+          <TextBlock Text="{x:Static state:RestoreModel.Caption}" Style="{StaticResource CaptionText}" />
+          <TextBlock Text="{x:Static state:RestoreModel.ClaudeConfigNote}" Style="{StaticResource CaptionText}" Margin="0,4,0,10" />
+          <ListBox x:Name="BackupList" Height="240" FontFamily="{StaticResource MonoFont}" FontSize="13" SelectionChanged="OnSelectionChanged" />
+        </StackPanel>
+      </TabItem>
+    </TabControl>
+    <!-- Platform idiom: one failure line under the tabs follows the shown tab; the Mac puts each tab's in the tab.
+         The panel's DataContext is the shown tab's model. -->
+    <StackPanel x:Name="Footer">
+      <TextBlock x:Name="FailureText" Text="{Binding RestoreError}" Style="{StaticResource ErrorText}" Margin="0,8,0,0" Visibility="{Binding HasRestoreError, Converter={StaticResource Vis}}" />
+      <StackPanel Style="{StaticResource DialogButtons}" Margin="0,16,0,0">
+        <Button Content="{x:Static state:RestoreModel.CancelTitle}" MinWidth="80" IsCancel="True" Click="OnCancel" />
+        <Button x:Name="RestoreButton" Content="{x:Static state:RestoreModel.RestoreTitle}" MinWidth="90" Margin="8,0,0,0" IsEnabled="{Binding CanRestore}" Style="{DynamicResource AccentButtonStyle}" Click="OnRestore" />
+      </StackPanel>
     </StackPanel>
   </StackPanel>
 </views:DialogWindow>

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using ConnectorControl.Core.Tests.TestSupport;
 
 namespace ConnectorControl.Core.Tests;
@@ -39,6 +40,17 @@ public class MasterStoreTests : IDisposable
         Assert.NotNull(store.RenameCollection("Z", "C"));   // a taken name is refused
         Assert.Equal("No collection named “Nope”.", store.RenameCollection("Nope", "Q"));
         Assert.Equal("No collection named “Nope”.", store.DeleteCollection("Nope"));
+    }
+
+    /// <summary>A collection is found under any spelling Unicode counts as the same text, and named as it is held.</summary>
+    [Fact]
+    public void StoredCollectionNameIsTheSpellingHeld()
+    {
+        const string composed = "Caf\u00E9", decomposed = "Cafe\u0301";
+        var store = new MasterStore(2, composed, [new KeyValuePair<string, Collection>(composed, new Collection())]);
+        Assert.Equal(composed, store.StoredCollectionName(decomposed));
+        Assert.Equal(composed, store.StoredCollectionName(composed));
+        Assert.Null(store.StoredCollectionName("Other"));
     }
 
     [Fact]
@@ -139,7 +151,8 @@ public class MasterStoreTests : IDisposable
 
     /// <summary>The master list is read as Claude's config is, and as the Mac reads both: nesting past 64, a
     /// trailing comma, and UTF-16 or UTF-32 are refused, so the file is unreadable alike on both, and the watcher's
-    /// peek refuses what the load does. A UTF-8 byte-order mark is read.</summary>
+    /// peek refuses what the load does. A UTF-8 byte-order mark is read. A backup's bytes, decoded, follow the
+    /// same rules.</summary>
     [Fact]
     public void TheMasterListIsReadAsClaudesConfigIs()
     {
@@ -155,6 +168,7 @@ public class MasterStoreTests : IDisposable
         {
             File.WriteAllBytes(Url, data);
             Assert.True(MasterStoreIO.Read(Url) is null, what);
+            Assert.True(Record.Exception(() => MasterStoreIO.Decode(data)) is JsonException or FormatException, what);
             Assert.True(MasterStoreIO.Load(Url).CorruptFilePath is not null, what);
         }
         var read = new (string What, byte[] Data)[]
@@ -167,6 +181,7 @@ public class MasterStoreTests : IDisposable
         {
             File.WriteAllBytes(Url, data);
             Assert.True(MasterStoreIO.Read(Url) is not null, what);
+            Assert.True(MasterStoreIO.Decode(data).Equals(MasterStoreIO.Read(Url)), what);
             var loaded = MasterStoreIO.Load(Url);
             Assert.True(loaded.CorruptFilePath is null, what);
             Assert.True(loaded.Store.Mcps.ContainsKey("a"), what);

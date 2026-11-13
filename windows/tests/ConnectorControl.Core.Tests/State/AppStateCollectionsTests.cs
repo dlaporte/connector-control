@@ -267,6 +267,45 @@ public class AppStateCollectionsTests
         Assert.Equal("Default", state.CollectionsCache.LastAppliedCollection);
     }
 
+    /// <summary>
+    /// The backup taken just before a delete is kept for 30 days: it is the only copy of what the
+    /// delete removed. An ordinary save pins nothing.
+    /// </summary>
+    [Fact]
+    public void DeletingACollectionPinsTheBackupTakenBeforeIt()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        Assert.Null(state.CreateActiveCopy("Other"));
+        state.SwitchCollection("Default");
+        state.SetEnabled("aws-mcp", false);
+        Assert.Empty(BackupPins.Pinned(h.BackupsDir));   // an ordinary save pins nothing
+
+        Assert.Null(state.DeleteCollection("Other"));
+        var newest = state.Service.Backups.Backups("mcps")[0];
+        Assert.Equal([Path.GetFileName(newest)], BackupPins.Pinned(h.BackupsDir));
+        Assert.True(MasterStoreIO.Read(newest)!.Collections.ContainsKey("Other"));   // the pinned copy still holds the collection
+        Assert.False(h.StoreOnDisk().Collections.ContainsKey("Other"));
+
+        state.SetEnabled("aws-mcp", true);
+        Assert.Equal([Path.GetFileName(newest)], BackupPins.Pinned(h.BackupsDir));   // a toggle pins nothing more
+    }
+
+    [Fact]
+    public void DeletingConnectorsPinsTheBackupTakenBeforeIt()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        state.SetEnabled("aws-mcp", false);
+        Assert.Empty(BackupPins.Pinned(h.BackupsDir));
+
+        state.Delete(["aws-mcp"]);
+        var newest = state.Service.Backups.Backups("mcps")[0];
+        Assert.Equal([Path.GetFileName(newest)], BackupPins.Pinned(h.BackupsDir));
+        Assert.True(MasterStoreIO.Read(newest)!.Collections["Default"].Mcps.ContainsKey("aws-mcp"));   // the pinned copy still holds the connector
+        Assert.False(state.Store.Collections["Default"].Mcps.ContainsKey("aws-mcp"));
+    }
+
     [Fact]
     public void DeletingTheActiveCollectionSwitchesToTheAlphabeticallyFirstRemaining()
     {
@@ -2398,15 +2437,17 @@ public class AppStateCollectionsTests
         s.SwitchCollection("Default");   // backs up what Gone put in Claude's file, recorded as Gone's
         var backup = s.Service.Backups.Backups("claude_desktop_config")[0];
         Assert.Null(s.DeleteCollection("Gone"));
-        Assert.IsType<RestoreCollectionGoneException>(s.RestoreRefusal(backup));
+        Assert.Null(s.RestoreRefusal(backup));   // a collection that is gone is created again
         Assert.Null(s.RestoreRefusalForRecorded(null));
         s.RestoreClaudeConfig(backup, null, null);
         Assert.Equal("Default", s.ActiveCollection);
         Assert.True(s.Store.Collections["Default"].Mcps.ContainsKey("gone-only"));
     }
 
+    /// <summary>A backup whose collection is gone creates it again, local, holding only what Claude was
+    /// running, and makes it the active collection, as every recorded restore does. Nothing else changes.</summary>
     [Fact]
-    public void ARestoreOfABackupWhoseCollectionIsGoneIsRefused()
+    public void ARestoreOfABackupWhoseCollectionIsGoneCreatesItAgain()
     {
         using var h = new AppStateHarness();
         using var s = h.Create();
@@ -2414,26 +2455,40 @@ public class AppStateCollectionsTests
         // A collection of its own content: a backup identical to the newest belongs to whichever
         // collection last wrote it.
         Assert.Null(s.Upsert("gone-only", new McpEntry(true, JsonValue.Object(("command", JsonValue.String("g")))), null, "Gone"));
+        Assert.Null(s.Upsert("gone-off", new McpEntry(false, JsonValue.Object(("command", JsonValue.String("o")))), null, "Gone"));
         s.Apply();
         s.SwitchCollection("Default");   // backs up what Gone put in Claude's file, recorded as Gone's
         var backup = s.Service.Backups.Backups("claude_desktop_config")[0];
         Assert.Equal("Gone", BackupCollections.CollectionOf(backup, h.BackupsDir));
+        var ran = ClaudeConfigIO.ReadMcpServers(backup);
         Assert.Null(s.DeleteCollection("Gone"));
-        var claudeBefore = File.ReadAllBytes(h.ClaudeConfigPath);
-        var storeBefore = s.Store.Clone();
-        var refused = Assert.Throws<RestoreCollectionGoneException>(() => s.RestoreClaudeConfig(backup));
-        Assert.Equal("Gone", refused.Collection);
-        Assert.Equal(AppState.RestoreCollectionGoneError("Gone"), refused.Message);
-        // Nothing was restored.
-        Assert.Equal(claudeBefore, File.ReadAllBytes(h.ClaudeConfigPath));
-        Assert.Equal(storeBefore, s.Store);
+        var defaultBefore = s.Store.Collections["Default"].Clone();
 
-        // The way back the message names: a collection of that name again, and the same backup goes in.
-        Assert.Contains("Create a collection named “Gone”", AppState.RestoreCollectionGoneError("Gone"));
-        Assert.Null(s.CreateActiveCopy("Gone"));
         s.RestoreClaudeConfig(backup);
         Assert.Equal("Gone", s.ActiveCollection);
-        Assert.True(s.Store.Collections["Gone"].Mcps.ContainsKey("gone-only"));
+        Assert.Equal(AppStateHarness.Keys(ran.Keys), AppStateHarness.Keys(s.Store.Collections["Gone"].Mcps.Keys));   // only what Claude was running
+        Assert.False(s.Store.Collections["Gone"].Mcps.ContainsKey("gone-off"));
+        Assert.Equal(CollectionKind.Local, s.KindOf("Gone"));
+        Assert.Equal(defaultBefore, s.Store.Collections["Default"]);
+        Assert.Equal(s.Store.Collections["Gone"], h.StoreOnDisk().Collections["Gone"]);
+        Assert.Equal("Gone", s.CollectionsCache.LastAppliedCollection);
+    }
+
+    /// <summary>The collection is created in the copy the snapshot goes into: a backup that cannot be restored
+    /// leaves no empty collection behind.</summary>
+    [Fact]
+    public void AFailedRestoreIntoACollectionThatIsGoneLeavesNothingBehind()
+    {
+        using var h = new AppStateHarness();
+        using var s = h.Create();
+        Directory.CreateDirectory(h.BackupsDir);
+        var bad = Path.Combine(h.BackupsDir, "claude_desktop_config.2026-09-04T00-00-00-000Z.json");
+        File.WriteAllText(bad, "{not json");
+        BackupCollections.Record("Gone", bad, h.BackupsDir);
+        var storeBefore = s.Store.Clone();
+        Assert.ThrowsAny<Exception>(() => s.RestoreClaudeConfig(bad));
+        Assert.Equal(storeBefore, s.Store);
+        Assert.False(h.StoreOnDisk().Collections.ContainsKey("Gone"));
     }
 
     /// <summary>

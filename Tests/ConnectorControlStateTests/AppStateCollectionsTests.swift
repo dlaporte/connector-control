@@ -234,6 +234,40 @@ final class AppStateCollectionsTests: XCTestCase {
         XCTAssertEqual(state.collectionsCache.lastAppliedCollection, "Default")
     }
 
+    /// The backup taken just before a delete is kept for 30 days: it is the only copy of what the
+    /// delete removed. An ordinary save pins nothing.
+    func testDeletingACollectionPinsTheBackupTakenBeforeIt() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        XCTAssertNil(state.createActiveCopy(named: "Other"))
+        state.switchCollection(to: "Default")
+        state.setEnabled("aws-mcp", false)
+        XCTAssertEqual(BackupPins.pinned(in: h.backupsDir), [], "an ordinary save pins nothing")
+
+        XCTAssertNil(state.deleteCollection(named: "Other"))
+        let newest = try XCTUnwrap(try state.service.backups.backups(series: "mcps").first)
+        XCTAssertEqual(BackupPins.pinned(in: h.backupsDir), [newest.lastPathComponent])
+        XCTAssertNotNil(MasterStoreIO.read(from: newest)?.collections["Other"], "the pinned copy still holds the collection")
+        XCTAssertNil(try h.storeOnDisk().collections["Other"])
+
+        state.setEnabled("aws-mcp", true)
+        XCTAssertEqual(BackupPins.pinned(in: h.backupsDir), [newest.lastPathComponent], "a toggle pins nothing more")
+    }
+
+    func testDeletingConnectorsPinsTheBackupTakenBeforeIt() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        state.setEnabled("aws-mcp", false)
+        XCTAssertEqual(BackupPins.pinned(in: h.backupsDir), [])
+
+        state.delete(names: ["aws-mcp"])
+        let newest = try XCTUnwrap(try state.service.backups.backups(series: "mcps").first)
+        XCTAssertEqual(BackupPins.pinned(in: h.backupsDir), [newest.lastPathComponent])
+        XCTAssertNotNil(MasterStoreIO.read(from: newest)?.collections["Default"]?.mcps["aws-mcp"],
+                        "the pinned copy still holds the connector")
+        XCTAssertNil(state.store.collections["Default"]?.mcps["aws-mcp"])
+    }
+
     func testDeletingTheActiveCollectionSwitchesToTheAlphabeticallyFirstRemaining() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
@@ -2136,14 +2170,16 @@ final class AppStateCollectionsTests: XCTestCase {
         s.switchCollection(to: "Default")   // backs up what Gone put in Claude's file, recorded as Gone's
         let backup = try XCTUnwrap(try s.service.backups.backups(series: "claude_desktop_config").first)
         XCTAssertNil(s.deleteCollection(named: "Gone"))
-        XCTAssertEqual(s.restoreRefusal(for: backup), .collectionGone("Gone"))
+        XCTAssertNil(s.restoreRefusal(for: backup), "a collection that is gone is created again")
         XCTAssertNil(s.restoreRefusal(forRecorded: nil))
         try s.restoreClaudeConfig(from: backup, data: nil, recorded: nil)
         XCTAssertEqual(s.activeCollection, "Default")
         XCTAssertNotNil(s.store.collections["Default"]?.mcps["gone-only"])
     }
 
-    func testARestoreOfABackupWhoseCollectionIsGoneIsRefused() throws {
+    /// A backup whose collection is gone creates it again, local, holding only what Claude was running,
+    /// and makes it the active collection, as every recorded restore does. Nothing else changes.
+    func testARestoreOfABackupWhoseCollectionIsGoneCreatesItAgain() throws {
         let (h, s) = AppStateHarness.started()
         defer { h.dispose() }
         XCTAssertNil(s.createActiveCopy(named: "Gone"))
@@ -2151,26 +2187,39 @@ final class AppStateCollectionsTests: XCTestCase {
         // collection last wrote it.
         XCTAssertNil(s.upsert(name: "gone-only", entry: MCPEntry(enabled: true, config: .object(["command": .string("g")])),
                               renamedFrom: nil, in: "Gone"))
+        XCTAssertNil(s.upsert(name: "gone-off", entry: MCPEntry(enabled: false, config: .object(["command": .string("o")])),
+                              renamedFrom: nil, in: "Gone"))
         s.apply()
         s.switchCollection(to: "Default")   // backs up what Gone put in Claude's file, recorded as Gone's
         let backup = try XCTUnwrap(try s.service.backups.backups(series: "claude_desktop_config").first)
         XCTAssertEqual(BackupCollections.collection(of: backup, in: h.backupsDir), "Gone")
+        let ran = try ClaudeConfigIO.readMCPServers(at: backup)
         XCTAssertNil(s.deleteCollection(named: "Gone"))
-        let claudeBefore = try Data(contentsOf: h.claudeConfigURL)
-        let storeBefore = s.store
-        XCTAssertThrowsError(try s.restoreClaudeConfig(from: backup)) {
-            XCTAssertEqual($0 as? RestoreError, .collectionGone("Gone"))
-            XCTAssertEqual($0.localizedDescription, AppState.restoreCollectionGoneError("Gone"))
-        }
-        XCTAssertEqual(try Data(contentsOf: h.claudeConfigURL), claudeBefore, "nothing was restored")
-        XCTAssertEqual(s.store, storeBefore)
+        let defaultBefore = s.store.collections["Default"]
 
-        // The way back the message names: a collection of that name again, and the same backup goes in.
-        XCTAssertTrue(AppState.restoreCollectionGoneError("Gone").contains("Create a collection named “Gone”"))
-        XCTAssertNil(s.createActiveCopy(named: "Gone"))
         try s.restoreClaudeConfig(from: backup)
         XCTAssertEqual(s.activeCollection, "Gone")
-        XCTAssertNotNil(s.store.collections["Gone"]?.mcps["gone-only"])
+        XCTAssertEqual(Set(try XCTUnwrap(s.store.collections["Gone"]).mcps.keys), Set(ran.keys), "only what Claude was running")
+        XCTAssertNil(s.store.collections["Gone"]?.mcps["gone-off"])
+        XCTAssertEqual(s.kind(of: "Gone"), .local)
+        XCTAssertEqual(s.store.collections["Default"], defaultBefore)
+        XCTAssertEqual(try h.storeOnDisk().collections["Gone"], s.store.collections["Gone"])
+        XCTAssertEqual(s.collectionsCache.lastAppliedCollection, "Gone")
+    }
+
+    /// The collection is created in the copy the snapshot goes into: a backup that cannot be restored
+    /// leaves no empty collection behind.
+    func testAFailedRestoreIntoACollectionThatIsGoneLeavesNothingBehind() throws {
+        let (h, s) = AppStateHarness.started()
+        defer { h.dispose() }
+        try FileManager.default.createDirectory(at: h.backupsDir, withIntermediateDirectories: true)
+        let bad = h.backupsDir.appendingPathComponent("claude_desktop_config.2026-09-04T00-00-00-000Z.json")
+        try Data("{not json".utf8).write(to: bad)
+        try BackupCollections.record("Gone", for: bad, in: h.backupsDir, staging: nil)
+        let storeBefore = s.store
+        XCTAssertThrowsError(try s.restoreClaudeConfig(from: bad))
+        XCTAssertEqual(s.store, storeBefore)
+        XCTAssertNil(try h.storeOnDisk().collections["Gone"])
     }
 
     /// A backup with no record goes into the active collection, and a subscribed collection's

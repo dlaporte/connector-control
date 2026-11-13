@@ -7,6 +7,9 @@
   "AppState.chooseClaude": "Choose the real Claude Desktop under Settings ▸ Claude.",
   "AppState.claudeConfigChangedBody": "Claude's config changed outside Connector Control.",
   "AppState.claudeConfigRegeneratedBody": "Claude's config was changed outside Connector Control - regenerated from your connector list. Restart Claude to pick it up.",
+  "AppState.collectionBackupUnreadableError": {
+    "format": "“{0}” can’t be read, so nothing was restored."
+  },
   "AppState.collectionDirCmdUnsafeCaution": {
     "win": "The folder ${COLLECTION_DIR} stands for must not contain & | < > ^ \" or spaces: on Windows the cmd /c launcher hands it to cmd.exe, which treats those as commands."
   },
@@ -17,6 +20,9 @@
     "win": {
       "format": "{0}’s file isn’t on this PC yet."
     }
+  },
+  "AppState.collectionNotInBackupError": {
+    "format": "“{0}” holds no collection named “{1}”."
   },
   "AppState.collectionPublishFailedBanner": {
     "format": "Couldn’t publish {0} to {1}: {2}"
@@ -85,8 +91,11 @@
   "AppState.restartButton": "Restart",
   "AppState.restartInformative": "Any in-progress Claude conversation will be interrupted.",
   "AppState.restartMessage": "Restart Claude Desktop now?",
-  "AppState.restoreCollectionGoneError": {
-    "format": "This backup was taken from “{0}”, which no longer exists. Nothing was restored. Create a collection named “{0}” again, and this backup goes back into it."
+  "AppState.restoreCollectionSubscribedError": {
+    "format": "“{0}” is subscribed, so its connectors are the author’s. Nothing was restored."
+  },
+  "AppState.restoreCollectionUnchangedError": {
+    "format": "“{0}” is already as it was in this backup."
   },
   "AppState.restoreSubscribedError": {
     "format": "“{0}” is subscribed, so its connectors are the author’s. Make a local collection active, then restore."
@@ -155,6 +164,40 @@
   "CollectionDocument.credentialReferencePhrase": "refers to a credential",
   "CollectionDocument.credentialUserOnlyPhrase": "names a user",
   "CollectionDocument.notJSONError": "not JSON",
+  "CollectionRestoreModel.activeInformative": "Claude is running this collection, so Claude’s config is updated too.",
+  "CollectionRestoreModel.caption": "Choose a backup, then a collection. The collection goes back to exactly how it was; its current connectors are backed up first and kept for 30 days.",
+  "CollectionRestoreModel.changedWhileAskingError": {
+    "format": "“{0}” changed while you were asked, so nothing was restored. Choose Restore again to see what it would change now."
+  },
+  "CollectionRestoreModel.changesLine.off": {
+    "format": "~ {0} (off)"
+  },
+  "CollectionRestoreModel.changesLine.on": {
+    "format": "~ {0} (on)"
+  },
+  "CollectionRestoreModel.comesBackLine.off": {
+    "format": "+ {0} (off)"
+  },
+  "CollectionRestoreModel.comesBackLine.on": {
+    "format": "+ {0} (on)"
+  },
+  "CollectionRestoreModel.confirmMessage": {
+    "format": "Restore “{0}” as it was at {1}?"
+  },
+  "CollectionRestoreModel.createdInformative": {
+    "format": "“{0}” no longer exists, so it is created again."
+  },
+  "CollectionRestoreModel.detailSeparator": " · ",
+  "CollectionRestoreModel.differsState": "differs from now",
+  "CollectionRestoreModel.goesLine": {
+    "format": "− {0}"
+  },
+  "CollectionRestoreModel.goneState": "deleted since",
+  "CollectionRestoreModel.sameState": "same as now",
+  "CollectionRestoreModel.subscribedState": "subscribed now",
+  "CollectionRestoreModel.unchangedLine": {
+    "format": "= {0} unchanged"
+  },
   "CollectionsModel.activePill": "Active",
   "CollectionsModel.addCollectionTooltip": "Add Collection",
   "CollectionsModel.addConnectorDisabledTooltip": "Additions go in a local collection.",
@@ -174,7 +217,7 @@
   "CollectionsModel.copyToButton": "Copy to",
   "CollectionsModel.deleteAction": "Delete",
   "CollectionsModel.deleteCheckedButton": "Delete",
-  "CollectionsModel.deleteCheckedInformative": "A copy remains in Backups.",
+  "CollectionsModel.deleteCheckedInformative": "A copy stays in Backups for 30 days.",
   "CollectionsModel.deleteCheckedMessage.many": {
     "format": "Delete {0} connectors?"
   },
@@ -419,12 +462,14 @@
   },
   "ControlTools.check_tools.cliUsage": "doctor",
   "ControlTools.check_tools.description": "Whether npx, node, uvx and uv are installed where Claude can find them. A connector launched through a missing one shows only \"server disconnected\" in Claude.",
+  "ControlTools.claudeBackupsHeading": "Claude’s config:",
   "ControlTools.claudeGroup": "Claude",
   "ControlTools.claudeLabel": "Claude",
   "ControlTools.claudeNotRunning": "not running",
   "ControlTools.claudeRunning": "running",
   "ControlTools.claudeRunningRestart": "running · restart required",
   "ControlTools.clauseSeparator": "; ",
+  "ControlTools.collectionBackupsHeading": "Collections:",
   "ControlTools.collectionHeader": "COLLECTION",
   "ControlTools.collectionsGroup": "Collections",
   "ControlTools.configShapeError": "A connector’s config needs a “command” or a “url”.",
@@ -443,21 +488,21 @@
   },
   "ControlTools.declinedError": "You declined this change in Connector Control.",
   "ControlTools.deleteActiveMessage": {
-    "format": "From “{0}”, the collection Claude is running. A copy remains in Backups."
+    "format": "From “{0}”, the collection Claude is running. A copy stays in Backups for 30 days."
   },
   "ControlTools.deleteCollectionTitle": {
     "format": "{0} wants to delete the collection “{1}”"
   },
   "ControlTools.deleteMessage": {
-    "format": "From “{0}”. A copy remains in Backups."
+    "format": "From “{0}”. A copy stays in Backups for 30 days."
   },
   "ControlTools.deleteTitle": {
     "format": "{0} wants to delete {1}"
   },
   "ControlTools.delete_collection.cliUsage": "collection delete <name>",
-  "ControlTools.delete_collection.description": "Delete a collection and its connectors. A copy remains in Connector Control's backups; a subscribed collection's file is left alone.",
+  "ControlTools.delete_collection.description": "Delete a collection and its connectors. A copy stays in Connector Control's backups for 30 days; a subscribed collection's file is left alone.",
   "ControlTools.delete_connectors.cliUsage": "delete <name>…",
-  "ControlTools.delete_connectors.description": "Delete connectors. A copy remains in Connector Control's backups.",
+  "ControlTools.delete_connectors.description": "Delete connectors. A copy stays in Connector Control's backups for 30 days.",
   "ControlTools.deletedCollectionNotification": {
     "format": "{0} deleted the collection “{1}”."
   },
@@ -572,7 +617,7 @@
   "ControlTools.kindHeader": "KIND",
   "ControlTools.listKind": "a list of names",
   "ControlTools.list_backups.cliUsage": "backups",
-  "ControlTools.list_backups.description": "List the backups of Claude's config. Each id can be given to restore_backup.",
+  "ControlTools.list_backups.description": "List the backups of Claude's config and of the collections. A Claude's config id goes to restore_backup; a collections id goes to restore_collection with one of the collection names listed beside it.",
   "ControlTools.list_collections.cliUsage": "collections",
   "ControlTools.list_collections.description": "List collections. Each is a set of connectors and the active one is what Claude runs; a subscribed collection follows a file someone else publishes and is read-only.",
   "ControlTools.list_connectors.cliUsage": "connectors [--collection <name>]",
@@ -658,14 +703,25 @@
   "ControlTools.restoreActivatingText": {
     "format": "Its connectors go back into “{0}”, which becomes the active collection:"
   },
+  "ControlTools.restoreCollectionCreatedText": {
+    "format": "“{0}” is created again as it was at {1}:"
+  },
+  "ControlTools.restoreCollectionText": {
+    "format": "“{0}” goes back to how it was at {1}:"
+  },
   "ControlTools.restoreIntoText": {
     "format": "Its connectors go back into “{0}”:"
+  },
+  "ControlTools.restoreRecreatingText": {
+    "format": "“{0}” no longer exists, so it is created again with only the connectors Claude was running, and becomes the active collection:"
   },
   "ControlTools.restoreTitle": {
     "format": "{0} wants to restore “{1}”"
   },
   "ControlTools.restore_backup.cliUsage": "backups restore <id>",
   "ControlTools.restore_backup.description": "Replace Claude's config with a backup. The current file is backed up first.",
+  "ControlTools.restore_collection.cliUsage": "backups restore-collection <id> <collection>",
+  "ControlTools.restore_collection.description": "Put one collection back exactly as it was in a backup. Every connector comes back with its settings and its switch, and a deleted collection is created again. Connectors added since are removed; other collections are left alone. The current state is backed up first and kept for 30 days.",
   "ControlTools.restoredNotification": {
     "format": "{0} restored “{1}”."
   },
@@ -750,6 +806,7 @@
   "ControlTools.titles.rename_collection": "Rename collection",
   "ControlTools.titles.restart_claude": "Restart Claude",
   "ControlTools.titles.restore_backup": "Restore backup",
+  "ControlTools.titles.restore_collection": "Restore collection",
   "ControlTools.titles.set_connector_enabled": "Turn connector on or off",
   "ControlTools.titles.set_connector_env": "Change environment",
   "ControlTools.titles.set_setting": "Change setting",
@@ -775,6 +832,7 @@
   "ControlTools.unknownToolError": {
     "format": "There’s no tool named “{0}”."
   },
+  "ControlTools.unreadableBackupText": "can’t be read",
   "ControlTools.upToDateText": {
     "format": "“{0}” is up to date."
   },
@@ -1098,10 +1156,16 @@
   },
   "RestoreModel.cancelTitle": "Cancel",
   "RestoreModel.caption": "The current file is backed up first, then replaced by the selected backup.",
+  "RestoreModel.claudeConfigNote": "It holds only the connectors that were on. To bring back a whole collection, use Collections.",
+  "RestoreModel.claudeConfigTab": "Claude’s config",
+  "RestoreModel.collectionsTab": "Collections",
   "RestoreModel.confirmMessage": {
     "format": "Replace Claude's config with {0}?"
   },
-  "RestoreModel.headline": "Restore Claude config from a backup",
+  "RestoreModel.headline": "Restore from a backup",
+  "RestoreModel.recreateInformative": {
+    "format": "“{0}” no longer exists, so it is created again with only the connectors Claude was running. To bring back all of its connectors, restore it from Collections."
+  },
   "RestoreModel.restoreButton": "Restore",
   "RestoreModel.restoreTitle": "Restore",
   "ReviewModel.addedLabel": "Added",

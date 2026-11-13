@@ -28,6 +28,9 @@ extension ControlTools {
     public static let publishedKind = "published"
     public static let updateAvailableKind = "update available"
     public static let noBackupsText = "No backups yet."
+    public static let claudeBackupsHeading = "Claude’s config:"
+    public static let collectionBackupsHeading = "Collections:"
+    public static let unreadableBackupText = "can’t be read"
     public static let clauseSeparator = "; "
 
     public static func statusTitle(_ version: String) -> String { "Connector Control \(version)" }
@@ -279,10 +282,21 @@ extension ControlTools {
         try state.service.backups.restorableBackups(series: RestoreModel.series)
     }
 
+    /// The master list's backups the Restore sheet's Collections tab lists, newest first; the series
+    /// has no first-run original.
+    func collectionBackupURLs() throws -> [URL] {
+        try state.service.backups.backups(series: CollectionRestoreModel.series)
+    }
+
+    /// Both kinds of backup, each under its heading when there are any: Claude's config's, whose ids
+    /// restore_backup takes, then the master list's, a row for each collection one holds, whose ids
+    /// restore_collection takes. A master-list backup is read once, within the bound every backup read
+    /// keeps, and one that cannot be read is listed as such rather than left out.
     func listBackups() -> ControlResult {
-        let urls: [URL]
+        let urls: [URL], collectionURLs: [URL]
         do {
             urls = try backupURLs()
+            collectionURLs = try collectionBackupURLs()
         } catch {
             return .refusal(ControlText.escaped(AppState.friendly(error)))
         }
@@ -294,10 +308,39 @@ extension ControlTools {
             rows.append([ControlText.escapedName(url.lastPathComponent), collection.map(ControlText.escapedName) ?? ""])
             items.append(.object(["id": .string(url.lastPathComponent), "collection": collection.map(JSONValue.string) ?? .null]))
         }
-        let text = rows.isEmpty
-            ? ControlTools.noBackupsText
-            : ControlText.table(header: [ControlTools.idHeader, ControlTools.collectionHeader], rows: rows).joined(separator: "\n")
-        return ControlResult(structured: .object(["backups": .array(items)]), text: text, isError: false)
+        var collectionRows: [[String]] = []
+        var collectionItems: [JSONValue] = []
+        for url in collectionURLs {
+            let id = url.lastPathComponent
+            guard let data = try? BoundedRead.data(at: url, limit: ConfigService.maxBackupBytes),
+                  let store = try? MasterStoreIO.decode(data) else {
+                collectionRows.append([ControlText.escapedName(id), "", ControlTools.unreadableBackupText])
+                collectionItems.append(.object(["id": .string(id), "collections": .null]))
+                continue
+            }
+            // A readable backup holding no collections lists no rows; real stores always hold one.
+            var collections: [JSONValue] = []
+            for (name, held) in store.collections.sorted(by: { $0.key.ordinallyPrecedes($1.key) }) {
+                let on = held.mcps.values.filter(\.enabled).count
+                collectionRows.append([ControlText.escapedName(id), ControlText.escapedName(name),
+                                       ControlTools.connectorCountText(held.mcps.count, on)])
+                collections.append(.object(["name": .string(name), "connectors": .int(held.mcps.count), "on": .int(on)]))
+            }
+            collectionItems.append(.object(["id": .string(id), "collections": .array(collections)]))
+        }
+        var lines: [String] = []
+        if !rows.isEmpty {
+            lines.append(ControlTools.claudeBackupsHeading)
+            lines += ControlText.table(header: [ControlTools.idHeader, ControlTools.collectionHeader], rows: rows)
+        }
+        if !collectionRows.isEmpty {
+            if !lines.isEmpty { lines.append("") }
+            lines.append(ControlTools.collectionBackupsHeading)
+            lines += ControlText.table(header: [ControlTools.idHeader, ControlTools.collectionHeader, ControlTools.connectorsHeader],
+                                       rows: collectionRows)
+        }
+        return ControlResult(structured: .object(["backups": .array(items), "collectionBackups": .array(collectionItems)]),
+                             text: lines.isEmpty ? ControlTools.noBackupsText : lines.joined(separator: "\n"), isError: false)
     }
 
     func currentSettings() -> ControlResult {

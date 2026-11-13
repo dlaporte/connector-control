@@ -4,6 +4,8 @@ public struct BackupManager: Sendable {
     /// Same-millisecond backups tried before giving up and overwriting the last one.
     private static let collisionBound = 100
     public static let defaultKeepCount = 20
+    /// How long a pinned backup (`BackupPins`) outlives the keep count.
+    public static let pinDays = 30
 
     public let backupsDir: URL
     public let keepCount: Int
@@ -83,7 +85,7 @@ public struct BackupManager: Sendable {
         try AtomicFile.write(current, to: dest, staging: stagingDir)
         // A replaced last candidate is already listed, and counting it twice would prune one too many.
         let listed = existing.contains { $0.lastPathComponent == dest.lastPathComponent }
-        prune(series: series, listing: listed ? existing : existing + [dest])
+        prune(listing: listed ? existing : existing + [dest], now: now)
         return dest
     }
 
@@ -129,15 +131,54 @@ public struct BackupManager: Sendable {
         return (String(base[...z]), counter)
     }
 
+    /// Keeps the `keepCount` newest, and every pinned backup (`BackupPins`) taken less than
+    /// `pinDays` before `now`: a pinned one still among the newest counts as one of them, and only
+    /// keeps itself once it has fallen past. A pin older than that prunes as any other backup.
+    ///
     /// `listing` is the caller's own pre-write directory read plus the file it just
     /// wrote - sorted the same way `backups(series:)` would - so pruning does not
     /// re-list a directory `backUp` already just listed.
-    private func prune(series: String, listing: [URL]) {
+    private func prune(listing: [URL], now: Date) {
         let all = listing.sorted(by: BackupManager.newestFirst)
-        for stale in all.dropFirst(keepCount) {
+        let stale = all.dropFirst(keepCount)
+        guard !stale.isEmpty else { return }
+        let pinned = BackupPins.pinned(in: backupsDir)
+        let cutoff = now.addingTimeInterval(-Double(BackupManager.pinDays) * 86_400)
+        for old in stale {
+            if pinned.contains(old.lastPathComponent), let taken = BackupManager.takenAt(old), taken > cutoff { continue }
             // Best-effort: a locked or read-only stale backup must not fail the
             // user's save; the next rotation retries.
-            try? FileManager.default.removeItem(at: stale)
+            try? FileManager.default.removeItem(at: old)
         }
+    }
+
+    /// What each backup is called where several are listed together, keyed by file name: its
+    /// local time to the second. Backups that share a second carry milliseconds, read from the
+    /// name's stamp; those that still share one add " (n)" from the counter in the name, the first
+    /// of a millisecond taking none. A name with no time is its own label.
+    public static func labels(for backups: [URL]) -> [String: String] {
+        var result: [String: String] = [:]
+        var timed: [(name: String, seconds: String, millis: String, counter: Int)] = []
+        for backup in backups {
+            let name = backup.lastPathComponent
+            guard let taken = takenAt(backup) else { result[name] = name; continue }
+            let parts = order(of: name)
+            let digits = parts.stamp.dropLast().suffix(3)
+            timed.append((name, IsoTimestamp.localDateTimeSeconds(from: taken), String(digits), parts.counter))
+        }
+        var perSecond: [String: Int] = [:]
+        for entry in timed { perSecond[entry.seconds, default: 0] += 1 }
+        let fine = timed.map { entry in
+            (entry, perSecond[entry.seconds]! > 1 ? "\(entry.seconds).\(entry.millis)" : entry.seconds)
+        }
+        var groups: [String: [(name: String, counter: Int)]] = [:]
+        for (entry, label) in fine { groups[label, default: []].append((entry.name, entry.counter)) }
+        for (label, members) in groups {
+            let ordered = members.sorted { $0.counter < $1.counter }
+            for (index, member) in ordered.enumerated() {
+                result[member.name] = index == 0 ? label : "\(label) (\(member.counter))"
+            }
+        }
+        return result
     }
 }

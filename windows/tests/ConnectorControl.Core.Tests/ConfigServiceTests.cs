@@ -611,6 +611,47 @@ public class ConfigServiceTests : IDisposable
         // What the file holds is reported whole, so the caller's comparison sees the entry.
         Assert.Equal(reserved, result.ClaudeServers!["connector-control"]);
     }
+
+    /// <summary>Only a save that asks pins, and what it pins is the backup of the file as it was.</summary>
+    [Fact]
+    public void SaveStorePinsTheBackupOfTheFileAsItWasOnlyWhenAsked()
+    {
+        var store = service.LoadAndReconcile().Store;
+        service.SaveStore(store);
+        store.Collections["Team"] = store.Collections["Default"].Clone();
+        service.SaveStore(store);   // an ordinary save
+        Assert.Empty(BackupPins.Pinned(paths.BackupsDir));
+        store.Collections["Team"].Mcps.Remove("scoutbook");
+        service.SaveStore(store, pinningBackup: true);
+        var newest = service.Backups.Backups("mcps")[0];
+        Assert.Equal([Path.GetFileName(newest)], BackupPins.Pinned(paths.BackupsDir));
+        // The pinned copy still holds what the save removed.
+        Assert.True(MasterStoreIO.Read(newest)!.Collections["Team"].Mcps.ContainsKey("scoutbook"));
+    }
+
+    /// <summary>An unchanged file keeps its one backup, and that is the one a pinning save pins.</summary>
+    [Fact]
+    public void SaveStorePinsTheNewestBackupWhenTheContentIsUnchanged()
+    {
+        var store = service.LoadAndReconcile().Store;
+        service.SaveStore(store);
+        service.SaveStore(store, pinningBackup: true);
+        var backups = service.Backups.Backups("mcps");
+        Assert.Single(backups);
+        Assert.Equal([Path.GetFileName(backups[0])], BackupPins.Pinned(paths.BackupsDir));
+    }
+
+    [Fact]
+    public void AFailedPinDoesNotFailSaveStore()
+    {
+        var store = service.LoadAndReconcile().Store;
+        service.SaveStore(store);
+        // A folder where the index belongs: it can be neither read nor written.
+        Directory.CreateDirectory(Path.Combine(paths.BackupsDir, BackupPins.FileName));
+        store.Collections["Team"] = store.Collections["Default"].Clone();
+        service.SaveStore(store, pinningBackup: true);
+        Assert.True(MasterStoreIO.Read(paths.MasterStorePath)!.Collections.ContainsKey("Team"));   // the store was saved
+    }
 }
 
 internal static class ConfigServiceLoads

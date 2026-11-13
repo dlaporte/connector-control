@@ -443,7 +443,7 @@ final class ControlToolsGatedTests: XCTestCase {
         let result = try XCTUnwrap(rig.call("delete_connectors", ["names": .array([.string("aws-mcp"), .string("scoutbook")])]))
         XCTAssertEqual(rig.confirmer.requests.last, ConfirmationRequest(
             title: "Claude wants to delete “aws-mcp” and “scoutbook”",
-            message: "From “Default”, the collection Claude is running. A copy remains in Backups.",
+            message: "From “Default”, the collection Claude is running. A copy stays in Backups for 30 days.",
             code: [], footer: ControlTools.takesEffectFooter))
         XCTAssertEqual(result.text, ControlTools.deletedText("“aws-mcp” and “scoutbook”", "Default"))
         XCTAssertEqual(Set(try rig.h.claudeServers().keys), ["service-now", ClaudeIntegration.entryName])

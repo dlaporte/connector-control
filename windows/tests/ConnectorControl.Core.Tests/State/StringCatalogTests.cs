@@ -75,7 +75,9 @@ public class StringCatalogTests
     /// </summary>
     private static readonly Dictionary<string, string[]> ArgsByKey = new(StringComparer.Ordinal)
     {
+        ["AppState.collectionBackupUnreadableError"] = ["X"],
         ["AppState.collectionLocateBanner"] = ["X"],
+        ["AppState.collectionNotInBackupError"] = ["X", "Y"],
         ["AppState.collectionPublishFailedBanner"] = ["X", "Y", "Z"],
         ["AppState.collectionUpdateBanner"] = ["X", "Y"],
         ["AppState.collectionUpdateNotificationBody"] = ["X", "Y"],
@@ -90,13 +92,23 @@ public class StringCatalogTests
         ["AppState.pathMarkMovedError"] = ["X"],
         ["AppState.publishFolderCarriedError"] = ["X", "Y"],
         ["AppState.publishSlugTakenError"] = ["X"],
-        ["AppState.restoreCollectionGoneError"] = ["X"],
+        ["AppState.restoreCollectionSubscribedError"] = ["X"],
+        ["AppState.restoreCollectionUnchangedError"] = ["X"],
         ["AppState.restoreSubscribedError"] = ["X"],
         ["AppState.sourceUnreadableError"] = ["X", "Y"],
         ["AppState.unreviewedConnectorError"] = ["X"],
         ["ClaudeProcess.notAClaudePackageError"] = ["X"],
         ["ClaudePublisher.subjectNoOrganizationError"] = ["X", "Y"],
         ["ClaudeSignature.notFoundMessage"] = ["X"],
+        ["CollectionRestoreModel.changedWhileAskingError"] = ["X"],
+        ["CollectionRestoreModel.changesLine.off"] = ["X"],
+        ["CollectionRestoreModel.changesLine.on"] = ["X"],
+        ["CollectionRestoreModel.comesBackLine.off"] = ["X"],
+        ["CollectionRestoreModel.comesBackLine.on"] = ["X"],
+        ["CollectionRestoreModel.confirmMessage"] = ["X", "Y"],
+        ["CollectionRestoreModel.createdInformative"] = ["X"],
+        ["CollectionRestoreModel.goesLine"] = ["X"],
+        ["CollectionRestoreModel.unchangedLine"] = ["3"],
         ["CollectionsModel.connectorTally.many"] = ["3"],
         ["CollectionsModel.connectorTally.one"] = ["1"],
         ["CollectionsModel.copiedNote.many"] = ["3", "X"],
@@ -202,7 +214,10 @@ public class StringCatalogTests
         ["ControlTools.renamedText"] = ["X", "Y"],
         ["ControlTools.restartTitle"] = ["X"],
         ["ControlTools.restoreActivatingText"] = ["X"],
+        ["ControlTools.restoreCollectionCreatedText"] = ["X", "Y"],
+        ["ControlTools.restoreCollectionText"] = ["X", "Y"],
         ["ControlTools.restoreIntoText"] = ["X"],
+        ["ControlTools.restoreRecreatingText"] = ["X"],
         ["ControlTools.restoreTitle"] = ["X", "Y"],
         ["ControlTools.restoredNotification"] = ["X", "Y"],
         ["ControlTools.restoredText"] = ["X"],
@@ -286,6 +301,7 @@ public class StringCatalogTests
         // label one of them renders as rather than the usual "X".
         ["RemotePattern.cmdUnsafeReason"] = ["Server URL"],
         ["RestoreModel.confirmMessage"] = ["X"],
+        ["RestoreModel.recreateInformative"] = ["X"],
         ["ReviewModel.title"] = ["X"],
         ["SettingsModel.keepCountHelpText"] = ["3"],
         ["SettingsModel.loginItemFailureNote"] = ["X"],
@@ -323,7 +339,9 @@ public class StringCatalogTests
         actual["AppState.claudeConfigChangedBody"] = AppState.ClaudeConfigChangedBody;
         actual["AppState.claudeConfigRegeneratedBody"] = AppState.ClaudeConfigRegeneratedBody;
         actual["AppState.collectionDirCmdUnsafeCaution"] = AppState.CollectionDirCmdUnsafeCaution;
+        actual["AppState.collectionBackupUnreadableError"] = AppState.CollectionBackupUnreadableError("X");
         actual["AppState.collectionLocateBanner"] = AppState.CollectionLocateBanner("X");
+        actual["AppState.collectionNotInBackupError"] = AppState.CollectionNotInBackupError("X", "Y");
         actual["AppState.collectionPublishFailedBanner"] = AppState.CollectionPublishFailedBanner("X", "Y", "Z");
         actual["AppState.collectionUpdateBanner"] = AppState.CollectionUpdateBanner("X", "Y");
         actual["AppState.collectionUpdateNotificationBody"] = AppState.CollectionUpdateNotificationBody("X", "Y");
@@ -360,7 +378,8 @@ public class StringCatalogTests
         actual["AppState.restartButton"] = AppState.RestartButton;
         actual["AppState.restartInformative"] = AppState.RestartInformative;
         actual["AppState.restartMessage"] = AppState.RestartMessage;
-        actual["AppState.restoreCollectionGoneError"] = AppState.RestoreCollectionGoneError("X");
+        actual["AppState.restoreCollectionSubscribedError"] = AppState.RestoreCollectionSubscribedError("X");
+        actual["AppState.restoreCollectionUnchangedError"] = AppState.RestoreCollectionUnchangedError("X");
         actual["AppState.restoreSubscribedError"] = AppState.RestoreSubscribedError("X");
         actual["AppState.sourceUnreadableError"] = AppState.SourceUnreadableError("X", "Y");
         actual["AppState.storeChangedBody"] = AppState.StoreChangedBody;
@@ -417,6 +436,25 @@ public class StringCatalogTests
         actual["CollectionDocument.notJSONError"] = CollectionDocument.NotJsonError;
         actual["CollectionDocument.credentialReferencePhrase"] = CollectionDocument.CredentialReferencePhrase;
         actual["CollectionDocument.credentialUserOnlyPhrase"] = CollectionDocument.CredentialUserOnlyPhrase;
+
+        // MARK: CollectionRestoreModel
+
+        actual["CollectionRestoreModel.activeInformative"] = CollectionRestoreModel.ActiveInformative;
+        actual["CollectionRestoreModel.caption"] = CollectionRestoreModel.Caption;
+        actual["CollectionRestoreModel.changedWhileAskingError"] = CollectionRestoreModel.ChangedWhileAskingError("X");
+        actual["CollectionRestoreModel.changesLine.off"] = CollectionRestoreModel.ChangesLine("X", false);
+        actual["CollectionRestoreModel.changesLine.on"] = CollectionRestoreModel.ChangesLine("X", true);
+        actual["CollectionRestoreModel.comesBackLine.off"] = CollectionRestoreModel.ComesBackLine("X", false);
+        actual["CollectionRestoreModel.comesBackLine.on"] = CollectionRestoreModel.ComesBackLine("X", true);
+        actual["CollectionRestoreModel.confirmMessage"] = CollectionRestoreModel.ConfirmMessage("X", "Y");
+        actual["CollectionRestoreModel.createdInformative"] = CollectionRestoreModel.CreatedInformative("X");
+        actual["CollectionRestoreModel.detailSeparator"] = CollectionRestoreModel.DetailSeparator;
+        actual["CollectionRestoreModel.differsState"] = CollectionRestoreModel.DiffersState;
+        actual["CollectionRestoreModel.goesLine"] = CollectionRestoreModel.GoesLine("X");
+        actual["CollectionRestoreModel.goneState"] = CollectionRestoreModel.GoneState;
+        actual["CollectionRestoreModel.sameState"] = CollectionRestoreModel.SameState;
+        actual["CollectionRestoreModel.subscribedState"] = CollectionRestoreModel.SubscribedState;
+        actual["CollectionRestoreModel.unchangedLine"] = CollectionRestoreModel.UnchangedLine(3);
 
         // MARK: CollectionsModel
 
@@ -572,12 +610,14 @@ public class StringCatalogTests
         actual["ControlTools.changedText"] = ControlTools.ChangedText("X", "Y");
         actual["ControlTools.changedWhileAskingError"] = ControlTools.ChangedWhileAskingError;
         actual["ControlTools.changesClause"] = ControlTools.ChangesClause("X");
+        actual["ControlTools.claudeBackupsHeading"] = ControlTools.ClaudeBackupsHeading;
         actual["ControlTools.claudeGroup"] = ControlTools.ClaudeGroup;
         actual["ControlTools.claudeLabel"] = ControlTools.ClaudeLabel;
         actual["ControlTools.claudeNotRunning"] = ControlTools.ClaudeNotRunning;
         actual["ControlTools.claudeRunning"] = ControlTools.ClaudeRunning;
         actual["ControlTools.claudeRunningRestart"] = ControlTools.ClaudeRunningRestart;
         actual["ControlTools.clauseSeparator"] = ControlTools.ClauseSeparator;
+        actual["ControlTools.collectionBackupsHeading"] = ControlTools.CollectionBackupsHeading;
         actual["ControlTools.collectionHeader"] = ControlTools.CollectionHeader;
         actual["ControlTools.collectionsGroup"] = ControlTools.CollectionsGroup;
         actual["ControlTools.configShapeError"] = ControlTools.ConfigShapeError;
@@ -673,7 +713,10 @@ public class StringCatalogTests
         actual["ControlTools.restartToUseText"] = ControlTools.RestartToUseText;
         actual["ControlTools.restartingText"] = ControlTools.RestartingText;
         actual["ControlTools.restoreActivatingText"] = ControlTools.RestoreActivatingText("X");
+        actual["ControlTools.restoreCollectionCreatedText"] = ControlTools.RestoreCollectionCreatedText("X", "Y");
+        actual["ControlTools.restoreCollectionText"] = ControlTools.RestoreCollectionText("X", "Y");
         actual["ControlTools.restoreIntoText"] = ControlTools.RestoreIntoText("X");
+        actual["ControlTools.restoreRecreatingText"] = ControlTools.RestoreRecreatingText("X");
         actual["ControlTools.restoreTitle"] = ControlTools.RestoreTitle("X", "Y");
         actual["ControlTools.restoredNotification"] = ControlTools.RestoredNotification("X", "Y");
         actual["ControlTools.restoredText"] = ControlTools.RestoredText("X");
@@ -705,6 +748,7 @@ public class StringCatalogTests
         actual["ControlTools.turnedOnText"] = ControlTools.TurnedOnText("X", "Y");
         actual["ControlTools.unchangedError"] = ControlTools.UnchangedError("X");
         actual["ControlTools.unknownToolError"] = ControlTools.UnknownToolError("X");
+        actual["ControlTools.unreadableBackupText"] = ControlTools.UnreadableBackupText;
         actual["ControlTools.upToDateText"] = ControlTools.UpToDateText("X");
         actual["ControlTools.updateAvailableKind"] = ControlTools.UpdateAvailableKind;
         actual["ControlTools.waitingText"] = ControlTools.WaitingText;
@@ -944,8 +988,12 @@ public class StringCatalogTests
 
         actual["RestoreModel.cancelTitle"] = RestoreModel.CancelTitle;
         actual["RestoreModel.caption"] = RestoreModel.Caption;
+        actual["RestoreModel.claudeConfigNote"] = RestoreModel.ClaudeConfigNote;
+        actual["RestoreModel.claudeConfigTab"] = RestoreModel.ClaudeConfigTab;
+        actual["RestoreModel.collectionsTab"] = RestoreModel.CollectionsTab;
         actual["RestoreModel.confirmMessage"] = RestoreModel.ConfirmMessage("X");
         actual["RestoreModel.headline"] = RestoreModel.Headline;
+        actual["RestoreModel.recreateInformative"] = RestoreModel.RecreateInformative("X");
         actual["RestoreModel.restoreButton"] = RestoreModel.RestoreButton;
         actual["RestoreModel.restoreTitle"] = RestoreModel.RestoreTitle;
 

@@ -1,0 +1,19 @@
+{
+  "activeProfile": "Default",
+  "profiles": {
+    "Default": {
+      "mcps": {
+        "aws-mcp": {"enabled": true, "config": {"command": "npx", "args": ["-y", "mcp-remote", "https://aws-mcp.us-east-1.api.aws/mcp"]}, "lastEditView": "form"},
+        "github": {"enabled": true, "config": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"]}, "lastEditView": "form"},
+        "splunk": {"enabled": true, "config": {"command": "npx", "args": ["-y", "mcp-remote", "https://harvard.splunkcloud.com/mcp"]}, "lastEditView": "form"}
+      }
+    },
+    "Personal": {
+      "mcps": {
+        "aws-mcp": {"enabled": true, "config": {"command": "npx", "args": ["-y", "mcp-remote", "https://aws-mcp.us-east-1.api.aws/mcp"]}, "lastEditView": "form"},
+        "github": {"enabled": false, "config": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"]}, "lastEditView": "form"}
+      }
+    }
+  },
+  "version": 2
+}

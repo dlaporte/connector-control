@@ -21,8 +21,7 @@ public static class MasterStoreIO
             // file) is self-healed by the MasterStore constructor itself - see
             // its comment - so FromJson always returns a store whose
             // ActiveCollection names an existing collection.
-            var store = MasterStore.FromJson(JsonValue.Parse(File.ReadAllBytes(path)));
-            return (store, null);
+            return (Decode(File.ReadAllBytes(path)), null);
         }
         catch (Exception ex) when (ex is JsonException or FormatException or IOException or UnauthorizedAccessException)
         {
@@ -56,11 +55,18 @@ public static class MasterStoreIO
             {
                 return null;
             }
-            return MasterStore.FromJson(JsonValue.Parse(File.ReadAllBytes(path)));
+            return Decode(File.ReadAllBytes(path));
         }
         catch (Exception ex) when (ex is JsonException or FormatException or IOException or UnauthorizedAccessException)
         {
             return null;
         }
     }
+
+    /// <summary>
+    /// A master list's bytes as <see cref="Load"/> and <see cref="Read"/> decode them: a backup read
+    /// once is decoded here, so what is shown from it is what is restored from it. Throws
+    /// <see cref="JsonException"/> or <see cref="FormatException"/>.
+    /// </summary>
+    public static MasterStore Decode(byte[] data) => MasterStore.FromJson(JsonValue.Parse(data));
 }

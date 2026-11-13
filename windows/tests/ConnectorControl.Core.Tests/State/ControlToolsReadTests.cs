@@ -167,8 +167,88 @@ public class ControlToolsReadTests
         var items = At(result.Structured, "backups");
         Assert.NotNull(items);
         Assert.Equal(expected.Select(path => JsonValue.String(Path.GetFileName(path))), items.ArrayItems.Select(item => At(item, "id")));
-        Assert.StartsWith("ID ", result.Text, StringComparison.Ordinal);
+        Assert.StartsWith(ControlTools.ClaudeBackupsHeading + "\nID ", result.Text, StringComparison.Ordinal);
         Assert.Contains(Path.GetFileName(expected[0]), result.Text, StringComparison.Ordinal);
+    }
+
+    /// <summary>The backups folder emptied, then holding only <paramref name="files"/>, each as its text: what
+    /// <c>list_backups</c> lists is then exactly what a test put there.</summary>
+    private static void Backups(ControlRig rig, params (string Name, string Text)[] files)
+    {
+        Directory.CreateDirectory(rig.H.BackupsDir);
+        foreach (var path in Directory.GetFiles(rig.H.BackupsDir))
+        {
+            File.Delete(path);
+        }
+        foreach (var (name, text) in files)
+        {
+            File.WriteAllText(Path.Combine(rig.H.BackupsDir, name), text);
+        }
+    }
+
+    private const string ClaudeBackup = "claude_desktop_config.2026-11-01T00-00-00-000Z.json";
+    private const string NewerBackup = "mcps.2026-11-02T00-00-00-000Z.json";
+    private const string OlderBackup = "mcps.2026-11-01T00-00-00-000Z.json";
+
+    /// <summary>A master list as a backup holds it: Personal, with one connector, on, and Default, with two,
+    /// one of them on.</summary>
+    private const string MasterList = """
+        {"version": 2, "activeProfile": "Default", "profiles": {
+          "Personal": {"mcps": {"notes": {"enabled": true, "config": {"command": "node"}, "lastEditView": "form"}}},
+          "Default": {"mcps": {"github": {"enabled": true, "config": {"command": "node"}, "lastEditView": "form"},
+                               "splunk": {"enabled": false, "config": {"command": "node"}, "lastEditView": "form"}}}}}
+        """;
+
+    /// <summary>Both kinds, each under its heading: Claude's config's as before, then a row for each collection
+    /// a master-list backup holds, by name, newest backup first; one that cannot be read says so.</summary>
+    [Fact]
+    public void ListBackupsListsBothKindsUnderTheirHeadings()
+    {
+        using var rig = new ControlRig();
+        Backups(rig, (ClaudeBackup, """{"mcpServers": {}}"""), (NewerBackup, MasterList), (OlderBackup, "{"));
+        BackupCollections.Record("Default", Path.Combine(rig.H.BackupsDir, ClaudeBackup), rig.H.BackupsDir);
+        var result = rig.Call("list_backups");
+        Assert.NotNull(result);
+        Assert.Equal(string.Join("\n",
+            "Claude’s config:",
+            "ID                                                    COLLECTION",
+            "claude_desktop_config.2026-11-01T00-00-00-000Z.json   Default",
+            "",
+            "Collections:",
+            "ID                                   COLLECTION   CONNECTORS",
+            "mcps.2026-11-02T00-00-00-000Z.json   Default      2 connectors, 1 on",
+            "mcps.2026-11-02T00-00-00-000Z.json   Personal     1 connector, 1 on",
+            "mcps.2026-11-01T00-00-00-000Z.json                can’t be read"), result.Text);
+        Assert.Equal(JsonValue.Object(
+            ("backups", JsonValue.Array([JsonValue.Object(("id", JsonValue.String(ClaudeBackup)), ("collection", JsonValue.String("Default")))])),
+            ("collectionBackups", JsonValue.Array([
+                JsonValue.Object(("id", JsonValue.String(NewerBackup)), ("collections", JsonValue.Array([
+                    JsonValue.Object(("name", JsonValue.String("Default")), ("connectors", JsonValue.Int(2)), ("on", JsonValue.Int(1))),
+                    JsonValue.Object(("name", JsonValue.String("Personal")), ("connectors", JsonValue.Int(1)), ("on", JsonValue.Int(1))),
+                ]))),
+                JsonValue.Object(("id", JsonValue.String(OlderBackup)), ("collections", JsonValue.Null)),
+            ]))), result.Structured);
+    }
+
+    /// <summary>Only the kind there is, under its heading and with no blank line before it; neither kind is the
+    /// sentence it always was.</summary>
+    [Fact]
+    public void ListBackupsListsOnlyTheKindThereIsAndSaysWhenThereAreNone()
+    {
+        using var rig = new ControlRig();
+        Backups(rig, (NewerBackup, MasterList));
+        var collections = rig.Call("list_backups");
+        Assert.NotNull(collections);
+        Assert.StartsWith("Collections:\nID ", collections.Text, StringComparison.Ordinal);
+        Assert.Equal(JsonValue.Array([]), At(collections.Structured, "backups"));
+        Backups(rig, (ClaudeBackup, """{"mcpServers": {}}"""));
+        var claude = rig.Call("list_backups");
+        Assert.NotNull(claude);
+        Assert.Equal(string.Join("\n", "Claude’s config:", "ID                                                    COLLECTION", ClaudeBackup), claude.Text);
+        Assert.Equal(JsonValue.Array([]), At(claude.Structured, "collectionBackups"));
+        Backups(rig);
+        Assert.Equal(new ControlResult(JsonValue.Object(("backups", JsonValue.Array([])), ("collectionBackups", JsonValue.Array([]))),
+            ControlTools.NoBackupsText, false), rig.Call("list_backups"));
     }
 
     [Fact]

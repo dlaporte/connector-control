@@ -67,6 +67,8 @@ public class ControlCommandLineTests
             (["settings", "set", "backups-to-keep", "30"], Call("set_setting", ("key", S("backups-to-keep")), ("value", S("30")))),
             (["backups"], Call("list_backups")),
             (["backups", "restore", id], Call("restore_backup", ("id", S(id)))),
+            (["backups", "restore-collection", "mcps.2026-10-28T12-00-00-000Z.json", "Team"],
+             Call("restore_collection", ("id", S("mcps.2026-10-28T12-00-00-000Z.json")), ("collection", S("Team")))),
             (["restart-claude"], Call("restart_claude")),
         ];
         var tools = new HashSet<string>();
@@ -153,6 +155,18 @@ public class ControlCommandLineTests
         Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UnknownOptionError("--\u0301x")), Parse("connectors", "--\u0301x"));
         Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.UnknownOptionError("extra")), Parse("mcp", "extra"));
         Assert.Equal(new ControlInvocation.Usage(ControlCommandLine.HelpTakesNoArgumentsError), Parse("help", "status"));
+    }
+
+    /// <summary><c>backups restore-collection</c> takes exactly an id and a collection.</summary>
+    [Fact]
+    public void RestoringACollectionTakesAnIdAndACollection()
+    {
+        var usage = new ControlInvocation.Usage(ControlCommandLine.UsageError("backups restore-collection <id> <collection>"));
+        Assert.Equal(JsonCall("restore_collection", ("id", S("mcps.x.json")), ("collection", S("My team"))),
+            Parse("backups", "restore-collection", "mcps.x.json", "My team", "--json"));
+        Assert.Equal(usage, Parse("backups", "restore-collection", "mcps.x.json"));
+        Assert.Equal(usage, Parse("backups", "restore-collection", "mcps.x.json", "Team", "Extra"));
+        Assert.Equal(usage, Parse("backups", "restore-collection"));
     }
 
     /// <summary><c>env</c> takes <c>KEY=value</c> words, each split at its first "=", and <c>--unset KEY</c> as often as it

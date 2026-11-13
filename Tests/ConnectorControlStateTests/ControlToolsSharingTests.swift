@@ -594,6 +594,66 @@ final class ControlToolsSharingTests: XCTestCase {
         XCTAssertEqual(result.structured.value(at: JSONPointer(["activeCollection"])), .string("Work"))
     }
 
+    /// A backup whose collection is gone creates it again, which becomes the active collection; the
+    /// question says it holds only what Claude was running.
+    func testRestoringABackupOfAGoneCollectionCreatesItAgain() throws {
+        let rig = rig(); defer { rig.dispose() }
+        XCTAssertNil(rig.state.createActiveCopy(named: "Work"))
+        XCTAssertNil(rig.state.upsert(name: "one", entry: AppStateHarness.localConnector("node"), renamedFrom: nil))
+        rig.state.applyInteractively()
+        rig.state.switchCollection(to: "Default")
+        let backups = try rig.state.service.backups.backups(series: RestoreModel.series)
+        let backup = try XCTUnwrap(backups.first { BackupCollections.collection(of: $0, in: rig.h.backupsDir) == "Work" })
+        XCTAssertNil(rig.state.deleteCollection(named: "Work"))
+        let result = try XCTUnwrap(rig.call("restore_backup", ["id": .string(backup.lastPathComponent)]))
+        XCTAssertEqual(rig.confirmer.requests.last?.message, RestoreModel.caption + " " + ControlTools.restoreRecreatingText("Work"))
+        XCTAssertFalse(result.isError, result.text)
+        XCTAssertEqual(rig.state.activeCollection, "Work")
+        XCTAssertNotNil(rig.state.store.collections["Work"]?.mcps["one"])
+        XCTAssertEqual(result.structured.value(at: JSONPointer(["activeCollection"])), .string("Work"))
+    }
+
+    /// A restore asked about a collection that is gone, and answered after it was created again, asks a
+    /// different question now (it is no longer created), so the Allow lands nothing.
+    func testARestoreOfAGoneCollectionThatWasCreatedAgainWhileAskingLandsNothing() throws {
+        let rig = rig(answer: nil); defer { rig.dispose() }
+        XCTAssertNil(rig.state.createActiveCopy(named: "Work"))
+        XCTAssertNil(rig.state.upsert(name: "one", entry: AppStateHarness.localConnector("node"), renamedFrom: nil))
+        rig.state.applyInteractively()
+        rig.state.switchCollection(to: "Default")
+        let backups = try rig.state.service.backups.backups(series: RestoreModel.series)
+        let backup = try XCTUnwrap(backups.first { BackupCollections.collection(of: $0, in: rig.h.backupsDir) == "Work" })
+        XCTAssertNil(rig.state.deleteCollection(named: "Work"))
+        let answer = rig.start("restore_backup", ["id": .string(backup.lastPathComponent)])
+        XCTAssertEqual(rig.confirmer.requests.last?.message, RestoreModel.caption + " " + ControlTools.restoreRecreatingText("Work"))
+        XCTAssertNil(rig.state.addEmptyCollection(named: "Work"))
+        let store = try rig.h.storeOnDisk(), claude = try rig.h.claudeServers()
+        rig.confirmer.answer(true)
+        rig.h.drain()
+        XCTAssertEqual(answer.result, .refusal(ControlTools.changedWhileAskingError))
+        XCTAssertEqual(rig.state.activeCollection, "Default")
+        XCTAssertEqual(try rig.h.storeOnDisk(), store, "nothing applied")
+        XCTAssertEqual(try rig.h.claudeServers(), claude)
+    }
+
+    /// A backup recorded under another spelling of a collection's name goes into the collection held: the
+    /// question names it as held, and does not say it is created again.
+    func testRestoringABackupRecordedUnderAnotherSpellingGoesIntoTheOneHeld() throws {
+        let rig = rig(); defer { rig.dispose() }
+        let composed = "Caf\u{E9}", decomposed = "Cafe\u{301}"
+        XCTAssertNil(rig.state.addEmptyCollection(named: composed))
+        let id = "claude_desktop_config.2026-11-01T00-00-00-000Z.json"
+        let backup = rig.h.backupsDir.appendingPathComponent(id)
+        try Data(#"{"mcpServers": {"c1": {"command": "c1"}}}"#.utf8).write(to: backup)
+        try BackupCollections.record(decomposed, for: backup, in: rig.h.backupsDir, staging: nil)
+        let result = try XCTUnwrap(rig.call("restore_backup", ["id": .string(id)]))
+        XCTAssertEqual(rig.confirmer.requests.last?.message,
+                       RestoreModel.caption + " " + ControlTools.restoreActivatingText(ControlText.escapedName(composed)))
+        XCTAssertFalse(result.isError, result.text)
+        XCTAssertTrue(rig.state.activeCollection.hasSameScalars(as: composed))
+        XCTAssertEqual(rig.state.store.collections.keys.filter { $0.hasPrefix("Caf") }.count, 1)
+    }
+
     // MARK: restart_claude
 
     func testARestartFromClaudeAlwaysAsksAndFromTheCommandLineNever() {

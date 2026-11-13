@@ -102,7 +102,15 @@ public sealed class MasterStore : IEquatable<MasterStore>
     /// collection's name is, so only a new name is held to this; a shared store never gains a second
     /// spelling that a Mac, keeping one, would lose.
     /// </summary>
-    private bool HoldsCollectionNamed(string name) => Collections.Keys.Any(k => Collection.NameComparer.Equals(k, name));
+    private bool HoldsCollectionNamed(string name) => StoredCollectionName(name) is not null;
+
+    /// <summary>
+    /// The name <paramref name="name"/> is held under among the collections, or null when no collection
+    /// has it: this spelling, else one Unicode counts as the same text (<see cref="Collection.NameComparer"/>),
+    /// as the Mac's dictionary keys find a collection and <see cref="Collection.StoredName"/> finds a connector.
+    /// </summary>
+    public string? StoredCollectionName(string name) =>
+        Collections.ContainsKey(name) ? name : Collections.Keys.FirstOrDefault(k => Collection.NameComparer.Equals(k, name));
 
     /// <summary>null on success, else a user-facing error message. Renaming the active collection keeps it active under its new name.</summary>
     public string? RenameCollection(string name, string newName)

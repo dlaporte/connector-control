@@ -93,6 +93,7 @@ public sealed partial class ControlTools
             case "subscribe": return SubscribeDocument(arguments, caller);
             case "apply_update": return ApplyUpdate(arguments, caller.ShownAsker);
             case "restore_backup": return RestoreBackup(arguments, caller.ShownAsker);
+            case "restore_collection": return RestoreCollection(arguments, caller);
             case "restart_claude": return RestartClaude(caller.ShownAsker);
             default: return new ControlStep.Refused(UnknownToolError(ControlText.EscapedName(name)));
         }

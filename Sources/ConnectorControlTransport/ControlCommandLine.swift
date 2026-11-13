@@ -183,8 +183,14 @@ public enum ControlCommandLine {
                 ["key": .string($0.positionals[0]), "value": .string($0.positionals[1])]
             }
         case "backups":
-            guard rest.first == "restore" else { return try call("list_backups", rest) }
-            return try call("restore_backup", rest.dropFirst(), count: 1...1) { ["id": .string($0.positionals[0])] }
+            switch rest.first {
+            case "restore": return try call("restore_backup", rest.dropFirst(), count: 1...1) { ["id": .string($0.positionals[0])] }
+            case "restore-collection":
+                return try call("restore_collection", rest.dropFirst(), count: 2...2) {
+                    ["id": .string($0.positionals[0]), "collection": .string($0.positionals[1])]
+                }
+            default: return try call("list_backups", rest)
+            }
         case "restart-claude": return try call("restart_claude", rest)
         default: return .usage(unknownCommandError(command))
         }

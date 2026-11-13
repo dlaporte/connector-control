@@ -2,11 +2,16 @@ using System.Text.Json;
 
 namespace ConnectorControl.Core.State;
 
-/// <summary>RestoreSheetView state.</summary>
+/// <summary>The Restore dialog's Claude's config tab, and the dialog's own strings.</summary>
 public sealed class RestoreModel : ObservableObject
 {
-    public const string Headline = "Restore Claude config from a backup";
+    public const string Headline = "Restore from a backup";
+    /// <summary>The dialog's two tabs, Collections first and chosen when it opens.</summary>
+    public const string CollectionsTab = "Collections";
+    public const string ClaudeConfigTab = "Claude’s config";
     public const string Caption = "The current file is backed up first, then replaced by the selected backup.";
+    /// <summary>Under the Claude's config tab's caption.</summary>
+    public const string ClaudeConfigNote = "It holds only the connectors that were on. To bring back a whole collection, use Collections.";
     public const string CancelTitle = "Cancel";
     /// <summary>
     /// The button that opens this dialog from Settings and the dialog's own Restore, on both
@@ -18,6 +23,9 @@ public sealed class RestoreModel : ObservableObject
     public const string Series = "claude_desktop_config";
 
     public static string ConfirmMessage(string fileName) => $"Replace Claude's config with {fileName}?";
+
+    /// <summary>The confirmation's informative text when the backup's collection is gone.</summary>
+    public static string RecreateInformative(string collection) => $"“{collection}” no longer exists, so it is created again with only the connectors Claude was running. To bring back all of its connectors, restore it from Collections.";
 
     private readonly AppState state;
     private readonly IDialogs dialogs;
@@ -105,7 +113,10 @@ public sealed class RestoreModel : ObservableObject
             RestoreError = ex.Message;
             return false;
         }
-        if (!dialogs.Confirm(ConfirmMessage(Path.GetFileName(backup)), null, RestoreButton, destructive: true))
+        // Under the message: when the collection the backup records is gone, that the restore creates it
+        // again with only what Claude was running.
+        var informative = recorded is not null && state.Store.StoredCollectionName(recorded) is null ? RecreateInformative(recorded) : null;
+        if (!dialogs.Confirm(ConfirmMessage(Path.GetFileName(backup)), informative, RestoreButton, destructive: true))
         {
             return false;
         }
@@ -115,7 +126,7 @@ public sealed class RestoreModel : ObservableObject
             CloseRequested?.Invoke();
             return true;
         }
-        catch (Exception ex) when (ex is RestoreCollectionGoneException or RestoreSubscribedException)
+        catch (RestoreSubscribedException ex)
         {
             // A refusal is the dialog's alone, as the one before the confirmation is: nothing was
             // restored, so there is nothing for the banner to say. It arrives here only when the
