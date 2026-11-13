@@ -226,15 +226,20 @@ public class ControlToolsCollectionRestoreTests
     /// <summary>Claude can't see a value, so a right guess at one leaves the collection as the backup holds it and a
     /// wrong one doesn't: both restores get the same answer and the same notification, restart and all, and write
     /// Claude's config alike, whether the connector holding the value is on or off, whether the collection is the one
-    /// Claude runs, and whether any of its connectors is on. Nobody is asked, so each restore is announced.</summary>
+    /// Claude runs, and whether any of its connectors is on; asked and allowed, or not asked at all, when each restore
+    /// is announced.</summary>
     [Theory]
-    [InlineData("Default", false, true)]
-    [InlineData("Default", true, true)]
-    [InlineData("Work", true, true)]
-    [InlineData("Default", false, false)]
-    public void AnUnchangedRestoreIsAnsweredAsOneThatChangesSomething(string collection, bool on, bool othersOn)
+    [InlineData("Default", false, true, true)]
+    [InlineData("Default", true, true, true)]
+    [InlineData("Work", true, true, true)]
+    [InlineData("Default", false, false, true)]
+    [InlineData("Default", false, true, false)]
+    [InlineData("Default", true, true, false)]
+    [InlineData("Work", true, true, false)]
+    [InlineData("Default", false, false, false)]
+    public void AnUnchangedRestoreIsAnsweredAsOneThatChangesSomething(string collection, bool on, bool othersOn, bool confirm)
     {
-        using var rig = new ControlRig(confirm: false);
+        using var rig = confirm ? Rig() : new ControlRig(confirm: false);
         if (collection != "Default")
         {
             Assert.Null(rig.State.AddEmptyCollection(collection));
@@ -269,8 +274,10 @@ public class ControlToolsCollectionRestoreTests
         // The same answer and the same notification.
         Assert.Equal(right.Result, wrong.Result);
         Assert.Equal(right.Sent, wrong.Sent);
-        Assert.Equal([ControlTools.RestoredNotification(ControlCaller.ClaudeName, collection)
-                      + (right.Wrote ? " " + ControlTools.RestartToApplyText : "")], right.Sent.Select(sent => sent.Body));
+        // Asked, the answer is the one Claude gets; not asked, the restore is announced.
+        string[] announced = confirm ? [] : [ControlTools.RestoredNotification(ControlCaller.ClaudeName, collection)
+                                             + (right.Wrote ? " " + ControlTools.RestartToApplyText : "")];
+        Assert.Equal(announced, right.Sent.Select(sent => sent.Body));
         // Claude's config written alike.
         var writes = collection == "Default" && (on || othersOn);
         Assert.Equal(writes, right.Wrote);
