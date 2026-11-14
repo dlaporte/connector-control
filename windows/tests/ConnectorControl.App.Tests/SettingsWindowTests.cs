@@ -3,6 +3,8 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using ConnectorControl.App.Services;
 using ConnectorControl.App.Tests.TestSupport;
@@ -386,6 +388,166 @@ public class SettingsWindowTests
                 dialog.Close();
             }
         });
+    }
+
+    /// <summary>Mirror: Tests/ConnectorControlAppTests/RestoreSheetLayoutTests.swift. Collections with nothing chosen,
+    /// with a backup chosen and its collections listed, and with a backup that cannot be read; Claude's config with and
+    /// without its failure line: one size throughout, so switching tabs, choosing a backup or a failure appearing never
+    /// moves the tabs or the buttons. Each list on Collections shows at least five rows, and the two share the space
+    /// evenly. A picture of each tab goes into the test results CI uploads.</summary>
+    [Fact]
+    public void RestoreDialogKeepsOneSizeOnBothTabs()
+    {
+        const string good = "mcps.2026-01-02T00-00-00-000Z.json";
+        const string unreadable = "mcps.2026-01-01T00-00-00-000Z.json";
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        foreach (var name in new[] { "Alpha", "Beta", "Gamma", "Delta", "Epsilon" })
+        {
+            Assert.Null(state.AddEmptyCollection(name));
+        }
+        Directory.CreateDirectory(h.BackupsDir);
+        MasterStoreIO.Save(state.Store, Path.Combine(h.BackupsDir, good));
+        File.WriteAllText(Path.Combine(h.BackupsDir, unreadable), "not a master list");
+        for (var day = 1; day <= 5; day++)
+        {
+            File.WriteAllText(Path.Combine(h.BackupsDir, $"claude_desktop_config.2026-01-0{day}T00-00-00-000Z.json"), Fixtures.RealisticClaudeConfig);
+        }
+        WpfApp.Invoke(() =>
+        {
+            var dialog = new RestoreDialog(state) { ShowActivated = false };
+            try
+            {
+                var sizes = new Dictionary<string, Size>();
+                int IndexOf(string name) => dialog.Collections.Backups.ToList().FindIndex(b => Path.GetFileName(b.Path) == name);
+                Assert.True(dialog.Collections.Backups.Count >= 5);
+                sizes["Collections, nothing chosen"] = ShowOnce(dialog, () =>
+                {
+                    Assert.Equal(Visibility.Visible, dialog.ChooseBackupPlaceholder.Visibility);
+                    Assert.True(dialog.ChooseBackupPlaceholder.ActualHeight > 0);
+                    Assert.Empty(dialog.CollectionList.Items);
+                    Assert.Equal(Visibility.Collapsed, dialog.FailureText.Visibility);
+                    SaveRender(dialog, "RestoreDialog-collections");
+                });
+
+                dialog.CollectionBackupList.SelectedIndex = IndexOf(good);
+                Assert.True(dialog.Collections.Rows.Count >= 5);
+                sizes["Collections, a backup chosen"] = ShowOnce(dialog, () =>
+                {
+                    Assert.Equal(Visibility.Collapsed, dialog.ChooseBackupPlaceholder.Visibility);
+                    Assert.Equal(dialog.Collections.Rows.Count, dialog.CollectionList.Items.Count);
+                    AssertShowsFiveRows(dialog.CollectionBackupList, "Backups");
+                    AssertShowsFiveRows(dialog.CollectionList, "Collections in this backup");
+                    Assert.Equal(dialog.CollectionBackupList.ActualHeight, dialog.CollectionList.ActualHeight, 1.0);   // shared evenly
+                    SaveRender(dialog, "RestoreDialog-collections-chosen");
+                });
+
+                dialog.CollectionBackupList.SelectedIndex = IndexOf(unreadable);
+                Assert.NotNull(dialog.Collections.RestoreError);
+                sizes["Collections, a failure line"] = ShowOnce(dialog, () =>
+                {
+                    Assert.Equal(Visibility.Visible, dialog.FailureText.Visibility);
+                    Assert.True(dialog.FailureText.ActualHeight > 0);
+                    Assert.Equal(dialog.Collections.RestoreError, dialog.FailureText.Text);
+                });
+
+                dialog.Tabs.SelectedItem = dialog.ClaudeConfigTabItem;
+                sizes["Claude's config"] = ShowOnce(dialog, () =>
+                {
+                    Assert.Equal(Visibility.Collapsed, dialog.FailureText.Visibility);
+                    AssertShowsFiveRows(dialog.BackupList, "Claude's config");
+                    SaveRender(dialog, "RestoreDialog-claude-config");
+                });
+
+                File.Delete(dialog.Model.Backups[0]);   // gone since the list was read
+                dialog.BackupList.SelectedIndex = 0;
+                Assert.False(dialog.Model.Restore());
+                Assert.NotNull(dialog.Model.RestoreError);
+                sizes["Claude's config, a failure line"] = ShowOnce(dialog, () =>
+                {
+                    Assert.Equal(Visibility.Visible, dialog.FailureText.Visibility);
+                    Assert.True(dialog.FailureText.ActualHeight > 0);
+                });
+
+                var first = sizes["Collections, nothing chosen"];
+                Assert.Equal(460, first.Width);
+                foreach (var (shown, size) in sizes)
+                {
+                    Assert.True(size == first, $"{shown}: {size} against {first}");
+                }
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    /// <summary>Shows <paramref name="window"/> for exactly one synchronous layout pass, as
+    /// <see cref="RestoreDialogOpensOnCollectionsAndListsTheChosenBackupsCollections"/> does, runs
+    /// <paramref name="check"/> while it is up, and returns the size it took.</summary>
+    private static Size ShowOnce(Window window, Action check)
+    {
+        window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
+        window.Show();
+        try
+        {
+            window.UpdateLayout();
+            check();
+            return new Size(window.ActualWidth, window.ActualHeight);
+        }
+        finally
+        {
+            window.Hide();
+        }
+    }
+
+    /// <summary>The first five rows of <paramref name="list"/> lie inside what it shows.</summary>
+    private static void AssertShowsFiveRows(ListBox list, string name)
+    {
+        Assert.True(list.Items.Count >= 5, $"{name} has five rows to show");
+        var fifth = list.ItemContainerGenerator.ContainerFromIndex(4) as ListBoxItem;
+        Assert.True(fifth is not null, $"{name} lays out its fifth row");
+        var shown = VisualTree.FindDescendant<ScrollContentPresenter>(list);
+        Assert.NotNull(shown);
+        var bottom = fifth.TransformToAncestor(shown).Transform(new Point(0, fifth.ActualHeight)).Y;
+        // In the test's output, so the dialog's height can be checked against what Fluent's rows measure on the runner.
+        TestContext.Current.TestOutputHelper?.WriteLine($"{name}: shows {shown.ActualHeight}, row 5 ends at {bottom}, a row is {fifth.ActualHeight} high.");
+        Assert.True(bottom <= shown.ActualHeight + 0.5,
+            $"{name} shows five rows: row 5 ends at {bottom}, the list shows {shown.ActualHeight}; a row is {fifth.ActualHeight} high");
+    }
+
+    /// <summary>A picture of <paramref name="window"/>'s content on its background, as <paramref name="name"/>.png in the
+    /// TestResults folder CI uploads as the test-results artifact, for a person to look at. Saved only there, and only
+    /// when that folder exists; anywhere else, nothing is written.</summary>
+    private static void SaveRender(Window window, string name)
+    {
+        var workspace = Environment.GetEnvironmentVariable("GITHUB_WORKSPACE");
+        var folder = string.IsNullOrEmpty(workspace) ? null : Path.Combine(workspace, "TestResults");
+        if (folder is null || !Directory.Exists(folder))
+        {
+            TestContext.Current.TestOutputHelper?.WriteLine($"{name}.png not saved: no TestResults folder in the CI workspace.");
+            return;
+        }
+        var content = (FrameworkElement)window.Content;
+        var margin = content.Margin;
+        var width = content.ActualWidth + margin.Left + margin.Right;
+        var height = content.ActualHeight + margin.Top + margin.Bottom;
+        var picture = new DrawingVisual();
+        using (var context = picture.RenderOpen())
+        {
+            context.DrawRectangle(window.Background, null, new Rect(0, 0, width, height));
+            context.DrawRectangle(new VisualBrush(content), null, new Rect(margin.Left, margin.Top, content.ActualWidth, content.ActualHeight));
+        }
+        var dpi = VisualTreeHelper.GetDpi(window);
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(width * dpi.DpiScaleX), (int)Math.Ceiling(height * dpi.DpiScaleY),
+            dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
+        bitmap.Render(picture);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var file = File.Create(Path.Combine(folder, name + ".png"));
+        encoder.Save(file);
+        TestContext.Current.TestOutputHelper?.WriteLine($"{name}.png saved in {folder}.");
     }
 
     /// <summary>The Tools group lists the four launchers, one line each with its status; how to install a missing one

@@ -359,23 +359,52 @@ final class BackupManagerTests: XCTestCase {
         XCTAssertEqual(labels[a.lastPathComponent]?.count, "2026-11-12 11:19:13".count)
     }
 
-    func testBackupsOfOneSecondCarryMilliseconds() throws {
+    /// Two backups of one second: the earlier keeps the plain label and the later adds " (2)"; a backup of
+    /// another second keeps its own.
+    func testBackupsOfOneSecondAreNumberedEarliestFirst() throws {
         let a = named("2026-11-12T16-19-13-493Z"), b = named("2026-11-12T16-19-13-871Z"), c = named("2026-11-12T16-19-14-000Z")
-        let labels = BackupManager.labels(for: [a, b, c])
+        let labels = BackupManager.labels(for: [b, c, a])
         let second = IsoTimestamp.localDateTimeSeconds(from: try XCTUnwrap(BackupManager.takenAt(a)))
-        XCTAssertEqual(labels[a.lastPathComponent], "\(second).493")
-        XCTAssertEqual(labels[b.lastPathComponent], "\(second).871")
+        XCTAssertEqual(labels[a.lastPathComponent], second)
+        XCTAssertEqual(labels[b.lastPathComponent], "\(second) (2)")
         XCTAssertEqual(labels[c.lastPathComponent], IsoTimestamp.localDateTimeSeconds(from: try XCTUnwrap(BackupManager.takenAt(c))),
-                       "a backup of another second keeps the short label")
+                       "a backup of another second keeps the plain label")
     }
 
-    func testBackupsOfOneMillisecondAddTheirCounter() throws {
-        let a = named("2026-11-12T16-19-13-493Z"), b = named("2026-11-12T16-19-13-493Z-2"), c = named("2026-11-12T16-19-13-493Z-3")
-        let labels = BackupManager.labels(for: [c, a, b])
-        let base = "\(IsoTimestamp.localDateTimeSeconds(from: try XCTUnwrap(BackupManager.takenAt(a)))).493"
-        XCTAssertEqual(labels[a.lastPathComponent], base)
-        XCTAssertEqual(labels[b.lastPathComponent], "\(base) (2)")
-        XCTAssertEqual(labels[c.lastPathComponent], "\(base) (3)")
+    /// Three backups of one second, two of them of one millisecond: numbered in order by the name's stamp,
+    /// then its counter.
+    func testThreeBackupsOfOneSecondAreNumberedByStampThenCounter() throws {
+        let a = named("2026-11-12T16-19-13-493Z"), b = named("2026-11-12T16-19-13-493Z-2"), c = named("2026-11-12T16-19-13-871Z")
+        let labels = BackupManager.labels(for: [c, b, a])
+        let second = IsoTimestamp.localDateTimeSeconds(from: try XCTUnwrap(BackupManager.takenAt(a)))
+        XCTAssertEqual(labels[a.lastPathComponent], second)
+        XCTAssertEqual(labels[b.lastPathComponent], "\(second) (2)")
+        XCTAssertEqual(labels[c.lastPathComponent], "\(second) (3)")
+    }
+
+    /// Two backups of one millisecond: the one without a counter is the earlier.
+    func testBackupsOfOneMillisecondAreNumberedByTheirCounter() throws {
+        let a = named("2026-11-12T16-19-13-493Z"), b = named("2026-11-12T16-19-13-493Z-2")
+        let labels = BackupManager.labels(for: [b, a])
+        let second = IsoTimestamp.localDateTimeSeconds(from: try XCTUnwrap(BackupManager.takenAt(a)))
+        XCTAssertEqual(labels[a.lastPathComponent], second)
+        XCTAssertEqual(labels[b.lastPathComponent], "\(second) (2)")
+    }
+
+    /// No label carries a fraction of a second, however many backups share one.
+    func testNoLabelCarriesMilliseconds() throws {
+        let stamps = ["2026-11-12T16-19-13-000Z", "2026-11-12T16-19-13-001Z", "2026-11-12T16-19-13-001Z-2",
+                      "2026-11-12T16-19-13-999Z", "2026-11-12T16-19-14-500Z"]
+        let urls = stamps.map { named($0) }
+        let labels = BackupManager.labels(for: urls)
+        XCTAssertEqual(labels.count, stamps.count)
+        for url in urls {
+            let label = try XCTUnwrap(labels[url.lastPathComponent])
+            let second = IsoTimestamp.localDateTimeSeconds(from: try XCTUnwrap(BackupManager.takenAt(url)))
+            XCTAssertTrue(label.hasPrefix(second), label)
+            XCTAssertFalse(label.dropFirst(second.count).hasPrefix("."), "no milliseconds after the seconds: \(label)")
+        }
+        XCTAssertEqual(Set(labels.values).count, stamps.count, "every label is its own")
     }
 
     func testANameWithNoTimeIsItsOwnLabel() {

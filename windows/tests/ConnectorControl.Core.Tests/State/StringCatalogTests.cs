@@ -440,10 +440,13 @@ public class StringCatalogTests
         // MARK: CollectionRestoreModel
 
         actual["CollectionRestoreModel.activeInformative"] = CollectionRestoreModel.ActiveInformative;
+        actual["CollectionRestoreModel.backupsHeading"] = CollectionRestoreModel.BackupsHeading;
         actual["CollectionRestoreModel.caption"] = CollectionRestoreModel.Caption;
         actual["CollectionRestoreModel.changedWhileAskingError"] = CollectionRestoreModel.ChangedWhileAskingError("X");
         actual["CollectionRestoreModel.changesLine.off"] = CollectionRestoreModel.ChangesLine("X", false);
         actual["CollectionRestoreModel.changesLine.on"] = CollectionRestoreModel.ChangesLine("X", true);
+        actual["CollectionRestoreModel.chooseBackupPlaceholder"] = CollectionRestoreModel.ChooseBackupPlaceholder;
+        actual["CollectionRestoreModel.collectionsHeading"] = CollectionRestoreModel.CollectionsHeading;
         actual["CollectionRestoreModel.comesBackLine.off"] = CollectionRestoreModel.ComesBackLine("X", false);
         actual["CollectionRestoreModel.comesBackLine.on"] = CollectionRestoreModel.ComesBackLine("X", true);
         actual["CollectionRestoreModel.confirmMessage"] = CollectionRestoreModel.ConfirmMessage("X", "Y");

@@ -5,51 +5,92 @@
         xmlns:views="clr-namespace:ConnectorControl.App.Views"
         Title="{x:Static state:RestoreModel.RestoreTitle}"
         Width="460">
+  <views:DialogWindow.Resources>
+    <!-- Platform idiom: compact rows, as the Mac's bordered lists have, so five fit in each list without the dialog
+         outgrowing a small screen; Fluent's own rows are about 40 high. -->
+    <Style x:Key="RestoreRow" TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Padding" Value="10,4" />
+    </Style>
+  </views:DialogWindow.Resources>
   <StackPanel Margin="16">
     <TextBlock Text="{x:Static state:RestoreModel.Headline}" FontSize="14" FontWeight="SemiBold" />
-    <!-- Platform idiom: a TabControl styled as Settings' own tabs switches between the two; the Mac switches with a
-         segmented picker. Collections comes first and is chosen when the dialog opens. -->
-    <TabControl x:Name="Tabs" Margin="0,8,0,0">
-      <TabItem x:Name="CollectionsTabItem" Header="{x:Static state:RestoreModel.CollectionsTab}">
-        <StackPanel Margin="0,10,0,0">
-          <TextBlock Text="{x:Static state:CollectionRestoreModel.Caption}" Style="{StaticResource CaptionText}" Margin="0,0,0,10" />
-          <!-- Each row is the backup's label, which is also what a screen reader says for it. -->
-          <ListBox x:Name="CollectionBackupList" Height="120" FontFamily="{StaticResource MonoFont}" FontSize="13"
-                   SelectionChanged="OnCollectionBackupSelectionChanged" />
-          <ListBox x:Name="CollectionList" Height="120" Margin="0,10,0,0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                   SelectionChanged="OnCollectionSelectionChanged">
-            <ListBox.ItemContainerStyle>
-              <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
-                <!-- The item holds a record, and without a name of its own a screen reader reads the record's
-                     ToString(). The Mac row reads the same name: the collection's, then its detail. -->
-                <Setter Property="AutomationProperties.Name" Value="{Binding SpokenName}" />
-                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-              </Style>
-            </ListBox.ItemContainerStyle>
-            <ListBox.ItemTemplate>
-              <DataTemplate>
-                <Grid>
-                  <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                  <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" Margin="0,0,12,0" />
-                  <TextBlock Grid.Column="1" Text="{Binding Detail}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                </Grid>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-        </StackPanel>
-      </TabItem>
-      <TabItem x:Name="ClaudeConfigTabItem" Header="{x:Static state:RestoreModel.ClaudeConfigTab}">
-        <StackPanel Margin="0,10,0,0">
-          <TextBlock Text="{x:Static state:RestoreModel.Caption}" Style="{StaticResource CaptionText}" />
-          <TextBlock Text="{x:Static state:RestoreModel.ClaudeConfigNote}" Style="{StaticResource CaptionText}" Margin="0,4,0,10" />
-          <ListBox x:Name="BackupList" Height="240" FontFamily="{StaticResource MonoFont}" FontSize="13" SelectionChanged="OnSelectionChanged" />
-        </StackPanel>
-      </TabItem>
-    </TabControl>
-    <!-- Platform idiom: one failure line under the tabs follows the shown tab; the Mac puts each tab's in the tab.
-         The panel's DataContext is the shown tab's model. -->
+    <!-- The tab switch and everything under it down to the buttons keep one height, whichever tab is shown and whatever
+         it shows, so switching tabs, choosing a backup or a failure line appearing never resizes the dialog or moves the
+         buttons: inside it the lists take what the text leaves. At the default text size each list on Collections shows
+         at least five rows (SettingsWindowTests measures it). Platform idiom: a little taller than the Mac's, as Fluent's tab
+         strip is. -->
+    <Grid x:Name="Body" Height="460" Margin="0,8,0,0">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+      <!-- Platform idiom: a TabControl styled as Settings' own tabs switches between the two; the Mac switches with a
+           segmented picker. Collections comes first and is chosen when the dialog opens. -->
+      <TabControl x:Name="Tabs">
+        <TabItem x:Name="CollectionsTabItem" Header="{x:Static state:RestoreModel.CollectionsTab}">
+          <!-- The two lists share what the caption leaves, evenly. -->
+          <Grid Margin="0,10,0,0">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="{x:Static state:CollectionRestoreModel.Caption}" Style="{StaticResource CaptionText}" Margin="0,0,0,10" />
+            <TextBlock Grid.Row="1" Text="{x:Static state:CollectionRestoreModel.BackupsHeading}" Style="{StaticResource SectionTitle}" Margin="0,0,0,4" />
+            <!-- Each row is the backup's label, which is also what a screen reader says for it. -->
+            <ListBox x:Name="CollectionBackupList" Grid.Row="2" FontFamily="{StaticResource MonoFont}" FontSize="13"
+                     ItemContainerStyle="{StaticResource RestoreRow}" SelectionChanged="OnCollectionBackupSelectionChanged" />
+            <TextBlock Grid.Row="3" Text="{x:Static state:CollectionRestoreModel.CollectionsHeading}" Style="{StaticResource SectionTitle}" Margin="0,10,0,4" />
+            <ListBox x:Name="CollectionList" Grid.Row="4" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     SelectionChanged="OnCollectionSelectionChanged">
+              <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem" BasedOn="{StaticResource RestoreRow}">
+                  <!-- The item holds a record, and without a name of its own a screen reader reads the record's
+                       ToString(). The Mac row reads the same name: the collection's, then its detail. -->
+                  <Setter Property="AutomationProperties.Name" Value="{Binding SpokenName}" />
+                  <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+              </ListBox.ItemContainerStyle>
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" Margin="0,0,12,0" />
+                    <TextBlock Grid.Column="1" Text="{Binding Detail}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <!-- Over the empty list while no backup is chosen; ShowRows shows and hides it. -->
+            <TextBlock x:Name="ChooseBackupPlaceholder" Grid.Row="4" Text="{x:Static state:CollectionRestoreModel.ChooseBackupPlaceholder}"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12" IsHitTestVisible="False" />
+          </Grid>
+        </TabItem>
+        <TabItem x:Name="ClaudeConfigTabItem" Header="{x:Static state:RestoreModel.ClaudeConfigTab}">
+          <Grid Margin="0,10,0,0">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="{x:Static state:RestoreModel.Caption}" Style="{StaticResource CaptionText}" />
+            <TextBlock Grid.Row="1" Text="{x:Static state:RestoreModel.ClaudeConfigNote}" Style="{StaticResource CaptionText}" Margin="0,4,0,10" />
+            <ListBox x:Name="BackupList" Grid.Row="2" FontFamily="{StaticResource MonoFont}" FontSize="13"
+                     ItemContainerStyle="{StaticResource RestoreRow}" SelectionChanged="OnSelectionChanged" />
+          </Grid>
+        </TabItem>
+      </TabControl>
+      <!-- Platform idiom: one failure line under the tabs follows the shown tab, Footer's DataContext; the Mac puts each
+           tab's in the tab. Either way it sits under the lists, inside the height that never changes. -->
+      <TextBlock x:Name="FailureText" Grid.Row="1" DataContext="{Binding DataContext, ElementName=Footer}" Text="{Binding RestoreError}"
+                 Style="{StaticResource ErrorText}" Margin="0,8,0,0" Visibility="{Binding HasRestoreError, Converter={StaticResource Vis}}" />
+    </Grid>
+    <!-- The panel's DataContext is the shown tab's model. -->
     <StackPanel x:Name="Footer">
-      <TextBlock x:Name="FailureText" Text="{Binding RestoreError}" Style="{StaticResource ErrorText}" Margin="0,8,0,0" Visibility="{Binding HasRestoreError, Converter={StaticResource Vis}}" />
       <StackPanel Style="{StaticResource DialogButtons}" Margin="0,16,0,0">
         <Button Content="{x:Static state:RestoreModel.CancelTitle}" MinWidth="80" IsCancel="True" Click="OnCancel" />
         <Button x:Name="RestoreButton" Content="{x:Static state:RestoreModel.RestoreTitle}" MinWidth="90" Margin="8,0,0,0" IsEnabled="{Binding CanRestore}" Style="{DynamicResource AccentButtonStyle}" Click="OnRestore" />

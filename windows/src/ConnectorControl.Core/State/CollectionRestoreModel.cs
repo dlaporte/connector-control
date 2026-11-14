@@ -17,6 +17,11 @@ public sealed class CollectionRestoreModel : ObservableObject
     public const string Series = "mcps";
 
     public const string Caption = "Choose a backup, then a collection. The collection goes back to exactly how it was; its current connectors are backed up first and kept for 30 days.";
+    /// <summary>Over the tab's two lists: the backups, and the chosen backup's collections.</summary>
+    public const string BackupsHeading = "Backups";
+    public const string CollectionsHeading = "Collections in this backup";
+    /// <summary>In the collections list while no backup is chosen.</summary>
+    public const string ChooseBackupPlaceholder = "Choose a backup to see its collections.";
     public const string GoneState = "deleted since";
     public const string SameState = "same as now";
     public const string DiffersState = "differs from now";

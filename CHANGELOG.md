@@ -22,6 +22,8 @@ has one.
 
 ### Both platforms
 
+- The Restore sheet keeps one size when you switch between its tabs, choose a backup, or a problem is shown. Its lists now have borders and headings and fill the sheet, and until you choose a backup the collections list says to choose one. Backup times now show to the second, without milliseconds; a second backup taken in the same second reads “(2)”.
+
 ### Release pipeline
 
 ## v1.5.3

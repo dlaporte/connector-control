@@ -4,16 +4,31 @@ import ConnectorControlState
 /// Layout only; every rule and string is RestoreModel's (the sheet and its Claude's config tab) or
 /// CollectionRestoreModel's (its Collections tab).
 struct RestoreSheetView: View {
-    private enum Tab { case collections, claudeConfig }
+    enum Tab { case collections, claudeConfig }
+
+    /// The tab body's one height, whichever tab is shown and whatever it shows, so switching tabs, choosing a
+    /// backup or a failure line appearing never resizes the sheet or moves the switch or the buttons. Inside it
+    /// the lists take what the text leaves: at the default text size each list on Collections shows at least
+    /// five rows (RestoreSheetLayoutTests measures it).
+    static let bodyHeight: CGFloat = 340
 
     @StateObject private var model: RestoreModel
     @StateObject private var collections: CollectionRestoreModel
-    @State private var tab = Tab.collections
+    @State private var tab: Tab
     @Environment(\.dismiss) private var dismiss
 
     init(state: AppState) {
         _model = StateObject(wrappedValue: RestoreModel(state: state))
         _collections = StateObject(wrappedValue: CollectionRestoreModel(state: state))
+        _tab = State(initialValue: .collections)
+    }
+
+    /// The sheet over models the caller holds, open on `tab`: RestoreSheetLayoutTests lays it out in each
+    /// state it can be in.
+    init(model: RestoreModel, collections: CollectionRestoreModel, tab: Tab = .collections) {
+        _model = StateObject(wrappedValue: model)
+        _collections = StateObject(wrappedValue: collections)
+        _tab = State(initialValue: tab)
     }
 
     var body: some View {
@@ -28,10 +43,13 @@ struct RestoreSheetView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
-            switch tab {
-            case .collections: collectionsTab
-            case .claudeConfig: claudeConfigTab
+            Group {
+                switch tab {
+                case .collections: collectionsTab
+                case .claudeConfig: claudeConfigTab
+                }
             }
+            .frame(height: RestoreSheetView.bodyHeight, alignment: .top)
             HStack {
                 Spacer()
                 Button(RestoreModel.cancelTitle) { dismiss() }
@@ -59,21 +77,34 @@ struct RestoreSheetView: View {
             Text(CollectionRestoreModel.caption)
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            List(collections.backups, selection: $collections.selection) { backup in
-                Text(backup.label).font(.system(.callout, design: .monospaced))
-            }
-            .frame(height: 120)
-            List(collections.rows, selection: $collections.collection) { row in
-                HStack {
-                    Text(row.name).lineLimit(1)
-                    Spacer()
-                    // The name gives way to a long detail, as on Windows, where the detail's column is sized to it.
-                    Text(row.detail).foregroundStyle(.secondary).lineLimit(1).layoutPriority(1)
+            // The two lists share what the caption and a failure line leave, evenly.
+            headed(CollectionRestoreModel.backupsHeading) {
+                List(collections.backups, selection: $collections.selection) { backup in
+                    Text(backup.label).font(.system(.callout, design: .monospaced))
                 }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(row.spokenName)
+                .listStyle(.bordered)
             }
-            .frame(height: 120)
+            headed(CollectionRestoreModel.collectionsHeading) {
+                List(collections.rows, selection: $collections.collection) { row in
+                    HStack {
+                        Text(row.name).lineLimit(1)
+                        Spacer()
+                        // The name gives way to a long detail, as on Windows, where the detail's column is sized to it.
+                        Text(row.detail).foregroundStyle(.secondary).lineLimit(1).layoutPriority(1)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(row.spokenName)
+                }
+                .listStyle(.bordered)
+                .overlay {
+                    if collections.selection == nil {
+                        Text(CollectionRestoreModel.chooseBackupPlaceholder)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding()
+                    }
+                }
+            }
             if let restoreError = collections.restoreError {
                 FailureLine(restoreError)
             }
@@ -103,7 +134,7 @@ struct RestoreSheetView: View {
             List(model.backups, id: \.self, selection: $model.selection) { url in
                 Text(url.lastPathComponent).font(.system(.callout, design: .monospaced))
             }
-            .frame(height: 240)
+            .listStyle(.bordered)
             if let restoreError = model.restoreError {
                 FailureLine(restoreError)
             }
@@ -119,6 +150,16 @@ struct RestoreSheetView: View {
             }
         } message: {
             if let informative = model.confirmInformative { Text(informative) }
+        }
+    }
+
+    /// A list under its small heading, as the Publish sheet heads its sections.
+    private func headed<Content: View>(_ heading: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(heading)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+            content()
         }
     }
 }

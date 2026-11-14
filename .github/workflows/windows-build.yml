@@ -140,9 +140,13 @@ jobs:
 
       # ci.runsettings sets xUnit FailSkips, so a test that silently skips on the
       # runner (a Windows-only test that did not run) fails the build.
+      # The folder exists before the tests run, so the App tests can leave renders of a dialog in
+      # it, beside results.trx, for the test-results artifact.
       - name: Test
         shell: pwsh
-        run: dotnet test windows/ConnectorControl.slnx --no-build -c Release --settings windows/ci.runsettings --logger "trx;LogFileName=results.trx" --results-directory TestResults
+        run: |
+          New-Item -ItemType Directory -Force TestResults | Out-Null
+          dotnet test windows/ConnectorControl.slnx --no-build -c Release --settings windows/ci.runsettings --logger "trx;LogFileName=results.trx" --results-directory TestResults
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:

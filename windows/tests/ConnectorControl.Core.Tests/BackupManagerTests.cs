@@ -410,29 +410,61 @@ public class BackupManagerTests : IDisposable
         Assert.Equal("2026-11-12 11:19:13".Length, labels[Path.GetFileName(a)].Length);
     }
 
+    /// <summary>Two backups of one second: the earlier keeps the plain label and the later adds " (2)"; a backup of
+    /// another second keeps its own.</summary>
     [Fact]
-    public void BackupsOfOneSecondCarryMilliseconds()
+    public void BackupsOfOneSecondAreNumberedEarliestFirst()
     {
         var a = Named("2026-11-12T16-19-13-493Z");
         var b = Named("2026-11-12T16-19-13-871Z");
         var c = Named("2026-11-12T16-19-14-000Z");
-        var labels = BackupManager.Labels([a, b, c]);
-        Assert.Equal($"{Second(a)}.493", labels[Path.GetFileName(a)]);
-        Assert.Equal($"{Second(a)}.871", labels[Path.GetFileName(b)]);
-        Assert.Equal(Second(c), labels[Path.GetFileName(c)]);   // another second keeps the short label
+        var labels = BackupManager.Labels([b, c, a]);
+        Assert.Equal(Second(a), labels[Path.GetFileName(a)]);
+        Assert.Equal($"{Second(a)} (2)", labels[Path.GetFileName(b)]);
+        Assert.Equal(Second(c), labels[Path.GetFileName(c)]);   // another second keeps the plain label
     }
 
+    /// <summary>Three backups of one second, two of them of one millisecond: numbered in order by the name's stamp,
+    /// then its counter.</summary>
     [Fact]
-    public void BackupsOfOneMillisecondAddTheirCounter()
+    public void ThreeBackupsOfOneSecondAreNumberedByStampThenCounter()
     {
         var a = Named("2026-11-12T16-19-13-493Z");
         var b = Named("2026-11-12T16-19-13-493Z-2");
-        var c = Named("2026-11-12T16-19-13-493Z-3");
-        var labels = BackupManager.Labels([c, a, b]);
-        var @base = $"{Second(a)}.493";
-        Assert.Equal(@base, labels[Path.GetFileName(a)]);
-        Assert.Equal($"{@base} (2)", labels[Path.GetFileName(b)]);
-        Assert.Equal($"{@base} (3)", labels[Path.GetFileName(c)]);
+        var c = Named("2026-11-12T16-19-13-871Z");
+        var labels = BackupManager.Labels([c, b, a]);
+        Assert.Equal(Second(a), labels[Path.GetFileName(a)]);
+        Assert.Equal($"{Second(a)} (2)", labels[Path.GetFileName(b)]);
+        Assert.Equal($"{Second(a)} (3)", labels[Path.GetFileName(c)]);
+    }
+
+    /// <summary>Two backups of one millisecond: the one without a counter is the earlier.</summary>
+    [Fact]
+    public void BackupsOfOneMillisecondAreNumberedByTheirCounter()
+    {
+        var a = Named("2026-11-12T16-19-13-493Z");
+        var b = Named("2026-11-12T16-19-13-493Z-2");
+        var labels = BackupManager.Labels([b, a]);
+        Assert.Equal(Second(a), labels[Path.GetFileName(a)]);
+        Assert.Equal($"{Second(a)} (2)", labels[Path.GetFileName(b)]);
+    }
+
+    /// <summary>No label carries a fraction of a second, however many backups share one.</summary>
+    [Fact]
+    public void NoLabelCarriesMilliseconds()
+    {
+        string[] stamps = ["2026-11-12T16-19-13-000Z", "2026-11-12T16-19-13-001Z", "2026-11-12T16-19-13-001Z-2",
+                           "2026-11-12T16-19-13-999Z", "2026-11-12T16-19-14-500Z"];
+        var paths = stamps.Select(Named).ToList();
+        var labels = BackupManager.Labels(paths);
+        Assert.Equal(stamps.Length, labels.Count);
+        foreach (var path in paths)
+        {
+            var label = labels[Path.GetFileName(path)];
+            Assert.StartsWith(Second(path), label, StringComparison.Ordinal);
+            Assert.False(label[Second(path).Length..].StartsWith('.'), $"no milliseconds after the seconds: {label}");
+        }
+        Assert.Equal(stamps.Length, labels.Values.Distinct(StringComparer.Ordinal).Count());   // every label is its own
     }
 
     [Fact]

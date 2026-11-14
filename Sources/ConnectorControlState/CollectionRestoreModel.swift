@@ -20,6 +20,11 @@ public final class CollectionRestoreModel: ObservableObject {
     nonisolated public static let series = "mcps"
 
     nonisolated public static let caption = "Choose a backup, then a collection. The collection goes back to exactly how it was; its current connectors are backed up first and kept for 30 days."
+    /// Over the tab's two lists: the backups, and the chosen backup's collections.
+    nonisolated public static let backupsHeading = "Backups"
+    nonisolated public static let collectionsHeading = "Collections in this backup"
+    /// In the collections list while no backup is chosen.
+    nonisolated public static let chooseBackupPlaceholder = "Choose a backup to see its collections."
     nonisolated public static let goneState = "deleted since"
     nonisolated public static let sameState = "same as now"
     nonisolated public static let differsState = "differs from now"
