@@ -165,6 +165,7 @@
   "CollectionDocument.credentialUserOnlyPhrase": "names a user",
   "CollectionDocument.notJSONError": "not JSON",
   "CollectionRestoreModel.activeInformative": "Claude is running this collection, so Claude’s config is updated too.",
+  "CollectionRestoreModel.backupsHeading": "Backups",
   "CollectionRestoreModel.caption": "Choose a backup, then a collection. The collection goes back to exactly how it was; its current connectors are backed up first and kept for 30 days.",
   "CollectionRestoreModel.changedWhileAskingError": {
     "format": "“{0}” changed while you were asked, so nothing was restored. Choose Restore again to see what it would change now."
@@ -175,6 +176,8 @@
   "CollectionRestoreModel.changesLine.on": {
     "format": "~ {0} (on)"
   },
+  "CollectionRestoreModel.chooseBackupPlaceholder": "Choose a backup to see its collections.",
+  "CollectionRestoreModel.collectionsHeading": "Collections in this backup",
   "CollectionRestoreModel.comesBackLine.off": {
     "format": "+ {0} (off)"
   },

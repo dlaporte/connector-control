@@ -416,10 +416,13 @@ final class StringCatalogTests: XCTestCase {
         // MARK: CollectionRestoreModel
 
         actual["CollectionRestoreModel.activeInformative"] = CollectionRestoreModel.activeInformative
+        actual["CollectionRestoreModel.backupsHeading"] = CollectionRestoreModel.backupsHeading
         actual["CollectionRestoreModel.caption"] = CollectionRestoreModel.caption
         actual["CollectionRestoreModel.changedWhileAskingError"] = CollectionRestoreModel.changedWhileAskingError("X")
         actual["CollectionRestoreModel.changesLine.off"] = CollectionRestoreModel.changesLine("X", false)
         actual["CollectionRestoreModel.changesLine.on"] = CollectionRestoreModel.changesLine("X", true)
+        actual["CollectionRestoreModel.chooseBackupPlaceholder"] = CollectionRestoreModel.chooseBackupPlaceholder
+        actual["CollectionRestoreModel.collectionsHeading"] = CollectionRestoreModel.collectionsHeading
         actual["CollectionRestoreModel.comesBackLine.off"] = CollectionRestoreModel.comesBackLine("X", false)
         actual["CollectionRestoreModel.comesBackLine.on"] = CollectionRestoreModel.comesBackLine("X", true)
         actual["CollectionRestoreModel.confirmMessage"] = CollectionRestoreModel.confirmMessage("X", "Y")
