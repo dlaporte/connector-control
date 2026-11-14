@@ -4,9 +4,9 @@ using ConnectorControl.Core.State;
 
 namespace ConnectorControl.App.Views;
 
-/// <summary>Modal, 460 wide, two tabs: Collections (a 120-high list of master-list backups over a 120-high list of
-/// the chosen one's collections) and Claude's config (a 240-high list of backups); under them the chosen tab's
-/// inline error and Cancel / Restore, then its confirmation.</summary>
+/// <summary>Modal, 460 wide, two tabs of one height: Collections (a list of master-list backups over a list of the
+/// chosen one's collections, each under its heading, sharing what the caption leaves) and Claude's config (one list of
+/// backups); under them the chosen tab's inline error and Cancel / Restore, then its confirmation.</summary>
 public partial class RestoreDialog : DialogWindow
 {
     /// <summary>True while the collections list is being refilled from the model, whose choice it shows rather than
@@ -61,12 +61,14 @@ public partial class RestoreDialog : DialogWindow
     }
 
     /// <summary>The chosen backup's collections, with the model's chosen one still chosen: a refusal re-reads how each
-    /// stands and keeps the choice, as the Mac's list keeps it.</summary>
+    /// stands and keeps the choice, as the Mac's list keeps it. Choosing a backup always lists its rows again, so the
+    /// placeholder shows here too, while none is chosen.</summary>
     private void ShowRows()
     {
         showingRows = true;
         try
         {
+            ChooseBackupPlaceholder.Visibility = Collections.Selection is null ? Visibility.Visible : Visibility.Collapsed;
             CollectionList.ItemsSource = Collections.Rows;
             CollectionList.SelectedItem = Collections.Rows.FirstOrDefault(row => string.Equals(row.Name, Collections.Collection, StringComparison.Ordinal));
         }
