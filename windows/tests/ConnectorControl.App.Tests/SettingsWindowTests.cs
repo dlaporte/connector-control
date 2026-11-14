@@ -322,7 +322,10 @@ public class SettingsWindowTests
             dialog.UpdateLayout();
             Assert.Same(dialog.Model, dialog.Footer.DataContext);   // the failure line and buttons are this tab's
             Assert.Equal(2, dialog.BackupList.Items.Count);
-            Assert.Equal("claude_desktop_config.original.json", dialog.BackupList.Items[1]);
+            // Each row is the backup's time, and the first-run original reads as what it is.
+            Assert.Equal(dialog.Model.BackupLabels, dialog.BackupList.Items.Cast<string>());
+            Assert.Equal(BackupManager.Labels(dialog.Model.Backups)[Path.GetFileName(dialog.Model.Backups[0])], dialog.BackupList.Items[0]);
+            Assert.Equal(RestoreModel.OriginalLabel, dialog.BackupList.Items[1]);
             Assert.False(dialog.Model.CanRestore);
             dialog.BackupList.SelectedIndex = 0;
             Assert.True(dialog.Model.CanRestore);

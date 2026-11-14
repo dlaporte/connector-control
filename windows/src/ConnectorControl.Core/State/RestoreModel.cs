@@ -22,7 +22,11 @@ public sealed class RestoreModel : ObservableObject
     public const string RestoreButton = "Restore";
     public const string Series = "claude_desktop_config";
 
-    public static string ConfirmMessage(string fileName) => $"Replace Claude's config with {fileName}?";
+    /// <summary>The first-run original's row: it has no time to be named by.</summary>
+    public const string OriginalLabel = "First-run original";
+    /// <summary>The confirmation names what was chosen: the backup's time, or the first-run original.</summary>
+    public static string ConfirmMessage(string label) => $"Replace Claude’s config with the backup from {label}?";
+    public const string ConfirmOriginalMessage = "Replace Claude’s config with the first-run original?";
 
     /// <summary>The confirmation's informative text when the backup's collection is gone.</summary>
     public static string RecreateInformative(string collection) => $"“{collection}” no longer exists, so it is created again with only the connectors Claude was running. To bring back all of its connectors, restore it from Collections.";
@@ -30,6 +34,10 @@ public sealed class RestoreModel : ObservableObject
     private readonly AppState state;
     private readonly IDialogs dialogs;
     private IReadOnlyList<string> backups = [];
+    /// <summary>Each listed backup's row, by file name, as <see cref="Load"/> named them.</summary>
+    private Dictionary<string, string> labels = new(StringComparer.Ordinal);
+    /// <summary>The first-run original's file name, when it was listed.</summary>
+    private string? original;
     private string? selection;
     private string? restoreError;
 
@@ -44,7 +52,16 @@ public sealed class RestoreModel : ObservableObject
     /// <summary>Full paths, newest first; the permanent .original snapshot last.</summary>
     public IReadOnlyList<string> Backups => backups;
 
-    public IReadOnlyList<string> BackupNames => backups.Select(Path.GetFileName).Select(n => n ?? "").ToList();
+    /// <summary>The rows, in <see cref="Backups"/>' order: what the list shows and a screen reader says.</summary>
+    public IReadOnlyList<string> BackupLabels => backups.Select(Label).ToList();
+
+    /// <summary>A backup's row: its time, as <see cref="BackupManager.Labels"/> names it among the backups listed (the
+    /// Collections tab's rule), or <see cref="OriginalLabel"/> for the first-run original.</summary>
+    public string Label(string backup)
+    {
+        var name = Path.GetFileName(backup);
+        return labels.GetValueOrDefault(name) ?? name;
+    }
 
     public string? Selection
     {
@@ -76,9 +93,18 @@ public sealed class RestoreModel : ObservableObject
 
     public void Load()
     {
-        backups = new List<string>(state.Service.Backups.RestorableBackups(Series));
+        var found = new List<string>(state.Service.Backups.RestorableBackups(Series));
+        // The first-run original by its own path, not by having no time: a stray name without one is its own
+        // label, as on the Collections tab.
+        original = state.Service.Backups.OriginalSnapshotPath(Series) is { } path ? Path.GetFileName(path) : null;
+        labels = new Dictionary<string, string>(BackupManager.Labels(found), StringComparer.Ordinal);
+        if (original is not null)
+        {
+            labels[original] = OriginalLabel;
+        }
+        backups = found;
         Raise(nameof(Backups));
-        Raise(nameof(BackupNames));
+        Raise(nameof(BackupLabels));
     }
 
     public void Cancel() => CloseRequested?.Invoke();
@@ -116,7 +142,8 @@ public sealed class RestoreModel : ObservableObject
         // Under the message: when the collection the backup records is gone, that the restore creates it
         // again with only what Claude was running.
         var informative = recorded is not null && state.Store.StoredCollectionName(recorded) is null ? RecreateInformative(recorded) : null;
-        if (!dialogs.Confirm(ConfirmMessage(Path.GetFileName(backup)), informative, RestoreButton, destructive: true))
+        var message = Path.GetFileName(backup) == original ? ConfirmOriginalMessage : ConfirmMessage(Label(backup));
+        if (!dialogs.Confirm(message, informative, RestoreButton, destructive: true))
         {
             return false;
         }

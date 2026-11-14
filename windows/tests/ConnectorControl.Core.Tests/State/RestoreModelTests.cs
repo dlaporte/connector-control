@@ -6,6 +6,8 @@ namespace ConnectorControl.Core.Tests.State;
 /// <summary>Mirror: Tests/ConnectorControlStateTests/RestoreModelTests.swift</summary>
 public class RestoreModelTests
 {
+    /// <summary>Each row is the backup's time, as the Collections tab names its backups (" (2)" for a later one in
+    /// the same second), and the first-run original, last, reads as what it is.</summary>
     [Fact]
     public void ListsBackupsNewestFirstWithTheOriginalLast()
     {
@@ -17,15 +19,19 @@ public class RestoreModelTests
         var model = new RestoreModel(state, h.Dialogs);
         model.Load();
         Assert.Equal(3, model.Backups.Count);
-        Assert.StartsWith("claude_desktop_config.", model.BackupNames[0], StringComparison.Ordinal);
-        Assert.True(string.CompareOrdinal(model.BackupNames[0], model.BackupNames[1]) > 0);   // newest first
-        Assert.Equal("claude_desktop_config.original.json", model.BackupNames[2]);
+        var names = model.Backups.Select(b => Path.GetFileName(b)).ToList();
+        Assert.StartsWith("claude_desktop_config.", names[0], StringComparison.Ordinal);
+        Assert.True(string.CompareOrdinal(names[0], names[1]) > 0);   // newest first
+        Assert.Equal("claude_desktop_config.original.json", names[2]);
+        var labels = BackupManager.Labels(model.Backups);
+        Assert.Equal([labels[names[0]], labels[names[1]], RestoreModel.OriginalLabel], model.BackupLabels);
+        Assert.NotEqual(names[0], model.BackupLabels[0]);   // a time, not a file name
         Assert.Null(model.Selection);
         Assert.False(model.CanRestore);
     }
 
     [Fact]
-    public void RestoreConfirmsWithTheFileNameAndRestoresThroughAppState()
+    public void RestoreConfirmsWithTheBackupsTimeAndRestoresThroughAppState()
     {
         using var h = new AppStateHarness();
         using var state = h.Create();
@@ -39,7 +45,8 @@ public class RestoreModelTests
 
         h.Dialogs.NextConfirm = false;
         Assert.False(model.Restore());
-        Assert.Equal(new FakeDialogs.ConfirmCall($"Replace Claude's config with {model.BackupNames[0]}?", null, "Restore", "Cancel", true), h.Dialogs.Confirms[0]);
+        var time = BackupManager.Labels(model.Backups)[Path.GetFileName(model.Backups[0])];
+        Assert.Equal(new FakeDialogs.ConfirmCall($"Replace Claude’s config with the backup from {time}?", null, "Restore", "Cancel", true), h.Dialogs.Confirms[0]);
         Assert.Equal(0, closed);
 
         h.Dialogs.NextConfirm = true;
@@ -67,11 +74,30 @@ public class RestoreModelTests
         Assert.Equal("Gone", BackupCollections.CollectionOf(model.Backups[0], h.BackupsDir));
 
         Assert.True(model.Restore());
-        Assert.Equal(new FakeDialogs.ConfirmCall(RestoreModel.ConfirmMessage(model.BackupNames[0]), RestoreModel.RecreateInformative("Gone"),
+        Assert.Equal(new FakeDialogs.ConfirmCall(RestoreModel.ConfirmMessage(model.Label(model.Backups[0])), RestoreModel.RecreateInformative("Gone"),
             RestoreModel.RestoreButton, "Cancel", true), Assert.Single(h.Dialogs.Confirms));
         Assert.Equal("Gone", state.ActiveCollection);
         Assert.True(state.Store.Collections["Gone"].Mcps.ContainsKey("gone-only"));
         Assert.Null(model.RestoreError);
+    }
+
+    /// <summary>The first-run original has no time to name it by, so its question names it as what it is.</summary>
+    [Fact]
+    public void TheFirstRunOriginalsQuestionNamesIt()
+    {
+        using var h = new AppStateHarness();
+        using var state = h.Create();
+        state.SetEnabled("aws-mcp", false);           // backup 1 + original snapshot
+        var model = new RestoreModel(state, h.Dialogs);
+        model.Load();
+        Assert.Equal("claude_desktop_config.original.json", Path.GetFileName(model.Backups[^1]));
+        model.Selection = model.Backups[^1];
+
+        h.Dialogs.NextConfirm = false;
+        Assert.False(model.Restore());
+        var asked = Assert.Single(h.Dialogs.Confirms);
+        Assert.Equal("Replace Claude’s config with the first-run original?", asked.Message);
+        Assert.Equal(RestoreModel.ConfirmOriginalMessage, asked.Message);
     }
 
     /// <summary>What is restored is the backup the user was asked about, not the file as it is by the time

@@ -18,9 +18,13 @@ has one.
 
 ### macOS
 
+- Sheets (Restore…, Import, Publish, Export, Copy and Review) now take the window’s background colour instead of white.
+
 ### Windows
 
 ### Both platforms
+
+- The Restore sheet’s Claude’s config tab lists backups by time, as the Collections tab does, with the first-run original last.
 
 ### Release pipeline
 

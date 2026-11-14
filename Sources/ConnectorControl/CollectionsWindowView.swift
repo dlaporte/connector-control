@@ -119,7 +119,7 @@ struct CollectionsWindowView: View {
             detail
         }
         .frame(minWidth: 720, minHeight: 480)
-        .sheet(item: $sheet, onDismiss: { presentPending() }) { present($0) }
+        .sheet(item: $sheet, onDismiss: { presentPending() }) { present($0).sheetBackground() }
         // Attached to this window rather than said through Dialogs.inform, which is app-modal:
         // a refusal here is about this window, and a window-modal alert is the Mac's way to say so.
         .alert(Text(shownError ?? ""), isPresented: errorShowing) { }

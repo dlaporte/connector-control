@@ -995,7 +995,9 @@ public class StringCatalogTests
         actual["RestoreModel.claudeConfigTab"] = RestoreModel.ClaudeConfigTab;
         actual["RestoreModel.collectionsTab"] = RestoreModel.CollectionsTab;
         actual["RestoreModel.confirmMessage"] = RestoreModel.ConfirmMessage("X");
+        actual["RestoreModel.confirmOriginalMessage"] = RestoreModel.ConfirmOriginalMessage;
         actual["RestoreModel.headline"] = RestoreModel.Headline;
+        actual["RestoreModel.originalLabel"] = RestoreModel.OriginalLabel;
         actual["RestoreModel.recreateInformative"] = RestoreModel.RecreateInformative("X");
         actual["RestoreModel.restoreButton"] = RestoreModel.RestoreButton;
         actual["RestoreModel.restoreTitle"] = RestoreModel.RestoreTitle;
