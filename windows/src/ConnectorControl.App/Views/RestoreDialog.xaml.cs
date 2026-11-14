@@ -23,7 +23,7 @@ public partial class RestoreDialog : DialogWindow
         Collections.Load();
         Model.Load();
         CollectionBackupList.ItemsSource = Collections.BackupLabels;
-        BackupList.ItemsSource = Model.BackupNames;
+        BackupList.ItemsSource = Model.BackupLabels;
         ShowRows();
         Collections.PropertyChanged += (_, e) =>
         {

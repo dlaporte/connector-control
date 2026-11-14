@@ -1163,9 +1163,11 @@
   "RestoreModel.claudeConfigTab": "Claude’s config",
   "RestoreModel.collectionsTab": "Collections",
   "RestoreModel.confirmMessage": {
-    "format": "Replace Claude's config with {0}?"
+    "format": "Replace Claude’s config with the backup from {0}?"
   },
+  "RestoreModel.confirmOriginalMessage": "Replace Claude’s config with the first-run original?",
   "RestoreModel.headline": "Restore from a backup",
+  "RestoreModel.originalLabel": "First-run original",
   "RestoreModel.recreateInformative": {
     "format": "“{0}” no longer exists, so it is created again with only the connectors Claude was running. To bring back all of its connectors, restore it from Collections."
   },

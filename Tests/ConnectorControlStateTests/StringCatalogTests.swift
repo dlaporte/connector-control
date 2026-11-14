@@ -942,8 +942,10 @@ final class StringCatalogTests: XCTestCase {
         actual["RestoreModel.claudeConfigNote"] = RestoreModel.claudeConfigNote
         actual["RestoreModel.claudeConfigTab"] = RestoreModel.claudeConfigTab
         actual["RestoreModel.collectionsTab"] = RestoreModel.collectionsTab
-        actual["RestoreModel.confirmMessage"] = RestoreModel.confirmMessage(fileName: "X")
+        actual["RestoreModel.confirmMessage"] = RestoreModel.confirmMessage("X")
+        actual["RestoreModel.confirmOriginalMessage"] = RestoreModel.confirmOriginalMessage
         actual["RestoreModel.headline"] = RestoreModel.headline
+        actual["RestoreModel.originalLabel"] = RestoreModel.originalLabel
         actual["RestoreModel.recreateInformative"] = RestoreModel.recreateInformative("X")
         actual["RestoreModel.restoreButton"] = RestoreModel.restoreButton
         actual["RestoreModel.restoreTitle"] = RestoreModel.restoreTitle

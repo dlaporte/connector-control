@@ -132,7 +132,7 @@ struct RestoreSheetView: View {
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
             List(model.backups, id: \.self, selection: $model.selection) { url in
-                Text(url.lastPathComponent).font(.system(.callout, design: .monospaced))
+                Text(model.label(of: url)).font(.system(.callout, design: .monospaced))
             }
             .listStyle(.bordered)
             if let restoreError = model.restoreError {

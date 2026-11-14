@@ -7,7 +7,9 @@ import ConnectorControlTestSupport
 /// confirmation is a sheet (pending state + the button's method).
 @MainActor
 final class RestoreModelTests: XCTestCase {
-    func testListsBackupsNewestFirstWithTheOriginalLast() {
+    /// Each row is the backup's time, as the Collections tab names its backups (" (2)" for a later one
+    /// in the same second), and the first-run original, last, reads as what it is.
+    func testListsBackupsNewestFirstWithTheOriginalLast() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         state.setEnabled("aws-mcp", false)           // backup 1 (three servers) + original snapshot
@@ -20,6 +22,10 @@ final class RestoreModelTests: XCTestCase {
         XCTAssertTrue(names[0].hasPrefix("claude_desktop_config."))
         XCTAssertGreaterThan(names[0], names[1])   // newest first
         XCTAssertEqual(names[2], "claude_desktop_config.original.json")
+        let labels = BackupManager.labels(for: model.backups)
+        let times = try [XCTUnwrap(labels[names[0]]), XCTUnwrap(labels[names[1]])]
+        XCTAssertEqual(model.backups.map(model.label(of:)), times + [RestoreModel.originalLabel])
+        XCTAssertNotEqual(times[0], names[0], "a time, not a file name")
         XCTAssertNil(model.selection)
         XCTAssertFalse(model.canRestore)
     }
@@ -39,7 +45,7 @@ final class RestoreModelTests: XCTestCase {
         XCTAssertNotNil(model.restoreError)
     }
 
-    func testRestoreConfirmsWithTheFileNameAndRestoresThroughAppState() {
+    func testRestoreConfirmsWithTheBackupsTimeAndRestoresThroughAppState() throws {
         let (h, state) = AppStateHarness.started()
         defer { h.dispose() }
         state.setEnabled("aws-mcp", false)
@@ -50,7 +56,8 @@ final class RestoreModelTests: XCTestCase {
 
         model.requestRestore()
         XCTAssertTrue(model.confirming)
-        XCTAssertEqual(model.confirmMessage, "Replace Claude's config with \(model.backups[0].lastPathComponent)?")
+        let time = try XCTUnwrap(BackupManager.labels(for: model.backups)[model.backups[0].lastPathComponent])
+        XCTAssertEqual(model.confirmMessage, "Replace Claude’s config with the backup from \(time)?")
         XCTAssertNil(model.confirmInformative, "its collection is still there")
         model.cancelRestore()
         XCTAssertFalse(model.confirming)
@@ -81,12 +88,30 @@ final class RestoreModelTests: XCTestCase {
 
         model.requestRestore()
         XCTAssertTrue(model.confirming)
-        XCTAssertEqual(model.confirmMessage, RestoreModel.confirmMessage(fileName: model.backups[0].lastPathComponent))
+        XCTAssertEqual(model.confirmMessage, RestoreModel.confirmMessage(model.label(of: model.backups[0])))
         XCTAssertEqual(model.confirmInformative, RestoreModel.recreateInformative("Gone"))
         XCTAssertTrue(model.confirmRestore())
         XCTAssertEqual(state.activeCollection, "Gone")
         XCTAssertNotNil(state.store.collections["Gone"]?.mcps["gone-only"])
         XCTAssertNil(model.restoreError)
+    }
+
+    /// The first-run original has no time to name it by, so its question names it as what it is.
+    func testTheFirstRunOriginalsQuestionNamesIt() throws {
+        let (h, state) = AppStateHarness.started()
+        defer { h.dispose() }
+        state.setEnabled("aws-mcp", false)           // backup 1 + original snapshot
+        let model = RestoreModel(state: state)
+        model.load()
+        let original = try XCTUnwrap(model.backups.last)
+        XCTAssertEqual(original.lastPathComponent, "claude_desktop_config.original.json")
+        model.selection = original
+
+        model.requestRestore()
+        XCTAssertTrue(model.confirming)
+        XCTAssertEqual(model.confirmMessage, "Replace Claude’s config with the first-run original?")
+        XCTAssertEqual(model.confirmMessage, RestoreModel.confirmOriginalMessage)
+        model.cancelRestore()
     }
 
     /// What is restored is the backup the user was asked about, not the file as it is by the time

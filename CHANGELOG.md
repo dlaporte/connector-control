@@ -22,6 +22,8 @@ has one.
 
 ### Both platforms
 
+- The Restore sheet’s Claude’s config tab lists backups by time, as the Collections tab does, with the first-run original last.
+
 ### Release pipeline
 
 ## v1.5.4

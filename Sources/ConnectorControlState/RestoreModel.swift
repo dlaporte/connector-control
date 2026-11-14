@@ -21,7 +21,11 @@ public final class RestoreModel: ObservableObject {
     public static let restoreButton = "Restore"
     public static let series = "claude_desktop_config"
 
-    public static func confirmMessage(fileName: String) -> String { "Replace Claude's config with \(fileName)?" }
+    /// The first-run original's row: it has no time to be named by.
+    public static let originalLabel = "First-run original"
+    /// The confirmation names what was chosen: the backup's time, or the first-run original.
+    public static func confirmMessage(_ label: String) -> String { "Replace Claude’s config with the backup from \(label)?" }
+    public static let confirmOriginalMessage = "Replace Claude’s config with the first-run original?"
 
     /// The confirmation's informative text when the backup's collection is gone.
     public static func recreateInformative(_ collection: String) -> String { "“\(collection)” no longer exists, so it is created again with only the connectors Claude was running. To bring back all of its connectors, restore it from Collections." }
@@ -30,6 +34,10 @@ public final class RestoreModel: ObservableObject {
 
     /// Full URLs, newest first; the permanent .original snapshot last.
     @Published public private(set) var backups: [URL] = []
+    /// Each listed backup's row, by file name, as `load()` named them.
+    private var labels: [String: String] = [:]
+    /// The first-run original's file name, when it was listed.
+    private var original: String?
     @Published public var selection: URL?
     @Published public private(set) var restoreError: String?
     /// True while the confirmation sheet is up.
@@ -44,8 +52,16 @@ public final class RestoreModel: ObservableObject {
 
     public var canRestore: Bool { selection != nil }
 
+    /// A backup's row: its time, as `BackupManager.labels(for:)` names it among the backups listed (the
+    /// Collections tab's rule), or `originalLabel` for the first-run original. A screen reader says it too.
+    public func label(of backup: URL) -> String {
+        labels[backup.lastPathComponent] ?? backup.lastPathComponent
+    }
+
     public var confirmMessage: String {
-        RestoreModel.confirmMessage(fileName: selection?.lastPathComponent ?? "")
+        guard let selection else { return "" }
+        return selection.lastPathComponent == original ? RestoreModel.confirmOriginalMessage
+            : RestoreModel.confirmMessage(label(of: selection))
     }
 
     /// Under the confirmation's message: when the collection the backup records is gone, that the
@@ -57,7 +73,13 @@ public final class RestoreModel: ObservableObject {
 
     public func load() {
         do {
-            backups = try state.service.backups.restorableBackups(series: RestoreModel.series)
+            let found = try state.service.backups.restorableBackups(series: RestoreModel.series)
+            // The first-run original by its own URL, not by having no time: a stray name without one is
+            // its own label, as on the Collections tab.
+            original = state.service.backups.originalSnapshotURL(series: RestoreModel.series)?.lastPathComponent
+            labels = BackupManager.labels(for: found)
+            if let original { labels[original] = RestoreModel.originalLabel }
+            backups = found
         } catch {
             restoreError = error.localizedDescription
         }
