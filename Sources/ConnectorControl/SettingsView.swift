@@ -56,7 +56,7 @@ struct SettingsView: View {
         // tab strip are taller, its Claude App group has three rows, and its height includes the title bar.
         .frame(width: 480, height: 660)
         .sheet(isPresented: $showRestore) {
-            RestoreSheetView(state: state)
+            RestoreSheetView(state: state).sheetBackground()
         }
         .onChange(of: model.claudeApp) {
             claudeTabIcon = SettingsView.makeClaudeTabIcon(appPath: model.claudeApp.path)

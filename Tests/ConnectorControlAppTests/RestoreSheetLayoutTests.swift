@@ -97,7 +97,7 @@ final class RestoreSheetLayoutTests: XCTestCase {
 
     private struct Laid {
         let window: NSWindow
-        let hosting: NSHostingView<RestoreSheetView>
+        let hosting: NSView
         /// The sheet's lists, top to bottom.
         let tables: [NSTableView]
         /// The size the sheet asks for: the size a sheet showing it takes.
@@ -114,10 +114,15 @@ final class RestoreSheetLayoutTests: XCTestCase {
 
     /// The sheet over `model` and `collections` as they are now, open on `tab`, in a window of its own size.
     private func lay(_ model: RestoreModel, _ collections: CollectionRestoreModel, on tab: RestoreSheetView.Tab) -> Laid {
-        let hosting = NSHostingView(rootView: RestoreSheetView(model: model, collections: collections, tab: tab))
+        lay(RestoreSheetView(model: model, collections: collections, tab: tab))
+    }
+
+    /// `content` in a window of its own size, in `appearance`.
+    private func lay<Content: View>(_ content: Content, in appearance: NSAppearance.Name = .aqua) -> Laid {
+        let hosting = NSHostingView(rootView: content)
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: hosting.fittingSize), styleMask: [.titled],
                               backing: .buffered, defer: true)
-        window.appearance = NSAppearance(named: .aqua)
+        window.appearance = NSAppearance(named: appearance)
         window.contentView = hosting
         settle(hosting)
         window.setContentSize(hosting.fittingSize)
@@ -141,6 +146,20 @@ final class RestoreSheetLayoutTests: XCTestCase {
         view.cacheDisplay(in: view.bounds, to: rep)
         let png = try XCTUnwrap(rep.representation(using: .png, properties: [:]))
         try png.write(to: URL(fileURLWithPath: folder).appendingPathComponent("restore-sheet-\(name).png"))
+    }
+
+    /// What `view` draws at `point`, in points from its top left, in sRGB: read from a picture of the view alone,
+    /// without the window behind it, which paints a background of its own. The picture is in the display's colour
+    /// space, which the colour `colorAt` returns does not carry, so its components are read in the picture's.
+    private func color(at point: CGPoint, in view: NSView) throws -> NSColor {
+        let rep = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+        view.cacheDisplay(in: view.bounds, to: rep)
+        let scale = CGFloat(rep.pixelsWide) / view.bounds.width
+        let pixel = try XCTUnwrap(rep.colorAt(x: Int(point.x * scale), y: Int(point.y * scale)))
+        var components = [CGFloat](repeating: 0, count: pixel.numberOfComponents)
+        pixel.getComponents(&components)
+        let drawn = NSColor(colorSpace: rep.colorSpace, components: components, count: components.count)
+        return try XCTUnwrap(drawn.usingColorSpace(.sRGB))
     }
 
     /// The first five rows of `table` lie inside what its list shows.
@@ -222,6 +241,38 @@ final class RestoreSheetLayoutTests: XCTestCase {
         XCTAssertEqual(first.width, 460, "the sheet stays 460 wide")
         for (shown, size) in sizes.sorted(by: { $0.key < $1.key }) {
             XCTAssertEqual(size, first, "\(shown): \(size) against \(first)")
+        }
+    }
+
+    /// The sheet as Settings presents it takes the window's colour, edge to edge: on macOS 26 and later a sheet is a
+    /// floating card, white unless it is given a background. Checked in the dark appearance, since in the light one
+    /// the window's colour is white too and could not tell painted from not. Nothing else changes: the sheet asks for
+    /// the same size.
+    func testTheSheetTakesTheWindowsBackgroundColour() throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.dispose() }
+        let (model, collections) = models(sandbox)
+        let bare = lay(RestoreSheetView(model: model, collections: collections), in: .darkAqua)
+        let dark = lay(RestoreSheetView(model: model, collections: collections).sheetBackground(), in: .darkAqua)
+        let light = lay(RestoreSheetView(model: model, collections: collections).sheetBackground(), in: .aqua)
+        try render(dark, "collections-dark")
+        try render(light, "collections-light")
+        XCTAssertEqual(dark.size, bare.size, "the background leaves the sheet's size alone")
+        XCTAssertEqual(dark.size, CGSize(width: 460, height: 466))
+        XCTAssertEqual(light.size, bare.size)
+
+        // Inside the sheet's 16-point padding, by its top left corner, away from any control.
+        let pixel = try color(at: CGPoint(x: 6, y: 6), in: dark.hosting)
+        var window: NSColor?
+        try XCTUnwrap(NSAppearance(named: .darkAqua)).performAsCurrentDrawingAppearance {
+            window = NSColor.windowBackgroundColor.usingColorSpace(.sRGB)
+        }
+        let expected = try XCTUnwrap(window)
+        XCTAssertEqual(pixel.alphaComponent, 1, "opaque: the sheet paints its own background")
+        for (drawn, wanted, channel) in [(pixel.redComponent, expected.redComponent, "red"),
+                                         (pixel.greenComponent, expected.greenComponent, "green"),
+                                         (pixel.blueComponent, expected.blueComponent, "blue")] {
+            XCTAssertEqual(drawn, wanted, accuracy: 2 / 255, "\(channel): \(pixel) against the window's \(expected)")
         }
     }
 }

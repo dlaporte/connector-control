@@ -18,6 +18,8 @@ has one.
 
 ### macOS
 
+- Sheets (Restore…, Import, Publish, Export, Copy and Review) now take the window’s background colour instead of white.
+
 ### Windows
 
 ### Both platforms
