@@ -257,8 +257,10 @@ final class RestoreSheetLayoutTests: XCTestCase {
         let light = lay(RestoreSheetView(model: model, collections: collections).sheetBackground(), in: .aqua)
         try render(dark, "collections-dark")
         try render(light, "collections-light")
+        // Compared with the bare sheet, not with fixed points: the height follows the system font, which differs between
+        // macOS releases (466 here, 460 on CI).
         XCTAssertEqual(dark.size, bare.size, "the background leaves the sheet's size alone")
-        XCTAssertEqual(dark.size, CGSize(width: 460, height: 466))
+        XCTAssertEqual(dark.size.width, 460)
         XCTAssertEqual(light.size, bare.size)
 
         // Inside the sheet's 16-point padding, by its top left corner, away from any control.
