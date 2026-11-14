@@ -451,20 +451,20 @@ public class ControlToolsCollectionRestoreTests
         Assert.False(rig.H.ClaudeServers().ContainsKey("extra"));
     }
 
-    /// <summary>Two backups of one second: the question names the one asked about with its milliseconds, so its
-    /// label is worked out over every backup listed, as <c>list_backups</c> and the dialog list them.</summary>
+    /// <summary>Two backups of one second: the question names the later one with its " (2)", so its label is worked
+    /// out over every backup listed, as <c>list_backups</c> and the dialog list them.</summary>
     [Fact]
     public void TheQuestionLabelsTheBackupAmongAllListedOnes()
     {
         using var rig = Rig();
         Assert.Null(rig.State.AddEmptyCollection("Work"));
-        var first = Backup(rig, rig.State.Store, "mcps.2026-09-04T12-00-00-000Z.json");
-        Backup(rig, rig.State.Store, "mcps.2026-09-04T12-00-00-500Z.json");
+        Backup(rig, rig.State.Store, "mcps.2026-09-04T12-00-00-000Z.json");
+        var later = Backup(rig, rig.State.Store, "mcps.2026-09-04T12-00-00-500Z.json");
         Assert.Null(rig.State.Upsert("extra", new McpEntry(Config("x")), null, "Work"));
-        var listed = Label(rig, first);
-        Assert.EndsWith(".000", listed, StringComparison.Ordinal);
-        Assert.NotEqual(listed, BackupManager.Labels(Backups(rig).Where(path => Path.GetFileName(path) == first).ToList())[first]);
-        Assert.NotNull(rig.Call("restore_collection", Arguments(first, "Work")));
+        var listed = Label(rig, later);
+        Assert.EndsWith(" (2)", listed, StringComparison.Ordinal);
+        Assert.NotEqual(listed, BackupManager.Labels(Backups(rig).Where(path => Path.GetFileName(path) == later).ToList())[later]);
+        Assert.NotNull(rig.Call("restore_collection", Arguments(later, "Work")));
         Assert.Equal(ControlTools.RestoreCollectionText("Work", listed), rig.Confirmer.Requests[^1].Message);
     }
 

@@ -152,31 +152,26 @@ public struct BackupManager: Sendable {
         }
     }
 
-    /// What each backup is called where several are listed together, keyed by file name: its
-    /// local time to the second. Backups that share a second carry milliseconds, read from the
-    /// name's stamp; those that still share one add " (n)" from the counter in the name, the first
-    /// of a millisecond taking none. A name with no time is its own label.
+    /// What each backup is called where several are listed together, keyed by file name: its local
+    /// time to the second. Where backups share a second, the earliest (by the name's stamp, then its
+    /// counter) keeps it and each later one adds " (2)", " (3)", in that order. A name with no time is
+    /// its own label.
     public static func labels(for backups: [URL]) -> [String: String] {
         var result: [String: String] = [:]
-        var timed: [(name: String, seconds: String, millis: String, counter: Int)] = []
+        var perSecond: [String: [(name: String, stamp: String, counter: Int)]] = [:]
         for backup in backups {
             let name = backup.lastPathComponent
             guard let taken = takenAt(backup) else { result[name] = name; continue }
             let parts = order(of: name)
-            let digits = parts.stamp.dropLast().suffix(3)
-            timed.append((name, IsoTimestamp.localDateTimeSeconds(from: taken), String(digits), parts.counter))
+            perSecond[IsoTimestamp.localDateTimeSeconds(from: taken), default: []].append((name, parts.stamp, parts.counter))
         }
-        var perSecond: [String: Int] = [:]
-        for entry in timed { perSecond[entry.seconds, default: 0] += 1 }
-        let fine = timed.map { entry in
-            (entry, perSecond[entry.seconds]! > 1 ? "\(entry.seconds).\(entry.millis)" : entry.seconds)
-        }
-        var groups: [String: [(name: String, counter: Int)]] = [:]
-        for (entry, label) in fine { groups[label, default: []].append((entry.name, entry.counter)) }
-        for (label, members) in groups {
-            let ordered = members.sorted { $0.counter < $1.counter }
+        for (second, members) in perSecond {
+            let ordered = members.sorted {
+                $0.stamp != $1.stamp ? $0.stamp.ordinallyPrecedes($1.stamp)
+                    : $0.counter != $1.counter ? $0.counter < $1.counter : $0.name.ordinallyPrecedes($1.name)
+            }
             for (index, member) in ordered.enumerated() {
-                result[member.name] = index == 0 ? label : "\(label) (\(member.counter))"
+                result[member.name] = index == 0 ? second : "\(second) (\(index + 1))"
             }
         }
         return result

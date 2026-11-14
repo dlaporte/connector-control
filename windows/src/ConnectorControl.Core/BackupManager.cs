@@ -199,14 +199,14 @@ public sealed class BackupManager
 
     /// <summary>
     /// What each backup is called where several are listed together, keyed by file name: its local
-    /// time to the second. Backups that share a second carry milliseconds, read from the name's
-    /// stamp; those that still share one add " (n)" from the counter in the name, the first of a
-    /// millisecond taking none. A name with no time is its own label.
+    /// time to the second. Where backups share a second, the earliest (by the name's stamp, then its
+    /// counter) keeps it and each later one adds " (2)", " (3)", in that order. A name with no time is
+    /// its own label.
     /// </summary>
     public static IReadOnlyDictionary<string, string> Labels(IEnumerable<string> backups)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        var timed = new List<(string Name, string Seconds, string Millis, int Counter)>();
+        var timed = new List<(string Name, string Second, string Stamp, int Counter)>();
         foreach (var backup in backups)
         {
             var name = Path.GetFileName(backup);
@@ -216,20 +216,18 @@ public sealed class BackupManager
                 continue;
             }
             var (stamp, counter) = Order(name);
-            timed.Add((name, IsoTimestamp.LocalDateTimeSeconds(taken), stamp[^4..^1], counter));
+            timed.Add((name, IsoTimestamp.LocalDateTimeSeconds(taken), stamp, counter));
         }
-        var perSecond = timed.GroupBy(e => e.Seconds).ToDictionary(g => g.Key, g => g.Count());
-        var groups = timed
-            .Select(e => (Entry: e, Label: perSecond[e.Seconds] > 1 ? $"{e.Seconds}.{e.Millis}" : e.Seconds))
-            .GroupBy(e => e.Label);
-        foreach (var group in groups)
+        foreach (var group in timed.GroupBy(e => e.Second, StringComparer.Ordinal))
         {
-            var ordered = group.OrderBy(e => e.Entry.Counter).ToList();
+            var ordered = group
+                .OrderBy(e => e.Stamp, StringComparer.Ordinal)
+                .ThenBy(e => e.Counter)
+                .ThenBy(e => e.Name, StringComparer.Ordinal)
+                .ToList();
             for (var index = 0; index < ordered.Count; index++)
             {
-                result[ordered[index].Entry.Name] = index == 0
-                    ? group.Key
-                    : $"{group.Key} ({ordered[index].Entry.Counter})";
+                result[ordered[index].Name] = index == 0 ? group.Key : $"{group.Key} ({index + 1})";
             }
         }
         return result;

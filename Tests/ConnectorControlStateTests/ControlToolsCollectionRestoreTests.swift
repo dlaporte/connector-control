@@ -386,18 +386,18 @@ final class ControlToolsCollectionRestoreTests: XCTestCase {
         XCTAssertNil(try rig.h.claudeServers()["extra"])
     }
 
-    /// Two backups of one second: the question names the one asked about with its milliseconds, so
-    /// its label is worked out over every backup listed, as `list_backups` and the sheet list them.
+    /// Two backups of one second: the question names the later one with its " (2)", so its label is
+    /// worked out over every backup listed, as `list_backups` and the sheet list them.
     func testTheQuestionLabelsTheBackupAmongAllListedOnes() throws {
         let rig = rig(); defer { rig.dispose() }
         XCTAssertNil(rig.state.addEmptyCollection(named: "Work"))
-        let first = try backup(rig, of: rig.state.store, named: "mcps.2026-09-04T12-00-00-000Z.json")
-        _ = try backup(rig, of: rig.state.store, named: "mcps.2026-09-04T12-00-00-500Z.json")
+        _ = try backup(rig, of: rig.state.store, named: "mcps.2026-09-04T12-00-00-000Z.json")
+        let later = try backup(rig, of: rig.state.store, named: "mcps.2026-09-04T12-00-00-500Z.json")
         XCTAssertNil(rig.state.upsert(name: "extra", entry: MCPEntry(config: config("x")), renamedFrom: nil, in: "Work"))
-        let listed = try label(rig, first)
-        XCTAssertTrue(listed.hasSuffix(".000"), listed)
-        XCTAssertNotEqual(listed, BackupManager.labels(for: try backups(rig).filter { $0.lastPathComponent == first })[first])
-        XCTAssertNotNil(rig.call("restore_collection", arguments(first, "Work")))
+        let listed = try label(rig, later)
+        XCTAssertTrue(listed.hasSuffix(" (2)"), listed)
+        XCTAssertNotEqual(listed, BackupManager.labels(for: try backups(rig).filter { $0.lastPathComponent == later })[later])
+        XCTAssertNotNil(rig.call("restore_collection", arguments(later, "Work")))
         XCTAssertEqual(rig.confirmer.requests.last?.message, ControlTools.restoreCollectionText("Work", listed))
     }
 
